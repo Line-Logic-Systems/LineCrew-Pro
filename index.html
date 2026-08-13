@@ -1722,6 +1722,78 @@ $('cancelDailyReportBtn').onclick = () => {
 
   $('dailyReportForm').classList.add('hidden');
 
+};
+/* SAVE DAILY REPORT */
+
+$('saveDailyReportBtn').onclick = async () => {
+
+  const jobId = $('dailyJobId').value;
+  const workDate = $('dailyWorkDate').value;
+
+  if(!jobId){
+    alert('Please select a job.');
+    return;
+  }
+
+  if(!workDate){
+    alert('Please select a work date.');
+    return;
+  }
+
+  const regularHours =
+    Number($('dailyRegularHours').value || 0);
+
+  const overtimeHours =
+    Number($('dailyOvertimeHours').value || 0);
+
+  const crewName =
+    $('dailyCrewName').value.trim();
+
+  const notes =
+    $('dailyNotes').value.trim();
+
+
+  $('saveDailyReportBtn').disabled = true;
+  $('saveDailyReportBtn').textContent = 'Saving...';
+
+
+  const {
+    data,
+    error
+  } = await sb.rpc(
+    'create_daily_report',
+    {
+      p_job_id: jobId,
+      p_work_date: workDate,
+      p_regular_hours: regularHours,
+      p_overtime_hours: overtimeHours,
+      p_crew_name: crewName || null,
+      p_notes: notes || null
+    }
+  );
+
+
+  $('saveDailyReportBtn').disabled = false;
+  $('saveDailyReportBtn').textContent = 'Save Draft';
+
+
+  if(error){
+
+    alert(
+      'Unable to save daily report: ' +
+      error.message
+    );
+
+    return;
+  }
+
+
+  $('dailyReportForm').classList.add('hidden');
+
+  alert('Daily report saved as draft.');
+
+  await loadProductionReports();
+
 };  
 /* START */
 
