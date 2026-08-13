@@ -1,13 +1,443 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LineCrew Pro</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b2d4d">
+<title>LineCrew Pro</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+:root{
+  --navy:#0b2d4d;
+  --blue:#1677d2;
+  --bg:#f3f6f9;
+  --card:#ffffff;
+  --text:#102235;
+  --muted:#6c7a89;
+  --border:#dce5ed;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+header{
+  background:var(--navy);
+  color:white;
+  padding:28px 22px;
+}
+header h1{margin:0;font-size:30px}
+header p{margin:6px 0 0;opacity:.85}
+main{
+  max-width:760px;
+  margin:auto;
+  padding:24px 16px 100px;
+}
+.card{
+  background:var(--card);
+  border-radius:20px;
+  padding:22px;
+  margin-bottom:18px;
+  box-shadow:0 2px 12px rgba(0,0,0,.07);
+}
+h2{margin-top:0}
+label{
+  display:block;
+  font-weight:700;
+  margin:14px 0 6px;
+}
+input{
+  width:100%;
+  padding:14px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  font-size:16px;
+}
+button{
+  width:100%;
+  padding:14px;
+  margin-top:14px;
+  border:0;
+  border-radius:12px;
+  background:var(--blue);
+  color:white;
+  font-size:16px;
+  font-weight:700;
+  cursor:pointer;
+}
+button.secondary{
+  background:#e9f0f6;
+  color:var(--navy);
+}
+button.danger{
+  background:#b83232;
+}
+.hidden{display:none!important}
+.muted{color:var(--muted)}
+.center{text-align:center}
+.role{
+  display:inline-block;
+  background:#e8f2fb;
+  padding:6px 10px;
+  border-radius:999px;
+  font-weight:700;
+  text-transform:uppercase;
+}
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+.metric{
+  background:#f5f8fb;
+  padding:18px;
+  border-radius:14px;
+}
+.metric strong{
+  display:block;
+  font-size:24px;
+}
+@media(max-width:600px){
+  .grid{grid-template-columns:1fr}
+}
+</style>
 </head>
 
 <body>
+
+<header>
   <h1>LineCrew Pro</h1>
   <p>Powerline Management Platform</p>
+</header>
+
+<main>
+
+<section id="authPage">
+
+  <div class="card">
+    <h2>Sign In</h2>
+
+    <label>Email</label>
+    <input id="loginEmail" type="email">
+
+    <label>Password</label>
+    <input id="loginPassword" type="password">
+
+    <button id="loginBtn">Sign In</button>
+  </div>
+
+  <div class="card">
+    <h2>Create Account</h2>
+
+    <label>Email</label>
+    <input id="signupEmail" type="email">
+
+    <label>Password</label>
+    <input id="signupPassword" type="password">
+
+    <button id="signupBtn">Create Account</button>
+  </div>
+
+</section>
+
+
+<section id="setupPage" class="hidden">
+
+  <div class="card center">
+    <h2>Welcome to LineCrew Pro</h2>
+    <p class="muted">Create a new company or join an existing company.</p>
+  </div>
+
+  <div class="card">
+    <h2>Create Company</h2>
+
+    <label>Your Name</label>
+    <input id="createAdminName">
+
+    <label>Company Name</label>
+    <input id="createCompanyName">
+
+    <button id="createCompanyBtn">Create Company</button>
+  </div>
+
+  <div class="card">
+    <h2>Join Existing Company</h2>
+
+    <label>Your Name</label>
+    <input id="joinName">
+
+    <label>Company Code</label>
+    <input id="joinCode" maxlength="8"
+           style="text-transform:uppercase">
+
+    <button id="joinCompanyBtn">Join Company</button>
+  </div>
+
+  <button class="secondary" id="setupSignOut">Sign Out</button>
+
+</section>
+
+
+<section id="dashboardPage" class="hidden">
+
+  <div class="card">
+    <h2 id="companyName">Company</h2>
+    <p>
+      <strong id="userName"></strong><br>
+      <span id="userRole" class="role"></span>
+    </p>
+  </div>
+
+  <div class="grid">
+
+    <div class="metric">
+      <strong>Jobs</strong>
+      <span class="muted">Job management coming next</span>
+    </div>
+
+    <div class="metric">
+      <strong>Production</strong>
+      <span class="muted">Daily reporting coming next</span>
+    </div>
+
+    <div class="metric">
+      <strong>Price Books</strong>
+      <span class="muted">Company pricing management</span>
+    </div>
+
+    <div class="metric">
+      <strong>Team</strong>
+      <span class="muted">Foremen, GFs and Admins</span>
+    </div>
+
+  </div>
+
+  <div id="adminNotice" class="card hidden">
+    <h2>Admin Controls</h2>
+    <p class="muted">
+      Company settings, users, pricing and permissions will be managed here.
+    </p>
+  </div>
+
+  <button class="secondary" id="signOutBtn">Sign Out</button>
+
+</section>
+
+</main>
+
+
+<script>
+
+/*
+IMPORTANT:
+We will replace these TWO values with the new
+LineCrew Pro Supabase credentials next.
+DO NOT use your old LineCrew credentials.
+*/
+
+const SUPABASE_URL = 'https://ldgkyxuozbozgkvwzadg.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
+
+const sb = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+const $ = id => document.getElementById(id);
+
+function show(page){
+  $('authPage').classList.add('hidden');
+  $('setupPage').classList.add('hidden');
+  $('dashboardPage').classList.add('hidden');
+
+  $(page).classList.remove('hidden');
+}
+
+async function loadApp(){
+
+  const {
+    data:{session}
+  } = await sb.auth.getSession();
+
+  if(!session){
+    show('authPage');
+    return;
+  }
+
+  const {data:profile,error} =
+    await sb
+      .from('profiles')
+      .select('*')
+      .eq('id',session.user.id)
+      .maybeSingle();
+
+  if(error){
+    alert(error.message);
+    return;
+  }
+
+  if(!profile){
+    show('setupPage');
+    return;
+  }
+
+  const {data:company} =
+    await sb
+      .from('companies')
+      .select('name,join_code')
+      .eq('id',profile.company_id)
+      .single();
+
+  $('companyName').textContent =
+    company?.name || 'LineCrew Pro';
+
+  $('userName').textContent =
+    profile.full_name;
+
+  $('userRole').textContent =
+    profile.role;
+
+  if(profile.role === 'admin'){
+    $('adminNotice').classList.remove('hidden');
+  }else{
+    $('adminNotice').classList.add('hidden');
+  }
+
+  show('dashboardPage');
+}
+
+
+$('loginBtn').onclick = async()=>{
+
+  const email =
+    $('loginEmail').value.trim();
+
+  const password =
+    $('loginPassword').value;
+
+  if(!email || !password)
+    return alert('Enter email and password.');
+
+  const {error} =
+    await sb.auth.signInWithPassword({
+      email,
+      password
+    });
+
+  if(error)
+    return alert(error.message);
+
+  await loadApp();
+};
+
+
+$('signupBtn').onclick = async()=>{
+
+  const email =
+    $('signupEmail').value.trim();
+
+  const password =
+    $('signupPassword').value;
+
+  if(!email || !password)
+    return alert('Enter email and password.');
+
+  const {data,error} =
+    await sb.auth.signUp({
+      email,
+      password
+    });
+
+  if(error)
+    return alert(error.message);
+
+  if(!data.session){
+    alert(
+      'Account created. Check your email to confirm your account, then sign in.'
+    );
+    return;
+  }
+
+  await loadApp();
+};
+
+
+$('createCompanyBtn').onclick = async()=>{
+
+  const adminName =
+    $('createAdminName').value.trim();
+
+  const companyName =
+    $('createCompanyName').value.trim();
+
+  if(!adminName || !companyName)
+    return alert('Enter your name and company name.');
+
+  const {error} =
+    await sb.rpc(
+      'create_company',
+      {
+        company_name:companyName,
+        admin_name:adminName
+      }
+    );
+
+  if(error)
+    return alert(error.message);
+
+  await loadApp();
+};
+
+
+$('joinCompanyBtn').onclick = async()=>{
+
+  const name =
+    $('joinName').value.trim();
+
+  const code =
+    $('joinCode').value.trim().toUpperCase();
+
+  if(!name || !code)
+    return alert('Enter your name and company code.');
+
+  const {error} =
+    await sb.rpc(
+      'join_company',
+      {
+        company_code:code,
+        user_name:name
+      }
+    );
+
+  if(error)
+    return alert(error.message);
+
+  await loadApp();
+};
+
+
+async function signOut(){
+
+  await sb.auth.signOut();
+
+  show('authPage');
+}
+
+
+$('signOutBtn').onclick = signOut;
+$('setupSignOut').onclick = signOut;
+
+sb.auth.onAuthStateChange(()=>{
+  setTimeout(loadApp,0);
+});
+
+loadApp();
+
+</script>
+
 </body>
 </html>
