@@ -17,26 +17,44 @@
   --text:#102235;
   --muted:#6c7a89;
   --border:#dce5ed;
+  --green:#198754;
+  --red:#b83232;
+  --orange:#d97706;
 }
-*{box-sizing:border-box}
+
+*{
+  box-sizing:border-box;
+}
+
 body{
   margin:0;
   font-family:Arial,Helvetica,sans-serif;
   background:var(--bg);
   color:var(--text);
 }
+
 header{
   background:var(--navy);
   color:white;
   padding:28px 22px;
 }
-header h1{margin:0;font-size:30px}
-header p{margin:6px 0 0;opacity:.85}
+
+header h1{
+  margin:0;
+  font-size:30px;
+}
+
+header p{
+  margin:6px 0 0;
+  opacity:.85;
+}
+
 main{
-  max-width:760px;
+  max-width:850px;
   margin:auto;
   padding:24px 16px 100px;
 }
+
 .card{
   background:var(--card);
   border-radius:20px;
@@ -44,19 +62,33 @@ main{
   margin-bottom:18px;
   box-shadow:0 2px 12px rgba(0,0,0,.07);
 }
-h2{margin-top:0}
+
+h2{
+  margin-top:0;
+}
+
+h3{
+  margin-top:0;
+}
+
 label{
   display:block;
   font-weight:700;
   margin:14px 0 6px;
 }
-input{
+
+input,
+select,
+textarea{
   width:100%;
   padding:14px;
   border:1px solid var(--border);
   border-radius:12px;
   font-size:16px;
+  background:white;
+  color:var(--text);
 }
+
 button{
   width:100%;
   padding:14px;
@@ -69,16 +101,43 @@ button{
   font-weight:700;
   cursor:pointer;
 }
+
 button.secondary{
   background:#e9f0f6;
   color:var(--navy);
 }
-button.danger{
-  background:#b83232;
+
+button.success{
+  background:var(--green);
 }
-.hidden{display:none!important}
-.muted{color:var(--muted)}
-.center{text-align:center}
+
+button.warning{
+  background:var(--orange);
+}
+
+button.danger{
+  background:var(--red);
+}
+
+button.small{
+  width:auto;
+  padding:9px 12px;
+  margin:4px;
+  font-size:14px;
+}
+
+.hidden{
+  display:none!important;
+}
+
+.muted{
+  color:var(--muted);
+}
+
+.center{
+  text-align:center;
+}
+
 .role{
   display:inline-block;
   background:#e8f2fb;
@@ -87,22 +146,124 @@ button.danger{
   font-weight:700;
   text-transform:uppercase;
 }
+
 .grid{
   display:grid;
   grid-template-columns:1fr 1fr;
   gap:12px;
 }
+
 .metric{
   background:#f5f8fb;
   padding:18px;
   border-radius:14px;
+  cursor:pointer;
+  border:1px solid transparent;
 }
+
+.metric:hover{
+  border-color:var(--blue);
+}
+
 .metric strong{
   display:block;
   font-size:24px;
 }
+
+.job-card{
+  background:white;
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:18px;
+  margin-bottom:14px;
+}
+
+.job-card.inactive{
+  opacity:.65;
+}
+
+.job-number{
+  font-size:21px;
+  font-weight:800;
+  color:var(--navy);
+}
+
+.job-title{
+  font-size:18px;
+  font-weight:700;
+  margin-top:4px;
+}
+
+.job-info{
+  margin-top:8px;
+  color:var(--muted);
+  line-height:1.5;
+}
+
+.status{
+  display:inline-block;
+  padding:5px 9px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+  margin-top:8px;
+}
+
+.status.active{
+  background:#e7f6ed;
+  color:#146c43;
+}
+
+.status.closed{
+  background:#f2f2f2;
+  color:#666;
+}
+
+.actions{
+  display:flex;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+
+.toolbar{
+  display:flex;
+  gap:10px;
+  margin-bottom:18px;
+}
+
+.toolbar button{
+  margin-top:0;
+}
+
+.section-header{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+}
+
+.section-header button{
+  width:auto;
+  margin-top:0;
+}
+
 @media(max-width:600px){
-  .grid{grid-template-columns:1fr}
+  .grid{
+    grid-template-columns:1fr;
+  }
+
+  .toolbar{
+    flex-direction:column;
+  }
+
+  .section-header{
+    display:block;
+  }
+
+  .section-header button{
+    width:100%;
+    margin-top:12px;
+  }
 }
 </style>
 </head>
@@ -115,6 +276,8 @@ button.danger{
 </header>
 
 <main>
+
+<!-- AUTH -->
 
 <section id="authPage">
 
@@ -145,11 +308,15 @@ button.danger{
 </section>
 
 
+<!-- COMPANY SETUP -->
+
 <section id="setupPage" class="hidden">
 
   <div class="card center">
     <h2>Welcome to LineCrew Pro</h2>
-    <p class="muted">Create a new company or join an existing company.</p>
+    <p class="muted">
+      Create a new company or join an existing company.
+    </p>
   </div>
 
   <div class="card">
@@ -161,7 +328,9 @@ button.danger{
     <label>Company Name</label>
     <input id="createCompanyName">
 
-    <button id="createCompanyBtn">Create Company</button>
+    <button id="createCompanyBtn">
+      Create Company
+    </button>
   </div>
 
   <div class="card">
@@ -171,21 +340,31 @@ button.danger{
     <input id="joinName">
 
     <label>Company Code</label>
-    <input id="joinCode" maxlength="8"
-           style="text-transform:uppercase">
+    <input
+      id="joinCode"
+      maxlength="8"
+      style="text-transform:uppercase"
+    >
 
-    <button id="joinCompanyBtn">Join Company</button>
+    <button id="joinCompanyBtn">
+      Join Company
+    </button>
   </div>
 
-  <button class="secondary" id="setupSignOut">Sign Out</button>
+  <button class="secondary" id="setupSignOut">
+    Sign Out
+  </button>
 
 </section>
 
+
+<!-- DASHBOARD -->
 
 <section id="dashboardPage" class="hidden">
 
   <div class="card">
     <h2 id="companyName">Company</h2>
+
     <p>
       <strong id="userName"></strong><br>
       <span id="userRole" class="role"></span>
@@ -194,36 +373,148 @@ button.danger{
 
   <div class="grid">
 
-    <div class="metric">
+    <div class="metric" id="jobsTile">
       <strong>Jobs</strong>
-      <span class="muted">Job management coming next</span>
+      <span class="muted">
+        Create, manage and close jobs
+      </span>
     </div>
 
     <div class="metric">
       <strong>Production</strong>
-      <span class="muted">Daily reporting coming next</span>
+      <span class="muted">
+        Daily reporting coming next
+      </span>
     </div>
 
     <div class="metric">
       <strong>Price Books</strong>
-      <span class="muted">Company pricing management</span>
+      <span class="muted">
+        Company pricing management
+      </span>
     </div>
 
     <div class="metric">
       <strong>Team</strong>
-      <span class="muted">Foremen, GFs and Admins</span>
+      <span class="muted">
+        Foremen, GFs and Admins
+      </span>
     </div>
 
   </div>
 
   <div id="adminNotice" class="card hidden">
     <h2>Admin Controls</h2>
+
     <p class="muted">
-      Company settings, users, pricing and permissions will be managed here.
+      Company settings, users, pricing and permissions
+      will be managed here.
     </p>
   </div>
 
-  <button class="secondary" id="signOutBtn">Sign Out</button>
+  <button class="secondary" id="signOutBtn">
+    Sign Out
+  </button>
+
+</section>
+
+
+<!-- JOBS PAGE -->
+
+<section id="jobsPage" class="hidden">
+
+  <div class="toolbar">
+    <button class="secondary" id="backToDashboard">
+      ← Back to Dashboard
+    </button>
+
+    <button id="refreshJobsBtn">
+      Refresh Jobs
+    </button>
+  </div>
+
+  <div class="card">
+
+    <div class="section-header">
+
+      <div>
+        <h2>Jobs</h2>
+        <p class="muted">
+          Company job management
+        </p>
+      </div>
+
+      <button
+        id="showCreateJobBtn"
+        class="success hidden"
+      >
+        + Create Job
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <!-- CREATE JOB FORM -->
+
+  <div id="createJobCard" class="card hidden">
+
+    <h2>Create Job</h2>
+
+    <label>Job Number</label>
+    <input
+      id="jobNumber"
+      placeholder="Example: 1924939"
+    >
+
+    <label>Job Name</label>
+    <input
+      id="jobName"
+      placeholder="Example: Feeder Rebuild"
+    >
+
+    <label>Customer</label>
+    <input
+      id="jobCustomer"
+      placeholder="Example: United Electric Cooperative"
+    >
+
+    <label>Utility</label>
+    <input
+      id="jobUtility"
+      placeholder="Utility name"
+    >
+
+    <button class="success" id="createJobBtn">
+      Create Job
+    </button>
+
+    <button
+      class="secondary"
+      id="cancelCreateJobBtn"
+    >
+      Cancel
+    </button>
+
+  </div>
+
+
+  <div id="jobsLoading" class="card center hidden">
+    Loading jobs...
+  </div>
+
+  <div id="jobsEmpty" class="card center hidden">
+
+    <h3>No Jobs Yet</h3>
+
+    <p class="muted">
+      Create the first job for this company.
+    </p>
+
+  </div>
+
+  <div id="jobsList"></div>
 
 </section>
 
@@ -232,30 +523,43 @@ button.danger{
 
 <script>
 
-/*
-IMPORTANT:
-We will replace these TWO values with the new
-LineCrew Pro Supabase credentials next.
-DO NOT use your old LineCrew credentials.
-*/
+/* LINECREW PRO SUPABASE */
 
-const SUPABASE_URL = 'https://ldgkyxuozbozgkvwzadg.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
+const SUPABASE_URL =
+  'https://ldgkyxuozbozgkvwzadg.supabase.co';
+
+const SUPABASE_KEY =
+  'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
 
 const sb = supabase.createClient(
   SUPABASE_URL,
   SUPABASE_KEY
 );
 
-const $ = id => document.getElementById(id);
+const $ = id =>
+  document.getElementById(id);
+
+
+/* CURRENT USER STATE */
+
+let currentProfile = null;
+let currentCompany = null;
+
+
+/* PAGE NAVIGATION */
 
 function show(page){
+
   $('authPage').classList.add('hidden');
   $('setupPage').classList.add('hidden');
   $('dashboardPage').classList.add('hidden');
+  $('jobsPage').classList.add('hidden');
 
   $(page).classList.remove('hidden');
 }
+
+
+/* LOAD APP */
 
 async function loadApp(){
 
@@ -264,52 +568,97 @@ async function loadApp(){
   } = await sb.auth.getSession();
 
   if(!session){
+
+    currentProfile = null;
+    currentCompany = null;
+
     show('authPage');
+
     return;
   }
 
-  const {data:profile,error} =
+
+  const {
+    data:profile,
+    error
+  } =
     await sb
       .from('profiles')
       .select('*')
       .eq('id',session.user.id)
       .maybeSingle();
 
+
   if(error){
+
     alert(error.message);
+
     return;
   }
+
 
   if(!profile){
+
     show('setupPage');
+
     return;
   }
 
-  const {data:company} =
+
+  const {
+    data:company,
+    error:companyError
+  } =
     await sb
       .from('companies')
-      .select('name,join_code')
+      .select('id,name,join_code')
       .eq('id',profile.company_id)
       .single();
+
+
+  if(companyError){
+
+    alert(companyError.message);
+
+    return;
+  }
+
+
+  currentProfile = profile;
+  currentCompany = company;
+
 
   $('companyName').textContent =
     company?.name || 'LineCrew Pro';
 
+
   $('userName').textContent =
-    profile.full_name;
+    profile.full_name || 'User';
+
 
   $('userRole').textContent =
-    profile.role;
+    profile.role || 'employee';
+
 
   if(profile.role === 'admin'){
-    $('adminNotice').classList.remove('hidden');
+
+    $('adminNotice')
+      .classList
+      .remove('hidden');
+
   }else{
-    $('adminNotice').classList.add('hidden');
+
+    $('adminNotice')
+      .classList
+      .add('hidden');
   }
+
 
   show('dashboardPage');
 }
 
+
+/* LOGIN */
 
 $('loginBtn').onclick = async()=>{
 
@@ -319,8 +668,14 @@ $('loginBtn').onclick = async()=>{
   const password =
     $('loginPassword').value;
 
-  if(!email || !password)
-    return alert('Enter email and password.');
+
+  if(!email || !password){
+
+    return alert(
+      'Enter email and password.'
+    );
+  }
+
 
   const {error} =
     await sb.auth.signInWithPassword({
@@ -328,12 +683,18 @@ $('loginBtn').onclick = async()=>{
       password
     });
 
-  if(error)
+
+  if(error){
+
     return alert(error.message);
+  }
+
 
   await loadApp();
 };
 
+
+/* SIGN UP */
 
 $('signupBtn').onclick = async()=>{
 
@@ -343,28 +704,46 @@ $('signupBtn').onclick = async()=>{
   const password =
     $('signupPassword').value;
 
-  if(!email || !password)
-    return alert('Enter email and password.');
 
-  const {data,error} =
+  if(!email || !password){
+
+    return alert(
+      'Enter email and password.'
+    );
+  }
+
+
+  const {
+    data,
+    error
+  } =
     await sb.auth.signUp({
       email,
       password
     });
 
-  if(error)
+
+  if(error){
+
     return alert(error.message);
+  }
+
 
   if(!data.session){
+
     alert(
       'Account created. Check your email to confirm your account, then sign in.'
     );
+
     return;
   }
+
 
   await loadApp();
 };
 
+
+/* CREATE COMPANY */
 
 $('createCompanyBtn').onclick = async()=>{
 
@@ -374,8 +753,14 @@ $('createCompanyBtn').onclick = async()=>{
   const companyName =
     $('createCompanyName').value.trim();
 
-  if(!adminName || !companyName)
-    return alert('Enter your name and company name.');
+
+  if(!adminName || !companyName){
+
+    return alert(
+      'Enter your name and company name.'
+    );
+  }
+
 
   const {error} =
     await sb.rpc(
@@ -386,12 +771,18 @@ $('createCompanyBtn').onclick = async()=>{
       }
     );
 
-  if(error)
+
+  if(error){
+
     return alert(error.message);
+  }
+
 
   await loadApp();
 };
 
+
+/* JOIN COMPANY */
 
 $('joinCompanyBtn').onclick = async()=>{
 
@@ -399,10 +790,19 @@ $('joinCompanyBtn').onclick = async()=>{
     $('joinName').value.trim();
 
   const code =
-    $('joinCode').value.trim().toUpperCase();
+    $('joinCode')
+      .value
+      .trim()
+      .toUpperCase();
 
-  if(!name || !code)
-    return alert('Enter your name and company code.');
+
+  if(!name || !code){
+
+    return alert(
+      'Enter your name and company code.'
+    );
+  }
+
 
   const {error} =
     await sb.rpc(
@@ -413,27 +813,591 @@ $('joinCompanyBtn').onclick = async()=>{
       }
     );
 
-  if(error)
+
+  if(error){
+
     return alert(error.message);
+  }
+
 
   await loadApp();
 };
 
 
+/* SIGN OUT */
+
 async function signOut(){
 
   await sb.auth.signOut();
+
+  currentProfile = null;
+  currentCompany = null;
 
   show('authPage');
 }
 
 
-$('signOutBtn').onclick = signOut;
-$('setupSignOut').onclick = signOut;
+$('signOutBtn').onclick =
+  signOut;
+
+$('setupSignOut').onclick =
+  signOut;
+
+
+/* OPEN JOBS */
+
+$('jobsTile').onclick = async()=>{
+
+  if(!currentProfile){
+
+    return;
+  }
+
+
+  const canManageJobs =
+    currentProfile.role === 'admin' ||
+    currentProfile.role === 'gf';
+
+
+  if(canManageJobs){
+
+    $('showCreateJobBtn')
+      .classList
+      .remove('hidden');
+
+  }else{
+
+    $('showCreateJobBtn')
+      .classList
+      .add('hidden');
+  }
+
+
+  show('jobsPage');
+
+  await loadJobs();
+};
+
+
+/* BACK TO DASHBOARD */
+
+$('backToDashboard').onclick = ()=>{
+
+  $('createJobCard')
+    .classList
+    .add('hidden');
+
+  show('dashboardPage');
+};
+
+
+/* CREATE JOB FORM */
+
+$('showCreateJobBtn').onclick = ()=>{
+
+  $('createJobCard')
+    .classList
+    .remove('hidden');
+};
+
+
+$('cancelCreateJobBtn').onclick = ()=>{
+
+  $('createJobCard')
+    .classList
+    .add('hidden');
+};
+
+
+/* CREATE JOB */
+
+$('createJobBtn').onclick = async()=>{
+
+  const number =
+    $('jobNumber').value.trim();
+
+  const name =
+    $('jobName').value.trim();
+
+  const customer =
+    $('jobCustomer').value.trim();
+
+  const utility =
+    $('jobUtility').value.trim();
+
+
+  if(!number || !name){
+
+    return alert(
+      'Job number and job name are required.'
+    );
+  }
+
+
+  const {error} =
+    await sb.rpc(
+      'create_job',
+      {
+        p_job_number:number,
+        p_job_name:name,
+        p_customer_name:customer || null,
+        p_utility_name:utility || null
+      }
+    );
+
+
+  if(error){
+
+    return alert(error.message);
+  }
+
+
+  $('jobNumber').value = '';
+  $('jobName').value = '';
+  $('jobCustomer').value = '';
+  $('jobUtility').value = '';
+
+
+  $('createJobCard')
+    .classList
+    .add('hidden');
+
+
+  await loadJobs();
+
+
+  alert('Job created.');
+};
+
+
+/* LOAD JOBS */
+
+async function loadJobs(){
+
+  $('jobsLoading')
+    .classList
+    .remove('hidden');
+
+  $('jobsEmpty')
+    .classList
+    .add('hidden');
+
+  $('jobsList').innerHTML = '';
+
+
+  const {
+    data:jobs,
+    error
+  } =
+    await sb
+      .from('jobs')
+      .select('*')
+      .eq(
+        'company_id',
+        currentProfile.company_id
+      )
+      .order(
+        'active',
+        {
+          ascending:false
+        }
+      )
+      .order(
+        'created_at',
+        {
+          ascending:false
+        }
+      );
+
+
+  $('jobsLoading')
+    .classList
+    .add('hidden');
+
+
+  if(error){
+
+    alert(
+      'Unable to load jobs: ' +
+      error.message
+    );
+
+    return;
+  }
+
+
+  if(!jobs || jobs.length === 0){
+
+    $('jobsEmpty')
+      .classList
+      .remove('hidden');
+
+    return;
+  }
+
+
+  jobs.forEach(renderJob);
+}
+
+
+/* RENDER JOB */
+
+function renderJob(job){
+
+  const card =
+    document.createElement('div');
+
+
+  card.className =
+    'job-card' +
+    (
+      job.active
+        ? ''
+        : ' inactive'
+    );
+
+
+  const statusText =
+    job.active
+      ? 'ACTIVE'
+      : 'CLOSED';
+
+
+  const statusClass =
+    job.active
+      ? 'active'
+      : 'closed';
+
+
+  const customer =
+    job.customer_name ||
+    'No customer listed';
+
+
+  const utility =
+    job.utility_name ||
+    'No utility listed';
+
+
+  card.innerHTML = `
+
+    <div class="job-number">
+      ${escapeHtml(job.job_number)}
+    </div>
+
+    <div class="job-title">
+      ${escapeHtml(job.job_name)}
+    </div>
+
+    <div class="status ${statusClass}">
+      ${statusText}
+    </div>
+
+    <div class="job-info">
+
+      Customer:
+      <strong>
+        ${escapeHtml(customer)}
+      </strong>
+
+      <br>
+
+      Utility:
+      <strong>
+        ${escapeHtml(utility)}
+      </strong>
+
+    </div>
+
+    <div
+      class="actions"
+      id="actions-${job.id}"
+    >
+    </div>
+  `;
+
+
+  $('jobsList')
+    .appendChild(card);
+
+
+  const actions =
+    card.querySelector(
+      `#actions-${job.id}`
+    );
+
+
+  const canManage =
+    currentProfile.role === 'admin' ||
+    currentProfile.role === 'gf';
+
+
+  if(canManage){
+
+    const editButton =
+      document.createElement('button');
+
+    editButton.className =
+      'small secondary';
+
+    editButton.textContent =
+      'Edit';
+
+    editButton.onclick =
+      ()=> editJob(job);
+
+    actions.appendChild(
+      editButton
+    );
+
+
+    const statusButton =
+      document.createElement('button');
+
+    statusButton.className =
+      job.active
+        ? 'small warning'
+        : 'small success';
+
+    statusButton.textContent =
+      job.active
+        ? 'Close Job'
+        : 'Reopen Job';
+
+    statusButton.onclick =
+      ()=> changeJobStatus(job);
+
+    actions.appendChild(
+      statusButton
+    );
+  }
+
+
+  if(currentProfile.role === 'admin'){
+
+    const deleteButton =
+      document.createElement('button');
+
+    deleteButton.className =
+      'small danger';
+
+    deleteButton.textContent =
+      'Delete';
+
+    deleteButton.onclick =
+      ()=> deleteJob(job);
+
+    actions.appendChild(
+      deleteButton
+    );
+  }
+}
+
+
+/* EDIT JOB */
+
+async function editJob(job){
+
+  const number =
+    prompt(
+      'Job Number:',
+      job.job_number || ''
+    );
+
+
+  if(number === null){
+
+    return;
+  }
+
+
+  const name =
+    prompt(
+      'Job Name:',
+      job.job_name || ''
+    );
+
+
+  if(name === null){
+
+    return;
+  }
+
+
+  const customer =
+    prompt(
+      'Customer:',
+      job.customer_name || ''
+    );
+
+
+  if(customer === null){
+
+    return;
+  }
+
+
+  const utility =
+    prompt(
+      'Utility:',
+      job.utility_name || ''
+    );
+
+
+  if(utility === null){
+
+    return;
+  }
+
+
+  if(
+    !number.trim() ||
+    !name.trim()
+  ){
+
+    return alert(
+      'Job number and job name are required.'
+    );
+  }
+
+
+  const {error} =
+    await sb.rpc(
+      'update_job',
+      {
+        p_job_id:job.id,
+        p_job_number:number.trim(),
+        p_job_name:name.trim(),
+        p_customer_name:
+          customer.trim() || null,
+        p_utility_name:
+          utility.trim() || null
+      }
+    );
+
+
+  if(error){
+
+    return alert(error.message);
+  }
+
+
+  await loadJobs();
+}
+
+
+/* CLOSE / REOPEN JOB */
+
+async function changeJobStatus(job){
+
+  const newStatus =
+    !job.active;
+
+
+  const action =
+    newStatus
+      ? 'reopen'
+      : 'close';
+
+
+  const confirmed =
+    confirm(
+      `Are you sure you want to ${action} job ${job.job_number}?`
+    );
+
+
+  if(!confirmed){
+
+    return;
+  }
+
+
+  const {error} =
+    await sb.rpc(
+      'set_job_active',
+      {
+        p_job_id:job.id,
+        p_active:newStatus
+      }
+    );
+
+
+  if(error){
+
+    return alert(error.message);
+  }
+
+
+  await loadJobs();
+}
+
+
+/* DELETE JOB */
+
+async function deleteJob(job){
+
+  const confirmed =
+    confirm(
+      `Delete job ${job.job_number} permanently?\n\nThis cannot be undone.`
+    );
+
+
+  if(!confirmed){
+
+    return;
+  }
+
+
+  const {error} =
+    await sb.rpc(
+      'delete_job',
+      {
+        p_job_id:job.id
+      }
+    );
+
+
+  if(error){
+
+    return alert(error.message);
+  }
+
+
+  await loadJobs();
+}
+
+
+/* REFRESH JOBS */
+
+$('refreshJobsBtn').onclick =
+  loadJobs;
+
+
+/* SAFE DISPLAY */
+
+function escapeHtml(value){
+
+  return String(value ?? '')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#039;");
+}
+
+
+/* AUTH CHANGE */
 
 sb.auth.onAuthStateChange(()=>{
-  setTimeout(loadApp,0);
+
+  setTimeout(
+    loadApp,
+    0
+  );
 });
+
+
+/* START */
 
 loadApp();
 
