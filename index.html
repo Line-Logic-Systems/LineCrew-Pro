@@ -380,13 +380,12 @@ button.small{
       </span>
     </div>
 
-    <div class="metric">
-      <strong>Production</strong>
-      <span class="muted">
-        Daily reporting coming next
-      </span>
-    </div>
-
+   <div class="metric" id="productionTile">
+  <strong>Production</strong>
+  <span class="muted">
+    Daily reporting coming next
+  </span>
+</div>
     <div class="metric">
       <strong>Price Books</strong>
       <span class="muted">
@@ -1396,7 +1395,24 @@ sb.auth.onAuthStateChange(()=>{
   );
 });
 
+/* PRODUCTION TILE */
 
+document.getElementById("productionTile").addEventListener("click", async () => {
+  await loadProduction();
+});
+
+async function loadProduction() {
+  const productionTitle = document.getElementById("productionTitle");
+
+  if (productionTitle) {
+    productionTitle.textContent =
+      profile.role === "admin" ? "Production Dashboard" : "GF Dashboard";
+  }
+
+  show("gf");
+
+  await loadGF();
+}
 /* START */
 
 loadApp();
