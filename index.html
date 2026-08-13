@@ -558,7 +558,77 @@ button.small{
       Daily production reports will appear here.
     </p>
   </div>
+<div id="dailyReportForm" class="card hidden">
 
+  <div class="section-header">
+    <div>
+      <h2>Create Daily Report</h2>
+      <p class="muted">
+        Enter the foreman daily production report.
+      </p>
+    </div>
+  </div>
+
+  <label for="dailyJobId">Job</label>
+  <select id="dailyJobId">
+    <option value="">Select active job</option>
+  </select>
+
+  <label for="dailyWorkDate">Work Date</label>
+  <input id="dailyWorkDate" type="date">
+
+  <label for="dailyForemanName">Foreman</label>
+  <input id="dailyForemanName" type="text" readonly>
+
+  <label for="dailyCrewName">Crew</label>
+  <input
+    id="dailyCrewName"
+    type="text"
+    placeholder="Example: Crew 1"
+  >
+
+  <label for="dailyRegularHours">Regular Hours</label>
+  <input
+    id="dailyRegularHours"
+    type="number"
+    min="0"
+    step="0.25"
+    value="0"
+  >
+
+  <label for="dailyOvertimeHours">OT Hours</label>
+  <input
+    id="dailyOvertimeHours"
+    type="number"
+    min="0"
+    step="0.25"
+    value="0"
+  >
+
+  <label for="dailyNotes">Notes</label>
+  <textarea
+    id="dailyNotes"
+    rows="4"
+    placeholder="Daily notes"
+  ></textarea>
+
+  <div class="button-row">
+    <button
+      id="saveDailyReportBtn"
+      class="success"
+    >
+      Save Draft
+    </button>
+
+    <button
+      id="cancelDailyReportBtn"
+      class="secondary"
+    >
+      Cancel
+    </button>
+  </div>
+
+</div>
   <div id="productionList"></div>
 
 </section>
@@ -1594,6 +1664,65 @@ async function loadProductionReports(){
   });
 
 }
+/* DAILY REPORT FORM */
+
+$('createDailyReportBtn').onclick = async () => {
+
+  $('dailyReportForm').classList.remove('hidden');
+
+  $('dailyForemanName').value =
+    currentProfile?.full_name || '';
+
+  $('dailyWorkDate').value =
+    new Date().toISOString().slice(0,10);
+
+  $('dailyRegularHours').value = 0;
+  $('dailyOvertimeHours').value = 0;
+  $('dailyCrewName').value = '';
+  $('dailyNotes').value = '';
+
+  $('dailyJobId').innerHTML =
+    '<option value="">Select active job</option>';
+
+  const {
+    data: jobs,
+    error
+  } = await sb
+    .from('jobs')
+    .select('id, job_number, job_name')
+    .eq('company_id', currentProfile.company_id)
+    .eq('active', true)
+    .order('job_number', { ascending:true });
+
+  if(error){
+    alert(
+      'Unable to load active jobs: ' +
+      error.message
+    );
+    return;
+  }
+
+  (jobs || []).forEach(job => {
+
+    const option =
+      document.createElement('option');
+
+    option.value = job.id;
+
+    option.textContent =
+      `${job.job_number} - ${job.job_name}`;
+
+    $('dailyJobId').appendChild(option);
+  });
+
+};
+
+
+$('cancelDailyReportBtn').onclick = () => {
+
+  $('dailyReportForm').classList.add('hidden');
+
+};  
 /* START */
 
 loadApp();
