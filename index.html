@@ -514,6 +514,44 @@ button.small{
   </div>
 
   <div id="jobsList"></div>
+</section>
+  
+<!-- PRODUCTION PAGE -->
+<section id="productionPage" class="hidden">
+
+  <div class="toolbar">
+    <button class="secondary" id="backFromProduction">
+      ← Back to Dashboard
+    </button>
+
+    <button id="refreshProductionBtn">
+      Refresh Production
+    </button>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div>
+        <h2>Production</h2>
+        <p class="muted">
+          Daily production reporting
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div id="productionLoading" class="card center hidden">
+    Loading production...
+  </div>
+
+  <div id="productionEmpty" class="card center hidden">
+    <h3>No Production Reports Yet</h3>
+    <p class="muted">
+      Daily production reports will appear here.
+    </p>
+  </div>
+
+  <div id="productionList"></div>
 
 </section>
 
@@ -553,7 +591,7 @@ function show(page){
   $('setupPage').classList.add('hidden');
   $('dashboardPage').classList.add('hidden');
   $('jobsPage').classList.add('hidden');
-
+$('productionPage').classList.add('hidden');
   $(page).classList.remove('hidden');
 }
 
@@ -1395,23 +1433,158 @@ sb.auth.onAuthStateChange(()=>{
   );
 });
 
-/* PRODUCTION TILE */
+/* PRODUCTION PAGE */
 
-document.getElementById("productionTile").addEventListener("click", async () => {
-  await loadProduction();
-});
+$('productionTile').onclick = async () => {
+  show('productionPage');
+  await loadProductionReports();
+};
 
-async function loadProduction() {
-  const productionTitle = document.getElementById("productionTitle");
 
-  if (productionTitle) {
-    productionTitle.textContent =
-      profile.role === "admin" ? "Production Dashboard" : "GF Dashboard";
+$('backFromProduction').onclick = () => {
+  show('dashboardPage');
+};
+
+
+$('refreshProductionBtn').onclick = async () => {
+  await loadProductionReports();
+};
+
+
+async function loadProductionReports(){
+
+  $('productionLoading').classList.remove('hidden');
+  $('productionEmpty').classList.add('hidden');
+  $('productionList').innerHTML = '';
+
+
+  const {
+    data: reports,
+    error
+  } = await sb
+    .from('daily_reports')
+    .select(`
+      id,
+      work_date,
+      foreman_name,
+      crew_name,
+      regular_hours,
+      overtime_hours,
+      notes,
+      status,
+      jobs (
+        job_number,
+        job_name
+      )
+    `)
+    .eq('company_id', currentProfile.company_id)
+    .order('work_date', { ascending:false })
+    .order('created_at', { ascending:false });
+
+
+  $('productionLoading').classList.add('hidden');
+
+
+  if(error){
+
+    alert(
+      'Unable to load production reports: ' +
+      error.message
+    );
+
+    return;
   }
 
-  show("gf");
 
-  await loadGF();
+  if(!reports || reports.length === 0){
+
+    $('productionEmpty').classList.remove('hidden');
+
+    return;
+  }
+
+
+  reports.forEach(report => {
+
+    const card =
+      document.createElement('div');
+
+    card.className = 'job-card';
+
+
+    const jobNumber =
+      report.jobs?.job_number || 'No Job';
+
+    const jobName =
+      report.jobs?.job_name || '';
+
+    const foreman =
+      report.foreman_name || 'Unknown Foreman';
+
+    const regularHours =
+      report.regular_hours || 0;
+
+    const overtimeHours =
+      report.overtime_hours || 0;
+
+
+    card.innerHTML = `
+
+      <div class="job-number">
+        ${escapeHtml(jobNumber)}
+      </div>
+
+      <div class="job-title">
+        ${escapeHtml(jobName)}
+      </div>
+
+      <div class="job-info">
+
+        Date:
+        <strong>
+          ${escapeHtml(report.work_date)}
+        </strong>
+
+        <br>
+
+        Foreman:
+        <strong>
+          ${escapeHtml(foreman)}
+        </strong>
+
+        <br>
+
+        Regular Hours:
+        <strong>
+          ${escapeHtml(regularHours)}
+        </strong>
+
+        <br>
+
+        OT Hours:
+        <strong>
+          ${escapeHtml(overtimeHours)}
+        </strong>
+
+        <br>
+
+        Status:
+        <strong>
+          ${escapeHtml(
+            String(report.status || 'draft')
+              .toUpperCase()
+          )}
+        </strong>
+
+      </div>
+    `;
+
+
+    $('productionList')
+      .appendChild(card);
+
+  });
+
 }
 /* START */
 
