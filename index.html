@@ -1543,6 +1543,7 @@ async function loadProductionReports(){
     .from('daily_reports')
     .select(`
       id,
+      job_id,
       work_date,
       foreman_name,
       crew_name,
