@@ -1654,7 +1654,15 @@ async function loadProductionReports(){
               .toUpperCase()
           )}
         </strong>
-
+${report.review_notes ? `
+  <br>
+  <span class="muted">
+    Review Notes:
+    <strong>
+      ${escapeHtml(report.review_notes)}
+    </strong>
+  </span>
+` : ''}
       </div>
     `;
 
