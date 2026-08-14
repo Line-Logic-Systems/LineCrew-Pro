@@ -1657,7 +1657,64 @@ async function loadProductionReports(){
       </div>
     `;
 
+if(
+  String(report.status || 'draft').toLowerCase() === 'draft'
+){
 
+  const submitBtn =
+    document.createElement('button');
+
+  submitBtn.className = 'success small';
+
+  submitBtn.textContent = 'Submit Report';
+
+  submitBtn.onclick = async () => {
+
+    const confirmed =
+      confirm(
+        'Submit this daily report for GF review?'
+      );
+
+    if(!confirmed){
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting...';
+
+    const {
+      error
+    } = await sb.rpc(
+      'submit_daily_report',
+      {
+        p_report_id: report.id
+      }
+    );
+
+    if(error){
+
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Report';
+
+      alert(
+        'Unable to submit report: ' +
+        error.message
+      );
+
+      return;
+    }
+
+    alert('Daily report submitted.');
+
+    await loadProductionReports();
+
+  };
+
+  card.appendChild(submitBtn);
+
+}
+   
+    
     $('productionList')
       .appendChild(card);
 
