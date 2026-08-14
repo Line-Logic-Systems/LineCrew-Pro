@@ -1671,6 +1671,77 @@ if(
   String(report.status || 'draft').toLowerCase() === 'draft'
 ){
 
+ const editBtn =
+  document.createElement('button');
+
+editBtn.className = 'secondary small';
+editBtn.textContent = 'Edit Report';
+
+editBtn.onclick = async () => {
+
+  $('dailyReportForm').classList.remove('hidden');
+
+  $('dailyForemanName').value =
+    report.foreman_name || '';
+
+  $('dailyWorkDate').value =
+    report.work_date || '';
+
+  $('dailyRegularHours').value =
+    report.regular_hours || 0;
+
+  $('dailyOvertimeHours').value =
+    report.overtime_hours || 0;
+
+  $('dailyCrewName').value =
+    report.crew_name || '';
+
+  $('dailyNotes').value =
+    report.notes || '';
+
+  $('dailyJobId').innerHTML =
+    '<option value="">Select active job</option>';
+
+  const {
+    data: jobs,
+    error
+  } = await sb
+    .from('jobs')
+    .select('id, job_number, job_name')
+    .eq('company_id', currentProfile.company_id)
+    .eq('active', true)
+    .order('job_number', { ascending:true });
+
+  if(error){
+    alert(
+      'Unable to load active jobs: ' +
+      error.message
+    );
+    return;
+  }
+
+  (jobs || []).forEach(job => {
+
+    const option =
+      document.createElement('option');
+
+    option.value = job.id;
+
+    option.textContent =
+      `${job.job_number} - ${job.job_name}`;
+
+    if(job.id === report.job_id){
+      option.selected = true;
+    }
+
+    $('dailyJobId').appendChild(option);
+
+  });
+
+};
+
+card.appendChild(editBtn); 
+  
   const submitBtn =
     document.createElement('button');
 
