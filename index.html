@@ -386,7 +386,7 @@ button.small{
     Daily reporting coming next
   </span>
 </div>
-    <div class="metric">
+    <div class="metric" id="priceBooksTile">
       <strong>Price Books</strong>
       <span class="muted">
         Company pricing management
@@ -633,7 +633,116 @@ button.small{
 
 </section>
 
-</main>
+<!-- PRICE BOOKS PAGE -->
+
+<section id="priceBooksPage" class="hidden">
+
+  <div class="toolbar">
+
+    <button
+      class="secondary"
+      id="backFromPriceBooks"
+    >
+      ← Back to Dashboard
+    </button>
+
+    <button id="refreshPriceBooksBtn">
+      Refresh
+    </button>
+
+  </div>
+
+
+  <div class="card">
+
+  <div class="section-header">
+
+      <div>
+        <h2>Contracts & Price Books</h2>
+        <p class="muted">
+          Manage utilities, contracts and company pricing.
+        </p>
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- CUSTOMERS / UTILITIES -->
+
+  <div class="card">
+
+    <div class="section-header">
+
+      <div>
+        <h2>Customers / Utilities</h2>
+        <p class="muted">
+          Utilities and customers your company contracts with.
+        </p>
+      </div>
+
+      <button id="addCustomerBtn" class="success">
+        + Add Customer
+      </button>
+
+    </div>
+
+    <div id="customersList"></div>
+
+  </div>
+
+
+  <!-- CONTRACTS -->
+
+  <div class="card">
+
+    <div class="section-header">
+
+      <div>
+        <h2>Contracts</h2>
+        <p class="muted">
+          Contracts tied to each customer or utility.
+        </p>
+      </div>
+
+      <button id="addContractBtn" class="success">
+        + Add Contract
+      </button>
+
+    </div>
+
+    <div id="contractsList"></div>
+
+  </div>
+
+
+  <!-- PRICE BOOKS -->
+
+  <div class="card">
+
+    <div class="section-header">
+
+      <div>
+        <h2>Price Books</h2>
+        <p class="muted">
+          Contractor-managed pricing for each contract.
+        </p>
+      </div>
+
+      <button id="addPriceBookBtn" class="success">
+        + Add Price Book
+      </button>
+
+    </div>
+
+    <div id="priceBooksList"></div>
+
+  </div>
+
+</section>
+  
+  </main>
 
 
 <script>
