@@ -1680,6 +1680,7 @@ editBtn.textContent = 'Edit Report';
 editBtn.onclick = async () => {
 
   $('dailyReportForm').classList.remove('hidden');
+  $('dailyReportForm').dataset.reportId = report.id;
 
   $('dailyForemanName').value =
     report.foreman_name || '';
@@ -1939,6 +1940,8 @@ $('createDailyReportBtn').onclick = async () => {
 
   $('dailyReportForm').classList.remove('hidden');
 
+  delete $('dailyReportForm').dataset.reportId;
+
   $('dailyForemanName').value =
     currentProfile?.full_name || '';
 
@@ -1996,6 +1999,9 @@ $('cancelDailyReportBtn').onclick = () => {
 
 $('saveDailyReportBtn').onclick = async () => {
 
+  const reportId =
+  $('dailyReportForm').dataset.reportId || null;
+  
   const jobId = $('dailyJobId').value;
   const workDate = $('dailyWorkDate').value;
 
@@ -2026,10 +2032,30 @@ $('saveDailyReportBtn').onclick = async () => {
   $('saveDailyReportBtn').textContent = 'Saving...';
 
 
-  const {
-    data,
-    error
-  } = await sb.rpc(
+ let data = null;
+let error = null;
+
+if(reportId){
+
+  const result = await sb.rpc(
+    'update_daily_report',
+    {
+      p_report_id: reportId,
+      p_job_id: jobId,
+      p_work_date: workDate,
+      p_regular_hours: regularHours,
+      p_overtime_hours: overtimeHours,
+      p_crew_name: crewName || null,
+      p_notes: notes || null
+    }
+  );
+
+  data = result.data;
+  error = result.error;
+
+}else{
+
+  const result = await sb.rpc(
     'create_daily_report',
     {
       p_job_id: jobId,
@@ -2040,6 +2066,11 @@ $('saveDailyReportBtn').onclick = async () => {
       p_notes: notes || null
     }
   );
+
+  data = result.data;
+  error = result.error;
+
+}
 
 
   $('saveDailyReportBtn').disabled = false;
