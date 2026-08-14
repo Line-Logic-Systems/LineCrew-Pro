@@ -1713,7 +1713,138 @@ if(
   card.appendChild(submitBtn);
 
 }
-   
+
+ if(
+  String(report.status || '').toLowerCase() === 'submitted' &&
+  ['admin','gf'].includes(
+    String(currentProfile.role || '').toLowerCase()
+  )
+){
+
+  const approveBtn =
+    document.createElement('button');
+
+  approveBtn.className = 'success small';
+  approveBtn.textContent = 'Approve';
+
+
+  approveBtn.onclick = async () => {
+
+    const notes =
+      prompt(
+        'Optional approval notes:',
+        ''
+      );
+
+    if(notes === null){
+      return;
+    }
+
+    const confirmed =
+      confirm(
+        'Approve this daily report?'
+      );
+
+    if(!confirmed){
+      return;
+    }
+
+    approveBtn.disabled = true;
+    approveBtn.textContent = 'Approving...';
+
+    const { error } = await sb.rpc(
+      'approve_daily_report',
+      {
+        p_report_id: report.id,
+        p_review_notes: notes || null
+      }
+    );
+
+    if(error){
+
+      approveBtn.disabled = false;
+      approveBtn.textContent = 'Approve';
+
+      alert(
+        'Unable to approve report: ' +
+        error.message
+      );
+
+      return;
+    }
+
+    alert('Daily report approved.');
+
+    await loadProductionReports();
+  };
+
+
+  const returnBtn =
+    document.createElement('button');
+
+  returnBtn.className = 'secondary small';
+  returnBtn.textContent = 'Return Report';
+
+
+  returnBtn.onclick = async () => {
+
+    const notes =
+      prompt(
+        'Enter the reason this report is being returned:'
+      );
+
+    if(notes === null){
+      return;
+    }
+
+    if(!notes.trim()){
+      alert('Return notes are required.');
+      return;
+    }
+
+    const confirmed =
+      confirm(
+        'Return this report to the foreman?'
+      );
+
+    if(!confirmed){
+      return;
+    }
+
+    returnBtn.disabled = true;
+    returnBtn.textContent = 'Returning...';
+
+    const { error } = await sb.rpc(
+      'return_daily_report',
+      {
+        p_report_id: report.id,
+        p_review_notes: notes.trim()
+      }
+    );
+
+    if(error){
+
+      returnBtn.disabled = false;
+      returnBtn.textContent = 'Return Report';
+
+      alert(
+        'Unable to return report: ' +
+        error.message
+      );
+
+      return;
+    }
+
+    alert('Daily report returned to draft.');
+
+    await loadProductionReports();
+  };
+
+
+  card.appendChild(approveBtn);
+  card.appendChild(returnBtn);
+
+}   
     
     $('productionList')
       .appendChild(card);
