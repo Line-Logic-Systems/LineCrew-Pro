@@ -779,6 +779,7 @@ function show(page){
   $('dashboardPage').classList.add('hidden');
   $('jobsPage').classList.add('hidden');
 $('productionPage').classList.add('hidden');
+  $('priceBooksPage').classList.add('hidden');
   $(page).classList.remove('hidden');
 }
 
@@ -1637,7 +1638,20 @@ $('refreshProductionBtn').onclick = async () => {
   await loadProductionReports();
 };
 
+/* PRICE BOOKS PAGE */
 
+$('priceBooksTile').onclick = async () => {
+  show('priceBooksPage');
+};
+
+$('backFromPriceBooks').onclick = () => {
+  show('dashboardPage');
+};
+
+$('refreshPriceBooksBtn').onclick = async () => {
+  alert('Price book loading will be connected next.');
+};
+  
 async function loadProductionReports(){
 
   $('productionLoading').classList.remove('hidden');
