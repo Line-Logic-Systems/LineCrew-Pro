@@ -900,6 +900,88 @@ button.small{
       </div>
 
       <div id="priceBookDetailContent"></div>
+
+      <div class="section-header">
+        <div>
+          <h3>Unit Items</h3>
+          <p class="muted">
+            Contract unit codes and pricing
+          </p>
+        </div>
+
+        <button
+          id="addPriceBookItemBtn"
+          class="success small hidden"
+        >
+          + Add Unit
+        </button>
+      </div>
+
+      <div id="priceBookItemForm" class="card hidden">
+        <h3>Add Unit Item</h3>
+
+        <label for="priceBookItemCode">Unit Code</label>
+        <input id="priceBookItemCode" type="text">
+
+        <label for="priceBookItemName">Unit Name</label>
+        <input id="priceBookItemName" type="text">
+
+        <label for="priceBookItemDescription">Description</label>
+        <textarea
+          id="priceBookItemDescription"
+          rows="3"
+        ></textarea>
+
+        <label for="priceBookItemCategory">Category</label>
+        <input id="priceBookItemCategory" type="text">
+
+        <label for="priceBookItemUnitOfMeasure">
+          Unit of Measure
+        </label>
+        <input
+          id="priceBookItemUnitOfMeasure"
+          type="text"
+          placeholder="Example: EA, FT, HR"
+        >
+
+        <label for="priceBookItemInstallPrice">
+          Install Price
+        </label>
+        <input
+          id="priceBookItemInstallPrice"
+          type="number"
+          min="0"
+          step="0.01"
+          value="0"
+        >
+
+        <label for="priceBookItemRetirementPrice">
+          Retirement / Remove Price
+        </label>
+        <input
+          id="priceBookItemRetirementPrice"
+          type="number"
+          min="0"
+          step="0.01"
+          value="0"
+        >
+
+        <button
+          id="savePriceBookItemBtn"
+          class="success"
+        >
+          Save Unit
+        </button>
+
+        <button
+          id="cancelPriceBookItemBtn"
+          class="secondary"
+        >
+          Cancel
+        </button>
+      </div>
+
+      <div id="priceBookItemsList"></div>
     </div>
 
     <div id="priceBooksList"></div>
@@ -2596,8 +2678,26 @@ function openPriceBook(
     '</p>';
 
   $('priceBookDetail')
+    .dataset
+    .priceBookId = priceBook.id;
+
+  $('addPriceBookItemBtn')
+    .classList
+    .toggle(
+      'hidden',
+      String(currentProfile?.role || '').toLowerCase() !==
+        'admin'
+    );
+
+  $('priceBookItemForm')
+    .classList
+    .add('hidden');
+
+  $('priceBookDetail')
     .classList
     .remove('hidden');
+
+  loadPriceBookItems(priceBook.id);
 
   $('priceBookDetail')
     .scrollIntoView({
@@ -2611,6 +2711,262 @@ $('closePriceBookDetailBtn').onclick = () => {
   $('priceBookDetail')
     .classList
     .add('hidden');
+
+};
+
+/* PRICE BOOK UNIT ITEMS */
+
+function formatCurrency(value){
+
+  const amount = Number(value || 0);
+
+  return amount.toLocaleString(
+    'en-US',
+    {
+      style: 'currency',
+      currency: 'USD'
+    }
+  );
+}
+
+async function loadPriceBookItems(priceBookId){
+
+  $('priceBookItemsList').innerHTML =
+    '<p class="muted">Loading unit items...</p>';
+
+  const {
+    data: items,
+    error
+  } = await sb
+    .from('price_book_items')
+    .select(`
+      id,
+      item_code,
+      item_name,
+      description,
+      install_price,
+      retirement_price,
+      unit_of_measure,
+      category,
+      active,
+      created_at,
+      updated_at
+    `)
+    .eq(
+      'company_id',
+      currentProfile.company_id
+    )
+    .eq(
+      'price_book_id',
+      priceBookId
+    )
+    .order(
+      'item_code',
+      { ascending: true }
+    );
+
+  if(error){
+
+    $('priceBookItemsList').innerHTML =
+      '<p class="muted">Unable to load unit items.</p>';
+
+    alert(
+      'Unable to load unit items: ' +
+      error.message
+    );
+
+    return;
+  }
+
+  if(!items || items.length === 0){
+
+    $('priceBookItemsList').innerHTML =
+      '<p class="muted">No unit items added yet.</p>';
+
+    return;
+  }
+
+  $('priceBookItemsList').innerHTML = '';
+
+  items.forEach(item => {
+
+    const card =
+      document.createElement('div');
+
+    card.className =
+      'job-card' +
+      (item.active ? '' : ' inactive');
+
+    card.innerHTML =
+      '<div class="job-number">' +
+        escapeHtml(item.item_code) +
+      '</div>' +
+      '<div class="job-title">' +
+        escapeHtml(item.item_name || 'Unnamed Unit') +
+      '</div>' +
+      '<div class="status ' +
+        (item.active ? 'active' : 'closed') +
+      '">' +
+        (item.active ? 'ACTIVE' : 'INACTIVE') +
+      '</div>' +
+      '<div class="job-info">' +
+        (item.description
+          ? escapeHtml(item.description) + '<br>'
+          : '') +
+        'Install: <strong>' +
+          escapeHtml(formatCurrency(item.install_price)) +
+        '</strong><br>' +
+        'Retirement / Remove: <strong>' +
+          escapeHtml(formatCurrency(item.retirement_price)) +
+        '</strong>' +
+        (item.unit_of_measure
+          ? '<br>Unit: <strong>' +
+              escapeHtml(item.unit_of_measure) +
+            '</strong>'
+          : '') +
+        (item.category
+          ? '<br>Category: <strong>' +
+              escapeHtml(item.category) +
+            '</strong>'
+          : '') +
+      '</div>';
+
+    $('priceBookItemsList')
+      .appendChild(card);
+
+  });
+}
+
+$('addPriceBookItemBtn').onclick = () => {
+
+  $('priceBookItemCode').value = '';
+  $('priceBookItemName').value = '';
+  $('priceBookItemDescription').value = '';
+  $('priceBookItemCategory').value = '';
+  $('priceBookItemUnitOfMeasure').value = '';
+  $('priceBookItemInstallPrice').value = 0;
+  $('priceBookItemRetirementPrice').value = 0;
+
+  $('priceBookItemForm')
+    .classList
+    .remove('hidden');
+
+};
+
+$('cancelPriceBookItemBtn').onclick = () => {
+
+  $('priceBookItemForm')
+    .classList
+    .add('hidden');
+
+};
+
+$('savePriceBookItemBtn').onclick = async () => {
+
+  const priceBookId =
+    $('priceBookDetail')
+      .dataset
+      .priceBookId;
+
+  const itemCode =
+    $('priceBookItemCode').value.trim();
+
+  const itemName =
+    $('priceBookItemName').value.trim();
+
+  const description =
+    $('priceBookItemDescription').value.trim() ||
+    null;
+
+  const category =
+    $('priceBookItemCategory').value.trim() ||
+    null;
+
+  const unitOfMeasure =
+    $('priceBookItemUnitOfMeasure').value.trim() ||
+    null;
+
+  const installPrice =
+    Number(
+      $('priceBookItemInstallPrice').value || 0
+    );
+
+  const retirementPrice =
+    Number(
+      $('priceBookItemRetirementPrice').value || 0
+    );
+
+  if(!priceBookId){
+
+    alert('Open a Price Book before adding a unit.');
+
+    return;
+  }
+
+  if(!itemCode){
+
+    alert('Enter a unit code.');
+
+    return;
+  }
+
+  if(!itemName){
+
+    alert('Enter a unit name.');
+
+    return;
+  }
+
+  if(
+    !Number.isFinite(installPrice) ||
+    !Number.isFinite(retirementPrice) ||
+    installPrice < 0 ||
+    retirementPrice < 0
+  ){
+
+    alert('Enter valid prices of zero or greater.');
+
+    return;
+  }
+
+  $('savePriceBookItemBtn').disabled = true;
+  $('savePriceBookItemBtn').textContent = 'Saving...';
+
+  const { error } = await sb
+    .from('price_book_items')
+    .insert({
+      company_id: currentProfile.company_id,
+      price_book_id: priceBookId,
+      item_code: itemCode,
+      item_name: itemName,
+      description: description,
+      category: category,
+      unit_of_measure: unitOfMeasure,
+      install_price: installPrice,
+      retirement_price: retirementPrice,
+      active: true
+    });
+
+  $('savePriceBookItemBtn').disabled = false;
+  $('savePriceBookItemBtn').textContent = 'Save Unit';
+
+  if(error){
+
+    alert(
+      'Unable to save unit item: ' +
+      error.message
+    );
+
+    return;
+  }
+
+  $('priceBookItemForm')
+    .classList
+    .add('hidden');
+
+  await loadPriceBookItems(priceBookId);
+
+  alert('Unit item saved.');
 
 };
 
