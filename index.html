@@ -688,6 +688,65 @@ button.small{
 
     </div>
 
+    <div id="customerForm" class="card hidden">
+
+  <h3>Add Customer / Utility</h3>
+
+  <label for="customerName">Customer / Utility Name</label>
+  <input
+    id="customerName"
+    type="text"
+    placeholder="Example: United Electric Cooperative"
+  >
+
+  <label for="customerType">Type</label>
+  <select id="customerType">
+    <option value="">Select type</option>
+    <option value="utility">Utility</option>
+    <option value="coop">Cooperative</option>
+    <option value="municipality">Municipality</option>
+    <option value="contractor">Contractor</option>
+    <option value="other">Other</option>
+  </select>
+
+  <label for="customerContactName">Contact Name</label>
+  <input
+    id="customerContactName"
+    type="text"
+    placeholder="Optional"
+  >
+
+  <label for="customerContactEmail">Contact Email</label>
+  <input
+    id="customerContactEmail"
+    type="email"
+    placeholder="Optional"
+  >
+
+  <label for="customerContactPhone">Contact Phone</label>
+  <input
+    id="customerContactPhone"
+    type="text"
+    placeholder="Optional"
+  >
+
+  <label for="customerNotes">Notes</label>
+  <textarea
+    id="customerNotes"
+    rows="3"
+    placeholder="Optional notes"
+  ></textarea>
+
+  <button id="saveCustomerBtn" class="success">
+    Save Customer
+  </button>
+
+  <button id="cancelCustomerBtn" class="secondary">
+    Cancel
+  </button>
+
+</div>
+    
     <div id="customersList"></div>
 
   </div>
@@ -1651,6 +1710,97 @@ $('backFromPriceBooks').onclick = () => {
 $('refreshPriceBooksBtn').onclick = async () => {
   alert('Price book loading will be connected next.');
 };
+
+ /* CUSTOMER / UTILITY FORM */
+
+$('addCustomerBtn').onclick = () => {
+
+  $('customerForm').classList.remove('hidden');
+
+  $('customerName').value = '';
+  $('customerType').value = '';
+  $('customerContactName').value = '';
+  $('customerContactEmail').value = '';
+  $('customerContactPhone').value = '';
+  $('customerNotes').value = '';
+};
+
+
+$('cancelCustomerBtn').onclick = () => {
+
+  $('customerForm').classList.add('hidden');
+};
+
+
+$('saveCustomerBtn').onclick = async () => {
+
+  const name =
+    $('customerName').value.trim();
+
+  const customerType =
+    $('customerType').value || null;
+
+  const contactName =
+    $('customerContactName').value.trim() || null;
+
+  const contactEmail =
+    $('customerContactEmail').value.trim() || null;
+
+  const contactPhone =
+    $('customerContactPhone').value.trim() || null;
+
+  const notes =
+    $('customerNotes').value.trim() || null;
+
+
+  if(!name){
+
+    alert('Enter a customer or utility name.');
+
+    return;
+  }
+
+
+  $('saveCustomerBtn').disabled = true;
+  $('saveCustomerBtn').textContent = 'Saving...';
+
+
+  const {
+    error
+  } = await sb
+    .from('customers')
+    .insert({
+      company_id: currentProfile.company_id,
+      name: name,
+      customer_type: customerType,
+      contact_name: contactName,
+      contact_email: contactEmail,
+      contact_phone: contactPhone,
+      notes: notes,
+      active: true
+    });
+
+
+  $('saveCustomerBtn').disabled = false;
+  $('saveCustomerBtn').textContent = 'Save Customer';
+
+
+  if(error){
+
+    alert(
+      'Unable to save customer: ' +
+      error.message
+    );
+
+    return;
+  }
+
+
+  alert('Customer saved.');
+
+  $('customerForm').classList.add('hidden');
+
+}; 
   
 async function loadProductionReports(){
 
