@@ -3719,30 +3719,47 @@ function loadImportWorksheet(sheetName){
     );
   }
 
-  const rawRows =
+  const parsedRows =
     XLSX.utils.sheet_to_json(
       currentPriceBookWorkbook.Sheets[sheetName],
       {
         defval: '',
-        raw: false
+        raw: false,
+        blankrows: false
       }
     );
 
+  const rawRows =
+    parsedRows
+      .map((row, index) => ({
+        row: row,
+        rowNumber: index + 2
+      }))
+      .filter(entry =>
+        Object.values(entry.row)
+          .some(value =>
+            String(value ?? '').trim() !== ''
+          )
+      );
+
   if(rawRows.length === 0){
     throw new Error(
-      'No pricing rows were found. Make sure the first row contains column names.'
+      'No pricing rows were found. Make sure the first row contains column names and at least one completed pricing row.'
     );
   }
 
   if(rawRows.length > 1000){
     throw new Error(
-      'This first release imports up to 1,000 rows at a time. Split the pricing into smaller groups and try again.'
+      'This first release imports up to 1,000 completed rows at a time. Split the pricing into smaller groups and try again.'
     );
   }
 
   currentPriceBookImportRows =
-    rawRows.map((row, index) =>
-      mapImportRow(row, index + 2)
+    rawRows.map(entry =>
+      mapImportRow(
+        entry.row,
+        entry.rowNumber
+      )
     );
 
   validateImportDuplicates(
