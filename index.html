@@ -243,6 +243,30 @@ button.small{
   margin:0;
 }
 
+.unit-filter-toolbar{
+  display:grid;
+  grid-template-columns:1fr 1fr 1.35fr auto;
+  gap:10px;
+  align-items:end;
+  margin:10px 0 14px;
+}
+
+.unit-filter-toolbar label{
+  margin:0 0 5px;
+  font-size:13px;
+}
+
+.unit-filter-toolbar select{
+  padding:10px;
+  font-size:14px;
+}
+
+.unit-filter-toolbar button{
+  width:auto;
+  margin:0;
+  padding:11px 14px;
+}
+
 button:disabled{
   opacity:.55;
   cursor:not-allowed;
@@ -392,6 +416,14 @@ button:disabled{
 
   .toolbar{
     flex-direction:column;
+  }
+
+  .unit-filter-toolbar{
+    grid-template-columns:1fr;
+  }
+
+  .unit-filter-toolbar button{
+    width:100%;
   }
 
   .section-header{
@@ -1229,6 +1261,37 @@ button:disabled{
         type="search"
         placeholder="Search code, name, description or category"
       >
+
+      <div class="unit-filter-toolbar">
+        <div>
+          <label for="priceBookItemStatusFilter">Status</label>
+          <select id="priceBookItemStatusFilter">
+            <option value="all">All units</option>
+            <option value="active">Active only</option>
+            <option value="inactive">Inactive only</option>
+          </select>
+        </div>
+        <div>
+          <label for="priceBookItemCategoryFilter">Category</label>
+          <select id="priceBookItemCategoryFilter">
+            <option value="all">All categories</option>
+          </select>
+        </div>
+        <div>
+          <label for="priceBookItemSort">Sort</label>
+          <select id="priceBookItemSort">
+            <option value="code-asc">Unit code A–Z</option>
+            <option value="code-desc">Unit code Z–A</option>
+            <option value="install-desc">Install price high–low</option>
+            <option value="install-asc">Install price low–high</option>
+            <option value="retirement-desc">Retirement high–low</option>
+            <option value="retirement-asc">Retirement low–high</option>
+          </select>
+        </div>
+        <button id="exportPriceBookItemsBtn" class="secondary">
+          Export CSV
+        </button>
+      </div>
 
       <div id="priceBookItemForm" class="card hidden">
         <h3 id="priceBookItemFormTitle">Add Unit Item</h3>
@@ -3058,6 +3121,10 @@ function openPriceBook(
   resetPriceBookImport();
 
   $('priceBookItemSearch').value = '';
+  $('priceBookItemStatusFilter').value = 'all';
+  $('priceBookItemCategoryFilter').innerHTML =
+    '<option value="all">All categories</option>';
+  $('priceBookItemSort').value = 'code-asc';
   currentPriceBookItems = [];
 
   $('priceBookItemForm')
@@ -4522,12 +4589,44 @@ async function loadPriceBookItems(priceBookId){
   currentPriceBookItems =
     items || [];
 
+  populatePriceBookCategoryFilter();
+
   currentPriceBookItemPage = 1;
 
   renderPriceBookItems();
 }
 
-function renderPriceBookItems(){
+function populatePriceBookCategoryFilter(){
+
+  const categoryFilter =
+    $('priceBookItemCategoryFilter');
+
+  const selectedCategory =
+    categoryFilter.value || 'all';
+
+  const categories = [...new Set(
+    currentPriceBookItems
+      .map(item => String(item.category || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
+
+  categoryFilter.innerHTML =
+    '<option value="all">All categories</option>';
+
+  categories.forEach(category => {
+    const option = document.createElement('option');
+    option.value = category;
+    option.textContent = category;
+    categoryFilter.appendChild(option);
+  });
+
+  categoryFilter.value =
+    categories.includes(selectedCategory)
+      ? selectedCategory
+      : 'all';
+}
+
+function getFilteredSortedPriceBookItems(){
 
   const searchText =
     $('priceBookItemSearch')
@@ -4535,8 +4634,38 @@ function renderPriceBookItems(){
       .trim()
       .toLowerCase();
 
+  const statusFilter =
+    $('priceBookItemStatusFilter').value;
+
+  const categoryFilter =
+    $('priceBookItemCategoryFilter').value;
+
+  const sortValue =
+    $('priceBookItemSort').value;
+
   const filteredItems =
     currentPriceBookItems.filter(item => {
+
+      if(
+        statusFilter === 'active' &&
+        !item.active
+      ){
+        return false;
+      }
+
+      if(
+        statusFilter === 'inactive' &&
+        item.active
+      ){
+        return false;
+      }
+
+      if(
+        categoryFilter !== 'all' &&
+        String(item.category || '') !== categoryFilter
+      ){
+        return false;
+      }
 
       if(!searchText){
         return true;
@@ -4554,6 +4683,38 @@ function renderPriceBookItems(){
           .includes(searchText)
       );
     });
+
+  const compareText = (a, b) =>
+    String(a || '').localeCompare(
+      String(b || ''),
+      undefined,
+      { numeric:true, sensitivity:'base' }
+    );
+
+  filteredItems.sort((a, b) => {
+    switch(sortValue){
+      case 'code-desc':
+        return compareText(b.item_code, a.item_code);
+      case 'install-desc':
+        return Number(b.install_price || 0) - Number(a.install_price || 0);
+      case 'install-asc':
+        return Number(a.install_price || 0) - Number(b.install_price || 0);
+      case 'retirement-desc':
+        return Number(b.retirement_price || 0) - Number(a.retirement_price || 0);
+      case 'retirement-asc':
+        return Number(a.retirement_price || 0) - Number(b.retirement_price || 0);
+      default:
+        return compareText(a.item_code, b.item_code);
+    }
+  });
+
+  return filteredItems;
+}
+
+function renderPriceBookItems(){
+
+  const filteredItems =
+    getFilteredSortedPriceBookItems();
 
   if(currentPriceBookItems.length === 0){
 
@@ -4838,6 +4999,78 @@ $('priceBookItemSearch').oninput = () => {
 
   renderPriceBookItems();
 
+};
+
+[
+  'priceBookItemStatusFilter',
+  'priceBookItemCategoryFilter',
+  'priceBookItemSort'
+].forEach(id => {
+  $(id).onchange = () => {
+    currentPriceBookItemPage = 1;
+    renderPriceBookItems();
+  };
+});
+
+function csvCell(value){
+  const text = String(value ?? '');
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+
+$('exportPriceBookItemsBtn').onclick = () => {
+
+  const items = getFilteredSortedPriceBookItems();
+
+  if(items.length === 0){
+    alert('There are no matching units to export.');
+    return;
+  }
+
+  const headers = [
+    'Unit Code',
+    'Unit Name',
+    'Description',
+    'Install Price',
+    'Retirement Price',
+    'Unit of Measure',
+    'Category',
+    'Status'
+  ];
+
+  const rows = items.map(item => [
+    item.item_code,
+    item.item_name,
+    item.description,
+    Number(item.install_price || 0).toFixed(2),
+    Number(item.retirement_price || 0).toFixed(2),
+    item.unit_of_measure,
+    item.category,
+    item.active ? 'Active' : 'Inactive'
+  ]);
+
+  const csv = [headers, ...rows]
+    .map(row => row.map(csvCell).join(','))
+    .join('\r\n');
+
+  const bookName =
+    currentOpenPriceBook?.name || 'price-book';
+
+  const safeName = bookName
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'price-book';
+
+  const blob = new Blob([csv], {
+    type:'text/csv;charset=utf-8'
+  });
+
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = safeName + '-units.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
 };
 
 function resetPriceBookItemForm(){
