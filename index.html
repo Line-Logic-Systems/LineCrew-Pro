@@ -263,10 +263,9 @@ button.small{
   margin:12px 0;
 }
 
-.import-table-wrap{
-  overflow-x:auto;
-  margin-top:12px;
-}
+.mapping-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mapping-grid label{margin-top:8px}
+.import-table-wrap{overflow-x:auto;margin-top:12px}
 
 .import-table{
   width:100%;
@@ -306,7 +305,8 @@ button.small{
 }
 
 @media(max-width:600px){
-  .grid{
+  .grid,
+  .mapping-grid{
     grid-template-columns:1fr;
   }
 
@@ -1076,10 +1076,23 @@ button.small{
         </div>
 
         <div id="priceBookWorksheetWrap" class="hidden">
-          <label for="priceBookWorksheet">
-            Worksheet / Tab
-          </label>
+          <label for="priceBookWorksheet">Worksheet / Tab</label>
           <select id="priceBookWorksheet"></select>
+        </div>
+        <div id="priceBookColumnMapping" class="hidden">
+          <h3>Match Spreadsheet Columns</h3>
+          <p class="muted">LineCrew Pro selected the best matches automatically. Change any selection when a contractor uses different headings.</p>
+          <div class="mapping-grid">
+            <div><label for="mapUnitCode">Unit Code *</label><select id="mapUnitCode"></select></div>
+            <div><label for="mapDescription">Description *</label><select id="mapDescription"></select></div>
+            <div><label for="mapUnitName">Unit Name</label><select id="mapUnitName"></select></div>
+            <div><label for="mapInstallPrice">Install Price</label><select id="mapInstallPrice"></select></div>
+            <div><label for="mapRetirementPrice">Retirement / Remove Price</label><select id="mapRetirementPrice"></select></div>
+            <div><label for="mapUnitPrice">Single Unit Price</label><select id="mapUnitPrice"></select></div>
+            <div><label for="mapUnitOfMeasure">Unit of Measure</label><select id="mapUnitOfMeasure"></select></div>
+            <div><label for="mapCategory">Category / Type</label><select id="mapCategory"></select></div>
+          </div>
+          <button id="applyImportColumnMappingBtn" class="secondary">Apply Column Mapping</button>
         </div>
 
         <p class="muted">
@@ -1240,6 +1253,7 @@ let currentPriceBookItems = [];
 let currentPriceBookImportRows = [];
 let currentOpenPriceBook = null;
 let currentPriceBookWorkbook = null;
+let currentPriceBookSourceRows = [];
 
 
 /* PAGE NAVIGATION */
@@ -3388,6 +3402,7 @@ function resetPriceBookImport(){
     .add('hidden');
 
   currentPriceBookImportRows = [];
+  currentPriceBookSourceRows = [];
   currentPriceBookWorkbook = null;
   $('priceBookImportFile').value = '';
   $('priceBookImportPaste').value = '';
@@ -3395,6 +3410,7 @@ function resetPriceBookImport(){
   $('priceBookWorksheetWrap')
     .classList
     .add('hidden');
+  $('priceBookColumnMapping').classList.add('hidden');
   $('priceBookImportPreview').innerHTML = '';
   $('confirmPriceBookImportBtn')
     .classList
@@ -3778,65 +3794,77 @@ function renderPriceBookImportPreview(){
     (validRows.length === 1 ? '' : 's');
 }
 
+const importMappingDefinitions=[
+{id:'mapUnitCode',aliases:['unitcode','itemcode','code','unitnumber','itemnumber','workunit']},
+{id:'mapDescription',aliases:['description','unitdescription','itemdescription','desc','workunitdescription']},
+{id:'mapUnitName',aliases:['unitname','itemname','name','title','workunitname']},
+{id:'mapInstallPrice',aliases:['installprice','installationprice','install','newprice']},
+{id:'mapRetirementPrice',aliases:['retirementprice','removeprice','removalprice','retireprice','retirement','remove']},
+{id:'mapUnitPrice',aliases:['unitprice','price','rate','unitrate','laborrate']},
+{id:'mapUnitOfMeasure',aliases:['unitofmeasure','uom','measure','unit']},
+{id:'mapCategory',aliases:['category','type','itemtype','unittype']}
+];
+
+function configureImportColumnMappings(headers){
+ importMappingDefinitions.forEach(definition=>{
+  const select=$(definition.id);
+  select.innerHTML='<option value="">Not provided</option>';
+  headers.forEach(header=>{
+   const option=document.createElement('option');
+   option.value=header; option.textContent=header;
+   if(definition.aliases.includes(normalizeImportHeader(header))) option.selected=true;
+   select.appendChild(option);
+  });
+ });
+ $('priceBookColumnMapping').classList.remove('hidden');
+}
+
+function mappedImportValue(row,selectId){
+ const columnName=$(selectId).value;
+ return columnName?row[columnName]:'';
+}
+
+function applyImportColumnMapping(){
+ if(!$('mapUnitCode').value){
+  $('priceBookImportPreview').innerHTML='<p class="import-error">Select the spreadsheet column that contains the Unit Code.</p>';
+  $('confirmPriceBookImportBtn').classList.add('hidden'); return;
+ }
+ if(!$('mapDescription').value&&!$('mapUnitName').value){
+  $('priceBookImportPreview').innerHTML='<p class="import-error">Select a Description or Unit Name column.</p>';
+  $('confirmPriceBookImportBtn').classList.add('hidden'); return;
+ }
+ if(!$('mapInstallPrice').value&&!$('mapRetirementPrice').value&&!$('mapUnitPrice').value){
+  $('priceBookImportPreview').innerHTML='<p class="import-error">Select an Install Price, Retirement Price or Single Unit Price column.</p>';
+  $('confirmPriceBookImportBtn').classList.add('hidden'); return;
+ }
+ currentPriceBookImportRows=currentPriceBookSourceRows.map(entry=>{
+  const mappedRow={
+   'Unit Code':mappedImportValue(entry.row,'mapUnitCode'),
+   'Description':mappedImportValue(entry.row,'mapDescription'),
+   'Unit Name':mappedImportValue(entry.row,'mapUnitName'),
+   'Install Price':mappedImportValue(entry.row,'mapInstallPrice'),
+   'Retirement Price':mappedImportValue(entry.row,'mapRetirementPrice'),
+   'Unit Price':mappedImportValue(entry.row,'mapUnitPrice'),
+   'Unit of Measure':mappedImportValue(entry.row,'mapUnitOfMeasure'),
+   'Category':mappedImportValue(entry.row,'mapCategory')
+  };
+  return mapImportRow(mappedRow,entry.rowNumber);
+ });
+ validateImportDuplicates(currentPriceBookImportRows);
+ renderPriceBookImportPreview();
+}
+
+$('applyImportColumnMappingBtn').onclick=applyImportColumnMapping;
+
 function loadImportWorksheet(sheetName){
-
-  if(
-    !currentPriceBookWorkbook ||
-    !currentPriceBookWorkbook.Sheets[sheetName]
-  ){
-    throw new Error(
-      'The selected worksheet could not be read.'
-    );
-  }
-
-  const parsedRows =
-    XLSX.utils.sheet_to_json(
-      currentPriceBookWorkbook.Sheets[sheetName],
-      {
-        defval: '',
-        raw: false,
-        blankrows: false
-      }
-    );
-
-  const rawRows =
-    parsedRows
-      .map((row, index) => ({
-        row: row,
-        rowNumber: index + 2
-      }))
-      .filter(entry =>
-        Object.values(entry.row)
-          .some(value =>
-            String(value ?? '').trim() !== ''
-          )
-      );
-
-  if(rawRows.length === 0){
-    throw new Error(
-      'No pricing rows were found. Make sure the first row contains column names and at least one completed pricing row.'
-    );
-  }
-
-  if(rawRows.length > 1000){
-    throw new Error(
-      'This first release imports up to 1,000 completed rows at a time. Split the pricing into smaller groups and try again.'
-    );
-  }
-
-  currentPriceBookImportRows =
-    rawRows.map(entry =>
-      mapImportRow(
-        entry.row,
-        entry.rowNumber
-      )
-    );
-
-  validateImportDuplicates(
-    currentPriceBookImportRows
-  );
-
-  renderPriceBookImportPreview();
+ if(!currentPriceBookWorkbook||!currentPriceBookWorkbook.Sheets[sheetName]) throw new Error('The selected worksheet could not be read.');
+ const parsedRows=XLSX.utils.sheet_to_json(currentPriceBookWorkbook.Sheets[sheetName],{defval:'',raw:false,blankrows:false});
+ const rawRows=parsedRows.map((row,index)=>({row:row,rowNumber:index+2})).filter(entry=>Object.values(entry.row).some(value=>String(value??'').trim()!==''));
+ if(rawRows.length===0) throw new Error('No pricing rows were found. Make sure the first row contains column names and at least one completed pricing row.');
+ if(rawRows.length>1000) throw new Error('This first release imports up to 1,000 completed rows at a time. Split the pricing into smaller groups and try again.');
+ currentPriceBookSourceRows=rawRows;
+ configureImportColumnMappings(Object.keys(rawRows[0].row));
+ applyImportColumnMapping();
 }
 
 function prepareImportWorkbook(
