@@ -267,6 +267,62 @@ button.small{
   padding:11px 14px;
 }
 
+.price-book-version-group{
+  background:white;
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:16px;
+  margin-bottom:14px;
+}
+
+.version-group-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  margin-bottom:10px;
+}
+
+.version-count{
+  white-space:nowrap;
+  background:#e9f0f6;
+  color:var(--navy);
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:12px;
+  font-weight:800;
+}
+
+.version-row{
+  display:grid;
+  grid-template-columns:minmax(115px,1fr) minmax(110px,auto) minmax(110px,auto) auto;
+  align-items:center;
+  gap:10px;
+  border-top:1px solid var(--border);
+  padding:11px 0;
+}
+
+.version-row:first-child{
+  border-top:0;
+}
+
+.version-row.inactive{
+  color:var(--muted);
+}
+
+.version-name{
+  font-weight:800;
+}
+
+.version-date{
+  font-size:14px;
+}
+
+.version-row button{
+  width:auto;
+  margin:0;
+}
+
 button:disabled{
   opacity:.55;
   cursor:not-allowed;
@@ -424,6 +480,23 @@ button:disabled{
 
   .unit-filter-toolbar button{
     width:100%;
+  }
+
+  .version-group-header{
+    display:block;
+  }
+
+  .version-count{
+    display:inline-block;
+    margin-top:8px;
+  }
+
+  .version-row{
+    grid-template-columns:1fr auto;
+  }
+
+  .version-date{
+    grid-column:1 / -1;
   }
 
   .section-header{
@@ -2930,94 +3003,126 @@ async function loadPriceBooks(){
 
   $('priceBooksList').innerHTML = '';
 
+  const versionGroups = new Map();
+
   priceBooks.forEach(priceBook => {
+    const groupKey = [
+      priceBook.contract_id || 'no-contract',
+      String(priceBook.name || '')
+        .trim()
+        .toLowerCase()
+    ].join('::');
 
+    if(!versionGroups.has(groupKey)){
+      versionGroups.set(groupKey, []);
+    }
+
+    versionGroups.get(groupKey).push(priceBook);
+  });
+
+  versionGroups.forEach(versions => {
+
+    versions.sort((a, b) => {
+      if(Boolean(a.active) !== Boolean(b.active)){
+        return a.active ? -1 : 1;
+      }
+
+      const aDate =
+        a.effective_start || a.effective_date || a.created_at || '';
+      const bDate =
+        b.effective_start || b.effective_date || b.created_at || '';
+
+      return String(bDate).localeCompare(String(aDate));
+    });
+
+    const representative = versions[0];
     const contract =
-      contractsById.get(priceBook.contract_id);
-
+      contractsById.get(representative.contract_id);
     const customer =
       contract
         ? customersById.get(contract.customer_id)
         : null;
 
-    const effectiveStart =
-      priceBook.effective_start ||
-      priceBook.effective_date ||
-      'Not set';
+    const group = document.createElement('div');
+    group.className = 'price-book-version-group';
 
-    const statusText =
-      priceBook.active
-        ? 'ACTIVE'
-        : 'INACTIVE';
-
-    const statusClass =
-      priceBook.active
-        ? 'active'
-        : 'closed';
-
-    const card =
-      document.createElement('div');
-
-    card.className =
-      'job-card' +
-      (priceBook.active ? '' : ' inactive');
-
-    card.innerHTML =
-      '<div class="job-title">' +
-        escapeHtml(priceBook.name) +
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'version-group-header';
+    groupHeader.innerHTML =
+      '<div>' +
+        '<div class="job-title">' +
+          escapeHtml(representative.name || 'Unnamed Price Book') +
+        '</div>' +
+        '<div class="job-info">' +
+          'Customer / Utility: <strong>' +
+            escapeHtml(customer?.name || 'Not assigned') +
+          '</strong><br>' +
+          'Contract: <strong>' +
+            escapeHtml(contract?.contract_name || 'Not assigned') +
+          '</strong>' +
+          (contract?.contract_number
+            ? ' (' + escapeHtml(contract.contract_number) + ')'
+            : '') +
+        '</div>' +
       '</div>' +
-      '<div class="status ' +
-        statusClass +
-      '">' +
-        statusText +
-      '</div>' +
-      '<div class="job-info">' +
-        'Customer / Utility: <strong>' +
-          escapeHtml(customer?.name || 'Not assigned') +
-        '</strong><br>' +
-        'Contract: <strong>' +
-          escapeHtml(contract?.contract_name || 'Not assigned') +
-        '</strong>' +
-        (contract?.contract_number
-          ? ' (' + escapeHtml(contract.contract_number) + ')'
-          : '') +
-        '<br>Effective: <strong>' +
+      '<span class="version-count">' +
+        versions.length + ' version' +
+        (versions.length === 1 ? '' : 's') +
+      '</span>';
+
+    group.appendChild(groupHeader);
+
+    const history = document.createElement('div');
+
+    versions.forEach(priceBook => {
+      const effectiveStart =
+        priceBook.effective_start ||
+        priceBook.effective_date ||
+        'Not set';
+
+      const row = document.createElement('div');
+      row.className =
+        'version-row' +
+        (priceBook.active ? '' : ' inactive');
+
+      row.innerHTML =
+        '<div>' +
+          '<div class="version-name">' +
+            escapeHtml(priceBook.version_name || 'Original') +
+          '</div>' +
+          (priceBook.notes
+            ? '<div class="muted">' +
+                escapeHtml(priceBook.notes) +
+              '</div>'
+            : '') +
+        '</div>' +
+        '<div class="version-date">Starts: <strong>' +
           escapeHtml(effectiveStart) +
         '</strong>' +
-        (priceBook.effective_end
-          ? '<br>Ends: <strong>' +
-              escapeHtml(priceBook.effective_end) +
-            '</strong>'
-          : '') +
-        '<br>Version: <strong>' +
-          escapeHtml(priceBook.version_name || 'Original') +
-        '</strong>' +
-        (priceBook.notes
-          ? '<br>Notes: ' +
-              escapeHtml(priceBook.notes)
-          : '') +
-      '</div>';
+          (priceBook.effective_end
+            ? '<br>Ends: <strong>' +
+                escapeHtml(priceBook.effective_end) +
+              '</strong>'
+            : '') +
+        '</div>' +
+        '<div class="status ' +
+          (priceBook.active ? 'active' : 'closed') +
+        '">' +
+          (priceBook.active ? 'ACTIVE' : 'INACTIVE') +
+        '</div>';
 
-    const openButton =
-      document.createElement('button');
+      const openButton = document.createElement('button');
+      openButton.className = 'secondary small';
+      openButton.textContent = 'Open';
+      openButton.onclick = () =>
+        openPriceBook(priceBook, contract, customer);
 
-    openButton.className =
-      'secondary small';
+      row.appendChild(openButton);
+      history.appendChild(row);
+    });
 
-    openButton.textContent =
-      'Open Price Book';
-
-    openButton.onclick = () =>
-      openPriceBook(
-        priceBook,
-        contract,
-        customer
-      );
-
-    card.appendChild(openButton);
-
-    $('priceBooksList').appendChild(card);
-
+    group.appendChild(history);
+    $('priceBooksList').appendChild(group);
   });
 }
 
