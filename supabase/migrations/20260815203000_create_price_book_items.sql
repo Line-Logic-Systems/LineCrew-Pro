@@ -135,7 +135,7 @@ with check (
       from public.profiles
      where profiles.id = auth.uid()
        and profiles.company_id = price_book_items.company_id
-       and lower(profiles.role) in ('admin', 'gf')
+       and lower(profiles.role) = 'admin'
   )
   and exists (
     select 1
@@ -158,7 +158,7 @@ using (
       from public.profiles
      where profiles.id = auth.uid()
        and profiles.company_id = price_book_items.company_id
-       and lower(profiles.role) in ('admin', 'gf')
+       and lower(profiles.role) = 'admin'
   )
 )
 with check (
@@ -167,7 +167,7 @@ with check (
       from public.profiles
      where profiles.id = auth.uid()
        and profiles.company_id = price_book_items.company_id
-       and lower(profiles.role) in ('admin', 'gf')
+       and lower(profiles.role) = 'admin'
   )
   and exists (
     select 1
@@ -190,7 +190,7 @@ using (
       from public.profiles
      where profiles.id = auth.uid()
        and profiles.company_id = price_book_items.company_id
-       and lower(profiles.role) in ('admin', 'gf')
+       and lower(profiles.role) = 'admin'
   )
 );
 
