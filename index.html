@@ -931,15 +931,79 @@ button.small{
           <p class="muted">Price Book details</p>
         </div>
 
-        <button
-          id="closePriceBookDetailBtn"
-          class="secondary small"
-        >
-          Close
-        </button>
+        <div class="import-actions">
+          <button
+            id="duplicatePriceBookBtn"
+            class="success small hidden"
+          >
+            Duplicate as New Version
+          </button>
+
+          <button
+            id="closePriceBookDetailBtn"
+            class="secondary small"
+          >
+            Close
+          </button>
+        </div>
       </div>
 
       <div id="priceBookDetailContent"></div>
+
+      <div id="duplicatePriceBookForm" class="card hidden">
+        <h3>Create New Price Book Version</h3>
+        <p class="muted">
+          The original Price Book will remain unchanged. The new version
+          will start inactive so it can be reviewed before use.
+        </p>
+
+        <label for="duplicatePriceBookName">Price Book Name</label>
+        <input id="duplicatePriceBookName" type="text">
+
+        <label for="duplicatePriceBookVersion">New Version Name</label>
+        <input
+          id="duplicatePriceBookVersion"
+          type="text"
+          placeholder="Example: 2027 Revision 1"
+        >
+
+        <label for="duplicatePriceBookEffectiveStart">
+          Effective Start
+        </label>
+        <input
+          id="duplicatePriceBookEffectiveStart"
+          type="date"
+        >
+
+        <label for="duplicatePriceBookEffectiveEnd">
+          Effective End
+        </label>
+        <input
+          id="duplicatePriceBookEffectiveEnd"
+          type="date"
+        >
+
+        <label for="duplicatePriceBookNotes">Version Notes</label>
+        <textarea
+          id="duplicatePriceBookNotes"
+          rows="3"
+          placeholder="Describe what changed in this version"
+        ></textarea>
+
+        <button
+          id="saveDuplicatePriceBookBtn"
+          class="success"
+        >
+          Create Inactive Version
+        </button>
+
+        <button
+          id="cancelDuplicatePriceBookBtn"
+          class="secondary"
+        >
+          Cancel
+        </button>
+      </div>
 
       <div class="section-header">
         <div>
@@ -1136,6 +1200,7 @@ let currentProfile = null;
 let currentCompany = null;
 let currentPriceBookItems = [];
 let currentPriceBookImportRows = [];
+let currentOpenPriceBook = null;
 
 
 /* PAGE NAVIGATION */
@@ -2801,6 +2866,14 @@ function openPriceBook(
     .dataset
     .priceBookId = priceBook.id;
 
+  currentOpenPriceBook = {
+    ...priceBook
+  };
+
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
   const canManagePriceBook =
     String(currentProfile?.role || '').toLowerCase() ===
       'admin';
@@ -2810,6 +2883,10 @@ function openPriceBook(
     .toggle('hidden', !canManagePriceBook);
 
   $('importPriceBookItemsBtn')
+    .classList
+    .toggle('hidden', !canManagePriceBook);
+
+  $('duplicatePriceBookBtn')
     .classList
     .toggle('hidden', !canManagePriceBook);
 
@@ -2843,6 +2920,307 @@ $('closePriceBookDetailBtn').onclick = () => {
     .classList
     .add('hidden');
 
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
+  currentOpenPriceBook = null;
+
+};
+
+$('duplicatePriceBookBtn').onclick = () => {
+
+  if(
+    !userCanManagePriceBooks() ||
+    !currentOpenPriceBook
+  ){
+    return;
+  }
+
+  $('duplicatePriceBookName').value =
+    currentOpenPriceBook.name || '';
+
+  $('duplicatePriceBookVersion').value = '';
+
+  $('duplicatePriceBookEffectiveStart').value =
+    new Date().toISOString().slice(0, 10);
+
+  $('duplicatePriceBookEffectiveEnd').value = '';
+
+  $('duplicatePriceBookNotes').value =
+    currentOpenPriceBook.notes || '';
+
+  $('duplicatePriceBookForm')
+    .classList
+    .remove('hidden');
+
+  $('duplicatePriceBookForm')
+    .scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+};
+
+$('cancelDuplicatePriceBookBtn').onclick = () => {
+
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
+};
+
+$('saveDuplicatePriceBookBtn').onclick = async () => {
+
+  const sourcePriceBookId =
+    currentOpenPriceBook?.id;
+
+  const companyId =
+    currentProfile?.company_id;
+
+  const name =
+    $('duplicatePriceBookName').value.trim();
+
+  const versionName =
+    $('duplicatePriceBookVersion').value.trim();
+
+  const effectiveStart =
+    $('duplicatePriceBookEffectiveStart').value;
+
+  const effectiveEnd =
+    $('duplicatePriceBookEffectiveEnd').value ||
+    null;
+
+  const notes =
+    $('duplicatePriceBookNotes').value.trim() ||
+    null;
+
+  if(
+    !sourcePriceBookId ||
+    !companyId ||
+    !userCanManagePriceBooks()
+  ){
+
+    alert(
+      'Open a Price Book as a company admin before creating a version.'
+    );
+
+    return;
+  }
+
+  if(!name){
+
+    alert('Enter a Price Book name.');
+
+    return;
+  }
+
+  if(!versionName){
+
+    alert('Enter a new version name.');
+
+    return;
+  }
+
+  if(!effectiveStart){
+
+    alert('Select an effective start date.');
+
+    return;
+  }
+
+  if(
+    effectiveEnd &&
+    effectiveEnd < effectiveStart
+  ){
+
+    alert(
+      'Effective End cannot be before Effective Start.'
+    );
+
+    return;
+  }
+
+  const confirmed = confirm(
+    'Create inactive version "' +
+    versionName +
+    '" and copy all units from the open Price Book?'
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  $('saveDuplicatePriceBookBtn').disabled = true;
+  $('saveDuplicatePriceBookBtn').textContent =
+    'Copying Price Book...';
+
+  const [
+    sourceBookResult,
+    sourceItemsResult
+  ] = await Promise.all([
+
+    sb
+      .from('price_books')
+      .select('*')
+      .eq('id', sourcePriceBookId)
+      .eq('company_id', companyId)
+      .single(),
+
+    sb
+      .from('price_book_items')
+      .select(`
+        item_code,
+        item_name,
+        description,
+        install_price,
+        retirement_price,
+        unit_of_measure,
+        category,
+        extra_data,
+        active
+      `)
+      .eq('price_book_id', sourcePriceBookId)
+      .eq('company_id', companyId)
+
+  ]);
+
+  const sourceError =
+    sourceBookResult.error ||
+    sourceItemsResult.error;
+
+  if(sourceError){
+
+    $('saveDuplicatePriceBookBtn').disabled = false;
+    $('saveDuplicatePriceBookBtn').textContent =
+      'Create Inactive Version';
+
+    alert(
+      'Unable to read the original Price Book: ' +
+      sourceError.message
+    );
+
+    return;
+  }
+
+  const sourceBook =
+    sourceBookResult.data;
+
+  const {
+    data: newBook,
+    error: bookError
+  } = await sb
+    .from('price_books')
+    .insert({
+      company_id: companyId,
+      name: name,
+      customer_name:
+        sourceBook.customer_name || null,
+      utility_name:
+        sourceBook.utility_name || null,
+      effective_date: effectiveStart,
+      active: false,
+      created_by:
+        currentProfile.id || null,
+      contract_id:
+        sourceBook.contract_id || null,
+      version_name: versionName,
+      effective_start: effectiveStart,
+      effective_end: effectiveEnd,
+      source_filename:
+        sourceBook.source_filename || null,
+      notes: notes
+    })
+    .select('id')
+    .single();
+
+  if(bookError){
+
+    $('saveDuplicatePriceBookBtn').disabled = false;
+    $('saveDuplicatePriceBookBtn').textContent =
+      'Create Inactive Version';
+
+    alert(
+      'Unable to create the new Price Book version: ' +
+      bookError.message
+    );
+
+    return;
+  }
+
+  const copiedItems =
+    (sourceItemsResult.data || [])
+      .map(item => ({
+        company_id: companyId,
+        price_book_id: newBook.id,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        description: item.description,
+        install_price: item.install_price,
+        retirement_price: item.retirement_price,
+        unit_of_measure: item.unit_of_measure,
+        category: item.category,
+        extra_data: item.extra_data || {},
+        active: item.active
+      }));
+
+  let itemError = null;
+
+  if(copiedItems.length > 0){
+
+    const result = await sb
+      .from('price_book_items')
+      .insert(copiedItems);
+
+    itemError = result.error;
+  }
+
+  if(itemError){
+
+    const rollbackResult = await sb
+      .from('price_books')
+      .delete()
+      .eq('id', newBook.id)
+      .eq('company_id', companyId)
+      .eq('active', false);
+
+    $('saveDuplicatePriceBookBtn').disabled = false;
+    $('saveDuplicatePriceBookBtn').textContent =
+      'Create Inactive Version';
+
+    alert(
+      rollbackResult.error
+        ? 'The units could not be copied and the incomplete Price Book could not be removed. Contact support before using it. Error: ' +
+          itemError.message
+        : 'The units could not be copied, so the incomplete Price Book was removed. Error: ' +
+          itemError.message
+    );
+
+    return;
+  }
+
+  $('saveDuplicatePriceBookBtn').disabled = false;
+  $('saveDuplicatePriceBookBtn').textContent =
+    'Create Inactive Version';
+
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
+  $('priceBookDetail')
+    .classList
+    .add('hidden');
+
+  currentOpenPriceBook = null;
+
+  await loadPriceBooks();
+
+  alert(
+    'New inactive version created with ' +
+    copiedItems.length +
+    ' unit' +
+    (copiedItems.length === 1 ? '' : 's') +
+    '.'
+  );
 };
 
 /* PRICE BOOK UNIT ITEMS */
