@@ -883,6 +883,25 @@ button.small{
 </button>
 
 </div>
+
+    <div id="priceBookDetail" class="card hidden">
+      <div class="section-header">
+        <div>
+          <h3 id="priceBookDetailName">Price Book</h3>
+          <p class="muted">Price Book details</p>
+        </div>
+
+        <button
+          id="closePriceBookDetailBtn"
+          class="secondary small"
+        >
+          Close
+        </button>
+      </div>
+
+      <div id="priceBookDetailContent"></div>
+    </div>
+
     <div id="priceBooksList"></div>
 
   </div>
@@ -2498,10 +2517,102 @@ async function loadPriceBooks(){
           : '') +
       '</div>';
 
+    const openButton =
+      document.createElement('button');
+
+    openButton.className =
+      'secondary small';
+
+    openButton.textContent =
+      'Open Price Book';
+
+    openButton.onclick = () =>
+      openPriceBook(
+        priceBook,
+        contract,
+        customer
+      );
+
+    card.appendChild(openButton);
+
     $('priceBooksList').appendChild(card);
 
   });
 }
+
+/* OPEN PRICE BOOK */
+
+function openPriceBook(
+  priceBook,
+  contract,
+  customer
+){
+
+  $('priceBookDetailName').textContent =
+    priceBook.name || 'Price Book';
+
+  const effectiveStart =
+    priceBook.effective_start ||
+    priceBook.effective_date ||
+    'Not set';
+
+  const activeText =
+    priceBook.active
+      ? 'Active'
+      : 'Inactive';
+
+  $('priceBookDetailContent').innerHTML =
+    '<div class="job-info">' +
+      'Customer / Utility: <strong>' +
+        escapeHtml(customer?.name || 'Not assigned') +
+      '</strong><br>' +
+      'Contract: <strong>' +
+        escapeHtml(contract?.contract_name || 'Not assigned') +
+      '</strong>' +
+      (contract?.contract_number
+        ? ' (' + escapeHtml(contract.contract_number) + ')'
+        : '') +
+      '<br>Status: <strong>' +
+        escapeHtml(activeText) +
+      '</strong>' +
+      '<br>Version: <strong>' +
+        escapeHtml(priceBook.version_name || 'Original') +
+      '</strong>' +
+      '<br>Effective Start: <strong>' +
+        escapeHtml(effectiveStart) +
+      '</strong>' +
+      (priceBook.effective_end
+        ? '<br>Effective End: <strong>' +
+            escapeHtml(priceBook.effective_end) +
+          '</strong>'
+        : '') +
+      (priceBook.notes
+        ? '<br>Notes: ' +
+            escapeHtml(priceBook.notes)
+        : '') +
+    '</div>' +
+    '<p class="muted">' +
+      'Unit pricing will appear here after the unit-item table and policies are added.' +
+    '</p>';
+
+  $('priceBookDetail')
+    .classList
+    .remove('hidden');
+
+  $('priceBookDetail')
+    .scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+}
+
+$('closePriceBookDetailBtn').onclick = () => {
+
+  $('priceBookDetail')
+    .classList
+    .add('hidden');
+
+};
 
 async function loadProductionReports(){
 
