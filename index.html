@@ -1500,6 +1500,8 @@ let priceBookNavigationRecords = new Map();
 let currentPriceBookCatalog = [];
 let currentPriceBookContractsById = new Map();
 let currentPriceBookCustomersById = new Map();
+let customerLoadSequence = 0;
+let contractLoadSequence = 0;
 
 const APP_PAGE_IDS = new Set([
   'dashboardPage',
@@ -2614,7 +2616,10 @@ await loadCustomers();
 
 async function loadCustomers(){
 
-  $('customersList').innerHTML = '';
+  const loadSequence = ++customerLoadSequence;
+
+  $('customersList').innerHTML =
+    '<p class="muted">Loading customers...</p>';
 
   const {
     data: customers,
@@ -2634,6 +2639,10 @@ async function loadCustomers(){
     .eq('company_id', currentProfile.company_id)
     .order('name', { ascending: true });
 
+  if(loadSequence !== customerLoadSequence){
+    return;
+  }
+
 
   if(error){
 
@@ -2648,12 +2657,21 @@ async function loadCustomers(){
 
   if(!customers || customers.length === 0){
 
-    $('customersList').innerHTML =
-      '<p class="muted">No customers or utilities added yet.</p>';
+    $('customersList').replaceChildren();
+
+    const emptyMessage = document.createElement('p');
+    emptyMessage.className = 'muted';
+    emptyMessage.textContent =
+      'No customers or utilities added yet.';
+
+    $('customersList').appendChild(emptyMessage);
 
     return;
   }
 
+
+  const customerFragment =
+    document.createDocumentFragment();
 
   customers.forEach(customer => {
 
@@ -2700,8 +2718,10 @@ async function loadCustomers(){
       }
     `;
 
-    $('customersList').appendChild(card);
+    customerFragment.appendChild(card);
   });
+
+  $('customersList').replaceChildren(customerFragment);
 }
 /* CONTRACT FORM */
 
@@ -2842,7 +2862,10 @@ $('saveContractBtn').onclick = async () => {
 };
 async function loadContracts(){
 
-  $('contractsList').innerHTML = '';
+  const loadSequence = ++contractLoadSequence;
+
+  $('contractsList').innerHTML =
+    '<p class="muted">Loading contracts...</p>';
 
   const {
     data: contracts,
@@ -2862,16 +2885,28 @@ async function loadContracts(){
     .eq('company_id', currentProfile.company_id)
     .order('created_at', { ascending: false });
 
+  if(loadSequence !== contractLoadSequence){
+    return;
+  }
+
   if(error){
     alert('Unable to load contracts: ' + error.message);
     return;
   }
 
   if(!contracts || contracts.length === 0){
-    $('contractsList').innerHTML =
-      '<p class="muted">No contracts yet.</p>';
+    $('contractsList').replaceChildren();
+
+    const emptyMessage = document.createElement('p');
+    emptyMessage.className = 'muted';
+    emptyMessage.textContent = 'No contracts yet.';
+
+    $('contractsList').appendChild(emptyMessage);
     return;
   }
+
+  const contractFragment =
+    document.createDocumentFragment();
 
   contracts.forEach(contract => {
 
@@ -2902,9 +2937,11 @@ async function loadContracts(){
       }
     `;
 
-    $('contractsList').appendChild(card);
+    contractFragment.appendChild(card);
 
   });
+
+  $('contractsList').replaceChildren(contractFragment);
 }
  /* PRICE BOOK FORM */
 
