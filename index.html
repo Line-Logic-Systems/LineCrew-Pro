@@ -2237,6 +2237,76 @@ $('addPriceBookBtn').onclick = async () => {
 $('cancelPriceBookBtn').onclick = () => {
   $('priceBookForm').classList.add('hidden');
 }; 
+  $('savePriceBookBtn').onclick = async () => {
+
+  const contractId =
+    $('priceBookContract').value;
+
+  const name =
+    $('priceBookName').value.trim();
+
+  const effectiveDate =
+    $('priceBookEffectiveDate').value || null;
+
+  const notes =
+    $('priceBookNotes').value.trim() || null;
+
+
+  if(!contractId){
+
+    alert('Select a contract.');
+
+    return;
+  }
+
+
+  if(!name){
+
+    alert('Enter a price book name.');
+
+    return;
+  }
+
+
+  $('savePriceBookBtn').disabled = true;
+  $('savePriceBookBtn').textContent = 'Saving...';
+
+
+  const {
+    error
+  } = await sb
+    .from('price_books')
+    .insert({
+      company_id: currentProfile.company_id,
+      contract_id: contractId,
+      name: name,
+      effective_date: effectiveDate,
+      effective_start: effectiveDate,
+      notes: notes,
+      active: true
+    });
+
+
+  $('savePriceBookBtn').disabled = false;
+  $('savePriceBookBtn').textContent = 'Save Price Book';
+
+
+  if(error){
+
+    alert(
+      'Unable to save price book: ' +
+      error.message
+    );
+
+    return;
+  }
+
+
+  alert('Price book saved.');
+
+  $('priceBookForm').classList.add('hidden');
+
+};
 async function loadProductionReports(){
 
   $('productionLoading').classList.remove('hidden');
