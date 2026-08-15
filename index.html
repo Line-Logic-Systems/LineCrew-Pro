@@ -7,6 +7,7 @@
 <title>LineCrew Pro</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
 <style>
 :root{
@@ -245,6 +246,63 @@ button.small{
 .section-header button{
   width:auto;
   margin-top:0;
+}
+
+.import-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:12px 0;
+}
+
+.import-summary{
+  background:#f5f8fb;
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  margin:12px 0;
+}
+
+.import-table-wrap{
+  overflow-x:auto;
+  margin-top:12px;
+}
+
+.import-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+
+.import-table th,
+.import-table td{
+  border-bottom:1px solid var(--border);
+  padding:9px;
+  text-align:left;
+  white-space:nowrap;
+}
+
+.import-error{
+  color:var(--red);
+  font-weight:700;
+}
+
+.file-drop{
+  border:2px dashed var(--border);
+  border-radius:14px;
+  padding:18px;
+  text-align:center;
+  background:#f8fafc;
+  transition:border-color .15s, background .15s;
+}
+
+.file-drop.dragover{
+  border-color:var(--blue);
+  background:#e8f2fb;
+}
+
+.file-drop input{
+  margin-top:10px;
 }
 
 @media(max-width:600px){
@@ -891,15 +949,86 @@ button.small{
           <p class="muted">Price Book details</p>
         </div>
 
-        <button
-          id="closePriceBookDetailBtn"
-          class="secondary small"
-        >
-          Close
-        </button>
+        <div class="import-actions">
+          <button
+            id="priceBookStatusBtn"
+            class="warning small hidden"
+          >
+            Change Status
+          </button>
+
+          <button
+            id="duplicatePriceBookBtn"
+            class="success small hidden"
+          >
+            Duplicate as New Version
+          </button>
+
+          <button
+            id="closePriceBookDetailBtn"
+            class="secondary small"
+          >
+            Close
+          </button>
+        </div>
       </div>
 
       <div id="priceBookDetailContent"></div>
+
+      <div id="duplicatePriceBookForm" class="card hidden">
+        <h3>Create New Price Book Version</h3>
+        <p class="muted">
+          The original Price Book will remain unchanged. The new version
+          will start inactive so it can be reviewed before use.
+        </p>
+
+        <label for="duplicatePriceBookName">Price Book Name</label>
+        <input id="duplicatePriceBookName" type="text">
+
+        <label for="duplicatePriceBookVersion">New Version Name</label>
+        <input
+          id="duplicatePriceBookVersion"
+          type="text"
+          placeholder="Example: 2027 Revision 1"
+        >
+
+        <label for="duplicatePriceBookEffectiveStart">
+          Effective Start
+        </label>
+        <input
+          id="duplicatePriceBookEffectiveStart"
+          type="date"
+        >
+
+        <label for="duplicatePriceBookEffectiveEnd">
+          Effective End
+        </label>
+        <input
+          id="duplicatePriceBookEffectiveEnd"
+          type="date"
+        >
+
+        <label for="duplicatePriceBookNotes">Version Notes</label>
+        <textarea
+          id="duplicatePriceBookNotes"
+          rows="3"
+          placeholder="Describe what changed in this version"
+        ></textarea>
+
+        <button
+          id="saveDuplicatePriceBookBtn"
+          class="success"
+        >
+          Create Inactive Version
+        </button>
+
+        <button
+          id="cancelDuplicatePriceBookBtn"
+          class="secondary"
+        >
+          Cancel
+        </button>
+      </div>
 
       <div class="section-header">
         <div>
@@ -909,11 +1038,93 @@ button.small{
           </p>
         </div>
 
+        <div class="import-actions">
+          <button
+            id="importPriceBookItemsBtn"
+            class="secondary small hidden"
+          >
+            Import CSV / Excel
+          </button>
+
+          <button
+            id="addPriceBookItemBtn"
+            class="success small hidden"
+          >
+            + Add Unit
+          </button>
+        </div>
+      </div>
+
+      <div id="priceBookImportCard" class="card hidden">
+        <h3>Import Unit Pricing</h3>
+        <p class="muted">
+          Upload a CSV, XLSX or XLS file. The first worksheet will be used.
+          Nothing is saved until you review the preview and confirm the import.
+        </p>
+
+        <label for="priceBookImportFile">Pricing File</label>
+        <div id="priceBookFileDrop" class="file-drop">
+          <strong>Drop a pricing file here</strong>
+          <div class="muted">
+            or choose CSV, TSV, TXT, XLSX, XLS or ODS
+          </div>
+          <input
+            id="priceBookImportFile"
+            type="file"
+            accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
+          >
+        </div>
+
+        <div id="priceBookWorksheetWrap" class="hidden">
+          <label for="priceBookWorksheet">
+            Worksheet / Tab
+          </label>
+          <select id="priceBookWorksheet"></select>
+        </div>
+
+        <p class="muted">
+          Expected columns: Unit Code, Unit Name, Description,
+          Install Price, Retirement Price, Unit of Measure and Category.
+          Common variations such as Item Code and Remove Price are recognized.
+        </p>
+
         <button
-          id="addPriceBookItemBtn"
-          class="success small hidden"
+          id="downloadPriceBookTemplateBtn"
+          class="secondary"
         >
-          + Add Unit
+          Download LineCrew Pro CSV Template
+        </button>
+
+        <label for="priceBookImportPaste">
+          Or Paste from Excel / Google Sheets
+        </label>
+        <textarea
+          id="priceBookImportPaste"
+          rows="7"
+          placeholder="Copy the header row and pricing rows from your spreadsheet, then paste them here."
+        ></textarea>
+
+        <button
+          id="previewPastedPriceBookItemsBtn"
+          class="secondary"
+        >
+          Preview Pasted Units
+        </button>
+
+        <div id="priceBookImportPreview"></div>
+
+        <button
+          id="confirmPriceBookImportBtn"
+          class="success hidden"
+        >
+          Import Valid Units
+        </button>
+
+        <button
+          id="cancelPriceBookImportBtn"
+          class="secondary"
+        >
+          Cancel Import
         </button>
       </div>
 
@@ -1026,6 +1237,9 @@ const $ = id =>
 let currentProfile = null;
 let currentCompany = null;
 let currentPriceBookItems = [];
+let currentPriceBookImportRows = [];
+let currentOpenPriceBook = null;
+let currentPriceBookWorkbook = null;
 
 
 /* PAGE NAVIGATION */
@@ -2691,13 +2905,45 @@ function openPriceBook(
     .dataset
     .priceBookId = priceBook.id;
 
+  currentOpenPriceBook = {
+    ...priceBook
+  };
+
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
+  const canManagePriceBook =
+    String(currentProfile?.role || '').toLowerCase() ===
+      'admin';
+
   $('addPriceBookItemBtn')
     .classList
-    .toggle(
-      'hidden',
-      String(currentProfile?.role || '').toLowerCase() !==
-        'admin'
-    );
+    .toggle('hidden', !canManagePriceBook);
+
+  $('importPriceBookItemsBtn')
+    .classList
+    .toggle('hidden', !canManagePriceBook);
+
+  $('duplicatePriceBookBtn')
+    .classList
+    .toggle('hidden', !canManagePriceBook);
+
+  $('priceBookStatusBtn')
+    .classList
+    .toggle('hidden', !canManagePriceBook);
+
+  $('priceBookStatusBtn').textContent =
+    priceBook.active
+      ? 'Deactivate Price Book'
+      : 'Activate Price Book';
+
+  $('priceBookStatusBtn').className =
+    (priceBook.active ? 'warning' : 'success') +
+    ' small' +
+    (canManagePriceBook ? '' : ' hidden');
+
+  resetPriceBookImport();
 
   $('priceBookItemSearch').value = '';
   currentPriceBookItems = [];
@@ -2727,6 +2973,390 @@ $('closePriceBookDetailBtn').onclick = () => {
     .classList
     .add('hidden');
 
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
+  currentOpenPriceBook = null;
+
+};
+
+$('priceBookStatusBtn').onclick = async () => {
+
+  if(
+    !userCanManagePriceBooks() ||
+    !currentOpenPriceBook
+  ){
+    return;
+  }
+
+  const newStatus =
+    !currentOpenPriceBook.active;
+
+  const action =
+    newStatus
+      ? 'activate'
+      : 'deactivate';
+
+  const extraNotice =
+    newStatus
+      ? '\n\nOther Price Book versions will not be changed automatically.'
+      : '\n\nThe Price Book and its unit history will be preserved.';
+
+  const confirmed = confirm(
+    'Are you sure you want to ' +
+    action +
+    ' "' +
+    currentOpenPriceBook.name +
+    '"?' +
+    extraNotice
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  $('priceBookStatusBtn').disabled = true;
+  $('priceBookStatusBtn').textContent =
+    newStatus
+      ? 'Activating...'
+      : 'Deactivating...';
+
+  const { error } = await sb
+    .from('price_books')
+    .update({
+      active: newStatus
+    })
+    .eq('id', currentOpenPriceBook.id)
+    .eq(
+      'company_id',
+      currentProfile.company_id
+    );
+
+  $('priceBookStatusBtn').disabled = false;
+
+  if(error){
+
+    $('priceBookStatusBtn').textContent =
+      currentOpenPriceBook.active
+        ? 'Deactivate Price Book'
+        : 'Activate Price Book';
+
+    alert(
+      'Unable to change Price Book status: ' +
+      error.message
+    );
+
+    return;
+  }
+
+  $('priceBookDetail')
+    .classList
+    .add('hidden');
+
+  currentOpenPriceBook = null;
+
+  await loadPriceBooks();
+
+  alert(
+    'Price Book ' +
+    (newStatus ? 'activated.' : 'deactivated.')
+  );
+};
+
+$('duplicatePriceBookBtn').onclick = () => {
+
+  if(
+    !userCanManagePriceBooks() ||
+    !currentOpenPriceBook
+  ){
+    return;
+  }
+
+  $('duplicatePriceBookName').value =
+    currentOpenPriceBook.name || '';
+
+  $('duplicatePriceBookVersion').value = '';
+
+  $('duplicatePriceBookEffectiveStart').value =
+    new Date().toISOString().slice(0, 10);
+
+  $('duplicatePriceBookEffectiveEnd').value = '';
+
+  $('duplicatePriceBookNotes').value =
+    currentOpenPriceBook.notes || '';
+
+  $('duplicatePriceBookForm')
+    .classList
+    .remove('hidden');
+
+  $('duplicatePriceBookForm')
+    .scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+};
+
+$('cancelDuplicatePriceBookBtn').onclick = () => {
+
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
+};
+
+$('saveDuplicatePriceBookBtn').onclick = async () => {
+
+  const sourcePriceBookId =
+    currentOpenPriceBook?.id;
+
+  const companyId =
+    currentProfile?.company_id;
+
+  const name =
+    $('duplicatePriceBookName').value.trim();
+
+  const versionName =
+    $('duplicatePriceBookVersion').value.trim();
+
+  const effectiveStart =
+    $('duplicatePriceBookEffectiveStart').value;
+
+  const effectiveEnd =
+    $('duplicatePriceBookEffectiveEnd').value ||
+    null;
+
+  const notes =
+    $('duplicatePriceBookNotes').value.trim() ||
+    null;
+
+  if(
+    !sourcePriceBookId ||
+    !companyId ||
+    !userCanManagePriceBooks()
+  ){
+
+    alert(
+      'Open a Price Book as a company admin before creating a version.'
+    );
+
+    return;
+  }
+
+  if(!name){
+
+    alert('Enter a Price Book name.');
+
+    return;
+  }
+
+  if(!versionName){
+
+    alert('Enter a new version name.');
+
+    return;
+  }
+
+  if(!effectiveStart){
+
+    alert('Select an effective start date.');
+
+    return;
+  }
+
+  if(
+    effectiveEnd &&
+    effectiveEnd < effectiveStart
+  ){
+
+    alert(
+      'Effective End cannot be before Effective Start.'
+    );
+
+    return;
+  }
+
+  const confirmed = confirm(
+    'Create inactive version "' +
+    versionName +
+    '" and copy all units from the open Price Book?'
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  $('saveDuplicatePriceBookBtn').disabled = true;
+  $('saveDuplicatePriceBookBtn').textContent =
+    'Copying Price Book...';
+
+  const [
+    sourceBookResult,
+    sourceItemsResult
+  ] = await Promise.all([
+
+    sb
+      .from('price_books')
+      .select('*')
+      .eq('id', sourcePriceBookId)
+      .eq('company_id', companyId)
+      .single(),
+
+    sb
+      .from('price_book_items')
+      .select(`
+        item_code,
+        item_name,
+        description,
+        install_price,
+        retirement_price,
+        unit_of_measure,
+        category,
+        extra_data,
+        active
+      `)
+      .eq('price_book_id', sourcePriceBookId)
+      .eq('company_id', companyId)
+
+  ]);
+
+  const sourceError =
+    sourceBookResult.error ||
+    sourceItemsResult.error;
+
+  if(sourceError){
+
+    $('saveDuplicatePriceBookBtn').disabled = false;
+    $('saveDuplicatePriceBookBtn').textContent =
+      'Create Inactive Version';
+
+    alert(
+      'Unable to read the original Price Book: ' +
+      sourceError.message
+    );
+
+    return;
+  }
+
+  const sourceBook =
+    sourceBookResult.data;
+
+  const {
+    data: newBook,
+    error: bookError
+  } = await sb
+    .from('price_books')
+    .insert({
+      company_id: companyId,
+      name: name,
+      customer_name:
+        sourceBook.customer_name || null,
+      utility_name:
+        sourceBook.utility_name || null,
+      effective_date: effectiveStart,
+      active: false,
+      created_by:
+        currentProfile.id || null,
+      contract_id:
+        sourceBook.contract_id || null,
+      version_name: versionName,
+      effective_start: effectiveStart,
+      effective_end: effectiveEnd,
+      source_filename:
+        sourceBook.source_filename || null,
+      notes: notes
+    })
+    .select('id')
+    .single();
+
+  if(bookError){
+
+    $('saveDuplicatePriceBookBtn').disabled = false;
+    $('saveDuplicatePriceBookBtn').textContent =
+      'Create Inactive Version';
+
+    alert(
+      'Unable to create the new Price Book version: ' +
+      bookError.message
+    );
+
+    return;
+  }
+
+  const copiedItems =
+    (sourceItemsResult.data || [])
+      .map(item => ({
+        company_id: companyId,
+        price_book_id: newBook.id,
+        item_code: item.item_code,
+        item_name: item.item_name,
+        description: item.description,
+        install_price: item.install_price,
+        retirement_price: item.retirement_price,
+        unit_of_measure: item.unit_of_measure,
+        category: item.category,
+        extra_data: item.extra_data || {},
+        active: item.active
+      }));
+
+  let itemError = null;
+
+  if(copiedItems.length > 0){
+
+    const result = await sb
+      .from('price_book_items')
+      .insert(copiedItems);
+
+    itemError = result.error;
+  }
+
+  if(itemError){
+
+    const rollbackResult = await sb
+      .from('price_books')
+      .delete()
+      .eq('id', newBook.id)
+      .eq('company_id', companyId)
+      .eq('active', false);
+
+    $('saveDuplicatePriceBookBtn').disabled = false;
+    $('saveDuplicatePriceBookBtn').textContent =
+      'Create Inactive Version';
+
+    alert(
+      rollbackResult.error
+        ? 'The units could not be copied and the incomplete Price Book could not be removed. Contact support before using it. Error: ' +
+          itemError.message
+        : 'The units could not be copied, so the incomplete Price Book was removed. Error: ' +
+          itemError.message
+    );
+
+    return;
+  }
+
+  $('saveDuplicatePriceBookBtn').disabled = false;
+  $('saveDuplicatePriceBookBtn').textContent =
+    'Create Inactive Version';
+
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
+  $('priceBookDetail')
+    .classList
+    .add('hidden');
+
+  currentOpenPriceBook = null;
+
+  await loadPriceBooks();
+
+  alert(
+    'New inactive version created with ' +
+    copiedItems.length +
+    ' unit' +
+    (copiedItems.length === 1 ? '' : 's') +
+    '.'
+  );
 };
 
 /* PRICE BOOK UNIT ITEMS */
@@ -2750,6 +3380,876 @@ function userCanManagePriceBooks(){
     currentProfile?.role || ''
   ).toLowerCase() === 'admin';
 }
+
+function resetPriceBookImport(){
+
+  $('priceBookImportCard')
+    .classList
+    .add('hidden');
+
+  currentPriceBookImportRows = [];
+  currentPriceBookWorkbook = null;
+  $('priceBookImportFile').value = '';
+  $('priceBookImportPaste').value = '';
+  $('priceBookWorksheet').innerHTML = '';
+  $('priceBookWorksheetWrap')
+    .classList
+    .add('hidden');
+  $('priceBookImportPreview').innerHTML = '';
+  $('confirmPriceBookImportBtn')
+    .classList
+    .add('hidden');
+}
+
+$('importPriceBookItemsBtn').onclick = () => {
+
+  resetPriceBookImport();
+
+  $('priceBookImportCard')
+    .classList
+    .remove('hidden');
+
+  $('priceBookImportCard')
+    .scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+};
+
+$('cancelPriceBookImportBtn').onclick = () => {
+
+  $('priceBookImportCard')
+    .classList
+    .add('hidden');
+
+  resetPriceBookImport();
+};
+
+function normalizeImportHeader(value){
+
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function importCell(row, aliases){
+
+  const keys = Object.keys(row);
+
+  const foundKey = keys.find(key =>
+    aliases.includes(normalizeImportHeader(key))
+  );
+
+  return foundKey
+    ? row[foundKey]
+    : '';
+}
+
+function importPrice(value){
+
+  if(
+    value === '' ||
+    value === null ||
+    typeof value === 'undefined'
+  ){
+    return 0;
+  }
+
+  const cleaned =
+    String(value)
+      .replace(/[$,\s]/g, '')
+      .replace(/^\((.*)\)$/, '-$1');
+
+  return Number(cleaned);
+}
+
+function mapImportRow(row, rowNumber){
+
+  const itemCode = String(importCell(
+    row,
+    [
+      'unitcode',
+      'itemcode',
+      'code',
+      'unitnumber',
+      'itemnumber'
+    ]
+  ) || '').trim();
+
+  const itemName = String(importCell(
+    row,
+    [
+      'unitname',
+      'itemname',
+      'name',
+      'title'
+    ]
+  ) || '').trim();
+
+  const description = String(importCell(
+    row,
+    [
+      'description',
+      'unitdescription',
+      'itemdescription',
+      'desc'
+    ]
+  ) || '').trim();
+
+  const category = String(importCell(
+    row,
+    [
+      'category',
+      'type',
+      'itemtype',
+      'unittype'
+    ]
+  ) || '').trim();
+
+  const unitOfMeasure = String(importCell(
+    row,
+    [
+      'unitofmeasure',
+      'uom',
+      'measure',
+      'unit'
+    ]
+  ) || '').trim();
+
+  const installPrice = importPrice(importCell(
+    row,
+    [
+      'installprice',
+      'installationprice',
+      'install',
+      'newprice'
+    ]
+  ));
+
+  const retirementPrice = importPrice(importCell(
+    row,
+    [
+      'retirementprice',
+      'removeprice',
+      'removalprice',
+      'retireprice',
+      'retirement',
+      'remove'
+    ]
+  ));
+
+  const errors = [];
+
+  if(!itemCode){
+    errors.push('Missing Unit Code');
+  }
+
+  if(!itemName && !description){
+    errors.push('Missing Unit Name or Description');
+  }
+
+  if(
+    !Number.isFinite(installPrice) ||
+    installPrice < 0
+  ){
+    errors.push('Invalid Install Price');
+  }
+
+  if(
+    !Number.isFinite(retirementPrice) ||
+    retirementPrice < 0
+  ){
+    errors.push('Invalid Retirement Price');
+  }
+
+  return {
+    rowNumber: rowNumber,
+    item_code: itemCode,
+    item_name: itemName || description,
+    description: description || null,
+    category: category || null,
+    unit_of_measure: unitOfMeasure || null,
+    install_price: installPrice,
+    retirement_price: retirementPrice,
+    errors: errors
+  };
+}
+
+function validateImportDuplicates(rows){
+
+  const existingCodes = new Set(
+    currentPriceBookItems.map(item =>
+      String(item.item_code || '')
+        .trim()
+        .toLowerCase()
+    )
+  );
+
+  const fileCodes = new Set();
+
+  rows.forEach(row => {
+
+    const code =
+      row.item_code.toLowerCase();
+
+    if(!code){
+      return;
+    }
+
+    if(existingCodes.has(code)){
+      row.errors.push(
+        'Unit Code already exists in this Price Book'
+      );
+    }
+
+    if(fileCodes.has(code)){
+      row.errors.push(
+        'Duplicate Unit Code in file'
+      );
+    }
+
+    fileCodes.add(code);
+  });
+}
+
+function renderPriceBookImportPreview(){
+
+  const validRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length === 0
+    );
+
+  const invalidRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length > 0
+    );
+
+  let html =
+    '<div class="import-summary">' +
+      '<strong>' +
+        validRows.length +
+        ' valid unit' +
+        (validRows.length === 1 ? '' : 's') +
+      '</strong><br>' +
+      invalidRows.length +
+      ' row' +
+      (invalidRows.length === 1 ? '' : 's') +
+      ' need attention and will not be imported.' +
+    '</div>';
+
+  html +=
+    '<div class="import-table-wrap">' +
+      '<table class="import-table">' +
+        '<thead><tr>' +
+          '<th>Row</th>' +
+          '<th>Unit Code</th>' +
+          '<th>Name</th>' +
+          '<th>Install</th>' +
+          '<th>Retirement</th>' +
+          '<th>Status</th>' +
+        '</tr></thead><tbody>';
+
+  currentPriceBookImportRows
+    .slice(0, 100)
+    .forEach(row => {
+
+      html +=
+        '<tr>' +
+          '<td>' + row.rowNumber + '</td>' +
+          '<td>' + escapeHtml(row.item_code || '—') + '</td>' +
+          '<td>' + escapeHtml(row.item_name || '—') + '</td>' +
+          '<td>' +
+            escapeHtml(
+              Number.isFinite(row.install_price)
+                ? formatCurrency(row.install_price)
+                : 'Invalid'
+            ) +
+          '</td>' +
+          '<td>' +
+            escapeHtml(
+              Number.isFinite(row.retirement_price)
+                ? formatCurrency(row.retirement_price)
+                : 'Invalid'
+            ) +
+          '</td>' +
+          '<td class="' +
+            (row.errors.length ? 'import-error' : '') +
+          '">' +
+            escapeHtml(
+              row.errors.length
+                ? row.errors.join('; ')
+                : 'Ready'
+            ) +
+          '</td>' +
+        '</tr>';
+    });
+
+  html += '</tbody></table></div>';
+
+  if(currentPriceBookImportRows.length > 100){
+    html +=
+      '<p class="muted">Preview shows the first 100 rows.</p>';
+  }
+
+  $('priceBookImportPreview').innerHTML = html;
+
+  $('confirmPriceBookImportBtn')
+    .classList
+    .toggle(
+      'hidden',
+      validRows.length === 0
+    );
+
+  $('confirmPriceBookImportBtn').textContent =
+    'Import ' +
+    validRows.length +
+    ' Valid Unit' +
+    (validRows.length === 1 ? '' : 's');
+}
+
+function loadImportWorksheet(sheetName){
+
+  if(
+    !currentPriceBookWorkbook ||
+    !currentPriceBookWorkbook.Sheets[sheetName]
+  ){
+    throw new Error(
+      'The selected worksheet could not be read.'
+    );
+  }
+
+  const rawRows =
+    XLSX.utils.sheet_to_json(
+      currentPriceBookWorkbook.Sheets[sheetName],
+      {
+        defval: '',
+        raw: false
+      }
+    );
+
+  if(rawRows.length === 0){
+    throw new Error(
+      'No pricing rows were found. Make sure the first row contains column names.'
+    );
+  }
+
+  if(rawRows.length > 1000){
+    throw new Error(
+      'This first release imports up to 1,000 rows at a time. Split the pricing into smaller groups and try again.'
+    );
+  }
+
+  currentPriceBookImportRows =
+    rawRows.map((row, index) =>
+      mapImportRow(row, index + 2)
+    );
+
+  validateImportDuplicates(
+    currentPriceBookImportRows
+  );
+
+  renderPriceBookImportPreview();
+}
+
+function prepareImportWorkbook(
+  workbook,
+  showWorksheetPicker
+){
+
+  if(!workbook?.SheetNames?.length){
+    throw new Error(
+      'The file does not contain a worksheet.'
+    );
+  }
+
+  currentPriceBookWorkbook = workbook;
+
+  $('priceBookWorksheet').innerHTML = '';
+
+  workbook.SheetNames.forEach(sheetName => {
+
+    const option =
+      document.createElement('option');
+
+    option.value = sheetName;
+    option.textContent = sheetName;
+
+    $('priceBookWorksheet')
+      .appendChild(option);
+  });
+
+  $('priceBookWorksheetWrap')
+    .classList
+    .toggle(
+      'hidden',
+      !showWorksheetPicker ||
+      workbook.SheetNames.length < 2
+    );
+
+  loadImportWorksheet(
+    workbook.SheetNames[0]
+  );
+}
+
+function showImportReadError(error){
+
+  currentPriceBookImportRows = [];
+
+  $('priceBookImportPreview').innerHTML =
+    '<p class="import-error">' +
+      escapeHtml(
+        error?.message ||
+        'Unable to read this pricing data.'
+      ) +
+    '</p>';
+
+  $('confirmPriceBookImportBtn')
+    .classList
+    .add('hidden');
+}
+
+$('priceBookWorksheet').onchange = () => {
+
+  currentPriceBookImportRows = [];
+  $('priceBookImportPreview').innerHTML =
+    '<p class="muted">Reading worksheet...</p>';
+
+  try{
+
+    loadImportWorksheet(
+      $('priceBookWorksheet').value
+    );
+
+  }catch(error){
+
+    showImportReadError(error);
+  }
+};
+
+$('downloadPriceBookTemplateBtn').onclick = () => {
+
+  const headings = [
+    'Unit Code',
+    'Unit Name',
+    'Description',
+    'Install Price',
+    'Retirement Price',
+    'Unit of Measure',
+    'Category'
+  ];
+
+  const example = [
+    'EXAMPLE-001',
+    'Example Unit',
+    'Replace or delete this example row',
+    '0.00',
+    '0.00',
+    'EA',
+    'Example'
+  ];
+
+  const csvCell = value =>
+    '"' +
+    String(value).replace(/"/g, '""') +
+    '"';
+
+  const csv =
+    '\uFEFF' +
+    headings.map(csvCell).join(',') +
+    '\r\n' +
+    example.map(csvCell).join(',') +
+    '\r\n';
+
+  const blob = new Blob(
+    [csv],
+    { type: 'text/csv;charset=utf-8' }
+  );
+
+  const link = document.createElement('a');
+
+  link.href = URL.createObjectURL(blob);
+  link.download =
+    'linecrew-pro-price-book-template.csv';
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(
+    () => URL.revokeObjectURL(link.href),
+    1000
+  );
+};
+
+$('previewPastedPriceBookItemsBtn').onclick = () => {
+
+  const pastedText =
+    $('priceBookImportPaste').value.trim();
+
+  currentPriceBookImportRows = [];
+  currentPriceBookWorkbook = null;
+  $('priceBookWorksheetWrap')
+    .classList
+    .add('hidden');
+  $('priceBookImportPreview').innerHTML = '';
+  $('confirmPriceBookImportBtn')
+    .classList
+    .add('hidden');
+
+  if(!pastedText){
+
+    alert(
+      'Copy the header row and pricing rows from Excel or Google Sheets, then paste them into the box.'
+    );
+
+    return;
+  }
+
+  if(typeof XLSX === 'undefined'){
+
+    alert(
+      'The spreadsheet reader did not load. Refresh the page and try again.'
+    );
+
+    return;
+  }
+
+  $('previewPastedPriceBookItemsBtn').disabled = true;
+  $('previewPastedPriceBookItemsBtn').textContent =
+    'Reading Pasted Units...';
+
+  try{
+
+    const workbook =
+      XLSX.read(
+        pastedText,
+        { type: 'string' }
+      );
+
+    prepareImportWorkbook(
+      workbook,
+      false
+    );
+
+  }catch(error){
+
+    showImportReadError(error);
+  }
+
+  $('previewPastedPriceBookItemsBtn').disabled = false;
+  $('previewPastedPriceBookItemsBtn').textContent =
+    'Preview Pasted Units';
+};
+
+async function handlePriceBookImportFile(file){
+
+  currentPriceBookImportRows = [];
+  currentPriceBookWorkbook = null;
+  $('priceBookWorksheetWrap')
+    .classList
+    .add('hidden');
+  $('priceBookImportPreview').innerHTML = '';
+  $('confirmPriceBookImportBtn')
+    .classList
+    .add('hidden');
+
+  if(!file){
+    return;
+  }
+
+  const extension =
+    String(file.name || '')
+      .toLowerCase()
+      .split('.')
+      .pop();
+
+  if(
+    ![
+      'csv',
+      'tsv',
+      'txt',
+      'xlsx',
+      'xls',
+      'ods'
+    ].includes(extension)
+  ){
+
+    showImportReadError(
+      new Error(
+        'Choose a CSV, TSV, TXT, XLSX, XLS or ODS pricing file.'
+      )
+    );
+
+    return;
+  }
+
+  if(typeof XLSX === 'undefined'){
+
+    alert(
+      'The spreadsheet reader did not load. Refresh the page and try again.'
+    );
+
+    return;
+  }
+
+  $('priceBookImportFile').disabled = true;
+  $('priceBookImportPreview').innerHTML =
+    '<p class="muted">Reading file...</p>';
+
+  try{
+
+    const workbook =
+      XLSX.read(await file.arrayBuffer());
+
+    prepareImportWorkbook(
+      workbook,
+      true
+    );
+
+  }catch(error){
+
+    showImportReadError(error);
+  }
+
+  $('priceBookImportFile').disabled = false;
+}
+
+$('priceBookImportFile').onchange = async event => {
+
+  await handlePriceBookImportFile(
+    event.target.files?.[0]
+  );
+};
+
+const priceBookFileDrop =
+  $('priceBookFileDrop');
+
+[
+  'dragenter',
+  'dragover'
+].forEach(eventName => {
+
+  priceBookFileDrop.addEventListener(
+    eventName,
+    event => {
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      priceBookFileDrop
+        .classList
+        .add('dragover');
+    }
+  );
+});
+
+[
+  'dragleave',
+  'drop'
+].forEach(eventName => {
+
+  priceBookFileDrop.addEventListener(
+    eventName,
+    event => {
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      priceBookFileDrop
+        .classList
+        .remove('dragover');
+    }
+  );
+});
+
+priceBookFileDrop.addEventListener(
+  'drop',
+  async event => {
+
+    const files =
+      event.dataTransfer?.files;
+
+    if(!files?.length){
+      return;
+    }
+
+    if(files.length > 1){
+
+      alert(
+        'Drop one pricing file at a time.'
+      );
+
+      return;
+    }
+
+    await handlePriceBookImportFile(
+      files[0]
+    );
+  }
+);
+
+$('confirmPriceBookImportBtn').onclick = async () => {
+
+  const priceBookId =
+    $('priceBookDetail')
+      .dataset
+      .priceBookId;
+
+  if(!priceBookId || !currentProfile?.company_id){
+
+    alert('Open a Price Book before importing units.');
+
+    return;
+  }
+
+  if(!userCanManagePriceBooks()){
+
+    alert('Only company admins can import unit pricing.');
+
+    return;
+  }
+
+  let validRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length === 0
+    );
+
+  if(validRows.length === 0){
+
+    alert('There are no valid units to import.');
+
+    return;
+  }
+
+  $('confirmPriceBookImportBtn').disabled = true;
+  $('confirmPriceBookImportBtn').textContent =
+    'Checking Unit Codes...';
+
+  const {
+    data: latestItems,
+    error:checkError
+  } = await sb
+    .from('price_book_items')
+    .select('item_code')
+    .eq('company_id', currentProfile.company_id)
+    .eq('price_book_id', priceBookId);
+
+  $('confirmPriceBookImportBtn').disabled = false;
+
+  if(checkError){
+
+    renderPriceBookImportPreview();
+
+    alert(
+      'Unable to verify existing Unit Codes: ' +
+      checkError.message
+    );
+
+    return;
+  }
+
+  const latestCodes = new Set(
+    (latestItems || []).map(item =>
+      String(item.item_code || '')
+        .trim()
+        .toLowerCase()
+    )
+  );
+
+  let newDuplicateFound = false;
+
+  validRows.forEach(row => {
+
+    if(latestCodes.has(row.item_code.toLowerCase())){
+
+      row.errors.push(
+        'Unit Code already exists in this Price Book'
+      );
+
+      newDuplicateFound = true;
+    }
+  });
+
+  if(newDuplicateFound){
+
+    renderPriceBookImportPreview();
+
+    alert(
+      'One or more Unit Codes already exist. They were removed from the valid import list. Review the preview, then confirm again.'
+    );
+
+    return;
+  }
+
+  validRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length === 0
+    );
+
+  const confirmed = confirm(
+    'Import ' +
+    validRows.length +
+    ' unit' +
+    (validRows.length === 1 ? '' : 's') +
+    ' into this Price Book?\n\n' +
+    'Rows marked with errors will not be imported.'
+  );
+
+  if(!confirmed){
+
+    renderPriceBookImportPreview();
+
+    return;
+  }
+
+  const insertRows =
+    validRows.map(row => ({
+      company_id: currentProfile.company_id,
+      price_book_id: priceBookId,
+      item_code: row.item_code,
+      item_name: row.item_name,
+      description: row.description,
+      category: row.category,
+      unit_of_measure: row.unit_of_measure,
+      install_price: row.install_price,
+      retirement_price: row.retirement_price,
+      active: true
+    }));
+
+  $('confirmPriceBookImportBtn').disabled = true;
+  $('confirmPriceBookImportBtn').textContent =
+    'Importing...';
+
+  const { error } = await sb
+    .from('price_book_items')
+    .insert(insertRows);
+
+  $('confirmPriceBookImportBtn').disabled = false;
+
+  if(error){
+
+    renderPriceBookImportPreview();
+
+    alert(
+      'No units were imported: ' +
+      error.message
+    );
+
+    return;
+  }
+
+  resetPriceBookImport();
+
+  await loadPriceBookItems(priceBookId);
+
+  alert(
+    insertRows.length +
+    ' unit' +
+    (insertRows.length === 1 ? '' : 's') +
+    ' imported successfully.'
+  );
+};
 
 async function loadPriceBookItems(priceBookId){
 
