@@ -1701,6 +1701,7 @@ $('refreshProductionBtn').onclick = async () => {
 
 $('priceBooksTile').onclick = async () => {
   show('priceBooksPage');
+  await loadCustomers();
 };
 
 $('backFromPriceBooks').onclick = () => {
@@ -1799,8 +1800,102 @@ $('saveCustomerBtn').onclick = async () => {
   alert('Customer saved.');
 
   $('customerForm').classList.add('hidden');
-
+await loadCustomers();
 }; 
+
+/* LOAD CUSTOMERS */
+
+async function loadCustomers(){
+
+  $('customersList').innerHTML = '';
+
+  const {
+    data: customers,
+    error
+  } = await sb
+    .from('customers')
+    .select(`
+      id,
+      name,
+      customer_type,
+      contact_name,
+      contact_email,
+      contact_phone,
+      notes,
+      active
+    `)
+    .eq('company_id', currentProfile.company_id)
+    .order('name', { ascending: true });
+
+
+  if(error){
+
+    alert(
+      'Unable to load customers: ' +
+      error.message
+    );
+
+    return;
+  }
+
+
+  if(!customers || customers.length === 0){
+
+    $('customersList').innerHTML =
+      '<p class="muted">No customers or utilities added yet.</p>';
+
+    return;
+  }
+
+
+  customers.forEach(customer => {
+
+    const card =
+      document.createElement('div');
+
+    card.className = 'card';
+
+    const typeText =
+      customer.customer_type
+        ? customer.customer_type.toUpperCase()
+        : 'CUSTOMER';
+
+    card.innerHTML = `
+      <strong>${escapeHtml(customer.name)}</strong>
+      <br>
+
+      <span class="muted">
+        ${escapeHtml(typeText)}
+      </span>
+
+      ${
+        customer.contact_name
+          ? `<br>Contact: ${escapeHtml(customer.contact_name)}`
+          : ''
+      }
+
+      ${
+        customer.contact_email
+          ? `<br>Email: ${escapeHtml(customer.contact_email)}`
+          : ''
+      }
+
+      ${
+        customer.contact_phone
+          ? `<br>Phone: ${escapeHtml(customer.contact_phone)}`
+          : ''
+      }
+
+      ${
+        customer.notes
+          ? `<br>Notes: ${escapeHtml(customer.notes)}`
+          : ''
+      }
+    `;
+
+    $('customersList').appendChild(card);
+  });
+}
   
 async function loadProductionReports(){
 
