@@ -3473,7 +3473,8 @@ function mapImportRow(row, rowNumber){
       'itemcode',
       'code',
       'unitnumber',
-      'itemnumber'
+      'itemnumber',
+      'workunit'
     ]
   ) || '').trim();
 
@@ -3483,7 +3484,8 @@ function mapImportRow(row, rowNumber){
       'unitname',
       'itemname',
       'name',
-      'title'
+      'title',
+      'workunitname'
     ]
   ) || '').trim();
 
@@ -3493,11 +3495,12 @@ function mapImportRow(row, rowNumber){
       'description',
       'unitdescription',
       'itemdescription',
-      'desc'
+      'desc',
+      'workunitdescription'
     ]
   ) || '').trim();
 
-  const category = String(importCell(
+  let category = String(importCell(
     row,
     [
       'category',
@@ -3507,7 +3510,7 @@ function mapImportRow(row, rowNumber){
     ]
   ) || '').trim();
 
-  const unitOfMeasure = String(importCell(
+  let unitOfMeasure = String(importCell(
     row,
     [
       'unitofmeasure',
@@ -3517,7 +3520,7 @@ function mapImportRow(row, rowNumber){
     ]
   ) || '').trim();
 
-  const installPrice = importPrice(importCell(
+  const installPriceCell = importCell(
     row,
     [
       'installprice',
@@ -3525,9 +3528,9 @@ function mapImportRow(row, rowNumber){
       'install',
       'newprice'
     ]
-  ));
+  );
 
-  const retirementPrice = importPrice(importCell(
+  const retirementPriceCell = importCell(
     row,
     [
       'retirementprice',
@@ -3537,7 +3540,74 @@ function mapImportRow(row, rowNumber){
       'retirement',
       'remove'
     ]
-  ));
+  );
+
+  const unitPriceCell = importCell(
+    row,
+    [
+      'unitprice',
+      'price',
+      'rate',
+      'unitrate',
+      'laborrate'
+    ]
+  );
+
+  let installPrice =
+    importPrice(installPriceCell);
+
+  let retirementPrice =
+    importPrice(retirementPriceCell);
+
+  const hasSeparatePriceColumns =
+    String(installPriceCell ?? '').trim() !== '' ||
+    String(retirementPriceCell ?? '').trim() !== '';
+
+  if(
+    !hasSeparatePriceColumns &&
+    String(unitPriceCell ?? '').trim() !== ''
+  ){
+
+    const unitPrice =
+      importPrice(unitPriceCell);
+
+    if(
+      itemCode.toUpperCase().endsWith('R')
+    ){
+
+      installPrice = 0;
+      retirementPrice = unitPrice;
+
+    }else{
+
+      installPrice = unitPrice;
+      retirementPrice = 0;
+    }
+  }
+
+  if(!unitOfMeasure && description){
+
+    const measureMatch =
+      description.match(
+        /unit\s+of\s+measure\s*(?:=|:|-)?\s*([^.;\n]+)/i
+      );
+
+    if(measureMatch){
+      unitOfMeasure =
+        measureMatch[1].trim();
+    }
+  }
+
+  if(!category && itemCode){
+
+    const categoryMatch =
+      itemCode.match(/^[a-z]+/i);
+
+    if(categoryMatch){
+      category =
+        categoryMatch[0].toUpperCase();
+    }
+  }
 
   const errors = [];
 
