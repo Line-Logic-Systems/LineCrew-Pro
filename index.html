@@ -287,6 +287,24 @@ button.small{
   font-weight:700;
 }
 
+.file-drop{
+  border:2px dashed var(--border);
+  border-radius:14px;
+  padding:18px;
+  text-align:center;
+  background:#f8fafc;
+  transition:border-color .15s, background .15s;
+}
+
+.file-drop.dragover{
+  border-color:var(--blue);
+  background:#e8f2fb;
+}
+
+.file-drop input{
+  margin-top:10px;
+}
+
 @media(max-width:600px){
   .grid{
     grid-template-columns:1fr;
@@ -1045,11 +1063,24 @@ button.small{
         </p>
 
         <label for="priceBookImportFile">Pricing File</label>
-        <input
-          id="priceBookImportFile"
-          type="file"
-          accept=".csv,.xlsx,.xls"
-        >
+        <div id="priceBookFileDrop" class="file-drop">
+          <strong>Drop a pricing file here</strong>
+          <div class="muted">
+            or choose CSV, TSV, TXT, XLSX, XLS or ODS
+          </div>
+          <input
+            id="priceBookImportFile"
+            type="file"
+            accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
+          >
+        </div>
+
+        <div id="priceBookWorksheetWrap" class="hidden">
+          <label for="priceBookWorksheet">
+            Worksheet / Tab
+          </label>
+          <select id="priceBookWorksheet"></select>
+        </div>
 
         <p class="muted">
           Expected columns: Unit Code, Unit Name, Description,
@@ -1208,6 +1239,7 @@ let currentCompany = null;
 let currentPriceBookItems = [];
 let currentPriceBookImportRows = [];
 let currentOpenPriceBook = null;
+let currentPriceBookWorkbook = null;
 
 
 /* PAGE NAVIGATION */
@@ -3356,8 +3388,13 @@ function resetPriceBookImport(){
     .add('hidden');
 
   currentPriceBookImportRows = [];
+  currentPriceBookWorkbook = null;
   $('priceBookImportFile').value = '';
   $('priceBookImportPaste').value = '';
+  $('priceBookWorksheet').innerHTML = '';
+  $('priceBookWorksheetWrap')
+    .classList
+    .add('hidden');
   $('priceBookImportPreview').innerHTML = '';
   $('confirmPriceBookImportBtn')
     .classList
@@ -3671,20 +3708,20 @@ function renderPriceBookImportPreview(){
     (validRows.length === 1 ? '' : 's');
 }
 
-function loadImportWorkbook(workbook){
+function loadImportWorksheet(sheetName){
 
-  const firstSheetName =
-    workbook.SheetNames[0];
-
-  if(!firstSheetName){
+  if(
+    !currentPriceBookWorkbook ||
+    !currentPriceBookWorkbook.Sheets[sheetName]
+  ){
     throw new Error(
-      'The file does not contain a worksheet.'
+      'The selected worksheet could not be read.'
     );
   }
 
   const rawRows =
     XLSX.utils.sheet_to_json(
-      workbook.Sheets[firstSheetName],
+      currentPriceBookWorkbook.Sheets[sheetName],
       {
         defval: '',
         raw: false
@@ -3715,6 +3752,46 @@ function loadImportWorkbook(workbook){
   renderPriceBookImportPreview();
 }
 
+function prepareImportWorkbook(
+  workbook,
+  showWorksheetPicker
+){
+
+  if(!workbook?.SheetNames?.length){
+    throw new Error(
+      'The file does not contain a worksheet.'
+    );
+  }
+
+  currentPriceBookWorkbook = workbook;
+
+  $('priceBookWorksheet').innerHTML = '';
+
+  workbook.SheetNames.forEach(sheetName => {
+
+    const option =
+      document.createElement('option');
+
+    option.value = sheetName;
+    option.textContent = sheetName;
+
+    $('priceBookWorksheet')
+      .appendChild(option);
+  });
+
+  $('priceBookWorksheetWrap')
+    .classList
+    .toggle(
+      'hidden',
+      !showWorksheetPicker ||
+      workbook.SheetNames.length < 2
+    );
+
+  loadImportWorksheet(
+    workbook.SheetNames[0]
+  );
+}
+
 function showImportReadError(error){
 
   currentPriceBookImportRows = [];
@@ -3731,6 +3808,24 @@ function showImportReadError(error){
     .classList
     .add('hidden');
 }
+
+$('priceBookWorksheet').onchange = () => {
+
+  currentPriceBookImportRows = [];
+  $('priceBookImportPreview').innerHTML =
+    '<p class="muted">Reading worksheet...</p>';
+
+  try{
+
+    loadImportWorksheet(
+      $('priceBookWorksheet').value
+    );
+
+  }catch(error){
+
+    showImportReadError(error);
+  }
+};
 
 $('downloadPriceBookTemplateBtn').onclick = () => {
 
@@ -3793,6 +3888,10 @@ $('previewPastedPriceBookItemsBtn').onclick = () => {
     $('priceBookImportPaste').value.trim();
 
   currentPriceBookImportRows = [];
+  currentPriceBookWorkbook = null;
+  $('priceBookWorksheetWrap')
+    .classList
+    .add('hidden');
   $('priceBookImportPreview').innerHTML = '';
   $('confirmPriceBookImportBtn')
     .classList
@@ -3828,7 +3927,10 @@ $('previewPastedPriceBookItemsBtn').onclick = () => {
         { type: 'string' }
       );
 
-    loadImportWorkbook(workbook);
+    prepareImportWorkbook(
+      workbook,
+      false
+    );
 
   }catch(error){
 
@@ -3840,17 +3942,45 @@ $('previewPastedPriceBookItemsBtn').onclick = () => {
     'Preview Pasted Units';
 };
 
-$('priceBookImportFile').onchange = async event => {
-
-  const file = event.target.files?.[0];
+async function handlePriceBookImportFile(file){
 
   currentPriceBookImportRows = [];
+  currentPriceBookWorkbook = null;
+  $('priceBookWorksheetWrap')
+    .classList
+    .add('hidden');
   $('priceBookImportPreview').innerHTML = '';
   $('confirmPriceBookImportBtn')
     .classList
     .add('hidden');
 
   if(!file){
+    return;
+  }
+
+  const extension =
+    String(file.name || '')
+      .toLowerCase()
+      .split('.')
+      .pop();
+
+  if(
+    ![
+      'csv',
+      'tsv',
+      'txt',
+      'xlsx',
+      'xls',
+      'ods'
+    ].includes(extension)
+  ){
+
+    showImportReadError(
+      new Error(
+        'Choose a CSV, TSV, TXT, XLSX, XLS or ODS pricing file.'
+      )
+    );
+
     return;
   }
 
@@ -3872,7 +4002,10 @@ $('priceBookImportFile').onchange = async event => {
     const workbook =
       XLSX.read(await file.arrayBuffer());
 
-    loadImportWorkbook(workbook);
+    prepareImportWorkbook(
+      workbook,
+      true
+    );
 
   }catch(error){
 
@@ -3880,7 +4013,81 @@ $('priceBookImportFile').onchange = async event => {
   }
 
   $('priceBookImportFile').disabled = false;
+}
+
+$('priceBookImportFile').onchange = async event => {
+
+  await handlePriceBookImportFile(
+    event.target.files?.[0]
+  );
 };
+
+const priceBookFileDrop =
+  $('priceBookFileDrop');
+
+[
+  'dragenter',
+  'dragover'
+].forEach(eventName => {
+
+  priceBookFileDrop.addEventListener(
+    eventName,
+    event => {
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      priceBookFileDrop
+        .classList
+        .add('dragover');
+    }
+  );
+});
+
+[
+  'dragleave',
+  'drop'
+].forEach(eventName => {
+
+  priceBookFileDrop.addEventListener(
+    eventName,
+    event => {
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      priceBookFileDrop
+        .classList
+        .remove('dragover');
+    }
+  );
+});
+
+priceBookFileDrop.addEventListener(
+  'drop',
+  async event => {
+
+    const files =
+      event.dataTransfer?.files;
+
+    if(!files?.length){
+      return;
+    }
+
+    if(files.length > 1){
+
+      alert(
+        'Drop one pricing file at a time.'
+      );
+
+      return;
+    }
+
+    await handlePriceBookImportFile(
+      files[0]
+    );
+  }
+);
 
 $('confirmPriceBookImportBtn').onclick = async () => {
 
