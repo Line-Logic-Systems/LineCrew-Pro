@@ -1589,20 +1589,9 @@ async function navigateToAppPage(page){
   await displayAppPage(page);
 }
 
-function returnToDashboard(){
-  if(
-    window.history.state?.lineCrewApp &&
-    window.history.state?.lineCrewPage !== 'dashboardPage'
-  ){
-    window.history.back();
-    return;
-  }
-
-  setAppHistory(
-    { lineCrewPage:'dashboardPage' },
-    true
-  );
-  show('dashboardPage');
+async function returnToDashboard(){
+  setAppHistory({ lineCrewPage:'dashboardPage' });
+  await displayAppPage('dashboardPage');
 }
 
 window.addEventListener('popstate', async event => {
