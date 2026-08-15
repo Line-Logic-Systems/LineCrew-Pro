@@ -917,8 +917,17 @@ button.small{
         </button>
       </div>
 
+      <label for="priceBookItemSearch">
+        Search Unit Items
+      </label>
+      <input
+        id="priceBookItemSearch"
+        type="search"
+        placeholder="Search code, name, description or category"
+      >
+
       <div id="priceBookItemForm" class="card hidden">
-        <h3>Add Unit Item</h3>
+        <h3 id="priceBookItemFormTitle">Add Unit Item</h3>
 
         <label for="priceBookItemCode">Unit Code</label>
         <input id="priceBookItemCode" type="text">
@@ -1016,6 +1025,7 @@ const $ = id =>
 
 let currentProfile = null;
 let currentCompany = null;
+let currentPriceBookItems = [];
 
 
 /* PAGE NAVIGATION */
@@ -2729,6 +2739,13 @@ function formatCurrency(value){
   );
 }
 
+function userCanManagePriceBooks(){
+
+  return String(
+    currentProfile?.role || ''
+  ).toLowerCase() === 'admin';
+}
+
 async function loadPriceBookItems(priceBookId){
 
   $('priceBookItemsList').innerHTML =
@@ -2761,11 +2778,17 @@ async function loadPriceBookItems(priceBookId){
       priceBookId
     )
     .order(
+      'active',
+      { ascending: false }
+    )
+    .order(
       'item_code',
       { ascending: true }
     );
 
   if(error){
+
+    currentPriceBookItems = [];
 
     $('priceBookItemsList').innerHTML =
       '<p class="muted">Unable to load unit items.</p>';
@@ -2778,7 +2801,41 @@ async function loadPriceBookItems(priceBookId){
     return;
   }
 
-  if(!items || items.length === 0){
+  currentPriceBookItems =
+    items || [];
+
+  renderPriceBookItems();
+}
+
+function renderPriceBookItems(){
+
+  const searchText =
+    $('priceBookItemSearch')
+      .value
+      .trim()
+      .toLowerCase();
+
+  const filteredItems =
+    currentPriceBookItems.filter(item => {
+
+      if(!searchText){
+        return true;
+      }
+
+      return [
+        item.item_code,
+        item.item_name,
+        item.description,
+        item.category,
+        item.unit_of_measure
+      ].some(value =>
+        String(value || '')
+          .toLowerCase()
+          .includes(searchText)
+      );
+    });
+
+  if(currentPriceBookItems.length === 0){
 
     $('priceBookItemsList').innerHTML =
       '<p class="muted">No unit items added yet.</p>';
@@ -2786,9 +2843,17 @@ async function loadPriceBookItems(priceBookId){
     return;
   }
 
+  if(filteredItems.length === 0){
+
+    $('priceBookItemsList').innerHTML =
+      '<p class="muted">No unit items match your search.</p>';
+
+    return;
+  }
+
   $('priceBookItemsList').innerHTML = '';
 
-  items.forEach(item => {
+  filteredItems.forEach(item => {
 
     const card =
       document.createElement('div');
@@ -2831,13 +2896,88 @@ async function loadPriceBookItems(priceBookId){
           : '') +
       '</div>';
 
+    if(userCanManagePriceBooks()){
+
+      const actions =
+        document.createElement('div');
+
+      actions.className = 'actions';
+
+      const editButton =
+        document.createElement('button');
+
+      editButton.className =
+        'secondary small';
+
+      editButton.textContent =
+        'Edit';
+
+      editButton.onclick = () =>
+        editPriceBookItem(item);
+
+      actions.appendChild(editButton);
+
+      const statusButton =
+        document.createElement('button');
+
+      statusButton.className =
+        item.active
+          ? 'warning small'
+          : 'success small';
+
+      statusButton.textContent =
+        item.active
+          ? 'Deactivate'
+          : 'Activate';
+
+      statusButton.onclick = () =>
+        setPriceBookItemActive(
+          item,
+          !item.active
+        );
+
+      actions.appendChild(statusButton);
+
+      const deleteButton =
+        document.createElement('button');
+
+      deleteButton.className =
+        'danger small';
+
+      deleteButton.textContent =
+        'Delete';
+
+      deleteButton.onclick = () =>
+        deletePriceBookItem(item);
+
+      actions.appendChild(deleteButton);
+
+      card.appendChild(actions);
+    }
+
     $('priceBookItemsList')
       .appendChild(card);
 
   });
 }
 
-$('addPriceBookItemBtn').onclick = () => {
+$('priceBookItemSearch').oninput = () => {
+
+  renderPriceBookItems();
+
+};
+
+function resetPriceBookItemForm(){
+
+  delete $('priceBookItemForm')
+    .dataset
+    .itemId;
+
+  $('priceBookItemFormTitle').textContent =
+    'Add Unit Item';
+
+  $('savePriceBookItemBtn').textContent =
+    'Save Unit';
 
   $('priceBookItemCode').value = '';
   $('priceBookItemName').value = '';
@@ -2846,6 +2986,11 @@ $('addPriceBookItemBtn').onclick = () => {
   $('priceBookItemUnitOfMeasure').value = '';
   $('priceBookItemInstallPrice').value = 0;
   $('priceBookItemRetirementPrice').value = 0;
+}
+
+$('addPriceBookItemBtn').onclick = () => {
+
+  resetPriceBookItemForm();
 
   $('priceBookItemForm')
     .classList
@@ -2853,11 +2998,57 @@ $('addPriceBookItemBtn').onclick = () => {
 
 };
 
+function editPriceBookItem(item){
+
+  $('priceBookItemForm')
+    .dataset
+    .itemId = item.id;
+
+  $('priceBookItemFormTitle').textContent =
+    'Edit Unit Item';
+
+  $('savePriceBookItemBtn').textContent =
+    'Save Changes';
+
+  $('priceBookItemCode').value =
+    item.item_code || '';
+
+  $('priceBookItemName').value =
+    item.item_name || '';
+
+  $('priceBookItemDescription').value =
+    item.description || '';
+
+  $('priceBookItemCategory').value =
+    item.category || '';
+
+  $('priceBookItemUnitOfMeasure').value =
+    item.unit_of_measure || '';
+
+  $('priceBookItemInstallPrice').value =
+    Number(item.install_price || 0);
+
+  $('priceBookItemRetirementPrice').value =
+    Number(item.retirement_price || 0);
+
+  $('priceBookItemForm')
+    .classList
+    .remove('hidden');
+
+  $('priceBookItemForm')
+    .scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+}
+
 $('cancelPriceBookItemBtn').onclick = () => {
 
   $('priceBookItemForm')
     .classList
     .add('hidden');
+
+  resetPriceBookItemForm();
 
 };
 
@@ -2867,6 +3058,11 @@ $('savePriceBookItemBtn').onclick = async () => {
     $('priceBookDetail')
       .dataset
       .priceBookId;
+
+  const itemId =
+    $('priceBookItemForm')
+      .dataset
+      .itemId || null;
 
   const itemCode =
     $('priceBookItemCode').value.trim();
@@ -2898,7 +3094,7 @@ $('savePriceBookItemBtn').onclick = async () => {
 
   if(!priceBookId){
 
-    alert('Open a Price Book before adding a unit.');
+    alert('Open a Price Book before saving a unit.');
 
     return;
   }
@@ -2929,28 +3125,60 @@ $('savePriceBookItemBtn').onclick = async () => {
     return;
   }
 
+  const itemValues = {
+    item_code: itemCode,
+    item_name: itemName,
+    description: description,
+    category: category,
+    unit_of_measure: unitOfMeasure,
+    install_price: installPrice,
+    retirement_price: retirementPrice
+  };
+
   $('savePriceBookItemBtn').disabled = true;
   $('savePriceBookItemBtn').textContent = 'Saving...';
 
-  const { error } = await sb
-    .from('price_book_items')
-    .insert({
-      company_id: currentProfile.company_id,
-      price_book_id: priceBookId,
-      item_code: itemCode,
-      item_name: itemName,
-      description: description,
-      category: category,
-      unit_of_measure: unitOfMeasure,
-      install_price: installPrice,
-      retirement_price: retirementPrice,
-      active: true
-    });
+  let error = null;
+
+  if(itemId){
+
+    const result = await sb
+      .from('price_book_items')
+      .update(itemValues)
+      .eq('id', itemId)
+      .eq(
+        'company_id',
+        currentProfile.company_id
+      )
+      .eq(
+        'price_book_id',
+        priceBookId
+      );
+
+    error = result.error;
+
+  }else{
+
+    const result = await sb
+      .from('price_book_items')
+      .insert({
+        company_id: currentProfile.company_id,
+        price_book_id: priceBookId,
+        ...itemValues,
+        active: true
+      });
+
+    error = result.error;
+  }
 
   $('savePriceBookItemBtn').disabled = false;
-  $('savePriceBookItemBtn').textContent = 'Save Unit';
 
   if(error){
+
+    $('savePriceBookItemBtn').textContent =
+      itemId
+        ? 'Save Changes'
+        : 'Save Unit';
 
     alert(
       'Unable to save unit item: ' +
@@ -2964,11 +3192,131 @@ $('savePriceBookItemBtn').onclick = async () => {
     .classList
     .add('hidden');
 
+  resetPriceBookItemForm();
+
   await loadPriceBookItems(priceBookId);
 
-  alert('Unit item saved.');
+  alert(
+    itemId
+      ? 'Unit item updated.'
+      : 'Unit item saved.'
+  );
 
 };
+
+async function setPriceBookItemActive(
+  item,
+  newStatus
+){
+
+  const action =
+    newStatus
+      ? 'activate'
+      : 'deactivate';
+
+  const confirmed =
+    confirm(
+      'Are you sure you want to ' +
+      action +
+      ' unit ' +
+      item.item_code +
+      '?'
+    );
+
+  if(!confirmed){
+    return;
+  }
+
+  const { error } = await sb
+    .from('price_book_items')
+    .update({
+      active: newStatus
+    })
+    .eq('id', item.id)
+    .eq(
+      'company_id',
+      currentProfile.company_id
+    )
+    .eq(
+      'price_book_id',
+      $('priceBookDetail')
+        .dataset
+        .priceBookId
+    );
+
+  if(error){
+
+    alert(
+      'Unable to change unit status: ' +
+      error.message
+    );
+
+    return;
+  }
+
+  await loadPriceBookItems(
+    $('priceBookDetail')
+      .dataset
+      .priceBookId
+  );
+}
+
+async function deletePriceBookItem(item){
+
+  if(item.active){
+
+    alert(
+      'Deactivate this unit before deleting it.'
+    );
+
+    return;
+  }
+
+  const confirmed =
+    confirm(
+      'Permanently delete inactive unit ' +
+      item.item_code +
+      '?\\n\\nThis cannot be undone.'
+    );
+
+  if(!confirmed){
+    return;
+  }
+
+  const { error } = await sb
+    .from('price_book_items')
+    .delete()
+    .eq('id', item.id)
+    .eq(
+      'company_id',
+      currentProfile.company_id
+    )
+    .eq(
+      'price_book_id',
+      $('priceBookDetail')
+        .dataset
+        .priceBookId
+    )
+    .eq('active', false);
+
+  if(error){
+
+    alert(
+      'Unable to delete unit item: ' +
+      error.message
+    );
+
+    return;
+  }
+
+  await loadPriceBookItems(
+    $('priceBookDetail')
+      .dataset
+      .priceBookId
+  );
+
+  alert('Unit item deleted.');
+}
 
 async function loadProductionReports(){
 
