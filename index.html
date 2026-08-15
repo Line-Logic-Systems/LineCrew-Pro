@@ -2684,7 +2684,7 @@ function openPriceBook(
         : '') +
     '</div>' +
     '<p class="muted">' +
-      'Unit pricing will appear here after the unit-item table and policies are added.' +
+      'Search, add and manage the unit pricing for this Price Book below.' +
     '</p>';
 
   $('priceBookDetail')
@@ -2699,9 +2699,14 @@ function openPriceBook(
         'admin'
     );
 
+  $('priceBookItemSearch').value = '';
+  currentPriceBookItems = [];
+
   $('priceBookItemForm')
     .classList
     .add('hidden');
+
+  resetPriceBookItemForm();
 
   $('priceBookDetail')
     .classList
@@ -3276,7 +3281,7 @@ async function deletePriceBookItem(item){
     confirm(
       'Permanently delete inactive unit ' +
       item.item_code +
-      '?\\n\\nThis cannot be undone.'
+      '?\n\nThis cannot be undone.'
     );
 
   if(!confirmed){
