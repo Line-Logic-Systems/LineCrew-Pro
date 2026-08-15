@@ -183,6 +183,71 @@ button.small{
   opacity:.65;
 }
 
+.unit-compact-card{
+  background:white;
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:11px 14px;
+  margin-bottom:8px;
+}
+
+.unit-compact-card.inactive{
+  opacity:.65;
+}
+
+.unit-summary-row{
+  display:grid;
+  grid-template-columns:minmax(110px,140px) minmax(180px,1fr) auto auto;
+  gap:12px;
+  align-items:center;
+}
+
+.unit-code-compact{
+  font-weight:800;
+  color:var(--navy);
+}
+
+.unit-name-compact{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.unit-prices-compact{
+  white-space:nowrap;
+  color:var(--muted);
+  font-size:14px;
+}
+
+.unit-details{
+  margin-top:7px;
+}
+
+.unit-details summary{
+  color:var(--blue);
+  cursor:pointer;
+  font-weight:700;
+  font-size:14px;
+}
+
+.pagination{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin:14px 0;
+}
+
+.pagination button{
+  width:auto;
+  margin:0;
+}
+
+button:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
 .job-number{
   font-size:21px;
   font-weight:800;
@@ -308,6 +373,21 @@ button.small{
   .grid,
   .mapping-grid{
     grid-template-columns:1fr;
+  }
+
+  .unit-summary-row{
+    grid-template-columns:1fr auto;
+    gap:5px 10px;
+  }
+
+  .unit-name-compact{
+    grid-column:1 / -1;
+    grid-row:2;
+  }
+
+  .unit-prices-compact{
+    grid-column:1 / -1;
+    grid-row:3;
   }
 
   .toolbar{
@@ -1250,6 +1330,8 @@ const $ = id =>
 let currentProfile = null;
 let currentCompany = null;
 let currentPriceBookItems = [];
+let currentPriceBookItemPage = 1;
+const PRICE_BOOK_ITEMS_PER_PAGE = 50;
 let currentPriceBookImportRows = [];
 let currentOpenPriceBook = null;
 let currentPriceBookWorkbook = null;
@@ -4440,6 +4522,8 @@ async function loadPriceBookItems(priceBookId){
   currentPriceBookItems =
     items || [];
 
+  currentPriceBookItemPage = 1;
+
   renderPriceBookItems();
 }
 
@@ -4487,50 +4571,129 @@ function renderPriceBookItems(){
     return;
   }
 
+  const totalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        filteredItems.length /
+        PRICE_BOOK_ITEMS_PER_PAGE
+      )
+    );
+
+  currentPriceBookItemPage =
+    Math.min(
+      Math.max(currentPriceBookItemPage, 1),
+      totalPages
+    );
+
+  const startIndex =
+    (currentPriceBookItemPage - 1) *
+    PRICE_BOOK_ITEMS_PER_PAGE;
+
+  const pageItems =
+    filteredItems.slice(
+      startIndex,
+      startIndex + PRICE_BOOK_ITEMS_PER_PAGE
+    );
+
   $('priceBookItemsList').innerHTML = '';
 
-  filteredItems.forEach(item => {
+  const countText =
+    document.createElement('p');
+
+  countText.className = 'muted';
+
+  countText.textContent =
+    'Showing ' +
+    (startIndex + 1) +
+    '–' +
+    Math.min(
+      startIndex + pageItems.length,
+      filteredItems.length
+    ) +
+    ' of ' +
+    filteredItems.length +
+    ' unit' +
+    (filteredItems.length === 1 ? '' : 's');
+
+  $('priceBookItemsList')
+    .appendChild(countText);
+
+  pageItems.forEach(item => {
 
     const card =
       document.createElement('div');
 
     card.className =
-      'job-card' +
+      'unit-compact-card' +
       (item.active ? '' : ' inactive');
 
-    card.innerHTML =
-      '<div class="job-number">' +
+    const summaryRow =
+      document.createElement('div');
+
+    summaryRow.className =
+      'unit-summary-row';
+
+    summaryRow.innerHTML =
+      '<div class="unit-code-compact">' +
         escapeHtml(item.item_code) +
       '</div>' +
-      '<div class="job-title">' +
+      '<div class="unit-name-compact" title="' +
         escapeHtml(item.item_name || 'Unnamed Unit') +
+      '">' +
+        escapeHtml(item.item_name || 'Unnamed Unit') +
+      '</div>' +
+      '<div class="unit-prices-compact">' +
+        'I: <strong>' +
+          escapeHtml(formatCurrency(item.install_price)) +
+        '</strong> &nbsp; R: <strong>' +
+          escapeHtml(formatCurrency(item.retirement_price)) +
+        '</strong>' +
       '</div>' +
       '<div class="status ' +
         (item.active ? 'active' : 'closed') +
       '">' +
         (item.active ? 'ACTIVE' : 'INACTIVE') +
-      '</div>' +
-      '<div class="job-info">' +
-        (item.description
-          ? escapeHtml(item.description) + '<br>'
-          : '') +
-        'Install: <strong>' +
-          escapeHtml(formatCurrency(item.install_price)) +
-        '</strong><br>' +
-        'Retirement / Remove: <strong>' +
-          escapeHtml(formatCurrency(item.retirement_price)) +
-        '</strong>' +
-        (item.unit_of_measure
-          ? '<br>Unit: <strong>' +
-              escapeHtml(item.unit_of_measure) +
-            '</strong>'
-          : '') +
-        (item.category
-          ? '<br>Category: <strong>' +
-              escapeHtml(item.category) +
-            '</strong>'
-          : '') +
       '</div>';
+
+    card.appendChild(summaryRow);
+
+    const details =
+      document.createElement('details');
+
+    details.className = 'unit-details';
+
+    const detailsSummary =
+      document.createElement('summary');
+
+    detailsSummary.textContent =
+      'View details and actions';
+
+    details.appendChild(detailsSummary);
+
+    const detailsBody =
+      document.createElement('div');
+
+    detailsBody.className = 'job-info';
+
+    detailsBody.innerHTML =
+      (item.description
+        ? 'Description: ' +
+          escapeHtml(item.description) +
+          '<br>'
+        : '') +
+      (item.unit_of_measure
+        ? 'Unit: <strong>' +
+            escapeHtml(item.unit_of_measure) +
+          '</strong><br>'
+        : '') +
+      (item.category
+        ? 'Category: <strong>' +
+            escapeHtml(item.category) +
+          '</strong>'
+        : '');
+
+    details.appendChild(detailsBody);
 
     if(userCanManagePriceBooks()){
 
@@ -4545,8 +4708,7 @@ function renderPriceBookItems(){
       editButton.className =
         'secondary small';
 
-      editButton.textContent =
-        'Edit';
+      editButton.textContent = 'Edit';
 
       editButton.onclick = () =>
         editPriceBookItem(item);
@@ -4580,24 +4742,99 @@ function renderPriceBookItems(){
       deleteButton.className =
         'danger small';
 
-      deleteButton.textContent =
-        'Delete';
+      deleteButton.textContent = 'Delete';
 
       deleteButton.onclick = () =>
         deletePriceBookItem(item);
 
       actions.appendChild(deleteButton);
 
-      card.appendChild(actions);
+      details.appendChild(actions);
     }
+
+    card.appendChild(details);
 
     $('priceBookItemsList')
       .appendChild(card);
-
   });
+
+  if(totalPages > 1){
+
+    const pagination =
+      document.createElement('div');
+
+    pagination.className = 'pagination';
+
+    const previousButton =
+      document.createElement('button');
+
+    previousButton.className =
+      'secondary small';
+
+    previousButton.textContent = '← Previous';
+
+    previousButton.disabled =
+      currentPriceBookItemPage === 1;
+
+    previousButton.onclick = () => {
+
+      currentPriceBookItemPage -= 1;
+      renderPriceBookItems();
+
+      $('priceBookItemSearch')
+        .scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+    };
+
+    const pageLabel =
+      document.createElement('span');
+
+    pageLabel.className = 'muted';
+
+    pageLabel.textContent =
+      'Page ' +
+      currentPriceBookItemPage +
+      ' of ' +
+      totalPages;
+
+    const nextButton =
+      document.createElement('button');
+
+    nextButton.className =
+      'secondary small';
+
+    nextButton.textContent = 'Next →';
+
+    nextButton.disabled =
+      currentPriceBookItemPage ===
+      totalPages;
+
+    nextButton.onclick = () => {
+
+      currentPriceBookItemPage += 1;
+      renderPriceBookItems();
+
+      $('priceBookItemSearch')
+        .scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+    };
+
+    pagination.appendChild(previousButton);
+    pagination.appendChild(pageLabel);
+    pagination.appendChild(nextButton);
+
+    $('priceBookItemsList')
+      .appendChild(pagination);
+  }
 }
 
 $('priceBookItemSearch').oninput = () => {
+
+  currentPriceBookItemPage = 1;
 
   renderPriceBookItems();
 
