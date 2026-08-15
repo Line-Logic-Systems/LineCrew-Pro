@@ -1791,6 +1791,7 @@ $('priceBooksTile').onclick = async () => {
   show('priceBooksPage');
   await loadCustomers();
   await loadContracts();
+  await loadPriceBooks();
 };
 
 $('backFromPriceBooks').onclick = () => {
@@ -1798,7 +1799,9 @@ $('backFromPriceBooks').onclick = () => {
 };
 
 $('refreshPriceBooksBtn').onclick = async () => {
-  alert('Price book loading will be connected next.');
+  await loadCustomers();
+  await loadContracts();
+  await loadPriceBooks();
 };
 
  /* CUSTOMER / UTILITY FORM */
@@ -2306,7 +2309,200 @@ $('cancelPriceBookBtn').onclick = () => {
 
   $('priceBookForm').classList.add('hidden');
 
+  await loadPriceBooks();
+
 };
+
+/* LOAD PRICE BOOKS */
+
+async function loadPriceBooks(){
+
+  $('priceBooksList').innerHTML =
+    '<p class="muted">Loading price books...</p>';
+
+  const companyId =
+    currentProfile?.company_id;
+
+  if(!companyId){
+
+    $('priceBooksList').innerHTML =
+      '<p class="muted">Unable to determine the current company.</p>';
+
+    return;
+  }
+
+  const [
+    priceBooksResult,
+    contractsResult,
+    customersResult
+  ] = await Promise.all([
+
+    sb
+      .from('price_books')
+      .select(`
+        id,
+        contract_id,
+        name,
+        effective_date,
+        effective_start,
+        effective_end,
+        version_name,
+        notes,
+        active,
+        created_at,
+        updated_at
+      `)
+      .eq('company_id', companyId)
+      .order('active', { ascending: false })
+      .order('effective_start', {
+        ascending: false,
+        nullsFirst: false
+      })
+      .order('created_at', { ascending: false }),
+
+    sb
+      .from('contracts')
+      .select(`
+        id,
+        customer_id,
+        contract_name,
+        contract_number
+      `)
+      .eq('company_id', companyId),
+
+    sb
+      .from('customers')
+      .select(`
+        id,
+        name,
+        customer_type
+      `)
+      .eq('company_id', companyId)
+
+  ]);
+
+  const loadError =
+    priceBooksResult.error ||
+    contractsResult.error ||
+    customersResult.error;
+
+  if(loadError){
+
+    $('priceBooksList').innerHTML =
+      '<p class="muted">Unable to load price books.</p>';
+
+    alert(
+      'Unable to load price books: ' +
+      loadError.message
+    );
+
+    return;
+  }
+
+  const priceBooks =
+    priceBooksResult.data || [];
+
+  if(priceBooks.length === 0){
+
+    $('priceBooksList').innerHTML =
+      '<p class="muted">No price books yet.</p>';
+
+    return;
+  }
+
+  const contractsById =
+    new Map(
+      (contractsResult.data || [])
+        .map(contract => [
+          contract.id,
+          contract
+        ])
+    );
+
+  const customersById =
+    new Map(
+      (customersResult.data || [])
+        .map(customer => [
+          customer.id,
+          customer
+        ])
+    );
+
+  $('priceBooksList').innerHTML = '';
+
+  priceBooks.forEach(priceBook => {
+
+    const contract =
+      contractsById.get(priceBook.contract_id);
+
+    const customer =
+      contract
+        ? customersById.get(contract.customer_id)
+        : null;
+
+    const effectiveStart =
+      priceBook.effective_start ||
+      priceBook.effective_date ||
+      'Not set';
+
+    const statusText =
+      priceBook.active
+        ? 'ACTIVE'
+        : 'INACTIVE';
+
+    const statusClass =
+      priceBook.active
+        ? 'active'
+        : 'closed';
+
+    const card =
+      document.createElement('div');
+
+    card.className =
+      'job-card' +
+      (priceBook.active ? '' : ' inactive');
+
+    card.innerHTML =
+      '<div class="job-title">' +
+        escapeHtml(priceBook.name) +
+      '</div>' +
+      '<div class="status ' +
+        statusClass +
+      '">' +
+        statusText +
+      '</div>' +
+      '<div class="job-info">' +
+        'Customer / Utility: <strong>' +
+          escapeHtml(customer?.name || 'Not assigned') +
+        '</strong><br>' +
+        'Contract: <strong>' +
+          escapeHtml(contract?.contract_name || 'Not assigned') +
+        '</strong>' +
+        (contract?.contract_number
+          ? ' (' + escapeHtml(contract.contract_number) + ')'
+          : '') +
+        '<br>Effective: <strong>' +
+          escapeHtml(effectiveStart) +
+        '</strong>' +
+        (priceBook.effective_end
+          ? '<br>Ends: <strong>' +
+              escapeHtml(priceBook.effective_end) +
+            '</strong>'
+          : '') +
+        '<br>Version: <strong>' +
+          escapeHtml(priceBook.version_name || 'Original') +
+        '</strong>' +
+        (priceBook.notes
+          ? '<br>Notes: ' +
+              escapeHtml(priceBook.notes)
+          : '') +
+      '</div>';
+
+    $('priceBooksList').appendChild(card);
+
+  });
+}
+
 async function loadProductionReports(){
 
   $('productionLoading').classList.remove('hidden');
