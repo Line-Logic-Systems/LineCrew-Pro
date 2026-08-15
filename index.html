@@ -3436,7 +3436,7 @@ $('priceBookStatusBtn').onclick = async () => {
 
   const extraNotice =
     newStatus
-      ? '\n\nOther Price Book versions will not be changed automatically.'
+      ? '\n\nAny other active version of this same Price Book will be deactivated automatically.'
       : '\n\nThe Price Book and its unit history will be preserved.';
 
   const confirmed = confirm(
@@ -3458,16 +3458,13 @@ $('priceBookStatusBtn').onclick = async () => {
       ? 'Activating...'
       : 'Deactivating...';
 
-  const { error } = await sb
-    .from('price_books')
-    .update({
-      active: newStatus
-    })
-    .eq('id', currentOpenPriceBook.id)
-    .eq(
-      'company_id',
-      currentProfile.company_id
-    );
+  const { error } = await sb.rpc(
+    'set_price_book_active',
+    {
+      p_price_book_id: currentOpenPriceBook.id,
+      p_active: newStatus
+    }
+  );
 
   $('priceBookStatusBtn').disabled = false;
 
