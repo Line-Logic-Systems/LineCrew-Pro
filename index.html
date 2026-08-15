@@ -933,6 +933,13 @@ button.small{
 
         <div class="import-actions">
           <button
+            id="priceBookStatusBtn"
+            class="warning small hidden"
+          >
+            Change Status
+          </button>
+
+          <button
             id="duplicatePriceBookBtn"
             class="success small hidden"
           >
@@ -2890,6 +2897,20 @@ function openPriceBook(
     .classList
     .toggle('hidden', !canManagePriceBook);
 
+  $('priceBookStatusBtn')
+    .classList
+    .toggle('hidden', !canManagePriceBook);
+
+  $('priceBookStatusBtn').textContent =
+    priceBook.active
+      ? 'Deactivate Price Book'
+      : 'Activate Price Book';
+
+  $('priceBookStatusBtn').className =
+    (priceBook.active ? 'warning' : 'success') +
+    ' small' +
+    (canManagePriceBook ? '' : ' hidden');
+
   resetPriceBookImport();
 
   $('priceBookItemSearch').value = '';
@@ -2926,6 +2947,89 @@ $('closePriceBookDetailBtn').onclick = () => {
 
   currentOpenPriceBook = null;
 
+};
+
+$('priceBookStatusBtn').onclick = async () => {
+
+  if(
+    !userCanManagePriceBooks() ||
+    !currentOpenPriceBook
+  ){
+    return;
+  }
+
+  const newStatus =
+    !currentOpenPriceBook.active;
+
+  const action =
+    newStatus
+      ? 'activate'
+      : 'deactivate';
+
+  const extraNotice =
+    newStatus
+      ? '\n\nOther Price Book versions will not be changed automatically.'
+      : '\n\nThe Price Book and its unit history will be preserved.';
+
+  const confirmed = confirm(
+    'Are you sure you want to ' +
+    action +
+    ' "' +
+    currentOpenPriceBook.name +
+    '"?' +
+    extraNotice
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  $('priceBookStatusBtn').disabled = true;
+  $('priceBookStatusBtn').textContent =
+    newStatus
+      ? 'Activating...'
+      : 'Deactivating...';
+
+  const { error } = await sb
+    .from('price_books')
+    .update({
+      active: newStatus
+    })
+    .eq('id', currentOpenPriceBook.id)
+    .eq(
+      'company_id',
+      currentProfile.company_id
+    );
+
+  $('priceBookStatusBtn').disabled = false;
+
+  if(error){
+
+    $('priceBookStatusBtn').textContent =
+      currentOpenPriceBook.active
+        ? 'Deactivate Price Book'
+        : 'Activate Price Book';
+
+    alert(
+      'Unable to change Price Book status: ' +
+      error.message
+    );
+
+    return;
+  }
+
+  $('priceBookDetail')
+    .classList
+    .add('hidden');
+
+  currentOpenPriceBook = null;
+
+  await loadPriceBooks();
+
+  alert(
+    'Price Book ' +
+    (newStatus ? 'activated.' : 'deactivated.')
+  );
 };
 
 $('duplicatePriceBookBtn').onclick = () => {
