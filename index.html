@@ -846,7 +846,43 @@ button.small{
       </button>
 
     </div>
+<div id="priceBookForm" class="form-card hidden">
 
+  <h3>Add Price Book</h3>
+
+  <label for="priceBookContract">Contract</label>
+  <select id="priceBookContract">
+    <option value="">Select contract</option>
+  </select>
+
+  <label for="priceBookName">Price Book Name</label>
+  <input
+    id="priceBookName"
+    type="text"
+    placeholder="Example: United Electric 2026 Pricing"
+  >
+
+  <label for="priceBookEffectiveDate">Effective Date</label>
+  <input
+    id="priceBookEffectiveDate"
+    type="date"
+  >
+ <label for="priceBookNotes">Notes</label>
+<textarea
+  id="priceBookNotes"
+  rows="3"
+  placeholder="Optional notes"
+></textarea>
+
+<button id="savePriceBookBtn" class="success">
+  Save Price Book
+</button>
+
+<button id="cancelPriceBookBtn" class="secondary">
+  Cancel
+</button>
+
+</div>
     <div id="priceBooksList"></div>
 
   </div>
@@ -2152,7 +2188,55 @@ async function loadContracts(){
 
   });
 }
-  
+ /* PRICE BOOK FORM */
+
+$('addPriceBookBtn').onclick = async () => {
+
+  $('priceBookForm').classList.remove('hidden');
+
+  $('priceBookName').value = '';
+  $('priceBookEffectiveDate').value = '';
+  $('priceBookNotes').value = '';
+
+  $('priceBookContract').innerHTML =
+    '<option value="">Select contract</option>';
+
+  const {
+    data: contracts,
+    error
+  } = await sb
+    .from('contracts')
+    .select('id, contract_name, contract_number')
+    .eq('company_id', currentProfile.company_id)
+    .eq('active', true)
+    .order('contract_name', { ascending: true });
+
+  if(error){
+    alert('Unable to load contracts: ' + error.message);
+    return;
+  }
+
+  contracts.forEach(contract => {
+
+    const option = document.createElement('option');
+
+    option.value = contract.id;
+
+    option.textContent =
+      contract.contract_name +
+      (contract.contract_number
+        ? ' - ' + contract.contract_number
+        : '');
+
+    $('priceBookContract').appendChild(option);
+
+  });
+
+};
+
+$('cancelPriceBookBtn').onclick = () => {
+  $('priceBookForm').classList.add('hidden');
+}; 
 async function loadProductionReports(){
 
   $('productionLoading').classList.remove('hidden');
