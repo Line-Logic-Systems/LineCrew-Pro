@@ -1089,6 +1089,30 @@ button:disabled{
       </button>
 
     </div>
+
+    <label for="priceBookLibrarySearch">Search Price Books</label>
+    <input
+      id="priceBookLibrarySearch"
+      type="search"
+      placeholder="Search Price Book, customer, contract, version or notes"
+    >
+
+    <div class="unit-filter-toolbar">
+      <div>
+        <label for="priceBookLibraryStatus">Status</label>
+        <select id="priceBookLibraryStatus">
+          <option value="all">All Price Books</option>
+          <option value="active">Has active version</option>
+          <option value="inactive">No active version</option>
+        </select>
+      </div>
+      <div>
+        <label for="priceBookLibraryCustomer">Customer / Utility</label>
+        <select id="priceBookLibraryCustomer">
+          <option value="all">All customers</option>
+        </select>
+      </div>
+    </div>
 <div id="priceBookForm" class="form-card hidden">
 
   <h3>Add Price Book</h3>
@@ -1473,6 +1497,9 @@ let currentOpenPriceBook = null;
 let currentPriceBookWorkbook = null;
 let currentPriceBookSourceRows = [];
 let priceBookNavigationRecords = new Map();
+let currentPriceBookCatalog = [];
+let currentPriceBookContractsById = new Map();
+let currentPriceBookCustomersById = new Map();
 
 const APP_PAGE_IDS = new Set([
   'dashboardPage',
@@ -3090,13 +3117,7 @@ async function loadPriceBooks(){
   const priceBooks =
     priceBooksResult.data || [];
 
-  if(priceBooks.length === 0){
-
-    $('priceBooksList').innerHTML =
-      '<p class="muted">No price books yet.</p>';
-
-    return;
-  }
+  currentPriceBookCatalog = priceBooks;
 
   const contractsById =
     new Map(
@@ -3116,6 +3137,9 @@ async function loadPriceBooks(){
         ])
     );
 
+  currentPriceBookContractsById = contractsById;
+  currentPriceBookCustomersById = customersById;
+
   priceBookNavigationRecords = new Map();
 
   priceBooks.forEach(priceBook => {
@@ -3132,11 +3156,56 @@ async function loadPriceBooks(){
     );
   });
 
+  populatePriceBookLibraryCustomers();
+  renderPriceBookLibrary();
+}
+
+function populatePriceBookLibraryCustomers(){
+  const select = $('priceBookLibraryCustomer');
+  const selected = select.value || 'all';
+
+  const customers = [...currentPriceBookCustomersById.values()]
+    .sort((a, b) =>
+      String(a.name || '').localeCompare(
+        String(b.name || ''),
+        undefined,
+        { sensitivity:'base' }
+      )
+    );
+
+  select.innerHTML =
+    '<option value="all">All customers</option>';
+
+  customers.forEach(customer => {
+    const option = document.createElement('option');
+    option.value = customer.id;
+    option.textContent = customer.name || 'Unnamed customer';
+    select.appendChild(option);
+  });
+
+  select.value = customers.some(customer => customer.id === selected)
+    ? selected
+    : 'all';
+}
+
+function renderPriceBookLibrary(){
+
+  const searchText =
+    $('priceBookLibrarySearch').value.trim().toLowerCase();
+  const statusFilter = $('priceBookLibraryStatus').value;
+  const customerFilter = $('priceBookLibraryCustomer').value;
+
   $('priceBooksList').innerHTML = '';
+
+  if(currentPriceBookCatalog.length === 0){
+    $('priceBooksList').innerHTML =
+      '<p class="muted">No price books yet.</p>';
+    return;
+  }
 
   const versionGroups = new Map();
 
-  priceBooks.forEach(priceBook => {
+  currentPriceBookCatalog.forEach(priceBook => {
     const groupKey = [
       priceBook.contract_id || 'no-contract',
       String(priceBook.name || '')
@@ -3151,7 +3220,70 @@ async function loadPriceBooks(){
     versionGroups.get(groupKey).push(priceBook);
   });
 
-  versionGroups.forEach(versions => {
+  const visibleGroups = [...versionGroups.values()]
+    .filter(versions => {
+      const representative = versions[0];
+      const contract =
+        currentPriceBookContractsById.get(representative.contract_id);
+      const customer = contract
+        ? currentPriceBookCustomersById.get(contract.customer_id)
+        : null;
+      const hasActiveVersion =
+        versions.some(version => version.active);
+
+      if(statusFilter === 'active' && !hasActiveVersion){
+        return false;
+      }
+
+      if(statusFilter === 'inactive' && hasActiveVersion){
+        return false;
+      }
+
+      if(
+        customerFilter !== 'all' &&
+        contract?.customer_id !== customerFilter
+      ){
+        return false;
+      }
+
+      if(!searchText){
+        return true;
+      }
+
+      const searchableValues = [
+        representative.name,
+        contract?.contract_name,
+        contract?.contract_number,
+        customer?.name,
+        ...versions.flatMap(version => [
+          version.version_name,
+          version.notes,
+          version.effective_start,
+          version.effective_date,
+          version.effective_end
+        ])
+      ];
+
+      return searchableValues.some(value =>
+        String(value || '').toLowerCase().includes(searchText)
+      );
+    });
+
+  if(visibleGroups.length === 0){
+    $('priceBooksList').innerHTML =
+      '<p class="muted">No Price Books match the selected filters.</p>';
+    return;
+  }
+
+  const resultCount = document.createElement('p');
+  resultCount.className = 'muted';
+  resultCount.textContent =
+    'Showing ' + visibleGroups.length + ' of ' +
+    versionGroups.size + ' Price Book' +
+    (versionGroups.size === 1 ? '' : 's');
+  $('priceBooksList').appendChild(resultCount);
+
+  visibleGroups.forEach(versions => {
 
     versions.sort((a, b) => {
       if(Boolean(a.active) !== Boolean(b.active)){
@@ -3168,10 +3300,10 @@ async function loadPriceBooks(){
 
     const representative = versions[0];
     const contract =
-      contractsById.get(representative.contract_id);
+      currentPriceBookContractsById.get(representative.contract_id);
     const customer =
       contract
-        ? customersById.get(contract.customer_id)
+        ? currentPriceBookCustomersById.get(contract.customer_id)
         : null;
 
     const group = document.createElement('div');
@@ -3256,6 +3388,15 @@ async function loadPriceBooks(){
     $('priceBooksList').appendChild(group);
   });
 }
+
+$('priceBookLibrarySearch').oninput =
+  renderPriceBookLibrary;
+
+$('priceBookLibraryStatus').onchange =
+  renderPriceBookLibrary;
+
+$('priceBookLibraryCustomer').onchange =
+  renderPriceBookLibrary;
 
 /* OPEN PRICE BOOK */
 
