@@ -7,6 +7,7 @@
 <title>LineCrew Pro</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
 <style>
 :root{
@@ -245,6 +246,45 @@ button.small{
 .section-header button{
   width:auto;
   margin-top:0;
+}
+
+.import-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:12px 0;
+}
+
+.import-summary{
+  background:#f5f8fb;
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  margin:12px 0;
+}
+
+.import-table-wrap{
+  overflow-x:auto;
+  margin-top:12px;
+}
+
+.import-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:14px;
+}
+
+.import-table th,
+.import-table td{
+  border-bottom:1px solid var(--border);
+  padding:9px;
+  text-align:left;
+  white-space:nowrap;
+}
+
+.import-error{
+  color:var(--red);
+  font-weight:700;
 }
 
 @media(max-width:600px){
@@ -909,11 +949,57 @@ button.small{
           </p>
         </div>
 
-        <button
-          id="addPriceBookItemBtn"
-          class="success small hidden"
+        <div class="import-actions">
+          <button
+            id="importPriceBookItemsBtn"
+            class="secondary small hidden"
+          >
+            Import CSV / Excel
+          </button>
+
+          <button
+            id="addPriceBookItemBtn"
+            class="success small hidden"
+          >
+            + Add Unit
+          </button>
+        </div>
+      </div>
+
+      <div id="priceBookImportCard" class="card hidden">
+        <h3>Import Unit Pricing</h3>
+        <p class="muted">
+          Upload a CSV, XLSX or XLS file. The first worksheet will be used.
+          Nothing is saved until you review the preview and confirm the import.
+        </p>
+
+        <label for="priceBookImportFile">Pricing File</label>
+        <input
+          id="priceBookImportFile"
+          type="file"
+          accept=".csv,.xlsx,.xls"
         >
-          + Add Unit
+
+        <p class="muted">
+          Expected columns: Unit Code, Unit Name, Description,
+          Install Price, Retirement Price, Unit of Measure and Category.
+          Common variations such as Item Code and Remove Price are recognized.
+        </p>
+
+        <div id="priceBookImportPreview"></div>
+
+        <button
+          id="confirmPriceBookImportBtn"
+          class="success hidden"
+        >
+          Import Valid Units
+        </button>
+
+        <button
+          id="cancelPriceBookImportBtn"
+          class="secondary"
+        >
+          Cancel Import
         </button>
       </div>
 
@@ -1026,6 +1112,7 @@ const $ = id =>
 let currentProfile = null;
 let currentCompany = null;
 let currentPriceBookItems = [];
+let currentPriceBookImportRows = [];
 
 
 /* PAGE NAVIGATION */
@@ -2691,13 +2778,19 @@ function openPriceBook(
     .dataset
     .priceBookId = priceBook.id;
 
+  const canManagePriceBook =
+    String(currentProfile?.role || '').toLowerCase() ===
+      'admin';
+
   $('addPriceBookItemBtn')
     .classList
-    .toggle(
-      'hidden',
-      String(currentProfile?.role || '').toLowerCase() !==
-        'admin'
-    );
+    .toggle('hidden', !canManagePriceBook);
+
+  $('importPriceBookItemsBtn')
+    .classList
+    .toggle('hidden', !canManagePriceBook);
+
+  resetPriceBookImport();
 
   $('priceBookItemSearch').value = '';
   currentPriceBookItems = [];
@@ -2750,6 +2843,510 @@ function userCanManagePriceBooks(){
     currentProfile?.role || ''
   ).toLowerCase() === 'admin';
 }
+
+function resetPriceBookImport(){
+
+  currentPriceBookImportRows = [];
+  $('priceBookImportFile').value = '';
+  $('priceBookImportPreview').innerHTML = '';
+  $('confirmPriceBookImportBtn')
+    .classList
+    .add('hidden');
+}
+
+$('importPriceBookItemsBtn').onclick = () => {
+
+  resetPriceBookImport();
+
+  $('priceBookImportCard')
+    .classList
+    .remove('hidden');
+
+  $('priceBookImportCard')
+    .scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+};
+
+$('cancelPriceBookImportBtn').onclick = () => {
+
+  $('priceBookImportCard')
+    .classList
+    .add('hidden');
+
+  resetPriceBookImport();
+};
+
+function normalizeImportHeader(value){
+
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function importCell(row, aliases){
+
+  const keys = Object.keys(row);
+
+  const foundKey = keys.find(key =>
+    aliases.includes(normalizeImportHeader(key))
+  );
+
+  return foundKey
+    ? row[foundKey]
+    : '';
+}
+
+function importPrice(value){
+
+  if(
+    value === '' ||
+    value === null ||
+    typeof value === 'undefined'
+  ){
+    return 0;
+  }
+
+  const cleaned =
+    String(value)
+      .replace(/[$,\s]/g, '')
+      .replace(/^\((.*)\)$/, '-$1');
+
+  return Number(cleaned);
+}
+
+function mapImportRow(row, rowNumber){
+
+  const itemCode = String(importCell(
+    row,
+    [
+      'unitcode',
+      'itemcode',
+      'code',
+      'unitnumber',
+      'itemnumber'
+    ]
+  ) || '').trim();
+
+  const itemName = String(importCell(
+    row,
+    [
+      'unitname',
+      'itemname',
+      'name',
+      'title'
+    ]
+  ) || '').trim();
+
+  const description = String(importCell(
+    row,
+    [
+      'description',
+      'unitdescription',
+      'itemdescription',
+      'desc'
+    ]
+  ) || '').trim();
+
+  const category = String(importCell(
+    row,
+    [
+      'category',
+      'type',
+      'itemtype',
+      'unittype'
+    ]
+  ) || '').trim();
+
+  const unitOfMeasure = String(importCell(
+    row,
+    [
+      'unitofmeasure',
+      'uom',
+      'measure',
+      'unit'
+    ]
+  ) || '').trim();
+
+  const installPrice = importPrice(importCell(
+    row,
+    [
+      'installprice',
+      'installationprice',
+      'install',
+      'newprice'
+    ]
+  ));
+
+  const retirementPrice = importPrice(importCell(
+    row,
+    [
+      'retirementprice',
+      'removeprice',
+      'removalprice',
+      'retireprice',
+      'retirement',
+      'remove'
+    ]
+  ));
+
+  const errors = [];
+
+  if(!itemCode){
+    errors.push('Missing Unit Code');
+  }
+
+  if(!itemName && !description){
+    errors.push('Missing Unit Name or Description');
+  }
+
+  if(
+    !Number.isFinite(installPrice) ||
+    installPrice < 0
+  ){
+    errors.push('Invalid Install Price');
+  }
+
+  if(
+    !Number.isFinite(retirementPrice) ||
+    retirementPrice < 0
+  ){
+    errors.push('Invalid Retirement Price');
+  }
+
+  return {
+    rowNumber: rowNumber,
+    item_code: itemCode,
+    item_name: itemName || description,
+    description: description || null,
+    category: category || null,
+    unit_of_measure: unitOfMeasure || null,
+    install_price: installPrice,
+    retirement_price: retirementPrice,
+    errors: errors
+  };
+}
+
+function validateImportDuplicates(rows){
+
+  const existingCodes = new Set(
+    currentPriceBookItems.map(item =>
+      String(item.item_code || '')
+        .trim()
+        .toLowerCase()
+    )
+  );
+
+  const fileCodes = new Set();
+
+  rows.forEach(row => {
+
+    const code =
+      row.item_code.toLowerCase();
+
+    if(!code){
+      return;
+    }
+
+    if(existingCodes.has(code)){
+      row.errors.push(
+        'Unit Code already exists in this Price Book'
+      );
+    }
+
+    if(fileCodes.has(code)){
+      row.errors.push(
+        'Duplicate Unit Code in file'
+      );
+    }
+
+    fileCodes.add(code);
+  });
+}
+
+function renderPriceBookImportPreview(){
+
+  const validRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length === 0
+    );
+
+  const invalidRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length > 0
+    );
+
+  let html =
+    '<div class="import-summary">' +
+      '<strong>' +
+        validRows.length +
+        ' valid unit' +
+        (validRows.length === 1 ? '' : 's') +
+      '</strong><br>' +
+      invalidRows.length +
+      ' row' +
+      (invalidRows.length === 1 ? '' : 's') +
+      ' need attention and will not be imported.' +
+    '</div>';
+
+  html +=
+    '<div class="import-table-wrap">' +
+      '<table class="import-table">' +
+        '<thead><tr>' +
+          '<th>Row</th>' +
+          '<th>Unit Code</th>' +
+          '<th>Name</th>' +
+          '<th>Install</th>' +
+          '<th>Retirement</th>' +
+          '<th>Status</th>' +
+        '</tr></thead><tbody>';
+
+  currentPriceBookImportRows
+    .slice(0, 100)
+    .forEach(row => {
+
+      html +=
+        '<tr>' +
+          '<td>' + row.rowNumber + '</td>' +
+          '<td>' + escapeHtml(row.item_code || '—') + '</td>' +
+          '<td>' + escapeHtml(row.item_name || '—') + '</td>' +
+          '<td>' +
+            escapeHtml(
+              Number.isFinite(row.install_price)
+                ? formatCurrency(row.install_price)
+                : 'Invalid'
+            ) +
+          '</td>' +
+          '<td>' +
+            escapeHtml(
+              Number.isFinite(row.retirement_price)
+                ? formatCurrency(row.retirement_price)
+                : 'Invalid'
+            ) +
+          '</td>' +
+          '<td class="' +
+            (row.errors.length ? 'import-error' : '') +
+          '">' +
+            escapeHtml(
+              row.errors.length
+                ? row.errors.join('; ')
+                : 'Ready'
+            ) +
+          '</td>' +
+        '</tr>';
+    });
+
+  html += '</tbody></table></div>';
+
+  if(currentPriceBookImportRows.length > 100){
+    html +=
+      '<p class="muted">Preview shows the first 100 rows.</p>';
+  }
+
+  $('priceBookImportPreview').innerHTML = html;
+
+  $('confirmPriceBookImportBtn')
+    .classList
+    .toggle(
+      'hidden',
+      validRows.length === 0
+    );
+
+  $('confirmPriceBookImportBtn').textContent =
+    'Import ' +
+    validRows.length +
+    ' Valid Unit' +
+    (validRows.length === 1 ? '' : 's');
+}
+
+$('priceBookImportFile').onchange = async event => {
+
+  const file = event.target.files?.[0];
+
+  resetPriceBookImport();
+
+  if(!file){
+    return;
+  }
+
+  if(typeof XLSX === 'undefined'){
+
+    alert(
+      'The spreadsheet reader did not load. Refresh the page and try again.'
+    );
+
+    return;
+  }
+
+  $('priceBookImportFile').disabled = true;
+  $('priceBookImportPreview').innerHTML =
+    '<p class="muted">Reading file...</p>';
+
+  try{
+
+    const workbook =
+      XLSX.read(await file.arrayBuffer());
+
+    const firstSheetName =
+      workbook.SheetNames[0];
+
+    if(!firstSheetName){
+      throw new Error(
+        'The file does not contain a worksheet.'
+      );
+    }
+
+    const rawRows =
+      XLSX.utils.sheet_to_json(
+        workbook.Sheets[firstSheetName],
+        {
+          defval: '',
+          raw: false
+        }
+      );
+
+    if(rawRows.length === 0){
+      throw new Error(
+        'No pricing rows were found. Make sure row 1 contains column names.'
+      );
+    }
+
+    if(rawRows.length > 1000){
+      throw new Error(
+        'This first release imports up to 1,000 rows at a time. Split the file and try again.'
+      );
+    }
+
+    currentPriceBookImportRows =
+      rawRows.map((row, index) =>
+        mapImportRow(row, index + 2)
+      );
+
+    validateImportDuplicates(
+      currentPriceBookImportRows
+    );
+
+    renderPriceBookImportPreview();
+
+  }catch(error){
+
+    currentPriceBookImportRows = [];
+
+    $('priceBookImportPreview').innerHTML =
+      '<p class="import-error">' +
+        escapeHtml(
+          error?.message ||
+          'Unable to read this file.'
+        ) +
+      '</p>';
+
+    $('confirmPriceBookImportBtn')
+      .classList
+      .add('hidden');
+  }
+
+  $('priceBookImportFile').disabled = false;
+};
+
+$('confirmPriceBookImportBtn').onclick = async () => {
+
+  const priceBookId =
+    $('priceBookDetail')
+      .dataset
+      .priceBookId;
+
+  const validRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length === 0
+    );
+
+  if(!priceBookId || !currentProfile?.company_id){
+
+    alert('Open a Price Book before importing units.');
+
+    return;
+  }
+
+  if(!userCanManagePriceBooks()){
+
+    alert('Only company admins can import unit pricing.');
+
+    return;
+  }
+
+  if(validRows.length === 0){
+
+    alert('There are no valid units to import.');
+
+    return;
+  }
+
+  const confirmed = confirm(
+    'Import ' +
+    validRows.length +
+    ' unit' +
+    (validRows.length === 1 ? '' : 's') +
+    ' into this Price Book?\n\n' +
+    'Rows marked with errors will not be imported.'
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  const insertRows =
+    validRows.map(row => ({
+      company_id: currentProfile.company_id,
+      price_book_id: priceBookId,
+      item_code: row.item_code,
+      item_name: row.item_name,
+      description: row.description,
+      category: row.category,
+      unit_of_measure: row.unit_of_measure,
+      install_price: row.install_price,
+      retirement_price: row.retirement_price,
+      active: true
+    }));
+
+  $('confirmPriceBookImportBtn').disabled = true;
+  $('confirmPriceBookImportBtn').textContent =
+    'Importing...';
+
+  const { error } = await sb
+    .from('price_book_items')
+    .insert(insertRows);
+
+  $('confirmPriceBookImportBtn').disabled = false;
+
+  if(error){
+
+    renderPriceBookImportPreview();
+
+    alert(
+      'No units were imported: ' +
+      error.message
+    );
+
+    return;
+  }
+
+  $('priceBookImportCard')
+    .classList
+    .add('hidden');
+
+  resetPriceBookImport();
+
+  await loadPriceBookItems(priceBookId);
+
+  alert(
+    insertRows.length +
+    ' unit' +
+    (insertRows.length === 1 ? '' : 's') +
+    ' imported successfully.'
+  );
+};
 
 async function loadPriceBookItems(priceBookId){
 
