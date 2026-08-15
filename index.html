@@ -986,6 +986,29 @@ button.small{
           Common variations such as Item Code and Remove Price are recognized.
         </p>
 
+        <button
+          id="downloadPriceBookTemplateBtn"
+          class="secondary"
+        >
+          Download LineCrew Pro CSV Template
+        </button>
+
+        <label for="priceBookImportPaste">
+          Or Paste from Excel / Google Sheets
+        </label>
+        <textarea
+          id="priceBookImportPaste"
+          rows="7"
+          placeholder="Copy the header row and pricing rows from your spreadsheet, then paste them here."
+        ></textarea>
+
+        <button
+          id="previewPastedPriceBookItemsBtn"
+          class="secondary"
+        >
+          Preview Pasted Units
+        </button>
+
         <div id="priceBookImportPreview"></div>
 
         <button
@@ -2852,6 +2875,7 @@ function resetPriceBookImport(){
 
   currentPriceBookImportRows = [];
   $('priceBookImportFile').value = '';
+  $('priceBookImportPaste').value = '';
   $('priceBookImportPreview').innerHTML = '';
   $('confirmPriceBookImportBtn')
     .classList
@@ -3165,6 +3189,175 @@ function renderPriceBookImportPreview(){
     (validRows.length === 1 ? '' : 's');
 }
 
+function loadImportWorkbook(workbook){
+
+  const firstSheetName =
+    workbook.SheetNames[0];
+
+  if(!firstSheetName){
+    throw new Error(
+      'The file does not contain a worksheet.'
+    );
+  }
+
+  const rawRows =
+    XLSX.utils.sheet_to_json(
+      workbook.Sheets[firstSheetName],
+      {
+        defval: '',
+        raw: false
+      }
+    );
+
+  if(rawRows.length === 0){
+    throw new Error(
+      'No pricing rows were found. Make sure the first row contains column names.'
+    );
+  }
+
+  if(rawRows.length > 1000){
+    throw new Error(
+      'This first release imports up to 1,000 rows at a time. Split the pricing into smaller groups and try again.'
+    );
+  }
+
+  currentPriceBookImportRows =
+    rawRows.map((row, index) =>
+      mapImportRow(row, index + 2)
+    );
+
+  validateImportDuplicates(
+    currentPriceBookImportRows
+  );
+
+  renderPriceBookImportPreview();
+}
+
+function showImportReadError(error){
+
+  currentPriceBookImportRows = [];
+
+  $('priceBookImportPreview').innerHTML =
+    '<p class="import-error">' +
+      escapeHtml(
+        error?.message ||
+        'Unable to read this pricing data.'
+      ) +
+    '</p>';
+
+  $('confirmPriceBookImportBtn')
+    .classList
+    .add('hidden');
+}
+
+$('downloadPriceBookTemplateBtn').onclick = () => {
+
+  const headings = [
+    'Unit Code',
+    'Unit Name',
+    'Description',
+    'Install Price',
+    'Retirement Price',
+    'Unit of Measure',
+    'Category'
+  ];
+
+  const example = [
+    'EXAMPLE-001',
+    'Example Unit',
+    'Replace or delete this example row',
+    '0.00',
+    '0.00',
+    'EA',
+    'Example'
+  ];
+
+  const csvCell = value =>
+    '"' +
+    String(value).replace(/"/g, '""') +
+    '"';
+
+  const csv =
+    '\uFEFF' +
+    headings.map(csvCell).join(',') +
+    '\r\n' +
+    example.map(csvCell).join(',') +
+    '\r\n';
+
+  const blob = new Blob(
+    [csv],
+    { type: 'text/csv;charset=utf-8' }
+  );
+
+  const link = document.createElement('a');
+
+  link.href = URL.createObjectURL(blob);
+  link.download =
+    'linecrew-pro-price-book-template.csv';
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(
+    () => URL.revokeObjectURL(link.href),
+    1000
+  );
+};
+
+$('previewPastedPriceBookItemsBtn').onclick = () => {
+
+  const pastedText =
+    $('priceBookImportPaste').value.trim();
+
+  currentPriceBookImportRows = [];
+  $('priceBookImportPreview').innerHTML = '';
+  $('confirmPriceBookImportBtn')
+    .classList
+    .add('hidden');
+
+  if(!pastedText){
+
+    alert(
+      'Copy the header row and pricing rows from Excel or Google Sheets, then paste them into the box.'
+    );
+
+    return;
+  }
+
+  if(typeof XLSX === 'undefined'){
+
+    alert(
+      'The spreadsheet reader did not load. Refresh the page and try again.'
+    );
+
+    return;
+  }
+
+  $('previewPastedPriceBookItemsBtn').disabled = true;
+  $('previewPastedPriceBookItemsBtn').textContent =
+    'Reading Pasted Units...';
+
+  try{
+
+    const workbook =
+      XLSX.read(
+        pastedText,
+        { type: 'string' }
+      );
+
+    loadImportWorkbook(workbook);
+
+  }catch(error){
+
+    showImportReadError(error);
+  }
+
+  $('previewPastedPriceBookItemsBtn').disabled = false;
+  $('previewPastedPriceBookItemsBtn').textContent =
+    'Preview Pasted Units';
+};
+
 $('priceBookImportFile').onchange = async event => {
 
   const file = event.target.files?.[0];
@@ -3197,62 +3390,11 @@ $('priceBookImportFile').onchange = async event => {
     const workbook =
       XLSX.read(await file.arrayBuffer());
 
-    const firstSheetName =
-      workbook.SheetNames[0];
-
-    if(!firstSheetName){
-      throw new Error(
-        'The file does not contain a worksheet.'
-      );
-    }
-
-    const rawRows =
-      XLSX.utils.sheet_to_json(
-        workbook.Sheets[firstSheetName],
-        {
-          defval: '',
-          raw: false
-        }
-      );
-
-    if(rawRows.length === 0){
-      throw new Error(
-        'No pricing rows were found. Make sure row 1 contains column names.'
-      );
-    }
-
-    if(rawRows.length > 1000){
-      throw new Error(
-        'This first release imports up to 1,000 rows at a time. Split the file and try again.'
-      );
-    }
-
-    currentPriceBookImportRows =
-      rawRows.map((row, index) =>
-        mapImportRow(row, index + 2)
-      );
-
-    validateImportDuplicates(
-      currentPriceBookImportRows
-    );
-
-    renderPriceBookImportPreview();
+    loadImportWorkbook(workbook);
 
   }catch(error){
 
-    currentPriceBookImportRows = [];
-
-    $('priceBookImportPreview').innerHTML =
-      '<p class="import-error">' +
-        escapeHtml(
-          error?.message ||
-          'Unable to read this file.'
-        ) +
-      '</p>';
-
-    $('confirmPriceBookImportBtn')
-      .classList
-      .add('hidden');
+    showImportReadError(error);
   }
 
   $('priceBookImportFile').disabled = false;
