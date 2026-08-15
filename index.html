@@ -2846,6 +2846,10 @@ function userCanManagePriceBooks(){
 
 function resetPriceBookImport(){
 
+  $('priceBookImportCard')
+    .classList
+    .add('hidden');
+
   currentPriceBookImportRows = [];
   $('priceBookImportFile').value = '';
   $('priceBookImportPreview').innerHTML = '';
@@ -3165,7 +3169,11 @@ $('priceBookImportFile').onchange = async event => {
 
   const file = event.target.files?.[0];
 
-  resetPriceBookImport();
+  currentPriceBookImportRows = [];
+  $('priceBookImportPreview').innerHTML = '';
+  $('confirmPriceBookImportBtn')
+    .classList
+    .add('hidden');
 
   if(!file){
     return;
@@ -3257,11 +3265,6 @@ $('confirmPriceBookImportBtn').onclick = async () => {
       .dataset
       .priceBookId;
 
-  const validRows =
-    currentPriceBookImportRows.filter(
-      row => row.errors.length === 0
-    );
-
   if(!priceBookId || !currentProfile?.company_id){
 
     alert('Open a Price Book before importing units.');
@@ -3276,12 +3279,82 @@ $('confirmPriceBookImportBtn').onclick = async () => {
     return;
   }
 
+  let validRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length === 0
+    );
+
   if(validRows.length === 0){
 
     alert('There are no valid units to import.');
 
     return;
   }
+
+  $('confirmPriceBookImportBtn').disabled = true;
+  $('confirmPriceBookImportBtn').textContent =
+    'Checking Unit Codes...';
+
+  const {
+    data: latestItems,
+    error:checkError
+  } = await sb
+    .from('price_book_items')
+    .select('item_code')
+    .eq('company_id', currentProfile.company_id)
+    .eq('price_book_id', priceBookId);
+
+  $('confirmPriceBookImportBtn').disabled = false;
+
+  if(checkError){
+
+    renderPriceBookImportPreview();
+
+    alert(
+      'Unable to verify existing Unit Codes: ' +
+      checkError.message
+    );
+
+    return;
+  }
+
+  const latestCodes = new Set(
+    (latestItems || []).map(item =>
+      String(item.item_code || '')
+        .trim()
+        .toLowerCase()
+    )
+  );
+
+  let newDuplicateFound = false;
+
+  validRows.forEach(row => {
+
+    if(latestCodes.has(row.item_code.toLowerCase())){
+
+      row.errors.push(
+        'Unit Code already exists in this Price Book'
+      );
+
+      newDuplicateFound = true;
+    }
+  });
+
+  if(newDuplicateFound){
+
+    renderPriceBookImportPreview();
+
+    alert(
+      'One or more Unit Codes already exist. They were removed from the valid import list. Review the preview, then confirm again.'
+    );
+
+    return;
+  }
+
+  validRows =
+    currentPriceBookImportRows.filter(
+      row => row.errors.length === 0
+    );
 
   const confirmed = confirm(
     'Import ' +
@@ -3293,6 +3366,9 @@ $('confirmPriceBookImportBtn').onclick = async () => {
   );
 
   if(!confirmed){
+
+    renderPriceBookImportPreview();
+
     return;
   }
 
@@ -3331,10 +3407,6 @@ $('confirmPriceBookImportBtn').onclick = async () => {
 
     return;
   }
-
-  $('priceBookImportCard')
-    .classList
-    .add('hidden');
 
   resetPriceBookImport();
 
