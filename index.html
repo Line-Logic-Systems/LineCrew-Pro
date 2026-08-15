@@ -1472,6 +1472,14 @@ let currentPriceBookImportRows = [];
 let currentOpenPriceBook = null;
 let currentPriceBookWorkbook = null;
 let currentPriceBookSourceRows = [];
+let priceBookNavigationRecords = new Map();
+
+const APP_PAGE_IDS = new Set([
+  'dashboardPage',
+  'jobsPage',
+  'productionPage',
+  'priceBooksPage'
+]);
 
 
 /* PAGE NAVIGATION */
@@ -1487,6 +1495,99 @@ $('productionPage').classList.add('hidden');
   $(page).classList.remove('hidden');
 }
 
+function setAppHistory(state, replace = false){
+  const nextState = {
+    lineCrewApp: true,
+    ...state
+  };
+
+  if(replace){
+    window.history.replaceState(nextState, '', window.location.href);
+  }else{
+    window.history.pushState(nextState, '', window.location.href);
+  }
+}
+
+async function displayAppPage(page, state = {}){
+  if(!APP_PAGE_IDS.has(page)){
+    page = 'dashboardPage';
+  }
+
+  show(page);
+
+  if(page === 'jobsPage'){
+    const canManageJobs =
+      currentProfile?.role === 'admin' ||
+      currentProfile?.role === 'gf';
+
+    $('showCreateJobBtn')
+      .classList
+      .toggle('hidden', !canManageJobs);
+
+    await loadJobs();
+  }
+
+  if(page === 'productionPage'){
+    await loadProductionReports();
+  }
+
+  if(page === 'priceBooksPage'){
+    $('priceBookDetail').classList.add('hidden');
+    currentOpenPriceBook = null;
+
+    await loadCustomers();
+    await loadContracts();
+    await loadPriceBooks();
+
+    if(state.view === 'priceBookDetail' && state.priceBookId){
+      const record =
+        priceBookNavigationRecords.get(state.priceBookId);
+
+      if(record){
+        openPriceBook(
+          record.priceBook,
+          record.contract,
+          record.customer,
+          false
+        );
+      }
+    }
+  }
+}
+
+async function navigateToAppPage(page){
+  setAppHistory({ lineCrewPage:page });
+  await displayAppPage(page);
+}
+
+function returnToDashboard(){
+  if(
+    window.history.state?.lineCrewApp &&
+    window.history.state?.lineCrewPage !== 'dashboardPage'
+  ){
+    window.history.back();
+    return;
+  }
+
+  setAppHistory(
+    { lineCrewPage:'dashboardPage' },
+    true
+  );
+  show('dashboardPage');
+}
+
+window.addEventListener('popstate', async event => {
+  if(!currentProfile){
+    return;
+  }
+
+  const state = event.state;
+
+  if(state?.lineCrewApp && state.lineCrewPage){
+    await displayAppPage(state.lineCrewPage, state);
+  }
+});
+
 
 /* LOAD APP */
 
@@ -1501,6 +1602,7 @@ async function loadApp(){
     currentProfile = null;
     currentCompany = null;
 
+    window.history.replaceState(null, '', window.location.href);
     show('authPage');
 
     return;
@@ -1528,6 +1630,7 @@ async function loadApp(){
 
   if(!profile){
 
+    window.history.replaceState(null, '', window.location.href);
     show('setupPage');
 
     return;
@@ -1583,7 +1686,23 @@ async function loadApp(){
   }
 
 
-  show('dashboardPage');
+  const savedState = window.history.state;
+
+  if(
+    savedState?.lineCrewApp &&
+    APP_PAGE_IDS.has(savedState.lineCrewPage)
+  ){
+    await displayAppPage(
+      savedState.lineCrewPage,
+      savedState
+    );
+  }else{
+    setAppHistory(
+      { lineCrewPage:'dashboardPage' },
+      true
+    );
+    show('dashboardPage');
+  }
 }
 
 
@@ -1762,6 +1881,7 @@ async function signOut(){
   currentProfile = null;
   currentCompany = null;
 
+  window.history.replaceState(null, '', window.location.href);
   show('authPage');
 }
 
@@ -1802,9 +1922,7 @@ $('jobsTile').onclick = async()=>{
   }
 
 
-  show('jobsPage');
-
-  await loadJobs();
+  await navigateToAppPage('jobsPage');
 };
 
 
@@ -1816,7 +1934,7 @@ $('backToDashboard').onclick = ()=>{
     .classList
     .add('hidden');
 
-  show('dashboardPage');
+  returnToDashboard();
 };
 
 
@@ -2324,6 +2442,7 @@ sb.auth.onAuthStateChange((event)=>{
     currentProfile = null;
     currentCompany = null;
 
+    window.history.replaceState(null, '', window.location.href);
     show('authPage');
 
     return;
@@ -2344,13 +2463,12 @@ sb.auth.onAuthStateChange((event)=>{
 /* PRODUCTION PAGE */
 
 $('productionTile').onclick = async () => {
-  show('productionPage');
-  await loadProductionReports();
+  await navigateToAppPage('productionPage');
 };
 
 
 $('backFromProduction').onclick = () => {
-  show('dashboardPage');
+  returnToDashboard();
 };
 
 
@@ -2361,14 +2479,11 @@ $('refreshProductionBtn').onclick = async () => {
 /* PRICE BOOKS PAGE */
 
 $('priceBooksTile').onclick = async () => {
-  show('priceBooksPage');
-  await loadCustomers();
-  await loadContracts();
-  await loadPriceBooks();
+  await navigateToAppPage('priceBooksPage');
 };
 
 $('backFromPriceBooks').onclick = () => {
-  show('dashboardPage');
+  returnToDashboard();
 };
 
 $('refreshPriceBooksBtn').onclick = async () => {
@@ -3001,6 +3116,22 @@ async function loadPriceBooks(){
         ])
     );
 
+  priceBookNavigationRecords = new Map();
+
+  priceBooks.forEach(priceBook => {
+    const contract =
+      contractsById.get(priceBook.contract_id);
+    const customer =
+      contract
+        ? customersById.get(contract.customer_id)
+        : null;
+
+    priceBookNavigationRecords.set(
+      priceBook.id,
+      { priceBook, contract, customer }
+    );
+  });
+
   $('priceBooksList').innerHTML = '';
 
   const versionGroups = new Map();
@@ -3131,8 +3262,24 @@ async function loadPriceBooks(){
 function openPriceBook(
   priceBook,
   contract,
-  customer
+  customer,
+  recordHistory = true
 ){
+
+  if(recordHistory){
+    const currentState = window.history.state;
+
+    if(
+      currentState?.view !== 'priceBookDetail' ||
+      currentState?.priceBookId !== priceBook.id
+    ){
+      setAppHistory({
+        lineCrewPage:'priceBooksPage',
+        view:'priceBookDetail',
+        priceBookId:priceBook.id
+      });
+    }
+  }
 
   $('priceBookDetailName').textContent =
     priceBook.name || 'Price Book';
@@ -3252,6 +3399,11 @@ function openPriceBook(
 }
 
 $('closePriceBookDetailBtn').onclick = () => {
+
+  if(window.history.state?.view === 'priceBookDetail'){
+    window.history.back();
+    return;
+  }
 
   $('priceBookDetail')
     .classList
