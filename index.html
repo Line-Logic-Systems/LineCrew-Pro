@@ -2099,12 +2099,28 @@ function escapeHtml(value){
 
 /* AUTH CHANGE */
 
-sb.auth.onAuthStateChange(()=>{
+sb.auth.onAuthStateChange((event)=>{
 
-  setTimeout(
-    loadApp,
-    0
-  );
+  if(event === 'SIGNED_OUT'){
+
+    currentProfile = null;
+    currentCompany = null;
+
+    show('authPage');
+
+    return;
+  }
+
+  if(
+    event === 'SIGNED_IN' &&
+    !currentProfile
+  ){
+
+    setTimeout(
+      loadApp,
+      0
+    );
+  }
 });
 
 /* PRODUCTION PAGE */
