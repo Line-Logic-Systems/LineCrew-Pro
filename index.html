@@ -770,7 +770,59 @@ button.small{
       </button>
 
     </div>
+<!-- ADD CONTRACT FORM -->
 
+<div id="contractForm" class="card hidden">
+
+  <h3>Add Contract</h3>
+
+  <label for="contractCustomer">Customer / Utility</label>
+  <select id="contractCustomer">
+    <option value="">Select customer / utility</option>
+  </select>
+
+  <label for="contractName">Contract Name</label>
+  <input
+    id="contractName"
+    type="text"
+    placeholder="Example: 2026 Distribution Construction"
+  >
+
+  <label for="contractNumber">Contract Number</label>
+  <input
+    id="contractNumber"
+    type="text"
+    placeholder="Optional"
+  >
+
+  <label for="contractStartDate">Start Date</label>
+  <input
+    id="contractStartDate"
+    type="date"
+  >
+
+  <label for="contractEndDate">End Date</label>
+  <input
+    id="contractEndDate"
+    type="date"
+  >
+
+  <label for="contractNotes">Notes</label>
+  <textarea
+    id="contractNotes"
+    rows="3"
+    placeholder="Optional notes"
+  ></textarea>
+
+  <button id="saveContractBtn" class="success">
+    Save Contract
+  </button>
+
+  <button id="cancelContractBtn" class="secondary">
+    Cancel
+  </button>
+
+</div>
     <div id="contractsList"></div>
 
   </div>
@@ -1896,6 +1948,142 @@ async function loadCustomers(){
     $('customersList').appendChild(card);
   });
 }
+/* CONTRACT FORM */
+
+$('addContractBtn').onclick = async () => {
+
+  $('contractForm').classList.remove('hidden');
+
+  $('contractName').value = '';
+  $('contractNumber').value = '';
+  $('contractStartDate').value = '';
+  $('contractEndDate').value = '';
+  $('contractNotes').value = '';
+
+  $('contractCustomer').innerHTML =
+    '<option value="">Select customer / utility</option>';
+
+
+  const {
+    data: customers,
+    error
+  } = await sb
+    .from('customers')
+    .select('id, name')
+    .eq('company_id', currentProfile.company_id)
+    .eq('active', true)
+    .order('name', { ascending: true });
+
+
+  if(error){
+
+    alert(
+      'Unable to load customers: ' +
+      error.message
+    );
+
+    return;
+  }
+
+
+  (customers || []).forEach(customer => {
+
+    const option =
+      document.createElement('option');
+
+    option.value = customer.id;
+    option.textContent = customer.name;
+
+    $('contractCustomer').appendChild(option);
+  });
+
+};
+
+
+$('cancelContractBtn').onclick = () => {
+
+  $('contractForm').classList.add('hidden');
+
+};
+
+
+$('saveContractBtn').onclick = async () => {
+
+  const customerId =
+    $('contractCustomer').value;
+
+  const name =
+    $('contractName').value.trim();
+
+  const contractNumber =
+    $('contractNumber').value.trim() || null;
+
+  const startDate =
+    $('contractStartDate').value || null;
+
+  const endDate =
+    $('contractEndDate').value || null;
+
+  const notes =
+    $('contractNotes').value.trim() || null;
+
+
+  if(!customerId){
+
+    alert('Select a customer or utility.');
+
+    return;
+  }
+
+
+  if(!name){
+
+    alert('Enter a contract name.');
+
+    return;
+  }
+
+
+  $('saveContractBtn').disabled = true;
+  $('saveContractBtn').textContent = 'Saving...';
+
+
+  const {
+    error
+  } = await sb
+    .from('contracts')
+    .insert({
+      company_id: currentProfile.company_id,
+      customer_id: customerId,
+      name: name,
+      contract_number: contractNumber,
+      start_date: startDate,
+      end_date: endDate,
+      notes: notes,
+      active: true
+    });
+
+
+  $('saveContractBtn').disabled = false;
+  $('saveContractBtn').textContent = 'Save Contract';
+
+
+  if(error){
+
+    alert(
+      'Unable to save contract: ' +
+      error.message
+    );
+
+    return;
+  }
+
+
+  alert('Contract saved.');
+
+  $('contractForm').classList.add('hidden');
+
+};
   
 async function loadProductionReports(){
 
