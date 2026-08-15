@@ -202,6 +202,10 @@ button.small{
   align-items:center;
 }
 
+.unit-summary-row.manageable{
+  grid-template-columns:auto minmax(110px,140px) minmax(180px,1fr) auto auto;
+}
+
 .unit-code-compact{
   font-weight:800;
   color:var(--navy);
@@ -265,6 +269,36 @@ button.small{
   width:auto;
   margin:0;
   padding:11px 14px;
+}
+
+.unit-bulk-toolbar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  margin:0 0 12px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:#f8fafc;
+}
+
+.unit-bulk-toolbar button{
+  width:auto;
+  margin:0;
+}
+
+.unit-select{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.unit-select input{
+  width:18px;
+  height:18px;
+  margin:0;
+  cursor:pointer;
 }
 
 .price-book-version-group{
@@ -460,6 +494,11 @@ button:disabled{
     gap:5px 10px;
   }
 
+  .unit-summary-row.manageable{
+    grid-template-columns:auto 1fr auto;
+    gap:5px 10px;
+  }
+
   .unit-name-compact{
     grid-column:1 / -1;
     grid-row:2;
@@ -468,6 +507,19 @@ button:disabled{
   .unit-prices-compact{
     grid-column:1 / -1;
     grid-row:3;
+  }
+
+  .unit-summary-row.manageable .unit-name-compact,
+  .unit-summary-row.manageable .unit-prices-compact{
+    grid-column:2 / -1;
+  }
+
+  .unit-bulk-toolbar{
+    align-items:stretch;
+  }
+
+  .unit-bulk-toolbar button{
+    flex:1 1 140px;
   }
 
   .toolbar{
@@ -1390,6 +1442,22 @@ button:disabled{
         </button>
       </div>
 
+      <div id="priceBookBulkToolbar" class="unit-bulk-toolbar hidden">
+        <strong id="priceBookSelectedCount">0 units selected</strong>
+        <button id="selectFilteredPriceBookItemsBtn" class="secondary small">
+          Select All Matching
+        </button>
+        <button id="clearSelectedPriceBookItemsBtn" class="secondary small">
+          Clear Selection
+        </button>
+        <button id="activateSelectedPriceBookItemsBtn" class="success small">
+          Activate Selected
+        </button>
+        <button id="deactivateSelectedPriceBookItemsBtn" class="warning small">
+          Deactivate Selected
+        </button>
+      </div>
+
       <div id="priceBookItemForm" class="card hidden">
         <h3 id="priceBookItemFormTitle">Add Unit Item</h3>
 
@@ -1490,6 +1558,7 @@ const $ = id =>
 let currentProfile = null;
 let currentCompany = null;
 let currentPriceBookItems = [];
+let selectedPriceBookItemIds = new Set();
 let currentPriceBookItemPage = 1;
 const PRICE_BOOK_ITEMS_PER_PAGE = 50;
 let currentPriceBookImportRows = [];
@@ -4965,6 +5034,8 @@ $('confirmPriceBookImportBtn').onclick = async () => {
 
 async function loadPriceBookItems(priceBookId){
 
+  selectedPriceBookItemIds.clear();
+
   $('priceBookItemsList').innerHTML =
     '<p class="muted">Loading unit items...</p>';
 
@@ -5148,6 +5219,8 @@ function renderPriceBookItems(){
   const filteredItems =
     getFilteredSortedPriceBookItems();
 
+  updatePriceBookBulkToolbar(filteredItems);
+
   if(currentPriceBookItems.length === 0){
 
     $('priceBookItemsList').innerHTML =
@@ -5225,9 +5298,19 @@ function renderPriceBookItems(){
       document.createElement('div');
 
     summaryRow.className =
-      'unit-summary-row';
+      'unit-summary-row' +
+      (userCanManagePriceBooks() ? ' manageable' : '');
 
     summaryRow.innerHTML =
+      (userCanManagePriceBooks()
+        ? '<label class="unit-select" title="Select ' +
+            escapeHtml(item.item_code) +
+            '"><input type="checkbox" aria-label="Select unit ' +
+            escapeHtml(item.item_code) +
+            '"' +
+            (selectedPriceBookItemIds.has(item.id) ? ' checked' : '') +
+            '></label>'
+        : '') +
       '<div class="unit-code-compact">' +
         escapeHtml(item.item_code) +
       '</div>' +
@@ -5248,6 +5331,18 @@ function renderPriceBookItems(){
       '">' +
         (item.active ? 'ACTIVE' : 'INACTIVE') +
       '</div>';
+
+    if(userCanManagePriceBooks()){
+      const checkbox = summaryRow.querySelector('input[type="checkbox"]');
+      checkbox.onchange = () => {
+        if(checkbox.checked){
+          selectedPriceBookItemIds.add(item.id);
+        }else{
+          selectedPriceBookItemIds.delete(item.id);
+        }
+        updatePriceBookBulkToolbar(filteredItems);
+      };
+    }
 
     card.appendChild(summaryRow);
 
@@ -5424,6 +5519,97 @@ function renderPriceBookItems(){
       .appendChild(pagination);
   }
 }
+
+function updatePriceBookBulkToolbar(filteredItems = getFilteredSortedPriceBookItems()){
+  const toolbar = $('priceBookBulkToolbar');
+
+  if(!userCanManagePriceBooks() || currentPriceBookItems.length === 0){
+    toolbar.classList.add('hidden');
+    return;
+  }
+
+  toolbar.classList.remove('hidden');
+
+  const availableIds = new Set(currentPriceBookItems.map(item => item.id));
+  selectedPriceBookItemIds.forEach(id => {
+    if(!availableIds.has(id)) selectedPriceBookItemIds.delete(id);
+  });
+
+  const selectedCount = selectedPriceBookItemIds.size;
+  $('priceBookSelectedCount').textContent =
+    selectedCount + ' unit' + (selectedCount === 1 ? '' : 's') + ' selected';
+
+  $('clearSelectedPriceBookItemsBtn').disabled = selectedCount === 0;
+  $('activateSelectedPriceBookItemsBtn').disabled = selectedCount === 0;
+  $('deactivateSelectedPriceBookItemsBtn').disabled = selectedCount === 0;
+
+  const allMatchingSelected =
+    filteredItems.length > 0 &&
+    filteredItems.every(item => selectedPriceBookItemIds.has(item.id));
+
+  $('selectFilteredPriceBookItemsBtn').disabled =
+    filteredItems.length === 0 || allMatchingSelected;
+}
+
+$('selectFilteredPriceBookItemsBtn').onclick = () => {
+  getFilteredSortedPriceBookItems().forEach(item => {
+    selectedPriceBookItemIds.add(item.id);
+  });
+  renderPriceBookItems();
+};
+
+$('clearSelectedPriceBookItemsBtn').onclick = () => {
+  selectedPriceBookItemIds.clear();
+  renderPriceBookItems();
+};
+
+async function setSelectedPriceBookItemsActive(newStatus){
+  const priceBookId = $('priceBookDetail').dataset.priceBookId;
+  const selectedIds = [...selectedPriceBookItemIds];
+
+  if(!priceBookId || selectedIds.length === 0) return;
+
+  const action = newStatus ? 'activate' : 'deactivate';
+  const confirmed = confirm(
+    'Are you sure you want to ' + action + ' ' +
+    selectedIds.length + ' selected unit' +
+    (selectedIds.length === 1 ? '' : 's') + '?'
+  );
+
+  if(!confirmed) return;
+
+  const activateButton = $('activateSelectedPriceBookItemsBtn');
+  const deactivateButton = $('deactivateSelectedPriceBookItemsBtn');
+  activateButton.disabled = true;
+  deactivateButton.disabled = true;
+
+  const { error } = await sb
+    .from('price_book_items')
+    .update({ active:newStatus })
+    .in('id', selectedIds)
+    .eq('company_id', currentProfile.company_id)
+    .eq('price_book_id', priceBookId);
+
+  if(error){
+    updatePriceBookBulkToolbar();
+    alert('Unable to ' + action + ' selected units: ' + error.message);
+    return;
+  }
+
+  await loadPriceBookItems(priceBookId);
+
+  alert(
+    selectedIds.length + ' unit' +
+    (selectedIds.length === 1 ? '' : 's') +
+    ' ' + (newStatus ? 'activated.' : 'deactivated.')
+  );
+}
+
+$('activateSelectedPriceBookItemsBtn').onclick = () =>
+  setSelectedPriceBookItemsActive(true);
+
+$('deactivateSelectedPriceBookItemsBtn').onclick = () =>
+  setSelectedPriceBookItemsActive(false);
 
 $('priceBookItemSearch').oninput = () => {
 
