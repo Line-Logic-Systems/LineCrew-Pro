@@ -1754,6 +1754,7 @@ $('refreshProductionBtn').onclick = async () => {
 $('priceBooksTile').onclick = async () => {
   show('priceBooksPage');
   await loadCustomers();
+  await loadContracts();
 };
 
 $('backFromPriceBooks').onclick = () => {
@@ -2082,8 +2083,75 @@ $('saveContractBtn').onclick = async () => {
   alert('Contract saved.');
 
   $('contractForm').classList.add('hidden');
+  await loadContracts();
 
 };
+async function loadContracts(){
+
+  $('contractsList').innerHTML = '';
+
+  const {
+    data: contracts,
+    error
+  } = await sb
+    .from('contracts')
+    .select(`
+      id,
+      customer_id,
+      contract_name,
+      contract_number,
+      start_date,
+      end_date,
+      notes,
+      active
+    `)
+    .eq('company_id', currentProfile.company_id)
+    .order('created_at', { ascending: false });
+
+  if(error){
+    alert('Unable to load contracts: ' + error.message);
+    return;
+  }
+
+  if(!contracts || contracts.length === 0){
+    $('contractsList').innerHTML =
+      '<p class="muted">No contracts yet.</p>';
+    return;
+  }
+
+  contracts.forEach(contract => {
+
+    const card = document.createElement('div');
+    card.className = 'list-item';
+
+    card.innerHTML = `
+      <strong>${escapeHtml(contract.contract_name)}</strong>
+      ${
+        contract.contract_number
+          ? `<br>Contract #: ${escapeHtml(contract.contract_number)}`
+          : ''
+      }
+      ${
+        contract.start_date
+          ? `<br>Start: ${escapeHtml(contract.start_date)}`
+          : ''
+      }
+      ${
+        contract.end_date
+          ? `<br>End: ${escapeHtml(contract.end_date)}`
+          : ''
+      }
+      ${
+        contract.notes
+          ? `<br>Notes: ${escapeHtml(contract.notes)}`
+          : ''
+      }
+    `;
+
+    $('contractsList').appendChild(card);
+
+  });
+}
   
 async function loadProductionReports(){
 
