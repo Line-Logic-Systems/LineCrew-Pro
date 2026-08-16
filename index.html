@@ -400,6 +400,12 @@ button:disabled{
   margin:12px 0;
 }
 
+.team-role-select{
+  width:auto;
+  min-width:180px;
+  margin:4px;
+}
+
 .import-summary{
   background:#f5f8fb;
   border:1px solid var(--border);
@@ -506,6 +512,11 @@ button:disabled{
   .section-header button{
     width:100%;
     margin-top:12px;
+  }
+
+  .team-role-select{
+    width:100%;
+    margin:4px 0;
   }
 }
 </style>
@@ -636,7 +647,7 @@ button:disabled{
       </span>
     </div>
 
-    <div class="metric">
+    <div class="metric" id="teamTile">
       <strong>Team</strong>
       <span class="muted">
         Foremen, GFs and Admins
@@ -657,6 +668,54 @@ button:disabled{
   <button class="secondary" id="signOutBtn">
     Sign Out
   </button>
+
+</section>
+
+
+<!-- TEAM PAGE -->
+
+<section id="teamPage" class="hidden">
+
+  <div class="toolbar">
+    <button class="secondary" id="backFromTeam">
+      ← Back to Dashboard
+    </button>
+
+    <button id="refreshTeamBtn">
+      Refresh Team
+    </button>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div>
+        <h2>Team</h2>
+        <p class="muted">
+          People who belong to this contractor company.
+        </p>
+      </div>
+    </div>
+
+    <div id="teamAdminTools" class="card hidden">
+      <h3>Invite Team Members</h3>
+      <p class="muted">
+        Give this code only to people who should join your company.
+        New members start with the Foreman role.
+      </p>
+      <div class="button-row">
+        <strong id="teamJoinCode" class="role"></strong>
+        <button id="copyJoinCodeBtn" class="secondary small">
+          Copy Company Code
+        </button>
+      </div>
+    </div>
+
+    <div id="teamLoading" class="center muted hidden">
+      Loading team members...
+    </div>
+
+    <div id="teamList"></div>
+  </div>
 
 </section>
 
@@ -1604,6 +1663,7 @@ let contractLoadSequence = 0;
 
 const APP_PAGE_IDS = new Set([
   'dashboardPage',
+  'teamPage',
   'jobsPage',
   'productionPage',
   'priceBooksPage'
@@ -1621,6 +1681,7 @@ function show(page){
   $('authPage').classList.add('hidden');
   $('setupPage').classList.add('hidden');
   $('dashboardPage').classList.add('hidden');
+  $('teamPage').classList.add('hidden');
   $('jobsPage').classList.add('hidden');
 $('productionPage').classList.add('hidden');
   $('priceBooksPage').classList.add('hidden');
@@ -1646,6 +1707,10 @@ async function displayAppPage(page, state = {}){
   }
 
   show(page);
+
+  if(page === 'teamPage'){
+    await loadTeamMembers();
+  }
 
   if(page === 'jobsPage'){
     const canManageJobs =
@@ -1789,7 +1854,9 @@ async function loadApp(){
 
 
   $('userRole').textContent =
-    profile.role || 'employee';
+    String(profile.role || 'foreman').toLowerCase() === 'employee'
+      ? 'foreman'
+      : profile.role;
 
 
   if(profile.role === 'admin'){
@@ -2011,6 +2078,193 @@ $('signOutBtn').onclick =
 
 $('setupSignOut').onclick =
   signOut;
+
+
+/* TEAM */
+
+$('teamTile').onclick = async () => {
+  await navigateToAppPage('teamPage');
+};
+
+$('backFromTeam').onclick = () => {
+  returnToDashboard();
+};
+
+$('refreshTeamBtn').onclick = async () => {
+  await loadTeamMembers();
+};
+
+$('copyJoinCodeBtn').onclick = async () => {
+  if(!userIsCompanyAdmin() || !currentCompany?.join_code){
+    return;
+  }
+
+  try{
+    await navigator.clipboard.writeText(currentCompany.join_code);
+    alert('Company code copied.');
+  }catch(error){
+    alert('Copy this company code: ' + currentCompany.join_code);
+  }
+};
+
+function formatTeamRole(role){
+  const roleLabels = {
+    admin:'Admin',
+    gf:'General Foreman',
+    foreman:'Foreman'
+  };
+
+  return roleLabels[String(role || '').toLowerCase()] || 'Foreman';
+}
+
+async function loadTeamMembers(){
+  $('teamLoading').classList.remove('hidden');
+  $('teamList').replaceChildren();
+
+  const isAdmin = userIsCompanyAdmin();
+  $('teamAdminTools').classList.toggle('hidden', !isAdmin);
+  $('teamJoinCode').textContent = isAdmin
+    ? (currentCompany?.join_code || 'No code available')
+    : '';
+
+  const { data:members, error } = await sb
+    .from('profiles')
+    .select('id, full_name, role, company_id')
+    .eq('company_id', currentProfile.company_id)
+    .order('full_name', { ascending:true });
+
+  $('teamLoading').classList.add('hidden');
+
+  if(error){
+    alert('Unable to load team members: ' + error.message);
+    return;
+  }
+
+  if(!members?.length){
+    const emptyMessage = document.createElement('p');
+    emptyMessage.className = 'muted';
+    emptyMessage.textContent = 'No team members found.';
+    $('teamList').appendChild(emptyMessage);
+    return;
+  }
+
+  const adminCount = members.filter(
+    member => String(member.role || '').toLowerCase() === 'admin'
+  ).length;
+
+  const fragment = document.createDocumentFragment();
+
+  members.forEach(member => {
+    const card = document.createElement('div');
+    card.className = 'job-card';
+
+    const name = document.createElement('strong');
+    name.textContent = member.full_name || 'Unnamed Team Member';
+    card.appendChild(name);
+
+    if(member.id === currentProfile.id){
+      const you = document.createElement('span');
+      you.className = 'muted';
+      you.textContent = ' (You)';
+      card.appendChild(you);
+    }
+
+    const roleLine = document.createElement('div');
+    roleLine.className = 'job-info';
+    roleLine.textContent = 'Role: ' + formatTeamRole(member.role);
+    card.appendChild(roleLine);
+
+    if(isAdmin){
+      const controls = document.createElement('div');
+      controls.className = 'import-actions';
+
+      const roleSelect = document.createElement('select');
+      roleSelect.className = 'team-role-select';
+
+      [
+        ['foreman', 'Foreman'],
+        ['gf', 'General Foreman'],
+        ['admin', 'Admin']
+      ].forEach(([value, label]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        roleSelect.appendChild(option);
+      });
+
+      const memberRole = String(member.role || 'foreman').toLowerCase();
+      roleSelect.value = memberRole === 'employee' ? 'foreman' : memberRole;
+
+      const saveButton = document.createElement('button');
+      saveButton.className = 'secondary small';
+      saveButton.textContent = 'Save Role';
+      saveButton.onclick = () => updateTeamMemberRole(
+        member,
+        roleSelect.value,
+        adminCount
+      );
+
+      controls.appendChild(roleSelect);
+      controls.appendChild(saveButton);
+      card.appendChild(controls);
+    }
+
+    fragment.appendChild(card);
+  });
+
+  $('teamList').replaceChildren(fragment);
+}
+
+async function updateTeamMemberRole(member, nextRole, adminCount){
+  if(!userIsCompanyAdmin()){
+    return;
+  }
+
+  const storedRole = String(member.role || 'foreman').toLowerCase();
+  const currentRole = storedRole === 'employee' ? 'foreman' : storedRole;
+
+  if(currentRole === nextRole){
+    alert('This team member already has that role.');
+    return;
+  }
+
+  if(currentRole === 'admin' && nextRole !== 'admin' && adminCount <= 1){
+    alert('Assign another Admin before changing the last Admin’s role.');
+    return;
+  }
+
+  const confirmed = confirm(
+    'Change ' + (member.full_name || 'this team member') +
+    ' from ' + formatTeamRole(currentRole) +
+    ' to ' + formatTeamRole(nextRole) + '?'
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  const { error } = await sb.rpc(
+    'set_company_member_role',
+    {
+      p_member_id:member.id,
+      p_role:nextRole
+    }
+  );
+
+  if(error){
+    alert('Unable to update the team member’s role: ' + error.message);
+    await loadTeamMembers();
+    return;
+  }
+
+  if(member.id === currentProfile.id){
+    currentProfile.role = nextRole;
+    $('userRole').textContent = nextRole;
+    $('adminNotice').classList.toggle('hidden', !userIsCompanyAdmin());
+  }
+
+  await loadTeamMembers();
+}
 
 
 /* OPEN JOBS */
