@@ -933,7 +933,7 @@ button:disabled{
 
     <div id="customerForm" class="card hidden">
 
-  <h3>Add Customer / Utility</h3>
+  <h3 id="customerFormTitle">Add Customer / Utility</h3>
 
   <label for="customerName">Customer / Utility Name</label>
   <input
@@ -1017,7 +1017,7 @@ button:disabled{
 
 <div id="contractForm" class="card hidden">
 
-  <h3>Add Contract</h3>
+  <h3 id="contractFormTitle">Add Contract</h3>
 
   <label for="contractCustomer">Customer / Utility</label>
   <select id="contractCustomer">
@@ -1597,6 +1597,8 @@ let currentPriceBookContractsById = new Map();
 let currentPriceBookCustomersById = new Map();
 let currentPriceBookComparisonVersions = [];
 let currentPriceBookComparisonReport = null;
+let currentCustomerCatalog = [];
+let currentContractCatalog = [];
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
 
@@ -1606,6 +1608,10 @@ const APP_PAGE_IDS = new Set([
   'productionPage',
   'priceBooksPage'
 ]);
+
+function userIsCompanyAdmin(){
+  return String(currentProfile?.role || '').toLowerCase() === 'admin';
+}
 
 
 /* PAGE NAVIGATION */
@@ -1741,7 +1747,6 @@ async function loadApp(){
 
     return;
   }
-
 
   if(!profile){
 
@@ -2611,7 +2616,15 @@ $('refreshPriceBooksBtn').onclick = async () => {
 
 $('addCustomerBtn').onclick = () => {
 
+  if(!userIsCompanyAdmin()){
+    return;
+  }
+
   $('customerForm').classList.remove('hidden');
+
+  delete $('customerForm').dataset.customerId;
+  $('customerFormTitle').textContent = 'Add Customer / Utility';
+  $('saveCustomerBtn').textContent = 'Save Customer';
 
   $('customerName').value = '';
   $('customerType').value = '';
@@ -2625,10 +2638,19 @@ $('addCustomerBtn').onclick = () => {
 $('cancelCustomerBtn').onclick = () => {
 
   $('customerForm').classList.add('hidden');
+  delete $('customerForm').dataset.customerId;
 };
 
 
 $('saveCustomerBtn').onclick = async () => {
+
+  if(!userIsCompanyAdmin()){
+    alert('Only company admins can manage customers and utilities.');
+    return;
+  }
+
+  const customerId =
+    $('customerForm').dataset.customerId || null;
 
   const name =
     $('customerName').value.trim();
@@ -2661,20 +2683,30 @@ $('saveCustomerBtn').onclick = async () => {
   $('saveCustomerBtn').textContent = 'Saving...';
 
 
-  const {
-    error
-  } = await sb
-    .from('customers')
-    .insert({
+  const customerValues = {
       company_id: currentProfile.company_id,
       name: name,
       customer_type: customerType,
       contact_name: contactName,
       contact_email: contactEmail,
       contact_phone: contactPhone,
-      notes: notes,
-      active: true
-    });
+      notes: notes
+    };
+
+  const customerWrite = customerId
+    ? sb
+        .from('customers')
+        .update(customerValues)
+        .eq('id', customerId)
+        .eq('company_id', currentProfile.company_id)
+    : sb
+        .from('customers')
+        .insert({
+          ...customerValues,
+          active: true
+        });
+
+  const { error } = await customerWrite;
 
 
   $('saveCustomerBtn').disabled = false;
@@ -2692,10 +2724,16 @@ $('saveCustomerBtn').onclick = async () => {
   }
 
 
-  alert('Customer saved.');
+  alert(
+    customerId
+      ? 'Customer updated.'
+      : 'Customer saved.'
+  );
 
   $('customerForm').classList.add('hidden');
-await loadCustomers();
+  delete $('customerForm').dataset.customerId;
+  await loadCustomers();
+  await loadContracts();
 }; 
 
 /* LOAD CUSTOMERS */
@@ -2740,6 +2778,12 @@ async function loadCustomers(){
     return;
   }
 
+  currentCustomerCatalog = customers || [];
+  $('addCustomerBtn').classList.toggle(
+    'hidden',
+    !userIsCompanyAdmin()
+  );
+
 
   if(!customers || customers.length === 0){
 
@@ -2764,7 +2808,9 @@ async function loadCustomers(){
     const card =
       document.createElement('div');
 
-    card.className = 'card';
+    card.className =
+      'job-card' +
+      (customer.active ? '' : ' inactive');
 
     const typeText =
       customer.customer_type
@@ -2777,6 +2823,10 @@ async function loadCustomers(){
 
       <span class="muted">
         ${escapeHtml(typeText)}
+      </span>
+
+      <span class="status ${customer.active ? 'active' : 'closed'}">
+        ${customer.active ? 'ACTIVE' : 'INACTIVE'}
       </span>
 
       ${
@@ -2804,16 +2854,125 @@ async function loadCustomers(){
       }
     `;
 
+    if(userIsCompanyAdmin()){
+      const actions = document.createElement('div');
+      actions.className = 'import-actions';
+
+      const editButton = document.createElement('button');
+      editButton.className = 'secondary small';
+      editButton.textContent = 'Edit';
+      editButton.onclick = () => editCustomer(customer);
+
+      const statusButton = document.createElement('button');
+      statusButton.className =
+        (customer.active ? 'warning' : 'success') + ' small';
+      statusButton.textContent =
+        customer.active ? 'Deactivate' : 'Activate';
+      statusButton.onclick = () => changeCustomerStatus(customer);
+
+      actions.appendChild(editButton);
+      actions.appendChild(statusButton);
+      card.appendChild(actions);
+    }
+
     customerFragment.appendChild(card);
   });
 
   $('customersList').replaceChildren(customerFragment);
 }
+
+function editCustomer(customer){
+
+  if(!userIsCompanyAdmin()){
+    return;
+  }
+
+  $('customerForm').dataset.customerId = customer.id;
+  $('customerFormTitle').textContent = 'Edit Customer / Utility';
+  $('customerName').value = customer.name || '';
+  $('customerType').value = customer.customer_type || '';
+  $('customerContactName').value = customer.contact_name || '';
+  $('customerContactEmail').value = customer.contact_email || '';
+  $('customerContactPhone').value = customer.contact_phone || '';
+  $('customerNotes').value = customer.notes || '';
+  $('saveCustomerBtn').textContent = 'Save Changes';
+  $('customerForm').classList.remove('hidden');
+  $('customerForm').scrollIntoView({
+    behavior:'smooth',
+    block:'start'
+  });
+}
+
+async function changeCustomerStatus(customer){
+
+  if(!userIsCompanyAdmin()){
+    return;
+  }
+
+  const newStatus = !customer.active;
+
+  if(!newStatus){
+    const { data:activeContracts, error:contractError } = await sb
+      .from('contracts')
+      .select('id, contract_name')
+      .eq('company_id', currentProfile.company_id)
+      .eq('customer_id', customer.id)
+      .eq('active', true)
+      .limit(5);
+
+    if(contractError){
+      alert('Unable to verify the customer contracts: ' + contractError.message);
+      return;
+    }
+
+    if(activeContracts?.length){
+      alert(
+        'Deactivate this customer’s active contracts first. This protects ' +
+        'contract and Price Book history from becoming inconsistent.'
+      );
+      return;
+    }
+  }
+
+  const confirmed = confirm(
+    (newStatus ? 'Activate' : 'Deactivate') +
+    ' "' + customer.name + '"?\n\n' +
+    (newStatus
+      ? 'The customer can be selected for new contracts again.'
+      : 'Historical contracts and Price Books will be preserved.')
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  const { error } = await sb
+    .from('customers')
+    .update({ active:newStatus })
+    .eq('id', customer.id)
+    .eq('company_id', currentProfile.company_id);
+
+  if(error){
+    alert('Unable to change customer status: ' + error.message);
+    return;
+  }
+
+  await loadCustomers();
+  await loadContracts();
+}
 /* CONTRACT FORM */
 
 $('addContractBtn').onclick = async () => {
 
+  if(!userIsCompanyAdmin()){
+    return;
+  }
+
   $('contractForm').classList.remove('hidden');
+
+  delete $('contractForm').dataset.contractId;
+  $('contractFormTitle').textContent = 'Add Contract';
+  $('saveContractBtn').textContent = 'Save Contract';
 
   $('contractName').value = '';
   $('contractNumber').value = '';
@@ -2864,11 +3023,20 @@ $('addContractBtn').onclick = async () => {
 $('cancelContractBtn').onclick = () => {
 
   $('contractForm').classList.add('hidden');
+  delete $('contractForm').dataset.contractId;
 
 };
 
 
 $('saveContractBtn').onclick = async () => {
+
+  if(!userIsCompanyAdmin()){
+    alert('Only company admins can manage contracts.');
+    return;
+  }
+
+  const contractId =
+    $('contractForm').dataset.contractId || null;
 
   const customerId =
     $('contractCustomer').value;
@@ -2904,25 +3072,40 @@ $('saveContractBtn').onclick = async () => {
     return;
   }
 
+  if(startDate && endDate && endDate < startDate){
+    alert('The contract end date cannot be before its start date.');
+    return;
+  }
+
 
   $('saveContractBtn').disabled = true;
   $('saveContractBtn').textContent = 'Saving...';
 
 
-  const {
-    error
-  } = await sb
-    .from('contracts')
-    .insert({
+  const contractValues = {
       company_id: currentProfile.company_id,
       customer_id: customerId,
       contract_name: name,
       contract_number: contractNumber,
       start_date: startDate,
       end_date: endDate,
-      notes: notes,
-      active: true
-    });
+      notes: notes
+    };
+
+  const contractWrite = contractId
+    ? sb
+        .from('contracts')
+        .update(contractValues)
+        .eq('id', contractId)
+        .eq('company_id', currentProfile.company_id)
+    : sb
+        .from('contracts')
+        .insert({
+          ...contractValues,
+          active: true
+        });
+
+  const { error } = await contractWrite;
 
 
   $('saveContractBtn').disabled = false;
@@ -2940,10 +3123,12 @@ $('saveContractBtn').onclick = async () => {
   }
 
 
-  alert('Contract saved.');
+  alert(contractId ? 'Contract updated.' : 'Contract saved.');
 
   $('contractForm').classList.add('hidden');
+  delete $('contractForm').dataset.contractId;
   await loadContracts();
+  await loadPriceBooks();
 
 };
 async function loadContracts(){
@@ -2980,6 +3165,12 @@ async function loadContracts(){
     return;
   }
 
+  currentContractCatalog = contracts || [];
+  $('addContractBtn').classList.toggle(
+    'hidden',
+    !userIsCompanyAdmin()
+  );
+
   if(!contracts || contracts.length === 0){
     $('contractsList').replaceChildren();
 
@@ -2997,10 +3188,24 @@ async function loadContracts(){
   contracts.forEach(contract => {
 
     const card = document.createElement('div');
-    card.className = 'list-item';
+    card.className =
+      'job-card' +
+      (contract.active ? '' : ' inactive');
+
+    const customer = currentCustomerCatalog.find(
+      item => item.id === contract.customer_id
+    );
 
     card.innerHTML = `
       <strong>${escapeHtml(contract.contract_name)}</strong>
+      <span class="status ${contract.active ? 'active' : 'closed'}">
+        ${contract.active ? 'ACTIVE' : 'INACTIVE'}
+      </span>
+      ${
+        customer
+          ? `<br>Customer / Utility: ${escapeHtml(customer.name)}`
+          : ''
+      }
       ${
         contract.contract_number
           ? `<br>Contract #: ${escapeHtml(contract.contract_number)}`
@@ -3023,11 +3228,112 @@ async function loadContracts(){
       }
     `;
 
+    if(userIsCompanyAdmin()){
+      const actions = document.createElement('div');
+      actions.className = 'import-actions';
+
+      const editButton = document.createElement('button');
+      editButton.className = 'secondary small';
+      editButton.textContent = 'Edit';
+      editButton.onclick = () => editContract(contract);
+
+      const statusButton = document.createElement('button');
+      statusButton.className =
+        (contract.active ? 'warning' : 'success') + ' small';
+      statusButton.textContent =
+        contract.active ? 'Deactivate' : 'Activate';
+      statusButton.onclick = () => changeContractStatus(contract);
+
+      actions.appendChild(editButton);
+      actions.appendChild(statusButton);
+      card.appendChild(actions);
+    }
+
     contractFragment.appendChild(card);
 
   });
 
   $('contractsList').replaceChildren(contractFragment);
+}
+
+function populateContractCustomers(selectedCustomerId = ''){
+
+  $('contractCustomer').innerHTML =
+    '<option value="">Select customer / utility</option>';
+
+  currentCustomerCatalog
+    .filter(customer => customer.active || customer.id === selectedCustomerId)
+    .forEach(customer => {
+      const option = document.createElement('option');
+      option.value = customer.id;
+      option.textContent =
+        customer.name + (customer.active ? '' : ' (Inactive)');
+      $('contractCustomer').appendChild(option);
+    });
+
+  $('contractCustomer').value = selectedCustomerId;
+}
+
+function editContract(contract){
+
+  if(!userIsCompanyAdmin()){
+    return;
+  }
+
+  $('contractForm').dataset.contractId = contract.id;
+  $('contractFormTitle').textContent = 'Edit Contract';
+  populateContractCustomers(contract.customer_id);
+  $('contractName').value = contract.contract_name || '';
+  $('contractNumber').value = contract.contract_number || '';
+  $('contractStartDate').value = contract.start_date || '';
+  $('contractEndDate').value = contract.end_date || '';
+  $('contractNotes').value = contract.notes || '';
+  $('saveContractBtn').textContent = 'Save Changes';
+  $('contractForm').classList.remove('hidden');
+  $('contractForm').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+async function changeContractStatus(contract){
+
+  if(!userIsCompanyAdmin()){
+    return;
+  }
+
+  const newStatus = !contract.active;
+  const customer = currentCustomerCatalog.find(
+    item => item.id === contract.customer_id
+  );
+
+  if(newStatus && customer && !customer.active){
+    alert('Activate the assigned customer or utility before activating this contract.');
+    return;
+  }
+
+  const confirmed = confirm(
+    (newStatus ? 'Activate' : 'Deactivate') +
+    ' "' + contract.contract_name + '"?\n\n' +
+    (newStatus
+      ? 'The contract can be selected for new Price Books again.'
+      : 'Existing Price Books and unit history will be preserved.')
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  const { error } = await sb
+    .from('contracts')
+    .update({ active:newStatus })
+    .eq('id', contract.id)
+    .eq('company_id', currentProfile.company_id);
+
+  if(error){
+    alert('Unable to change contract status: ' + error.message);
+    return;
+  }
+
+  await loadContracts();
+  await loadPriceBooks();
 }
  /* PRICE BOOK FORM */
 
@@ -4614,10 +4920,7 @@ function formatCurrency(value){
 }
 
 function userCanManagePriceBooks(){
-
-  return String(
-    currentProfile?.role || ''
-  ).toLowerCase() === 'admin';
+  return userIsCompanyAdmin();
 }
 
 function resetPriceBookImport(){
