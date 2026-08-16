@@ -16,6 +16,10 @@ alter table public.profiles
 
 -- A person joining with a contractor's company code always starts as a
 -- Foreman. Only a company Admin may promote that person afterward.
+-- The original function returned a different type, so PostgreSQL requires an
+-- explicit drop before replacing it with this void-returning implementation.
+drop function if exists public.join_company(text, text);
+
 create or replace function public.join_company(
   company_code text,
   user_name text
