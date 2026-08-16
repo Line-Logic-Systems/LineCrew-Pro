@@ -1868,6 +1868,7 @@ let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
 let currentDailyUnitCatalog = [];
 let currentDailySavedUnits = [];
+let currentDailyUnitUsageMemory = new Map();
 let currentDailyUnitReport = null;
 let currentDailyUnitBatchRows = [];
 let currentDailyReportValueSummaries = new Map();
@@ -8052,23 +8053,34 @@ async function openDailyUnitEditor(report){
   $('productionList').classList.add('hidden');
   $('productionEmpty').classList.add('hidden');
 
-  const [catalogResult, savedResult] = await Promise.all([
+  const [catalogResult, savedResult, usageResult] = await Promise.all([
     sb.rpc('get_daily_report_unit_catalog', { p_report_id:report.id }),
-    sb.rpc('get_daily_report_unit_locations', { p_report_id:report.id })
+    sb.rpc('get_daily_report_unit_locations', { p_report_id:report.id }),
+    sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id })
   ]);
 
-  if(catalogResult.error || savedResult.error){
+  if(catalogResult.error || savedResult.error || usageResult.error){
     $('dailyUnitEditor').classList.add('hidden');
     $('productionList').classList.remove('hidden');
     alert(
       'Unable to load daily units: ' +
-      (catalogResult.error?.message || savedResult.error?.message)
+      (catalogResult.error?.message || savedResult.error?.message ||
+       usageResult.error?.message)
     );
     return;
   }
 
   currentDailyUnitCatalog = catalogResult.data || [];
   currentDailySavedUnits = savedResult.data || [];
+  currentDailyUnitUsageMemory = new Map(
+    (usageResult.data || []).map(usage => [
+      String(usage.item_code || '').trim().toLowerCase(),
+      {
+        count:Number(usage.use_count || 0),
+        lastUsed:usage.last_used || null
+      }
+    ])
+  );
   renderDailyPoleLocationOptions();
   addDailyUnitBatchRows(10);
   renderDailyUnitEditor();
@@ -8231,18 +8243,44 @@ function renderDailyBatchSuggestions(row){
 
   const matchingByItem = new Map();
   currentDailyUnitCatalog
-    .filter(item => [
-      item.item_code,
-      item.item_name,
-      item.description,
-      item.category
-    ].some(value => String(value || '').toLowerCase().includes(search)))
+    .filter(item => dailyUnitSearchRank(item, search) < 99)
     .forEach(item => {
       if(!matchingByItem.has(item.price_book_item_id)){
         matchingByItem.set(item.price_book_item_id, item);
       }
     });
-  const matching = [...matchingByItem.values()].slice(0, 10);
+  const matching = [...matchingByItem.values()]
+    .sort((a, b) => {
+      const rankDifference =
+        dailyUnitSearchRank(a, search) - dailyUnitSearchRank(b, search);
+      if(rankDifference !== 0){
+        return rankDifference;
+      }
+
+      const aUsage = currentDailyUnitUsageMemory.get(
+        String(a.item_code || '').trim().toLowerCase()
+      ) || { count:0, lastUsed:null };
+      const bUsage = currentDailyUnitUsageMemory.get(
+        String(b.item_code || '').trim().toLowerCase()
+      ) || { count:0, lastUsed:null };
+
+      if(bUsage.count !== aUsage.count){
+        return bUsage.count - aUsage.count;
+      }
+
+      const lastUsedDifference =
+        String(bUsage.lastUsed || '').localeCompare(String(aUsage.lastUsed || ''));
+      if(lastUsedDifference !== 0){
+        return lastUsedDifference;
+      }
+
+      return String(a.item_code || '').localeCompare(
+        String(b.item_code || ''),
+        undefined,
+        { numeric:true }
+      );
+    })
+    .slice(0, 10);
   row.suggestions.innerHTML = '';
 
   if(matching.length === 0){
@@ -8264,6 +8302,33 @@ function renderDailyBatchSuggestions(row){
   });
 
   row.suggestions.classList.remove('hidden');
+}
+
+function dailyUnitSearchRank(item, search){
+  const code = String(item.item_code || '').trim().toLowerCase();
+  const name = String(item.item_name || '').toLowerCase();
+  const description = String(item.description || '').toLowerCase();
+  const category = String(item.category || '').toLowerCase();
+
+  if(code === search){
+    return 0;
+  }
+  if(code.startsWith(search)){
+    return 1;
+  }
+  if(code.includes(search)){
+    return 2;
+  }
+  if(name.startsWith(search) || description.startsWith(search)){
+    return 3;
+  }
+  if(name.includes(search) || description.includes(search)){
+    return 4;
+  }
+  if(category.includes(search)){
+    return 5;
+  }
+  return 99;
 }
 
 function selectDailyBatchUnit(row, item){
@@ -8514,6 +8579,7 @@ $('closeDailyUnitEditorBtn').onclick = () => {
   $('dailyUnitEditor').classList.add('hidden');
   currentDailyUnitCatalog = [];
   currentDailySavedUnits = [];
+  currentDailyUnitUsageMemory = new Map();
   currentDailyUnitReport = null;
   currentDailyUnitBatchRows = [];
   $('productionList').classList.remove('hidden');
