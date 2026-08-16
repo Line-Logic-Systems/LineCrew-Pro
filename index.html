@@ -977,6 +977,35 @@ button:disabled{
     <button class="secondary" id="cancelJobPackageBtn">Cancel</button>
   </div>
 
+  <div id="jobPackageDetailCard" class="card hidden">
+    <div class="section-header">
+      <div>
+        <h2 id="jobPackageDetailTitle">Utility Job Package</h2>
+        <p id="jobPackageDetailSubtitle" class="muted"></p>
+      </div>
+      <button id="closeJobPackageDetailBtn" class="secondary small">Close</button>
+    </div>
+
+    <div id="jobPackageProgress" class="daily-value-summary"></div>
+
+    <div id="jobPackageAdminTools" class="card hidden">
+      <h3>Add Work Point / Pole</h3>
+      <div class="grid">
+        <div>
+          <label for="jobPackageWorkPointCode">Pole / Work Point</label>
+          <input id="jobPackageWorkPointCode" placeholder="Example: Pole 18">
+        </div>
+        <div>
+          <label for="jobPackageWorkPointDescription">Description</label>
+          <input id="jobPackageWorkPointDescription" placeholder="Optional location notes">
+        </div>
+      </div>
+      <button id="addJobPackageWorkPointBtn" class="success">Add Work Point</button>
+    </div>
+
+    <div id="jobPackageWorkPoints"></div>
+  </div>
+
 
   <div id="jobsLoading" class="card center hidden">
     Loading jobs...
@@ -1889,6 +1918,7 @@ let currentContractCatalog = [];
 let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
 let currentJobPackageCatalog = [];
+let currentOpenJobPackage = null;
 let currentDailyUnitCatalog = [];
 let currentDailySavedUnits = [];
 let currentDailyUnitUsageMemory = new Map();
@@ -2674,6 +2704,12 @@ $('backToDashboard').onclick = ()=>{
     .classList
     .add('hidden');
 
+  $('jobPackageDetailCard')
+    .classList
+    .add('hidden');
+
+  currentOpenJobPackage = null;
+
   returnToDashboard();
 };
 
@@ -3131,9 +3167,200 @@ function renderJobPackages(job, container){
         </span>
       </div>
     `;
+    const openButton = document.createElement('button');
+    openButton.className = 'secondary small';
+    openButton.textContent = 'Manage Work Points';
+    openButton.onclick = ()=> openJobPackageDetails(jobPackage);
+    row.appendChild(openButton);
     container.appendChild(row);
   });
 }
+
+
+async function openJobPackageDetails(jobPackage){
+  currentOpenJobPackage = jobPackage;
+  $('jobPackageDetailTitle').textContent = jobPackage.package_name;
+  $('jobPackageDetailSubtitle').textContent =
+    'Reference: ' + (jobPackage.package_number || 'Not provided');
+  $('jobPackageAdminTools').classList.toggle('hidden', !userIsCompanyAdmin());
+  $('jobPackageDetailCard').classList.remove('hidden');
+  await loadJobPackageWorkPoints();
+  $('jobPackageDetailCard').scrollIntoView({ behavior:'smooth' });
+}
+
+
+async function loadJobPackageWorkPoints(){
+  if(!currentOpenJobPackage){
+    return;
+  }
+
+  const { data:lines, error } = await sb.rpc(
+    'get_job_package_work_points',
+    { p_package_id:currentOpenJobPackage.id }
+  );
+
+  if(error){
+    alert('Unable to load package work points: ' + error.message);
+    return;
+  }
+
+  renderJobPackageWorkPoints(lines || []);
+}
+
+
+function renderJobPackageWorkPoints(lines){
+  const pointGroups = new Map();
+
+  lines.forEach(line => {
+    if(!pointGroups.has(line.work_point_id)){
+      pointGroups.set(line.work_point_id, {
+        id:line.work_point_id,
+        code:line.work_point_code,
+        description:line.work_point_description,
+        units:[]
+      });
+    }
+    if(line.authorized_unit_id){
+      pointGroups.get(line.work_point_id).units.push(line);
+    }
+  });
+
+  const unitLines = lines.filter(line => line.authorized_unit_id);
+  const authorizedValue = unitLines.reduce(
+    (sum, line) => sum + Number(line.authorized_value || 0), 0
+  );
+  const reportedValue = unitLines.reduce(
+    (sum, line) => sum + Number(line.reported_value || 0), 0
+  );
+  const approvedValue = unitLines.reduce(
+    (sum, line) => sum + Number(line.approved_value || 0), 0
+  );
+  const reportedPercent = authorizedValue > 0
+    ? Math.min(100, reportedValue / authorizedValue * 100)
+    : 0;
+  const approvedPercent = authorizedValue > 0
+    ? Math.min(100, approvedValue / authorizedValue * 100)
+    : 0;
+
+  $('jobPackageProgress').innerHTML = `
+    <strong>Authorized Value: ${escapeHtml(formatCurrency(authorizedValue))}</strong>
+    <strong>Reported: ${reportedPercent.toFixed(1)}%</strong>
+    <strong>Approved: ${approvedPercent.toFixed(1)}%</strong>
+    <strong>Work Points: ${pointGroups.size}</strong>
+  `;
+
+  const container = $('jobPackageWorkPoints');
+  container.innerHTML = '';
+
+  if(!pointGroups.size){
+    container.innerHTML = '<p class="muted">No work points added yet.</p>';
+    return;
+  }
+
+  pointGroups.forEach(point => {
+    const card = document.createElement('div');
+    card.className = 'job-card';
+    card.innerHTML = `
+      <strong>${escapeHtml(point.code)}</strong>
+      ${point.description
+        ? '<div class="muted">' + escapeHtml(point.description) + '</div>'
+        : ''}
+      <div class="authorized-units"></div>
+    `;
+
+    const unitContainer = card.querySelector('.authorized-units');
+    if(!point.units.length){
+      unitContainer.innerHTML = '<p class="muted">No authorized units added.</p>';
+    }else{
+      point.units.forEach(unit => {
+        const row = document.createElement('div');
+        row.className = 'unit-compact-card';
+        row.innerHTML = `
+          <strong>${escapeHtml(unit.unit_code)}</strong> —
+          ${escapeHtml(unit.unit_name || unit.unit_description || '')}
+          <div class="muted">
+            Authorized I: ${unit.authorized_install_quantity} ·
+            R: ${unit.authorized_retirement_quantity} ·
+            Reported I: ${unit.reported_install_quantity} ·
+            R: ${unit.reported_retirement_quantity} ·
+            Approved I: ${unit.approved_install_quantity} ·
+            R: ${unit.approved_retirement_quantity}
+          </div>
+        `;
+        unitContainer.appendChild(row);
+      });
+    }
+
+    if(userIsCompanyAdmin()){
+      const form = document.createElement('div');
+      form.className = 'grid';
+      form.innerHTML = `
+        <div><label>Unit Code</label><input class="authorized-unit-code" placeholder="Contract unit code"></div>
+        <div><label>Install Quantity</label><input class="authorized-install" type="number" min="0" step="0.01" value="0"></div>
+        <div><label>Remove Quantity</label><input class="authorized-retirement" type="number" min="0" step="0.01" value="0"></div>
+        <div><button class="success add-authorized-unit">Add Authorized Unit</button></div>
+      `;
+      form.querySelector('.add-authorized-unit').onclick = ()=>
+        saveJobPackageAuthorizedUnit(point.id, form);
+      card.appendChild(form);
+    }
+
+    container.appendChild(card);
+  });
+}
+
+
+async function saveJobPackageAuthorizedUnit(workPointId, form){
+  const unitCode = form.querySelector('.authorized-unit-code').value.trim();
+  const installQuantity = Number(form.querySelector('.authorized-install').value || 0);
+  const retirementQuantity = Number(form.querySelector('.authorized-retirement').value || 0);
+
+  if(!unitCode || installQuantity < 0 || retirementQuantity < 0 ||
+     installQuantity + retirementQuantity <= 0){
+    return alert('Enter a unit code and an authorized quantity greater than zero.');
+  }
+
+  const { error } = await sb.rpc('save_job_package_authorized_unit', {
+    p_work_point_id:workPointId,
+    p_unit_code:unitCode,
+    p_install_quantity:installQuantity,
+    p_retirement_quantity:retirementQuantity
+  });
+
+  if(error){
+    return alert(error.message);
+  }
+
+  await loadJobPackageWorkPoints();
+}
+
+
+$('addJobPackageWorkPointBtn').onclick = async()=>{
+  const code = $('jobPackageWorkPointCode').value.trim();
+  if(!currentOpenJobPackage || !code){
+    return alert('Enter a pole or work-point number.');
+  }
+
+  const { error } = await sb.rpc('create_job_package_work_point', {
+    p_package_id:currentOpenJobPackage.id,
+    p_work_point_code:code,
+    p_description:$('jobPackageWorkPointDescription').value.trim() || null
+  });
+
+  if(error){
+    return alert(error.message);
+  }
+
+  $('jobPackageWorkPointCode').value = '';
+  $('jobPackageWorkPointDescription').value = '';
+  await loadJobPackageWorkPoints();
+};
+
+
+$('closeJobPackageDetailBtn').onclick = ()=>{
+  currentOpenJobPackage = null;
+  $('jobPackageDetailCard').classList.add('hidden');
+};
 
 
 function showJobPackageForm(job){
