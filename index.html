@@ -955,6 +955,28 @@ button:disabled{
 
   </div>
 
+  <div id="jobPackageFormCard" class="card hidden">
+    <h2>Add Utility Job Package</h2>
+
+    <label for="jobPackageJob">Job</label>
+    <select id="jobPackageJob"></select>
+
+    <label for="jobPackageName">Package Name</label>
+    <input id="jobPackageName" placeholder="Example: Pole Replacement Package">
+
+    <label for="jobPackageNumber">Utility Package / Reference Number</label>
+    <input id="jobPackageNumber" placeholder="Example: WR-10482">
+
+    <label for="jobPackageReceivedDate">Received Date</label>
+    <input id="jobPackageReceivedDate" type="date">
+
+    <label for="jobPackageNotes">Notes</label>
+    <textarea id="jobPackageNotes" rows="3"></textarea>
+
+    <button class="success" id="saveJobPackageBtn">Save Job Package</button>
+    <button class="secondary" id="cancelJobPackageBtn">Cancel</button>
+  </div>
+
 
   <div id="jobsLoading" class="card center hidden">
     Loading jobs...
@@ -1866,6 +1888,7 @@ let currentCustomerCatalog = [];
 let currentContractCatalog = [];
 let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
+let currentJobPackageCatalog = [];
 let currentDailyUnitCatalog = [];
 let currentDailySavedUnits = [];
 let currentDailyUnitUsageMemory = new Map();
@@ -2647,6 +2670,10 @@ $('backToDashboard').onclick = ()=>{
     .classList
     .add('hidden');
 
+  $('jobPackageFormCard')
+    .classList
+    .add('hidden');
+
   returnToDashboard();
 };
 
@@ -2858,6 +2885,25 @@ async function loadJobs(){
     return;
   }
 
+  const canViewJobPackages = ['admin', 'gf'].includes(
+    String(currentProfile.role || '').toLowerCase()
+  );
+
+  if(canViewJobPackages){
+    const {
+      data:jobPackages,
+      error:jobPackagesError
+    } = await sb.rpc('get_job_packages');
+
+    if(jobPackagesError){
+      alert('Unable to load utility job packages: ' + jobPackagesError.message);
+      return;
+    }
+
+    currentJobPackageCatalog = jobPackages || [];
+  }else{
+    currentJobPackageCatalog = [];
+  }
 
   jobs.forEach(renderJob);
 }
@@ -2955,6 +3001,8 @@ function renderJob(job){
       id="actions-${job.id}"
     >
     </div>
+
+    <div class="job-packages" id="job-packages-${job.id}"></div>
   `;
 
 
@@ -3016,6 +3064,12 @@ function renderJob(job){
 
   if(currentProfile.role === 'admin'){
 
+    const packageButton = document.createElement('button');
+    packageButton.className = 'small success';
+    packageButton.textContent = '+ Add Utility Package';
+    packageButton.onclick = ()=> showJobPackageForm(job);
+    actions.appendChild(packageButton);
+
     const deleteButton =
       document.createElement('button');
 
@@ -3032,7 +3086,105 @@ function renderJob(job){
       deleteButton
     );
   }
+
+  if(['admin', 'gf'].includes(String(currentProfile.role || '').toLowerCase())){
+    renderJobPackages(job, card.querySelector(`#job-packages-${job.id}`));
+  }
 }
+
+
+function renderJobPackages(job, container){
+  const packages = currentJobPackageCatalog.filter(
+    jobPackage => jobPackage.job_id === job.id
+  );
+
+  if(!packages.length){
+    container.innerHTML = `
+      <div class="muted" style="margin-top:14px">
+        No utility job packages added yet.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = '<h3 style="margin-top:16px">Utility Job Packages</h3>';
+
+  packages.forEach(jobPackage => {
+    const row = document.createElement('div');
+    row.className = 'unit-compact-card';
+    row.innerHTML = `
+      <div class="section-header">
+        <div>
+          <strong>${escapeHtml(jobPackage.package_name)}</strong>
+          <div class="muted">
+            Reference: ${escapeHtml(jobPackage.package_number || 'Not provided')}
+            ${jobPackage.received_date
+              ? ' · Received: ' + escapeHtml(jobPackage.received_date)
+              : ''}
+          </div>
+          ${jobPackage.notes
+            ? '<div class="muted">' + escapeHtml(jobPackage.notes) + '</div>'
+            : ''}
+        </div>
+        <span class="status ${jobPackage.status === 'active' ? 'active' : 'closed'}">
+          ${escapeHtml(String(jobPackage.status || 'draft').toUpperCase())}
+        </span>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+
+function showJobPackageForm(job){
+  $('jobPackageFormCard').dataset.jobId = job.id;
+  $('jobPackageJob').innerHTML = '';
+
+  const option = document.createElement('option');
+  option.value = job.id;
+  option.textContent = `${job.job_number} — ${job.job_name}`;
+  $('jobPackageJob').appendChild(option);
+
+  $('jobPackageName').value = '';
+  $('jobPackageNumber').value = '';
+  $('jobPackageReceivedDate').value = '';
+  $('jobPackageNotes').value = '';
+  $('jobPackageFormCard').classList.remove('hidden');
+  $('jobPackageFormCard').scrollIntoView({ behavior:'smooth' });
+}
+
+
+$('cancelJobPackageBtn').onclick = ()=>{
+  delete $('jobPackageFormCard').dataset.jobId;
+  $('jobPackageFormCard').classList.add('hidden');
+};
+
+
+$('saveJobPackageBtn').onclick = async()=>{
+  const jobId = $('jobPackageFormCard').dataset.jobId;
+  const packageName = $('jobPackageName').value.trim();
+
+  if(!jobId || !packageName){
+    return alert('Job and package name are required.');
+  }
+
+  const { error } = await sb.rpc('create_job_package', {
+    p_job_id:jobId,
+    p_package_name:packageName,
+    p_package_number:$('jobPackageNumber').value.trim() || null,
+    p_received_date:$('jobPackageReceivedDate').value || null,
+    p_notes:$('jobPackageNotes').value.trim() || null
+  });
+
+  if(error){
+    return alert(error.message);
+  }
+
+  delete $('jobPackageFormCard').dataset.jobId;
+  $('jobPackageFormCard').classList.add('hidden');
+  await loadJobs();
+  alert('Utility job package saved.');
+};
 
 
 /* EDIT JOB */
