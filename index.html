@@ -1353,6 +1353,21 @@ button:disabled{
           Common variations such as Item Code and Remove Price are recognized.
         </p>
 
+        <label for="priceBookImportMode">Existing Unit Codes</label>
+        <select id="priceBookImportMode">
+          <option value="add-only">
+            Add new units only (skip existing)
+          </option>
+          <option value="update-existing">
+            Update matching units and add new units
+          </option>
+        </select>
+        <p class="muted">
+          Updating matching units replaces their pricing and details but keeps
+          their current active or inactive status. Use this after duplicating a
+          Price Book when a utility issues revised pricing.
+        </p>
+
         <button
           id="downloadPriceBookTemplateBtn"
           class="secondary"
@@ -4216,6 +4231,7 @@ function resetPriceBookImport(){
   currentPriceBookWorkbook = null;
   $('priceBookImportFile').value = '';
   $('priceBookImportPaste').value = '';
+  $('priceBookImportMode').value = 'add-only';
   $('priceBookWorksheet').innerHTML = '';
   $('priceBookWorksheetWrap')
     .classList
@@ -4474,6 +4490,10 @@ function mapImportRow(row, rowNumber){
 
 function validateImportDuplicates(rows){
 
+  const updateExisting =
+    $('priceBookImportMode').value ===
+    'update-existing';
+
   const existingCodes = new Set(
     currentPriceBookItems.map(item =>
       String(item.item_code || '')
@@ -4486,6 +4506,11 @@ function validateImportDuplicates(rows){
 
   rows.forEach(row => {
 
+    row.errors = row.errors.filter(error =>
+      error !== 'Unit Code already exists in this Price Book' &&
+      error !== 'Duplicate Unit Code in file'
+    );
+
     const code =
       row.item_code.toLowerCase();
 
@@ -4493,7 +4518,7 @@ function validateImportDuplicates(rows){
       return;
     }
 
-    if(existingCodes.has(code)){
+    if(existingCodes.has(code) && !updateExisting){
       row.errors.push(
         'Unit Code already exists in this Price Book'
       );
@@ -4508,6 +4533,16 @@ function validateImportDuplicates(rows){
     fileCodes.add(code);
   });
 }
+
+$('priceBookImportMode').onchange = () => {
+
+  if(!currentPriceBookImportRows.length){
+    return;
+  }
+
+  validateImportDuplicates(currentPriceBookImportRows);
+  renderPriceBookImportPreview();
+};
 
 function renderPriceBookImportPreview(){
 
@@ -5062,7 +5097,7 @@ $('confirmPriceBookImportBtn').onclick = async () => {
     error:checkError
   } = await sb
     .from('price_book_items')
-    .select('item_code')
+    .select('item_code, active')
     .eq('company_id', currentProfile.company_id)
     .eq('price_book_id', priceBookId);
 
@@ -5080,19 +5115,27 @@ $('confirmPriceBookImportBtn').onclick = async () => {
     return;
   }
 
-  const latestCodes = new Set(
-    (latestItems || []).map(item =>
+  const latestItemsByCode = new Map(
+    (latestItems || []).map(item => [
       String(item.item_code || '')
         .trim()
-        .toLowerCase()
-    )
+        .toLowerCase(),
+      item
+    ])
   );
+
+  const updateExisting =
+    $('priceBookImportMode').value ===
+    'update-existing';
 
   let newDuplicateFound = false;
 
   validRows.forEach(row => {
 
-    if(latestCodes.has(row.item_code.toLowerCase())){
+    if(
+      !updateExisting &&
+      latestItemsByCode.has(row.item_code.toLowerCase())
+    ){
 
       row.errors.push(
         'Unit Code already exists in this Price Book'
@@ -5118,12 +5161,24 @@ $('confirmPriceBookImportBtn').onclick = async () => {
       row => row.errors.length === 0
     );
 
+  const updateCount = validRows.filter(row =>
+    latestItemsByCode.has(row.item_code.toLowerCase())
+  ).length;
+
+  const addCount = validRows.length - updateCount;
+
+  const confirmationSummary = updateExisting
+    ? 'Update ' + updateCount + ' existing unit' +
+      (updateCount === 1 ? '' : 's') +
+      ' and add ' + addCount + ' new unit' +
+      (addCount === 1 ? '' : 's') +
+      ' in this Price Book?'
+    : 'Import ' + validRows.length + ' new unit' +
+      (validRows.length === 1 ? '' : 's') +
+      ' into this Price Book?';
+
   const confirmed = confirm(
-    'Import ' +
-    validRows.length +
-    ' unit' +
-    (validRows.length === 1 ? '' : 's') +
-    ' into this Price Book?\n\n' +
+    confirmationSummary + '\n\n' +
     'Rows marked with errors will not be imported.'
   );
 
@@ -5134,27 +5189,43 @@ $('confirmPriceBookImportBtn').onclick = async () => {
     return;
   }
 
-  const insertRows =
-    validRows.map(row => ({
+  const writeRows =
+    validRows.map(row => {
+
+      const existingItem =
+        latestItemsByCode.get(
+          row.item_code.toLowerCase()
+        );
+
+      return {
       company_id: currentProfile.company_id,
       price_book_id: priceBookId,
-      item_code: row.item_code,
+      item_code: existingItem?.item_code || row.item_code,
       item_name: row.item_name,
       description: row.description,
       category: row.category,
       unit_of_measure: row.unit_of_measure,
       install_price: row.install_price,
       retirement_price: row.retirement_price,
-      active: true
-    }));
+      active: existingItem?.active ?? true
+      };
+    });
 
   $('confirmPriceBookImportBtn').disabled = true;
   $('confirmPriceBookImportBtn').textContent =
     'Importing...';
 
-  const { error } = await sb
-    .from('price_book_items')
-    .insert(insertRows);
+  const writeQuery = sb
+    .from('price_book_items');
+
+  const { error } = updateExisting
+    ? await writeQuery.upsert(
+        writeRows,
+        {
+          onConflict:'price_book_id,item_code'
+        }
+      )
+    : await writeQuery.insert(writeRows);
 
   $('confirmPriceBookImportBtn').disabled = false;
 
@@ -5206,10 +5277,12 @@ $('confirmPriceBookImportBtn').onclick = async () => {
   }
 
   alert(
-    insertRows.length +
+    writeRows.length +
     ' unit' +
-    (insertRows.length === 1 ? '' : 's') +
-    ' imported successfully.' +
+    (writeRows.length === 1 ? '' : 's') +
+    (updateExisting
+      ? ' updated or added successfully.'
+      : ' imported successfully.') +
     (auditError
       ? '\n\nThe units were saved, but the import audit details could not be updated: ' +
         auditError.message
