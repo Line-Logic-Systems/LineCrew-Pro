@@ -983,7 +983,10 @@ button:disabled{
         <h2 id="jobPackageDetailTitle">Utility Job Package</h2>
         <p id="jobPackageDetailSubtitle" class="muted"></p>
       </div>
-      <button id="closeJobPackageDetailBtn" class="secondary small">Close</button>
+      <div class="button-row">
+        <button id="jobPackageStatusActionBtn" class="small hidden"></button>
+        <button id="closeJobPackageDetailBtn" class="secondary small">Close</button>
+      </div>
     </div>
 
     <div id="jobPackageProgress" class="daily-value-summary"></div>
@@ -3251,15 +3254,88 @@ async function deleteJobPackage(jobPackage){
 async function openJobPackageDetails(jobPackage){
   currentOpenJobPackage = jobPackage;
   $('jobPackageDetailTitle').textContent = jobPackage.package_name;
-  $('jobPackageDetailSubtitle').textContent =
-    'Reference: ' + (jobPackage.package_number || 'Not provided');
-  $('jobPackageAdminTools').classList.toggle('hidden', !userIsCompanyAdmin());
-  $('jobPackageImportTools').classList.toggle('hidden', !userIsCompanyAdmin());
+  refreshOpenJobPackageControls();
   resetJobPackageImport();
   $('jobPackageDetailCard').classList.remove('hidden');
   await loadJobPackageWorkPoints();
   $('jobPackageDetailCard').scrollIntoView({ behavior:'smooth' });
 }
+
+
+function refreshOpenJobPackageControls(){
+  if(!currentOpenJobPackage){
+    return;
+  }
+
+  const status = String(currentOpenJobPackage.status || 'draft').toLowerCase();
+  const source = currentOpenJobPackage.source_filename
+    ? ' · Source: ' + currentOpenJobPackage.source_filename
+    : '';
+  $('jobPackageDetailSubtitle').textContent =
+    'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +
+    ' · Status: ' + status.toUpperCase() + source;
+
+  const isAdmin = userIsCompanyAdmin();
+  const isClosed = status === 'closed';
+  $('jobPackageAdminTools').classList.toggle('hidden', !isAdmin || isClosed);
+  $('jobPackageImportTools').classList.toggle('hidden', !isAdmin || isClosed);
+
+  const statusButton = $('jobPackageStatusActionBtn');
+  statusButton.classList.toggle('hidden', !isAdmin);
+  if(!isAdmin){
+    return;
+  }
+
+  if(status === 'draft'){
+    statusButton.textContent = 'Activate Package';
+    statusButton.className = 'success small';
+  }else if(status === 'active'){
+    statusButton.textContent = 'Close Package';
+    statusButton.className = 'warning small';
+  }else{
+    statusButton.textContent = 'Reopen Package';
+    statusButton.className = 'success small';
+  }
+}
+
+
+async function changeJobPackageStatus(){
+  if(!currentOpenJobPackage || !userIsCompanyAdmin()){
+    return;
+  }
+
+  const currentStatus = String(currentOpenJobPackage.status || 'draft').toLowerCase();
+  const nextStatus = currentStatus === 'active' ? 'closed' : 'active';
+  const action = currentStatus === 'draft'
+    ? 'activate'
+    : currentStatus === 'active'
+      ? 'close'
+      : 'reopen';
+
+  if(!confirm(
+    `${action.charAt(0).toUpperCase() + action.slice(1)} utility package ` +
+    `"${currentOpenJobPackage.package_name}"?`
+  )){
+    return;
+  }
+
+  const { data, error } = await sb.rpc('set_job_package_status', {
+    p_package_id:currentOpenJobPackage.id,
+    p_status:nextStatus
+  });
+
+  if(error){
+    return alert(error.message);
+  }
+
+  currentOpenJobPackage.status = data || nextStatus;
+  refreshOpenJobPackageControls();
+  await loadJobPackageWorkPoints();
+  await loadJobs();
+}
+
+
+$('jobPackageStatusActionBtn').onclick = changeJobPackageStatus;
 
 
 async function loadJobPackageWorkPoints(){
@@ -3283,6 +3359,8 @@ async function loadJobPackageWorkPoints(){
 
 function renderJobPackageWorkPoints(lines){
   const pointGroups = new Map();
+  const packageIsEditable = userIsCompanyAdmin() &&
+    String(currentOpenJobPackage?.status || 'draft').toLowerCase() !== 'closed';
 
   lines.forEach(line => {
     if(!pointGroups.has(line.work_point_id)){
@@ -3360,7 +3438,7 @@ function renderJobPackageWorkPoints(lines){
             R: ${unit.approved_retirement_quantity}
           </div>
         `;
-        if(userIsCompanyAdmin()){
+        if(packageIsEditable){
           const deleteButton = document.createElement('button');
           deleteButton.className = 'danger small';
           deleteButton.textContent = 'Delete Authorized Unit';
@@ -3371,7 +3449,7 @@ function renderJobPackageWorkPoints(lines){
       });
     }
 
-    if(userIsCompanyAdmin()){
+    if(packageIsEditable){
       const form = document.createElement('div');
       form.className = 'grid';
       form.innerHTML = `
