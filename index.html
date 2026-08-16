@@ -346,6 +346,44 @@ button:disabled{
   line-height:1.5;
 }
 
+.daily-unit-row{
+  display:grid;
+  grid-template-columns:minmax(130px, 0.8fr) minmax(220px, 2fr) 110px 110px auto;
+  gap:10px;
+  align-items:end;
+  padding:12px 0;
+  border-bottom:1px solid #d9e2ec;
+}
+
+.daily-unit-row input{
+  margin:0;
+}
+
+.daily-unit-code{
+  font-weight:800;
+  color:#0b3557;
+}
+
+.daily-value-summary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+  padding:12px;
+  margin:12px 0;
+  border-radius:10px;
+  background:#eef5fa;
+}
+
+@media (max-width:800px){
+  .daily-unit-row{
+    grid-template-columns:1fr 1fr;
+  }
+
+  .daily-unit-description{
+    grid-column:1 / -1;
+  }
+}
+
 .status{
   display:inline-block;
   padding:5px 9px;
@@ -931,6 +969,35 @@ button:disabled{
   </div>
 
 </div>
+
+<div id="dailyUnitEditor" class="card hidden">
+  <div class="section-header">
+    <div>
+      <h2>Daily Unit Production</h2>
+      <p id="dailyUnitReportLabel" class="muted"></p>
+    </div>
+    <button id="closeDailyUnitEditorBtn" class="secondary small">
+      Close Units
+    </button>
+  </div>
+
+  <p class="muted">
+    Enter installed and removed quantities. Dollar values are calculated from
+    the Price Book version locked to this report.
+  </p>
+
+  <div id="dailyUnitValueSummary" class="daily-value-summary"></div>
+
+  <label for="dailyUnitSearch">Search Contract Units</label>
+  <input
+    id="dailyUnitSearch"
+    placeholder="Search unit code, name, description or category"
+  >
+
+  <p id="dailyUnitCount" class="muted"></p>
+  <div id="dailyUnitList"></div>
+</div>
+
   <div id="productionList"></div>
 
 </section>
@@ -1675,6 +1742,9 @@ let currentCustomerCatalog = [];
 let currentContractCatalog = [];
 let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
+let currentDailyUnitCatalog = [];
+let currentDailyUnitReport = null;
+let currentDailyReportValueSummaries = new Map();
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
 
@@ -7555,6 +7625,26 @@ async function loadProductionReports(){
     return;
   }
 
+  const {
+    data:valueSummaries,
+    error:valueSummaryError
+  } = await sb.rpc('get_daily_report_value_summaries');
+
+  if(valueSummaryError){
+    alert(
+      'Unable to load daily production values: ' +
+      valueSummaryError.message
+    );
+    return;
+  }
+
+  currentDailyReportValueSummaries = new Map(
+    (valueSummaries || []).map(summary => [
+      summary.report_id,
+      summary
+    ])
+  );
+
 
   if(!reports || reports.length === 0){
 
@@ -7586,6 +7676,9 @@ async function loadProductionReports(){
 
     const overtimeHours =
       report.overtime_hours || 0;
+
+    const valueSummary =
+      currentDailyReportValueSummaries.get(report.id) || null;
 
 
     card.innerHTML = `
@@ -7644,8 +7737,18 @@ ${report.review_notes ? `
     </strong>
   </span>
 ` : ''}
+        ${dailyReportValueSummaryMarkup(valueSummary)}
       </div>
     `;
+
+    const unitsButton = document.createElement('button');
+    unitsButton.className = 'secondary small';
+    unitsButton.textContent =
+      String(report.status || 'draft').toLowerCase() === 'draft'
+        ? 'Manage Units'
+        : 'View Units';
+    unitsButton.onclick = () => openDailyUnitEditor(report);
+    card.appendChild(unitsButton);
 
 if(
   String(report.status || 'draft').toLowerCase() === 'draft'
@@ -7775,6 +7878,243 @@ card.appendChild(editBtn);
   card.appendChild(submitBtn);
 
 }
+
+function dailyReportValueSummaryMarkup(summary){
+  if(!summary || Number(summary.unit_line_count || 0) === 0){
+    return '<br><span class="muted">Unit Value: No units entered</span>';
+  }
+
+  const canSeeActual = userCanSeeActualContractPrices();
+  const hasAdjustment = summary.has_adjustment === true;
+
+  if(canSeeActual && hasAdjustment){
+    return (
+      '<br>Actual Unit Value: <strong>' +
+        escapeHtml(formatCurrency(summary.actual_total)) +
+      '</strong>' +
+      '<br>Field Unit Value: <strong>' +
+        escapeHtml(formatCurrency(summary.adjusted_total)) +
+      '</strong>'
+    );
+  }
+
+  const label = hasAdjustment ? 'Field Unit Value' : 'Actual Unit Value';
+  const amount = canSeeActual
+    ? summary.actual_total
+    : summary.visible_total;
+
+  return (
+    '<br>' + label + ': <strong>' +
+      escapeHtml(formatCurrency(amount)) +
+    '</strong>'
+  );
+}
+
+async function openDailyUnitEditor(report){
+  currentDailyUnitReport = report;
+  $('dailyUnitEditor').classList.remove('hidden');
+  $('dailyUnitReportLabel').textContent =
+    (report.jobs?.job_number || 'Job') + ' — ' +
+    (report.work_date || 'No date') + ' — ' +
+    String(report.status || 'draft').toUpperCase();
+  $('dailyUnitSearch').value = '';
+  $('dailyUnitList').innerHTML =
+    '<p class="muted">Loading contract units...</p>';
+  $('dailyUnitValueSummary').innerHTML = '';
+
+  const { data, error } = await sb.rpc(
+    'get_daily_report_unit_catalog',
+    { p_report_id:report.id }
+  );
+
+  if(error){
+    $('dailyUnitEditor').classList.add('hidden');
+    alert('Unable to load daily units: ' + error.message);
+    return;
+  }
+
+  currentDailyUnitCatalog = data || [];
+  renderDailyUnitEditor();
+  $('dailyUnitEditor').scrollIntoView({ behavior:'smooth' });
+}
+
+function renderDailyUnitEditor(){
+  const search = $('dailyUnitSearch').value.trim().toLowerCase();
+  const matching = currentDailyUnitCatalog.filter(item => {
+    if(!search){
+      return true;
+    }
+
+    return [
+      item.item_code,
+      item.item_name,
+      item.description,
+      item.category
+    ].some(value => String(value || '').toLowerCase().includes(search));
+  });
+
+  const visible = matching.slice(0, 50);
+  $('dailyUnitCount').textContent =
+    'Showing ' + visible.length + ' of ' + matching.length +
+    ' matching units. Search to narrow large Price Books.';
+  $('dailyUnitList').innerHTML = '';
+
+  const canEdit =
+    String(currentDailyUnitReport?.status || 'draft').toLowerCase() === 'draft';
+
+  visible.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'daily-unit-row';
+
+    const valueLabel = dailyUnitValueLabel(item);
+    row.innerHTML = `
+      <div>
+        <div class="daily-unit-code">${escapeHtml(item.item_code)}</div>
+        <div class="muted">${escapeHtml(item.category || '')}</div>
+      </div>
+      <div class="daily-unit-description">
+        <strong>${escapeHtml(item.item_name || item.description || 'Unnamed Unit')}</strong>
+        <div class="muted">${escapeHtml(item.description || '')}</div>
+        <div>${valueLabel}</div>
+      </div>
+      <div>
+        <label>Installed</label>
+        <input class="daily-install-quantity" type="number" min="0" step="0.01"
+          value="${escapeHtml(item.install_quantity || 0)}" ${canEdit ? '' : 'disabled'}>
+      </div>
+      <div>
+        <label>Removed</label>
+        <input class="daily-retirement-quantity" type="number" min="0" step="0.01"
+          value="${escapeHtml(item.retirement_quantity || 0)}" ${canEdit ? '' : 'disabled'}>
+      </div>
+      <div class="daily-unit-actions"></div>
+    `;
+
+    if(canEdit){
+      const saveButton = document.createElement('button');
+      saveButton.className = 'success small';
+      saveButton.textContent = 'Save';
+      saveButton.onclick = () => saveDailyUnitRow(item, row, saveButton);
+      row.querySelector('.daily-unit-actions').appendChild(saveButton);
+    }
+
+    $('dailyUnitList').appendChild(row);
+  });
+
+  renderDailyUnitTotals();
+}
+
+function dailyUnitValueLabel(item){
+  const canSeeActual = userCanSeeActualContractPrices();
+
+  if(canSeeActual && item.has_adjustment){
+    return (
+      'Actual I: <strong>' + formatCurrency(item.actual_install_price) +
+      '</strong> R: <strong>' + formatCurrency(item.actual_retirement_price) +
+      '</strong><br>Field I: <strong>' +
+      formatCurrency(item.adjusted_install_price) +
+      '</strong> R: <strong>' +
+      formatCurrency(item.adjusted_retirement_price) + '</strong>'
+    );
+  }
+
+  const label = item.has_adjustment ? 'Field' : 'Actual';
+  return (
+    label + ' I: <strong>' + formatCurrency(item.install_price) +
+    '</strong> R: <strong>' + formatCurrency(item.retirement_price) +
+    '</strong>'
+  );
+}
+
+function renderDailyUnitTotals(){
+  const savedItems = currentDailyUnitCatalog.filter(item =>
+    Number(item.install_quantity || 0) > 0 ||
+    Number(item.retirement_quantity || 0) > 0
+  );
+
+  const actualTotal = savedItems.reduce(
+    (total, item) => total + Number(item.actual_line_value || 0),
+    0
+  );
+  const adjustedTotal = savedItems.reduce(
+    (total, item) => total + Number(item.adjusted_line_value || 0),
+    0
+  );
+  const visibleTotal = savedItems.reduce(
+    (total, item) => total + Number(item.visible_line_value || 0),
+    0
+  );
+  const hasAdjustment = savedItems.some(item => item.has_adjustment);
+
+  if(userCanSeeActualContractPrices() && hasAdjustment){
+    $('dailyUnitValueSummary').innerHTML =
+      '<strong>Actual Daily Unit Value: ' +
+      escapeHtml(formatCurrency(actualTotal)) + '</strong>' +
+      '<strong>Field Daily Unit Value: ' +
+      escapeHtml(formatCurrency(adjustedTotal)) + '</strong>';
+  }else{
+    $('dailyUnitValueSummary').innerHTML =
+      '<strong>' + (hasAdjustment ? 'Field' : 'Actual') +
+      ' Daily Unit Value: ' +
+      escapeHtml(formatCurrency(visibleTotal)) + '</strong>';
+  }
+}
+
+async function saveDailyUnitRow(item, row, button){
+  const installQuantity = Number(
+    row.querySelector('.daily-install-quantity').value || 0
+  );
+  const retirementQuantity = Number(
+    row.querySelector('.daily-retirement-quantity').value || 0
+  );
+
+  if(
+    !Number.isFinite(installQuantity) || installQuantity < 0 ||
+    !Number.isFinite(retirementQuantity) || retirementQuantity < 0
+  ){
+    alert('Unit quantities must be zero or greater.');
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Saving...';
+
+  const rpcName =
+    installQuantity === 0 && retirementQuantity === 0
+      ? 'delete_daily_report_unit'
+      : 'save_daily_report_unit';
+  const rpcArgs = rpcName === 'delete_daily_report_unit'
+    ? {
+        p_report_id:currentDailyUnitReport.id,
+        p_price_book_item_id:item.price_book_item_id
+      }
+    : {
+        p_report_id:currentDailyUnitReport.id,
+        p_price_book_item_id:item.price_book_item_id,
+        p_install_quantity:installQuantity,
+        p_retirement_quantity:retirementQuantity
+      };
+
+  const { error } = await sb.rpc(rpcName, rpcArgs);
+
+  if(error){
+    button.disabled = false;
+    button.textContent = 'Save';
+    alert('Unable to save unit production: ' + error.message);
+    return;
+  }
+
+  await openDailyUnitEditor(currentDailyUnitReport);
+  await loadProductionReports();
+}
+
+$('dailyUnitSearch').oninput = renderDailyUnitEditor;
+
+$('closeDailyUnitEditorBtn').onclick = () => {
+  $('dailyUnitEditor').classList.add('hidden');
+  currentDailyUnitCatalog = [];
+  currentDailyUnitReport = null;
+};
 
  if(
   String(report.status || '').toLowerCase() === 'submitted' &&
