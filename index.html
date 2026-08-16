@@ -1112,6 +1112,21 @@ button:disabled{
     type="date"
   >
 
+  <label for="contractFieldValuePercent">
+    Field Value % of Contract Price
+  </label>
+  <input
+    id="contractFieldValuePercent"
+    type="number"
+    min="0"
+    max="100"
+    step="0.01"
+    placeholder="Blank means 100% (actual price)"
+  >
+  <p class="muted">
+    Example: enter 70 to show Foremen 70% of the actual unit price.
+  </p>
+
   <label for="contractNotes">Notes</label>
   <textarea
     id="contractNotes"
@@ -1661,6 +1676,7 @@ let currentPriceBookComparisonVersions = [];
 let currentPriceBookComparisonReport = null;
 let currentCustomerCatalog = [];
 let currentContractCatalog = [];
+let currentContractFieldSettings = new Map();
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
 
@@ -1674,6 +1690,12 @@ const APP_PAGE_IDS = new Set([
 
 function userIsCompanyAdmin(){
   return String(currentProfile?.role || '').toLowerCase() === 'admin';
+}
+
+function userCanSeeActualContractPrices(){
+  return ['admin', 'gf'].includes(
+    String(currentProfile?.role || '').toLowerCase()
+  );
 }
 
 
@@ -3353,6 +3375,7 @@ $('addContractBtn').onclick = async () => {
   $('contractNumber').value = '';
   $('contractStartDate').value = '';
   $('contractEndDate').value = '';
+  $('contractFieldValuePercent').value = '';
   $('contractNotes').value = '';
 
   $('contractCustomer').innerHTML =
@@ -3431,6 +3454,12 @@ $('saveContractBtn').onclick = async () => {
   const notes =
     $('contractNotes').value.trim() || null;
 
+  const fieldValueText =
+    $('contractFieldValuePercent').value.trim();
+
+  const fieldValuePercent =
+    fieldValueText === '' ? null : Number(fieldValueText);
+
 
   if(!customerId){
 
@@ -3449,6 +3478,16 @@ $('saveContractBtn').onclick = async () => {
 
   if(startDate && endDate && endDate < startDate){
     alert('The contract end date cannot be before its start date.');
+    return;
+  }
+
+  if(
+    fieldValuePercent !== null &&
+    (!Number.isFinite(fieldValuePercent) ||
+      fieldValuePercent < 0 ||
+      fieldValuePercent > 100)
+  ){
+    alert('Field Value must be between 0% and 100%, or left blank.');
     return;
   }
 
@@ -3478,9 +3517,11 @@ $('saveContractBtn').onclick = async () => {
         .insert({
           ...contractValues,
           active: true
-        });
+        })
+        .select('id')
+        .single();
 
-  const { error } = await contractWrite;
+  const { data:savedContract, error } = await contractWrite;
 
 
   $('saveContractBtn').disabled = false;
@@ -3494,6 +3535,24 @@ $('saveContractBtn').onclick = async () => {
       error.message
     );
 
+    return;
+  }
+
+  const savedContractId = contractId || savedContract?.id;
+
+  const { error:fieldValueError } = await sb.rpc(
+    'set_contract_field_value_percent',
+    {
+      p_contract_id:savedContractId,
+      p_field_value_percent:fieldValuePercent
+    }
+  );
+
+  if(fieldValueError){
+    alert(
+      'The contract was saved, but its Field Value percentage was not saved: ' +
+      fieldValueError.message
+    );
     return;
   }
 
@@ -3538,6 +3597,26 @@ async function loadContracts(){
   if(error){
     alert('Unable to load contracts: ' + error.message);
     return;
+  }
+
+  currentContractFieldSettings = new Map();
+
+  if(userIsCompanyAdmin()){
+    const { data:settings, error:settingsError } = await sb.rpc(
+      'get_contract_field_settings'
+    );
+
+    if(settingsError){
+      alert('Unable to load Field Value settings: ' + settingsError.message);
+      return;
+    }
+
+    currentContractFieldSettings = new Map(
+      (settings || []).map(setting => [
+        setting.contract_id,
+        setting.field_value_percent
+      ])
+    );
   }
 
   currentContractCatalog = contracts || [];
@@ -3601,6 +3680,15 @@ async function loadContracts(){
           ? `<br>Notes: ${escapeHtml(contract.notes)}`
           : ''
       }
+      ${
+        userIsCompanyAdmin()
+          ? `<br>Foreman Field Value: <strong>${
+              currentContractFieldSettings.has(contract.id)
+                ? escapeHtml(currentContractFieldSettings.get(contract.id)) + '%'
+                : 'Actual price (no adjustment)'
+            }</strong>`
+          : ''
+      }
     `;
 
     if(userIsCompanyAdmin()){
@@ -3662,6 +3750,8 @@ function editContract(contract){
   $('contractNumber').value = contract.contract_number || '';
   $('contractStartDate').value = contract.start_date || '';
   $('contractEndDate').value = contract.end_date || '';
+  $('contractFieldValuePercent').value =
+    currentContractFieldSettings.get(contract.id) ?? '';
   $('contractNotes').value = contract.notes || '';
   $('saveContractBtn').textContent = 'Save Changes';
   $('contractForm').classList.remove('hidden');
@@ -4508,21 +4598,16 @@ $('runPriceBookComparisonBtn').onclick = async () => {
   $('priceBookComparisonResults').innerHTML =
     '<p class="muted">Loading both versions...</p>';
 
-  const { data, error } = await sb
-    .from('price_book_items')
-    .select(`
-      price_book_id,
-      item_code,
-      item_name,
-      description,
-      install_price,
-      retirement_price,
-      unit_of_measure,
-      category,
-      active
-    `)
-    .eq('company_id', companyId)
-    .in('price_book_id', [openBook.id, comparisonBook.id]);
+  const [openResult, comparisonResult] = await Promise.all([
+    fetchPriceBookItemsForCurrentUser(openBook.id),
+    fetchPriceBookItemsForCurrentUser(comparisonBook.id)
+  ]);
+
+  const error = openResult.error || comparisonResult.error;
+  const data = [
+    ...(openResult.data || []),
+    ...(comparisonResult.data || [])
+  ];
 
   $('runPriceBookComparisonBtn').disabled = false;
   $('runPriceBookComparisonBtn').textContent = 'Compare Unit Pricing';
@@ -5122,21 +5207,7 @@ $('saveDuplicatePriceBookBtn').onclick = async () => {
       .eq('company_id', companyId)
       .single(),
 
-    sb
-      .from('price_book_items')
-      .select(`
-        item_code,
-        item_name,
-        description,
-        install_price,
-        retirement_price,
-        unit_of_measure,
-        category,
-        extra_data,
-        active
-      `)
-      .eq('price_book_id', sourcePriceBookId)
-      .eq('company_id', companyId)
+    fetchPriceBookItemsForCurrentUser(sourcePriceBookId)
 
   ]);
 
@@ -5291,6 +5362,13 @@ function formatCurrency(value){
       style: 'currency',
       currency: 'USD'
     }
+  );
+}
+
+async function fetchPriceBookItemsForCurrentUser(priceBookId){
+  return sb.rpc(
+    'get_price_book_items_for_user',
+    { p_price_book_id:priceBookId }
   );
 }
 
@@ -6340,7 +6418,7 @@ $('confirmPriceBookImportBtn').onclick = async () => {
             .eq('id', id)
             .eq('company_id', currentProfile.company_id)
             .eq('price_book_id', priceBookId)
-            .select('id, install_price, retirement_price');
+            .select('id');
         })
       );
 
@@ -6355,16 +6433,10 @@ $('confirmPriceBookImportBtn').onclick = async () => {
           break;
         }
 
-        if(
-          !saved ||
-          Number(saved.install_price) !==
-            Number(expected.install_price) ||
-          Number(saved.retirement_price) !==
-            Number(expected.retirement_price)
-        ){
+        if(!saved){
           error = {
             message:
-              'LineCrew Pro could not verify the saved prices for Unit Code ' +
+              'LineCrew Pro could not verify the saved Unit Code ' +
               expected.item_code +
               '.'
           };
@@ -6372,6 +6444,41 @@ $('confirmPriceBookImportBtn').onclick = async () => {
         }
 
         completedUpdateCount += 1;
+      }
+    }
+  }
+
+  if(!error && updateExisting && updateRows.length){
+    const verificationResult =
+      await fetchPriceBookItemsForCurrentUser(priceBookId);
+
+    if(verificationResult.error){
+      error = verificationResult.error;
+    }else{
+      const savedByCode = new Map(
+        (verificationResult.data || []).map(item => [
+          String(item.item_code || '').trim().toLowerCase(),
+          item
+        ])
+      );
+
+      for(const expected of updateRows){
+        const saved = savedByCode.get(
+          String(expected.item_code || '').trim().toLowerCase()
+        );
+
+        if(
+          !saved ||
+          Number(saved.install_price) !== Number(expected.install_price) ||
+          Number(saved.retirement_price) !== Number(expected.retirement_price)
+        ){
+          error = {
+            message:
+              'LineCrew Pro could not verify the saved prices for Unit Code ' +
+              expected.item_code + '.'
+          };
+          break;
+        }
       }
     }
   }
@@ -6480,37 +6587,7 @@ async function loadPriceBookItems(priceBookId){
   const {
     data: items,
     error
-  } = await sb
-    .from('price_book_items')
-    .select(`
-      id,
-      item_code,
-      item_name,
-      description,
-      install_price,
-      retirement_price,
-      unit_of_measure,
-      category,
-      active,
-      created_at,
-      updated_at
-    `)
-    .eq(
-      'company_id',
-      currentProfile.company_id
-    )
-    .eq(
-      'price_book_id',
-      priceBookId
-    )
-    .order(
-      'active',
-      { ascending: false }
-    )
-    .order(
-      'item_code',
-      { ascending: true }
-    );
+  } = await fetchPriceBookItemsForCurrentUser(priceBookId);
 
   if(error){
 
@@ -6652,6 +6729,37 @@ function getFilteredSortedPriceBookItems(){
   return filteredItems;
 }
 
+function priceBookItemPriceMarkup(item){
+  const canSeeActual = userCanSeeActualContractPrices();
+
+  if(canSeeActual && item.has_adjustment){
+    return (
+      'Actual I: <strong>' +
+        escapeHtml(formatCurrency(item.actual_install_price)) +
+      '</strong> R: <strong>' +
+        escapeHtml(formatCurrency(item.actual_retirement_price)) +
+      '</strong><br>Field I: <strong>' +
+        escapeHtml(formatCurrency(item.adjusted_install_price)) +
+      '</strong> R: <strong>' +
+        escapeHtml(formatCurrency(item.adjusted_retirement_price)) +
+      '</strong>'
+    );
+  }
+
+  const label =
+    canSeeActual || !item.has_adjustment
+      ? 'Actual'
+      : 'Field';
+
+  return (
+    label + ' I: <strong>' +
+      escapeHtml(formatCurrency(item.install_price)) +
+    '</strong> R: <strong>' +
+      escapeHtml(formatCurrency(item.retirement_price)) +
+    '</strong>'
+  );
+}
+
 function renderPriceBookItems(){
 
   const filteredItems =
@@ -6746,11 +6854,7 @@ function renderPriceBookItems(){
         escapeHtml(item.item_name || 'Unnamed Unit') +
       '</div>' +
       '<div class="unit-prices-compact">' +
-        'I: <strong>' +
-          escapeHtml(formatCurrency(item.install_price)) +
-        '</strong> &nbsp; R: <strong>' +
-          escapeHtml(formatCurrency(item.retirement_price)) +
-        '</strong>' +
+        priceBookItemPriceMarkup(item) +
       '</div>' +
       '<div class="status ' +
         (item.active ? 'active' : 'closed') +
@@ -6967,27 +7071,65 @@ $('exportPriceBookItemsBtn').onclick = () => {
     return;
   }
 
-  const headers = [
-    'Unit Code',
-    'Unit Name',
-    'Description',
-    'Install Price',
-    'Retirement Price',
-    'Unit of Measure',
-    'Category',
-    'Status'
-  ];
+  const includeBothPrices =
+    userCanSeeActualContractPrices() &&
+    items.some(item => item.has_adjustment);
 
-  const rows = items.map(item => [
-    item.item_code,
-    item.item_name,
-    item.description,
-    Number(item.install_price || 0).toFixed(2),
-    Number(item.retirement_price || 0).toFixed(2),
-    item.unit_of_measure,
-    item.category,
-    item.active ? 'Active' : 'Inactive'
-  ]);
+  const hasFieldAdjustment =
+    items.some(item => item.has_adjustment);
+
+  const headers = includeBothPrices
+    ? [
+        'Unit Code',
+        'Unit Name',
+        'Description',
+        'Actual Install Price',
+        'Actual Retirement Price',
+        'Field Install Value',
+        'Field Retirement Value',
+        'Unit of Measure',
+        'Category',
+        'Status'
+      ]
+    : [
+        'Unit Code',
+        'Unit Name',
+        'Description',
+        userCanSeeActualContractPrices() || !hasFieldAdjustment
+          ? 'Actual Install Price'
+          : 'Field Install Value',
+        userCanSeeActualContractPrices() || !hasFieldAdjustment
+          ? 'Actual Retirement Price'
+          : 'Field Retirement Value',
+        'Unit of Measure',
+        'Category',
+        'Status'
+      ];
+
+  const rows = items.map(item => includeBothPrices
+    ? [
+        item.item_code,
+        item.item_name,
+        item.description,
+        Number(item.actual_install_price || 0).toFixed(2),
+        Number(item.actual_retirement_price || 0).toFixed(2),
+        Number(item.adjusted_install_price || 0).toFixed(2),
+        Number(item.adjusted_retirement_price || 0).toFixed(2),
+        item.unit_of_measure,
+        item.category,
+        item.active ? 'Active' : 'Inactive'
+      ]
+    : [
+        item.item_code,
+        item.item_name,
+        item.description,
+        Number(item.install_price || 0).toFixed(2),
+        Number(item.retirement_price || 0).toFixed(2),
+        item.unit_of_measure,
+        item.category,
+        item.active ? 'Active' : 'Inactive'
+      ]
+  );
 
   const csv = [headers, ...rows]
     .map(row => row.map(csvCell).join(','))
