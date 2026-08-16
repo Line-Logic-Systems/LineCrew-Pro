@@ -778,17 +778,14 @@ button:disabled{
       placeholder="Example: Feeder Rebuild"
     >
 
-    <label>Customer</label>
-    <input
-      id="jobCustomer"
-      placeholder="Example: United Electric Cooperative"
-    >
-
-    <label>Utility</label>
-    <input
-      id="jobUtility"
-      placeholder="Utility name"
-    >
+    <label for="jobContract">Contract</label>
+    <select id="jobContract">
+      <option value="">Select an active contract</option>
+    </select>
+    <p class="muted">
+      The selected contract controls which Price Book units and values can be
+      used for this job.
+    </p>
 
     <button class="success" id="createJobBtn">
       Create Job
@@ -1677,6 +1674,7 @@ let currentPriceBookComparisonReport = null;
 let currentCustomerCatalog = [];
 let currentContractCatalog = [];
 let currentContractFieldSettings = new Map();
+let currentJobContractCatalog = [];
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
 
@@ -1746,6 +1744,7 @@ async function displayAppPage(page, state = {}){
       .classList
       .toggle('hidden', !canManageJobs);
 
+    await loadJobContractOptions();
     await loadJobs();
   }
 
@@ -2459,6 +2458,13 @@ $('backToDashboard').onclick = ()=>{
 
 $('showCreateJobBtn').onclick = ()=>{
 
+  delete $('createJobCard').dataset.jobId;
+  $('createJobCard').querySelector('h2').textContent = 'Create Job';
+  $('createJobBtn').textContent = 'Create Job';
+  $('jobNumber').value = '';
+  $('jobName').value = '';
+  loadJobContractOptions();
+
   $('createJobCard')
     .classList
     .remove('hidden');
@@ -2467,15 +2473,62 @@ $('showCreateJobBtn').onclick = ()=>{
 
 $('cancelCreateJobBtn').onclick = ()=>{
 
+  delete $('createJobCard').dataset.jobId;
+
   $('createJobCard')
     .classList
     .add('hidden');
 };
 
 
+async function loadJobContractOptions(selectedContractId = ''){
+
+  const { data:contracts, error } = await sb
+    .from('contracts')
+    .select(`
+      id,
+      contract_name,
+      contract_number,
+      active,
+      customers (
+        name
+      )
+    `)
+    .eq('company_id', currentProfile.company_id)
+    .eq('active', true)
+    .order('contract_name', { ascending:true });
+
+  if(error){
+    alert('Unable to load active contracts: ' + error.message);
+    return;
+  }
+
+  currentJobContractCatalog = contracts || [];
+  $('jobContract').innerHTML =
+    '<option value="">Select an active contract</option>';
+
+  currentJobContractCatalog.forEach(contract => {
+    const option = document.createElement('option');
+    option.value = contract.id;
+    option.textContent =
+      (contract.customers?.name
+        ? contract.customers.name + ' — '
+        : '') +
+      contract.contract_name +
+      (contract.contract_number
+        ? ' (' + contract.contract_number + ')'
+        : '');
+    option.selected = contract.id === selectedContractId;
+    $('jobContract').appendChild(option);
+  });
+}
+
+
 /* CREATE JOB */
 
 $('createJobBtn').onclick = async()=>{
+
+  const jobId = $('createJobCard').dataset.jobId || null;
 
   const number =
     $('jobNumber').value.trim();
@@ -2483,31 +2536,30 @@ $('createJobBtn').onclick = async()=>{
   const name =
     $('jobName').value.trim();
 
-  const customer =
-    $('jobCustomer').value.trim();
-
-  const utility =
-    $('jobUtility').value.trim();
+  const contractId = $('jobContract').value;
 
 
-  if(!number || !name){
+  if(!number || !name || !contractId){
 
     return alert(
-      'Job number and job name are required.'
+      'Job number, job name and contract are required.'
     );
   }
 
-
-  const {error} =
-    await sb.rpc(
-      'create_job',
-      {
+  const result = jobId
+    ? await sb.rpc('update_contract_job', {
+        p_job_id:jobId,
+        p_contract_id:contractId,
         p_job_number:number,
-        p_job_name:name,
-        p_customer_name:customer || null,
-        p_utility_name:utility || null
-      }
-    );
+        p_job_name:name
+      })
+    : await sb.rpc('create_contract_job', {
+        p_contract_id:contractId,
+        p_job_number:number,
+        p_job_name:name
+      });
+
+  const { error } = result;
 
 
   if(error){
@@ -2518,8 +2570,8 @@ $('createJobBtn').onclick = async()=>{
 
   $('jobNumber').value = '';
   $('jobName').value = '';
-  $('jobCustomer').value = '';
-  $('jobUtility').value = '';
+  $('jobContract').value = '';
+  delete $('createJobCard').dataset.jobId;
 
 
   $('createJobCard')
@@ -2530,7 +2582,7 @@ $('createJobBtn').onclick = async()=>{
   await loadJobs();
 
 
-  alert('Job created.');
+  alert(jobId ? 'Job updated.' : 'Job created.');
 };
 
 
@@ -2555,7 +2607,17 @@ async function loadJobs(){
   } =
     await sb
       .from('jobs')
-      .select('*')
+      .select(`
+        *,
+        contracts (
+          id,
+          contract_name,
+          contract_number,
+          customers (
+            name
+          )
+        )
+      `)
       .eq(
         'company_id',
         currentProfile.company_id
@@ -2642,6 +2704,17 @@ function renderJob(job){
     job.utility_name ||
     'No utility listed';
 
+  const contract = job.contracts;
+  const contractLabel = contract
+    ? contract.contract_name +
+      (contract.contract_number
+        ? ' (' + contract.contract_number + ')'
+        : '')
+    : 'Legacy job — contract not assigned';
+
+  const contractCustomer =
+    contract?.customers?.name || customer;
+
 
   card.innerHTML = `
 
@@ -2661,7 +2734,7 @@ function renderJob(job){
 
       Customer:
       <strong>
-        ${escapeHtml(customer)}
+        ${escapeHtml(contractCustomer)}
       </strong>
 
       <br>
@@ -2669,6 +2742,13 @@ function renderJob(job){
       Utility:
       <strong>
         ${escapeHtml(utility)}
+      </strong>
+
+      <br>
+
+      Contract:
+      <strong>
+        ${escapeHtml(contractLabel)}
       </strong>
 
     </div>
@@ -2761,92 +2841,14 @@ function renderJob(job){
 /* EDIT JOB */
 
 async function editJob(job){
-
-  const number =
-    prompt(
-      'Job Number:',
-      job.job_number || ''
-    );
-
-
-  if(number === null){
-
-    return;
-  }
-
-
-  const name =
-    prompt(
-      'Job Name:',
-      job.job_name || ''
-    );
-
-
-  if(name === null){
-
-    return;
-  }
-
-
-  const customer =
-    prompt(
-      'Customer:',
-      job.customer_name || ''
-    );
-
-
-  if(customer === null){
-
-    return;
-  }
-
-
-  const utility =
-    prompt(
-      'Utility:',
-      job.utility_name || ''
-    );
-
-
-  if(utility === null){
-
-    return;
-  }
-
-
-  if(
-    !number.trim() ||
-    !name.trim()
-  ){
-
-    return alert(
-      'Job number and job name are required.'
-    );
-  }
-
-
-  const {error} =
-    await sb.rpc(
-      'update_job',
-      {
-        p_job_id:job.id,
-        p_job_number:number.trim(),
-        p_job_name:name.trim(),
-        p_customer_name:
-          customer.trim() || null,
-        p_utility_name:
-          utility.trim() || null
-      }
-    );
-
-
-  if(error){
-
-    return alert(error.message);
-  }
-
-
-  await loadJobs();
+  $('createJobCard').dataset.jobId = job.id;
+  $('createJobCard').querySelector('h2').textContent = 'Edit Job';
+  $('createJobBtn').textContent = 'Save Changes';
+  $('jobNumber').value = job.job_number || '';
+  $('jobName').value = job.job_name || '';
+  await loadJobContractOptions(job.contract_id || '');
+  $('createJobCard').classList.remove('hidden');
+  $('createJobCard').scrollIntoView({ behavior:'smooth' });
 }
 
 
