@@ -359,6 +359,20 @@ button:disabled{
   margin:0;
 }
 
+.daily-authorization{
+  display:inline-block;
+  margin-top:5px;
+  padding:3px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:800;
+}
+
+.daily-authorization.authorized{ background:#e4f6eb; color:#08743d; }
+.daily-authorization.pending_packet{ background:#fff3d6; color:#8a5800; }
+.daily-authorization.redline{ background:#fde5e5; color:#b42318; }
+.daily-authorization-note{ margin-top:5px; color:#b42318; font-size:12px; }
+
 .daily-unit-code{
   font-weight:800;
   color:#0b3557;
@@ -8925,10 +8939,23 @@ function renderDailyUnitEditor(){
     row.className = 'daily-unit-row';
 
     const valueLabel = dailyUnitValueLabel(item);
+    const authorizationStatus = String(
+      item.authorization_status || 'pending_packet'
+    ).toLowerCase();
+    const authorizationLabel = authorizationStatus === 'authorized'
+      ? 'AUTHORIZED'
+      : authorizationStatus === 'redline'
+        ? 'REDLINE'
+        : 'PENDING PACKET';
+    const authorizationNote = item.authorization_note
+      ? '<div class="daily-authorization-note">' +
+        escapeHtml(item.authorization_note) + '</div>'
+      : '';
     row.innerHTML = `
       <div>
         <div class="daily-unit-code">${escapeHtml(item.item_code)}</div>
         <div class="muted">${escapeHtml(item.pole_location)}</div>
+        <span class="daily-authorization ${escapeHtml(authorizationStatus)}">${authorizationLabel}</span>
       </div>
       <div class="daily-unit-description">
         <strong>${escapeHtml(shortDailyUnitLabel(item))}</strong>
@@ -8937,6 +8964,7 @@ function renderDailyUnitEditor(){
           <div class="muted">${escapeHtml(item.description || item.item_name || 'No description')}</div>
         </details>
         <div>${valueLabel}</div>
+        ${authorizationNote}
       </div>
       <div>
         <label>Installed</label>
@@ -9424,6 +9452,23 @@ window.openDailyUnitEditor = openDailyUnitEditor;
 
   approveBtn.onclick = async () => {
 
+    const { data: authorizationRows, error: authorizationError } = await sb.rpc(
+      'get_daily_report_unit_locations',
+      { p_report_id: report.id }
+    );
+
+    if(authorizationError){
+      alert('Unable to verify report units before approval: ' + authorizationError.message);
+      return;
+    }
+
+    const redlineCount = (authorizationRows || []).filter(item =>
+      String(item.authorization_status || '').toLowerCase() === 'redline'
+    ).length;
+    const pendingCount = (authorizationRows || []).filter(item =>
+      String(item.authorization_status || '').toLowerCase() === 'pending_packet'
+    ).length;
+
     const notes =
       prompt(
         'Optional approval notes:',
@@ -9434,10 +9479,19 @@ window.openDailyUnitEditor = openDailyUnitEditor;
       return;
     }
 
-    const confirmed =
-      confirm(
-        'Approve this daily report?'
-      );
+    let approvalMessage = 'Approve this daily report?';
+    if(redlineCount || pendingCount){
+      approvalMessage =
+        'Authorization review required:\n\n' +
+        redlineCount + ' redline unit entr' +
+        (redlineCount === 1 ? 'y' : 'ies') + '\n' +
+        pendingCount + ' unit entr' +
+        (pendingCount === 1 ? 'y' : 'ies') +
+        ' pending a utility packet\n\n' +
+        'Approving confirms that you reviewed these exceptions. Continue?';
+    }
+
+    const confirmed = confirm(approvalMessage);
 
     if(!confirmed){
       return;
