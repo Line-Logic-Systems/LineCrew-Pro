@@ -5224,27 +5224,104 @@ $('confirmPriceBookImportBtn').onclick = async () => {
 
   let error = null;
 
+  let completedUpdateCount = 0;
+
   if(updateExisting && updateRows.length){
 
-    const updateResult = await sb
-      .from('price_book_items')
-      .upsert(
-        updateRows,
-        {
-          onConflict:'id'
-        }
+    const updateBatchSize = 15;
+
+    for(
+      let start = 0;
+      start < updateRows.length && !error;
+      start += updateBatchSize
+    ){
+
+      const batch = updateRows.slice(
+        start,
+        start + updateBatchSize
       );
 
-    error = updateResult.error;
+      $('confirmPriceBookImportBtn').textContent =
+        'Updating ' +
+        (start + 1) +
+        '–' +
+        Math.min(start + batch.length, updateRows.length) +
+        ' of ' +
+        updateRows.length +
+        '...';
+
+      const results = await Promise.all(
+        batch.map(row => {
+
+          const { id, ...changes } = row;
+
+          return sb
+            .from('price_book_items')
+            .update(changes)
+            .eq('id', id)
+            .eq('company_id', currentProfile.company_id)
+            .eq('price_book_id', priceBookId)
+            .select('id, install_price, retirement_price');
+        })
+      );
+
+      for(let index = 0; index < results.length; index++){
+
+        const result = results[index];
+        const expected = batch[index];
+        const saved = result.data?.[0];
+
+        if(result.error){
+          error = result.error;
+          break;
+        }
+
+        if(
+          !saved ||
+          Number(saved.install_price) !==
+            Number(expected.install_price) ||
+          Number(saved.retirement_price) !==
+            Number(expected.retirement_price)
+        ){
+          error = {
+            message:
+              'LineCrew Pro could not verify the saved prices for Unit Code ' +
+              expected.item_code +
+              '.'
+          };
+          break;
+        }
+
+        completedUpdateCount += 1;
+      }
+    }
   }
 
   if(!error && newRows.length){
 
+    $('confirmPriceBookImportBtn').textContent =
+      'Adding ' +
+      newRows.length +
+      ' new unit' +
+      (newRows.length === 1 ? '' : 's') +
+      '...';
+
     const insertResult = await sb
       .from('price_book_items')
-      .insert(newRows);
+      .insert(newRows)
+      .select('id');
 
     error = insertResult.error;
+
+    if(
+      !error &&
+      (insertResult.data || []).length !== newRows.length
+    ){
+      error = {
+        message:
+          'LineCrew Pro could not verify that every new unit was saved.'
+      };
+    }
   }
 
   $('confirmPriceBookImportBtn').disabled = false;
@@ -5255,7 +5332,13 @@ $('confirmPriceBookImportBtn').onclick = async () => {
 
     alert(
       'The import could not be completed: ' +
-      error.message
+      error.message +
+      (completedUpdateCount
+        ? '\n\n' + completedUpdateCount +
+          ' matching unit' +
+          (completedUpdateCount === 1 ? '' : 's') +
+          ' were updated before the import stopped.'
+        : '')
     );
 
     return;
