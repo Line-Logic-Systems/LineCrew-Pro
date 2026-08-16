@@ -376,7 +376,7 @@ button:disabled{
 
 .daily-unit-picker{
   display:grid;
-  grid-template-columns:minmax(220px, 2fr) 150px 120px auto;
+  grid-template-columns:minmax(220px, 2fr) minmax(150px, 1fr) 150px 110px auto;
   gap:10px;
   align-items:end;
   margin:12px 0;
@@ -1029,13 +1029,14 @@ button:disabled{
       <p id="dailyUnitReportLabel" class="muted"></p>
     </div>
     <button id="closeDailyUnitEditorBtn" class="secondary small">
-      Close Units
+      Done Adding Units
     </button>
   </div>
 
   <p class="muted">
     Start typing a unit code or description, select the matching contract unit,
-    then choose Install or Remove and enter the quantity.
+    then choose Install or Remove and enter the quantity. Add as many different
+    units as the crew completed today.
   </p>
 
   <div id="dailyUnitValueSummary" class="daily-value-summary"></div>
@@ -1050,6 +1051,17 @@ button:disabled{
       >
       <div id="dailyUnitSuggestions" class="daily-unit-suggestions hidden"></div>
       <div id="dailySelectedUnit" class="daily-selected-unit hidden"></div>
+    </div>
+
+    <div>
+      <label for="dailyUnitPoleLocation">Pole / Location</label>
+      <input
+        id="dailyUnitPoleLocation"
+        list="dailyUnitPoleLocations"
+        maxlength="200"
+        placeholder="Example: Pole 18"
+      >
+      <datalist id="dailyUnitPoleLocations"></datalist>
     </div>
 
     <div>
@@ -1817,6 +1829,7 @@ let currentContractCatalog = [];
 let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
 let currentDailyUnitCatalog = [];
+let currentDailySavedUnits = [];
 let currentDailyUnitReport = null;
 let currentDailyUnitSelection = null;
 let currentDailyReportValueSummaries = new Map();
@@ -7996,6 +8009,7 @@ async function openDailyUnitEditor(report){
     String(report.status || 'draft').toUpperCase();
   $('dailyUnitSearch').value = '';
   $('dailyUnitQuantity').value = '1';
+  $('dailyUnitPoleLocation').value = '';
   $('dailyUnitAction').value = 'install';
   $('dailyUnitSuggestions').classList.add('hidden');
   $('dailyUnitSuggestions').innerHTML = '';
@@ -8005,28 +8019,34 @@ async function openDailyUnitEditor(report){
   $('dailyUnitList').innerHTML =
     '<p class="muted">Loading saved units...</p>';
   $('dailyUnitValueSummary').innerHTML = '';
+  $('productionList').classList.add('hidden');
+  $('productionEmpty').classList.add('hidden');
 
-  const { data, error } = await sb.rpc(
-    'get_daily_report_unit_catalog',
-    { p_report_id:report.id }
-  );
+  const [catalogResult, savedResult] = await Promise.all([
+    sb.rpc('get_daily_report_unit_catalog', { p_report_id:report.id }),
+    sb.rpc('get_daily_report_unit_locations', { p_report_id:report.id })
+  ]);
 
-  if(error){
+  if(catalogResult.error || savedResult.error){
     $('dailyUnitEditor').classList.add('hidden');
-    alert('Unable to load daily units: ' + error.message);
+    $('productionList').classList.remove('hidden');
+    alert(
+      'Unable to load daily units: ' +
+      (catalogResult.error?.message || savedResult.error?.message)
+    );
     return;
   }
 
-  currentDailyUnitCatalog = data || [];
+  currentDailyUnitCatalog = catalogResult.data || [];
+  currentDailySavedUnits = savedResult.data || [];
+  renderDailyPoleLocationOptions();
   renderDailyUnitEditor();
+  $('dailyUnitSearch').focus();
   $('dailyUnitEditor').scrollIntoView({ behavior:'smooth' });
 }
 
 function renderDailyUnitEditor(){
-  const savedItems = currentDailyUnitCatalog.filter(item =>
-    Number(item.install_quantity || 0) > 0 ||
-    Number(item.retirement_quantity || 0) > 0
-  );
+  const savedItems = currentDailySavedUnits;
 
   $('dailyUnitCount').textContent =
     savedItems.length === 0
@@ -8046,11 +8066,14 @@ function renderDailyUnitEditor(){
     row.innerHTML = `
       <div>
         <div class="daily-unit-code">${escapeHtml(item.item_code)}</div>
-        <div class="muted">${escapeHtml(item.category || '')}</div>
+        <div class="muted">${escapeHtml(item.pole_location)}</div>
       </div>
       <div class="daily-unit-description">
-        <strong>${escapeHtml(item.item_name || item.description || 'Unnamed Unit')}</strong>
-        <div class="muted">${escapeHtml(item.description || '')}</div>
+        <strong>${escapeHtml(shortDailyUnitLabel(item))}</strong>
+        <details>
+          <summary>View Description</summary>
+          <div class="muted">${escapeHtml(item.description || item.item_name || 'No description')}</div>
+        </details>
         <div>${valueLabel}</div>
       </div>
       <div>
@@ -8086,6 +8109,23 @@ function renderDailyUnitEditor(){
   renderDailyUnitTotals();
 }
 
+function renderDailyPoleLocationOptions(){
+  const locations = [...new Set(
+    currentDailySavedUnits
+      .map(item => String(item.pole_location || '').trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
+
+  $('dailyUnitPoleLocations').innerHTML = locations
+    .map(location => '<option value="' + escapeHtml(location) + '"></option>')
+    .join('');
+}
+
+function shortDailyUnitLabel(item){
+  const text = String(item.item_name || item.description || 'Unnamed Unit').trim();
+  return text.length > 90 ? text.slice(0, 87) + '...' : text;
+}
+
 function renderDailyUnitSuggestions(){
   const search = $('dailyUnitSearch').value.trim().toLowerCase();
   const suggestions = $('dailyUnitSuggestions');
@@ -8099,14 +8139,20 @@ function renderDailyUnitSuggestions(){
     return;
   }
 
-  const matching = currentDailyUnitCatalog
+  const matchingByItem = new Map();
+  currentDailyUnitCatalog
     .filter(item => [
       item.item_code,
       item.item_name,
       item.description,
       item.category
     ].some(value => String(value || '').toLowerCase().includes(search)))
-    .slice(0, 12);
+    .forEach(item => {
+      if(!matchingByItem.has(item.price_book_item_id)){
+        matchingByItem.set(item.price_book_item_id, item);
+      }
+    });
+  const matching = [...matchingByItem.values()].slice(0, 12);
 
   suggestions.innerHTML = '';
 
@@ -8123,7 +8169,7 @@ function renderDailyUnitSuggestions(){
     button.className = 'daily-unit-suggestion';
     button.innerHTML =
       '<strong>' + escapeHtml(item.item_code) + '</strong> — ' +
-      escapeHtml(item.item_name || item.description || 'Unnamed Unit') +
+      escapeHtml(shortDailyUnitLabel(item)) +
       (item.category
         ? '<div class="muted">' + escapeHtml(item.category) + '</div>'
         : '');
@@ -8140,8 +8186,10 @@ function selectDailyUnitSuggestion(item){
   $('dailyUnitSuggestions').classList.add('hidden');
   $('dailySelectedUnit').innerHTML =
     '<strong>' + escapeHtml(item.item_code) + '</strong><br>' +
-    escapeHtml(item.item_name || item.description || 'Unnamed Unit') +
-    '<div class="muted">' + escapeHtml(item.description || '') + '</div>';
+    escapeHtml(shortDailyUnitLabel(item)) +
+    '<details><summary>View Description</summary><div class="muted">' +
+    escapeHtml(item.description || item.item_name || 'No description') +
+    '</div></details>';
   $('dailySelectedUnit').classList.remove('hidden');
   $('addDailyUnitBtn').disabled = false;
   $('dailyUnitQuantity').focus();
@@ -8150,6 +8198,7 @@ function selectDailyUnitSuggestion(item){
 async function addSelectedDailyUnit(){
   const item = currentDailyUnitSelection;
   const quantity = Number($('dailyUnitQuantity').value || 0);
+  const poleLocation = $('dailyUnitPoleLocation').value.trim();
 
   if(!item){
     alert('Start typing and select a contract unit first.');
@@ -8161,9 +8210,20 @@ async function addSelectedDailyUnit(){
     return;
   }
 
+  if(!poleLocation){
+    alert('Enter the pole or work location for this unit.');
+    $('dailyUnitPoleLocation').focus();
+    return;
+  }
+
   const action = $('dailyUnitAction').value;
-  const existingInstall = Number(item.install_quantity || 0);
-  const existingRetirement = Number(item.retirement_quantity || 0);
+  const existingLine = currentDailySavedUnits.find(saved =>
+    saved.price_book_item_id === item.price_book_item_id &&
+    String(saved.pole_location || '').trim().toLowerCase() ===
+      poleLocation.toLowerCase()
+  );
+  const existingInstall = Number(existingLine?.install_quantity || 0);
+  const existingRetirement = Number(existingLine?.retirement_quantity || 0);
   const installQuantity = action === 'install'
     ? existingInstall + quantity
     : existingInstall;
@@ -8175,9 +8235,10 @@ async function addSelectedDailyUnit(){
   button.disabled = true;
   button.textContent = 'Adding...';
 
-  const { error } = await sb.rpc('save_daily_report_unit', {
+  const { error } = await sb.rpc('save_daily_report_unit_location', {
     p_report_id:currentDailyUnitReport.id,
     p_price_book_item_id:item.price_book_item_id,
+    p_pole_location:poleLocation,
     p_install_quantity:installQuantity,
     p_retirement_quantity:retirementQuantity
   });
@@ -8191,6 +8252,8 @@ async function addSelectedDailyUnit(){
   }
 
   await openDailyUnitEditor(currentDailyUnitReport);
+  $('dailyUnitPoleLocation').value = poleLocation;
+  $('dailyUnitSearch').focus();
   await loadProductionReports();
 }
 
@@ -8202,9 +8265,10 @@ async function deleteDailyUnitRow(item, button){
   button.disabled = true;
   button.textContent = 'Removing...';
 
-  const { error } = await sb.rpc('delete_daily_report_unit', {
+  const { error } = await sb.rpc('delete_daily_report_unit_location', {
     p_report_id:currentDailyUnitReport.id,
-    p_price_book_item_id:item.price_book_item_id
+    p_price_book_item_id:item.price_book_item_id,
+    p_pole_location:item.pole_location
   });
 
   if(error){
@@ -8241,10 +8305,7 @@ function dailyUnitValueLabel(item){
 }
 
 function renderDailyUnitTotals(){
-  const savedItems = currentDailyUnitCatalog.filter(item =>
-    Number(item.install_quantity || 0) > 0 ||
-    Number(item.retirement_quantity || 0) > 0
-  );
+  const savedItems = currentDailySavedUnits;
 
   const actualTotal = savedItems.reduce(
     (total, item) => total + Number(item.actual_line_value || 0),
@@ -8295,16 +8356,18 @@ async function saveDailyUnitRow(item, row, button){
 
   const rpcName =
     installQuantity === 0 && retirementQuantity === 0
-      ? 'delete_daily_report_unit'
-      : 'save_daily_report_unit';
-  const rpcArgs = rpcName === 'delete_daily_report_unit'
+      ? 'delete_daily_report_unit_location'
+      : 'save_daily_report_unit_location';
+  const rpcArgs = rpcName === 'delete_daily_report_unit_location'
     ? {
         p_report_id:currentDailyUnitReport.id,
-        p_price_book_item_id:item.price_book_item_id
+        p_price_book_item_id:item.price_book_item_id,
+        p_pole_location:item.pole_location
       }
     : {
         p_report_id:currentDailyUnitReport.id,
         p_price_book_item_id:item.price_book_item_id,
+        p_pole_location:item.pole_location,
         p_install_quantity:installQuantity,
         p_retirement_quantity:retirementQuantity
       };
@@ -8328,8 +8391,10 @@ $('addDailyUnitBtn').onclick = addSelectedDailyUnit;
 $('closeDailyUnitEditorBtn').onclick = () => {
   $('dailyUnitEditor').classList.add('hidden');
   currentDailyUnitCatalog = [];
+  currentDailySavedUnits = [];
   currentDailyUnitReport = null;
   currentDailyUnitSelection = null;
+  $('productionList').classList.remove('hidden');
 };
 
 // The report list owns the secure unit-entry helpers. Expose the current
