@@ -5097,7 +5097,7 @@ $('confirmPriceBookImportBtn').onclick = async () => {
     error:checkError
   } = await sb
     .from('price_book_items')
-    .select('item_code, active')
+    .select('id, item_code, active')
     .eq('company_id', currentProfile.company_id)
     .eq('price_book_id', priceBookId);
 
@@ -5198,34 +5198,54 @@ $('confirmPriceBookImportBtn').onclick = async () => {
         );
 
       return {
-      company_id: currentProfile.company_id,
-      price_book_id: priceBookId,
-      item_code: existingItem?.item_code || row.item_code,
-      item_name: row.item_name,
-      description: row.description,
-      category: row.category,
-      unit_of_measure: row.unit_of_measure,
-      install_price: row.install_price,
-      retirement_price: row.retirement_price,
-      active: existingItem?.active ?? true
+        id: existingItem?.id,
+        company_id: currentProfile.company_id,
+        price_book_id: priceBookId,
+        item_code: existingItem?.item_code || row.item_code,
+        item_name: row.item_name,
+        description: row.description,
+        category: row.category,
+        unit_of_measure: row.unit_of_measure,
+        install_price: row.install_price,
+        retirement_price: row.retirement_price,
+        active: existingItem?.active ?? true
       };
     });
+
+  const updateRows = writeRows.filter(row => row.id);
+
+  const newRows = writeRows
+    .filter(row => !row.id)
+    .map(({ id, ...row }) => row);
 
   $('confirmPriceBookImportBtn').disabled = true;
   $('confirmPriceBookImportBtn').textContent =
     'Importing...';
 
-  const writeQuery = sb
-    .from('price_book_items');
+  let error = null;
 
-  const { error } = updateExisting
-    ? await writeQuery.upsert(
-        writeRows,
+  if(updateExisting && updateRows.length){
+
+    const updateResult = await sb
+      .from('price_book_items')
+      .upsert(
+        updateRows,
         {
-          onConflict:'price_book_id,item_code'
+          onConflict:'id'
         }
-      )
-    : await writeQuery.insert(writeRows);
+      );
+
+    error = updateResult.error;
+  }
+
+  if(!error && newRows.length){
+
+    const insertResult = await sb
+      .from('price_book_items')
+      .insert(newRows);
+
+    error = insertResult.error;
+  }
 
   $('confirmPriceBookImportBtn').disabled = false;
 
@@ -5234,7 +5254,7 @@ $('confirmPriceBookImportBtn').onclick = async () => {
     renderPriceBookImportPreview();
 
     alert(
-      'No units were imported: ' +
+      'The import could not be completed: ' +
       error.message
     );
 
