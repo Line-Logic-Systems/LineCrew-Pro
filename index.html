@@ -373,6 +373,30 @@ button:disabled{
 .daily-authorization.redline{ background:#fde5e5; color:#b42318; }
 .daily-authorization-note{ margin-top:5px; color:#b42318; font-size:12px; }
 
+.checkbox-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight:700;
+}
+
+.checkbox-row input{
+  width:auto;
+  margin:0;
+}
+
+.daily-review-counts{
+  margin-top:10px;
+  padding:8px 10px;
+  border-radius:8px;
+  background:#eef5fa;
+  font-size:12px;
+}
+
+.daily-review-counts .authorized{ color:#08743d; font-weight:800; }
+.daily-review-counts .pending{ color:#8a5800; font-weight:800; }
+.daily-review-counts .redline{ color:#b42318; font-weight:800; }
+
 .daily-unit-code{
   font-weight:800;
   color:#0b3557;
@@ -829,9 +853,22 @@ button:disabled{
     <h2>Admin Controls</h2>
 
     <p class="muted">
-      Company settings, users, pricing and permissions
-      will be managed here.
+      Company settings, users, pricing and permissions.
     </p>
+
+    <div class="job-card">
+      <h3>Redline Approval</h3>
+      <label class="checkbox-row" for="requireGfRedlineApproval">
+        <input id="requireGfRedlineApproval" type="checkbox">
+        Require General Foreman approval for reports containing redlines
+      </label>
+      <p class="muted">
+        Admins may override this requirement only by entering a reason.
+      </p>
+      <button id="saveRedlineApprovalSetting" class="success small">
+        Save Redline Setting
+      </button>
+    </div>
   </div>
 
   <button class="secondary" id="signOutBtn">
@@ -1147,6 +1184,8 @@ button:disabled{
   <div id="productionLoading" class="card center hidden">
     Loading production...
   </div>
+
+  <div id="productionReviewQueueSummary" class="card hidden"></div>
 
   <div id="productionEmpty" class="card center hidden">
     <h3>No Production Reports Yet</h3>
@@ -2016,6 +2055,7 @@ let currentDailyUnitUsageMemory = new Map();
 let currentDailyUnitReport = null;
 let currentDailyUnitBatchRows = [];
 let currentDailyReportValueSummaries = new Map();
+let currentDailyAuthorizationSummaries = new Map();
 let productionSearchTimer = null;
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
@@ -2217,7 +2257,7 @@ async function loadApp(){
   } =
     await sb
       .from('companies')
-      .select('id,name,join_code')
+      .select('id,name,join_code,require_gf_redline_approval')
       .eq('id',profile.company_id)
       .single();
 
@@ -2232,6 +2272,9 @@ async function loadApp(){
 
   currentProfile = profile;
   currentCompany = company;
+
+  $('requireGfRedlineApproval').checked =
+    company.require_gf_redline_approval === true;
 
 
   $('companyName').textContent =
@@ -4047,6 +4090,35 @@ sb.auth.onAuthStateChange((event)=>{
 
 $('productionTile').onclick = async () => {
   await navigateToAppPage('productionPage');
+};
+
+$('saveRedlineApprovalSetting').onclick = async () => {
+  if(!userIsCompanyAdmin()) return;
+
+  const required = $('requireGfRedlineApproval').checked;
+  const button = $('saveRedlineApprovalSetting');
+  button.disabled = true;
+  button.textContent = 'Saving...';
+
+  const { error } = await sb.rpc(
+    'set_company_redline_approval_requirement',
+    { p_required:required }
+  );
+
+  button.disabled = false;
+  button.textContent = 'Save Redline Setting';
+
+  if(error){
+    alert('Unable to save redline approval setting: ' + error.message);
+    return;
+  }
+
+  currentCompany.require_gf_redline_approval = required;
+  alert(
+    required
+      ? 'GF approval is now required for redline reports. Admin override requires a reason.'
+      : 'GF approval is no longer required for redline reports.'
+  );
 };
 
 
@@ -8657,6 +8729,28 @@ async function loadProductionReports(){
     ])
   );
 
+  currentDailyAuthorizationSummaries = new Map();
+  const canReviewProduction = ['admin', 'gf'].includes(
+    String(currentProfile?.role || '').toLowerCase()
+  );
+
+  if(canReviewProduction){
+    const { data:authorizationSummaries, error:authorizationSummaryError } =
+      await sb.rpc('get_daily_report_authorization_summaries');
+
+    if(authorizationSummaryError){
+      alert(
+        'Unable to load the production review queue: ' +
+        authorizationSummaryError.message
+      );
+      return;
+    }
+
+    currentDailyAuthorizationSummaries = new Map(
+      (authorizationSummaries || []).map(summary => [summary.report_id, summary])
+    );
+  }
+
   const search = $('productionSearch').value.trim().toLowerCase();
   const statusFilter = $('productionStatusFilter').value;
   const dateFrom = $('productionDateFrom').value;
@@ -8685,7 +8779,39 @@ async function loadProductionReports(){
       if(!haystack.includes(search)) return false;
     }
     return true;
+  }).sort((a, b) => {
+    const aSubmitted = String(a.status || '').toLowerCase() === 'submitted' ? 0 : 1;
+    const bSubmitted = String(b.status || '').toLowerCase() === 'submitted' ? 0 : 1;
+    if(aSubmitted !== bSubmitted) return aSubmitted - bSubmitted;
+    return String(b.work_date || '').localeCompare(String(a.work_date || ''));
   });
+
+  const submittedReports = (reports || []).filter(report =>
+    report.archived !== true &&
+    String(report.status || '').toLowerCase() === 'submitted'
+  );
+  const submittedRedlines = submittedReports.reduce((total, report) =>
+    total + Number(
+      currentDailyAuthorizationSummaries.get(report.id)?.redline_count || 0
+    ), 0
+  );
+  const submittedPending = submittedReports.reduce((total, report) =>
+    total + Number(
+      currentDailyAuthorizationSummaries.get(report.id)?.pending_packet_count || 0
+    ), 0
+  );
+
+  $('productionReviewQueueSummary').classList.toggle('hidden', !canReviewProduction);
+  if(canReviewProduction){
+    $('productionReviewQueueSummary').innerHTML =
+      '<h3>Production Review Queue</h3>' +
+      '<strong>' + submittedReports.length + '</strong> submitted report' +
+      (submittedReports.length === 1 ? '' : 's') + ' awaiting review' +
+      ' &nbsp;•&nbsp; <strong>' + submittedRedlines + '</strong> redline entr' +
+      (submittedRedlines === 1 ? 'y' : 'ies') +
+      ' &nbsp;•&nbsp; <strong>' + submittedPending + '</strong> pending packet entr' +
+      (submittedPending === 1 ? 'y' : 'ies');
+  }
 
   $('productionFilterCount').textContent =
     'Showing ' + filteredReports.length + ' of ' + (reports || []).length + ' reports';
@@ -8724,6 +8850,8 @@ async function loadProductionReports(){
 
     const valueSummary =
       currentDailyReportValueSummaries.get(report.id) || null;
+    const authorizationSummary =
+      currentDailyAuthorizationSummaries.get(report.id) || null;
 
 
     card.innerHTML = `
@@ -8783,6 +8911,7 @@ ${report.review_notes ? `
   </span>
 ` : ''}
         ${dailyReportValueSummaryMarkup(valueSummary)}
+        ${dailyReportAuthorizationSummaryMarkup(report, authorizationSummary)}
       </div>
     `;
 
@@ -8953,6 +9082,29 @@ function dailyReportValueSummaryMarkup(summary){
     '<br>' + label + ': <strong>' +
       escapeHtml(formatCurrency(amount)) +
     '</strong>'
+  );
+}
+
+function dailyReportAuthorizationSummaryMarkup(report, summary){
+  if(!summary || !['admin', 'gf'].includes(
+    String(currentProfile?.role || '').toLowerCase()
+  )) return '';
+
+  const status = String(report.status || 'draft').toLowerCase();
+  const redlines = Number(summary.redline_count || 0);
+  const pending = Number(summary.pending_packet_count || 0);
+  const authorized = Number(summary.authorized_count || 0);
+  const needsReview = status === 'submitted' && (redlines > 0 || pending > 0);
+
+  return (
+    '<div class="daily-review-counts">' +
+      (status === 'submitted'
+        ? '<strong>' + (needsReview ? 'REVIEW EXCEPTIONS' : 'READY FOR REVIEW') + '</strong> &nbsp;•&nbsp; '
+        : '') +
+      '<span class="authorized">' + authorized + ' Authorized</span>' +
+      ' &nbsp;•&nbsp; <span class="pending">' + pending + ' Pending</span>' +
+      ' &nbsp;•&nbsp; <span class="redline">' + redlines + ' Redline</span>' +
+    '</div>'
   );
 }
 
@@ -9554,13 +9706,24 @@ window.openDailyUnitEditor = openDailyUnitEditor;
       String(item.authorization_status || '').toLowerCase() === 'pending_packet'
     ).length;
 
-    const notes =
-      prompt(
-        'Optional approval notes:',
-        ''
-      );
+    const requiresAdminOverride =
+      redlineCount > 0 &&
+      currentCompany?.require_gf_redline_approval === true &&
+      String(currentProfile?.role || '').toLowerCase() === 'admin';
+
+    const notes = prompt(
+      requiresAdminOverride
+        ? 'This company requires GF approval for redlines. Enter the Admin override reason:'
+        : 'Optional approval notes:',
+      ''
+    );
 
     if(notes === null){
+      return;
+    }
+
+    if(requiresAdminOverride && !notes.trim()){
+      alert('An Admin override reason is required for a redline report.');
       return;
     }
 
@@ -9573,7 +9736,9 @@ window.openDailyUnitEditor = openDailyUnitEditor;
         pendingCount + ' unit entr' +
         (pendingCount === 1 ? 'y' : 'ies') +
         ' pending a utility packet\n\n' +
-        'Approving confirms that you reviewed these exceptions. Continue?';
+        (requiresAdminOverride
+          ? 'Your Admin override reason will be recorded. Continue?'
+          : 'Approving confirms that you reviewed these exceptions. Continue?');
     }
 
     const confirmed = confirm(approvalMessage);
