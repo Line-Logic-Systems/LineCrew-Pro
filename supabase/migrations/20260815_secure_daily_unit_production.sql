@@ -17,7 +17,7 @@ alter table public.daily_reports
 alter table public.daily_reports
   add column if not exists has_field_adjustment boolean null;
 
-create table if not exists public.daily_report_units (
+create table if not exists public.daily_production_units (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null
     references public.companies(id) on delete cascade,
@@ -47,22 +47,22 @@ create table if not exists public.daily_report_units (
   created_by uuid null references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint daily_report_units_nonnegative_quantities
+  constraint daily_production_units_nonnegative_quantities
     check (install_quantity >= 0 and retirement_quantity >= 0),
-  constraint daily_report_units_has_quantity
+  constraint daily_production_units_has_quantity
     check (install_quantity > 0 or retirement_quantity > 0),
-  constraint daily_report_units_report_item_unique
+  constraint daily_production_units_report_item_unique
     unique (daily_report_id, price_book_item_id)
 );
 
-create index if not exists daily_report_units_company_report_idx
-  on public.daily_report_units(company_id, daily_report_id);
+create index if not exists daily_production_units_company_report_idx
+  on public.daily_production_units(company_id, daily_report_id);
 
-alter table public.daily_report_units enable row level security;
+alter table public.daily_production_units enable row level security;
 
-revoke all on public.daily_report_units from public;
-revoke all on public.daily_report_units from anon;
-revoke all on public.daily_report_units from authenticated;
+revoke all on public.daily_production_units from public;
+revoke all on public.daily_production_units from anon;
+revoke all on public.daily_production_units from authenticated;
 
 create or replace function public.protect_daily_report_unit_history()
 returns trigger
@@ -73,7 +73,7 @@ as $$
 begin
   if exists (
     select 1
-    from public.daily_report_units line
+    from public.daily_production_units line
     where line.daily_report_id = old.id
   ) and (
     new.job_id is distinct from old.job_id or
@@ -88,7 +88,7 @@ begin
      lower(coalesce(new.status, 'draft')) = 'submitted' and
      not exists (
        select 1
-       from public.daily_report_units line
+       from public.daily_production_units line
        where line.daily_report_id = old.id
      ) then
     raise exception using
@@ -338,7 +338,7 @@ begin
       )
     end
   from public.price_book_items item
-  left join public.daily_report_units line
+  left join public.daily_production_units line
     on line.daily_report_id = p_report_id
    and line.price_book_item_id = item.id
    and line.company_id = v_company_id
@@ -490,7 +490,7 @@ begin
       item.active is true or
       exists (
         select 1
-        from public.daily_report_units existing_line
+        from public.daily_production_units existing_line
         where existing_line.daily_report_id = p_report_id
           and existing_line.price_book_item_id = item.id
           and existing_line.company_id = v_company_id
@@ -524,7 +524,7 @@ begin
 
   v_has_adjustment := coalesce(v_has_adjustment, false);
 
-  insert into public.daily_report_units (
+  insert into public.daily_production_units (
     company_id,
     daily_report_id,
     job_id,
@@ -650,7 +650,7 @@ begin
       message = 'Foremen can change units only on their own reports.';
   end if;
 
-  delete from public.daily_report_units
+  delete from public.daily_production_units
   where daily_report_id = p_report_id
     and price_book_item_id = p_price_book_item_id
     and company_id = v_company_id;
@@ -719,7 +719,7 @@ begin
     ), 0) end,
     coalesce(bool_or(line.has_adjustment), false)
   from public.daily_reports dr
-  left join public.daily_report_units line
+  left join public.daily_production_units line
     on line.daily_report_id = dr.id
    and line.company_id = dr.company_id
   where dr.company_id = v_company_id
