@@ -988,6 +988,41 @@ button:disabled{
 
     <div id="jobPackageProgress" class="daily-value-summary"></div>
 
+    <div id="jobPackageImportTools" class="card hidden">
+      <div class="section-header">
+        <div>
+          <h3>Import Utility Job Packet</h3>
+          <p class="muted">Upload CSV or Excel, review the column mapping and preview, then confirm the import.</p>
+        </div>
+        <button id="toggleJobPackageImportBtn" class="secondary small">Import CSV / Excel</button>
+      </div>
+
+      <div id="jobPackageImportForm" class="hidden">
+        <label for="jobPackageImportFile">Job Packet File</label>
+        <input id="jobPackageImportFile" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods">
+
+        <div id="jobPackageImportWorksheetWrap" class="hidden">
+          <label for="jobPackageImportWorksheet">Worksheet / Tab</label>
+          <select id="jobPackageImportWorksheet"></select>
+        </div>
+
+        <div id="jobPackageImportMapping" class="mapping-grid hidden">
+          <div><label for="jobMapWorkPoint">Pole / Work Point *</label><select id="jobMapWorkPoint"></select></div>
+          <div><label for="jobMapDescription">Work Point Description</label><select id="jobMapDescription"></select></div>
+          <div><label for="jobMapUnitCode">Unit Code *</label><select id="jobMapUnitCode"></select></div>
+          <div><label for="jobMapWorkType">Work Type</label><select id="jobMapWorkType"></select></div>
+          <div><label for="jobMapQuantity">Quantity</label><select id="jobMapQuantity"></select></div>
+          <div><label for="jobMapInstallQuantity">Install Quantity</label><select id="jobMapInstallQuantity"></select></div>
+          <div><label for="jobMapRemoveQuantity">Remove Quantity</label><select id="jobMapRemoveQuantity"></select></div>
+        </div>
+
+        <button id="previewJobPackageImportBtn" class="secondary hidden">Preview Mapped Packet</button>
+        <div id="jobPackageImportPreview"></div>
+        <button id="confirmJobPackageImportBtn" class="success hidden">Confirm Import</button>
+        <button id="cancelJobPackageImportBtn" class="secondary">Cancel Import</button>
+      </div>
+    </div>
+
     <div id="jobPackageAdminTools" class="card hidden">
       <h3>Add Work Point / Pole</h3>
       <div class="grid">
@@ -1922,6 +1957,9 @@ let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
 let currentJobPackageCatalog = [];
 let currentOpenJobPackage = null;
+let currentJobPackageImportWorkbook = null;
+let currentJobPackageImportRows = [];
+let currentJobPackageImportFilename = null;
 let currentDailyUnitCatalog = [];
 let currentDailySavedUnits = [];
 let currentDailyUnitUsageMemory = new Map();
@@ -3116,7 +3154,7 @@ function renderJob(job){
       'small danger';
 
     deleteButton.textContent =
-      'Delete';
+      'Delete Job';
 
     deleteButton.onclick =
       ()=> deleteJob(job);
@@ -3216,6 +3254,8 @@ async function openJobPackageDetails(jobPackage){
   $('jobPackageDetailSubtitle').textContent =
     'Reference: ' + (jobPackage.package_number || 'Not provided');
   $('jobPackageAdminTools').classList.toggle('hidden', !userIsCompanyAdmin());
+  $('jobPackageImportTools').classList.toggle('hidden', !userIsCompanyAdmin());
+  resetJobPackageImport();
   $('jobPackageDetailCard').classList.remove('hidden');
   await loadJobPackageWorkPoints();
   $('jobPackageDetailCard').scrollIntoView({ behavior:'smooth' });
@@ -3344,11 +3384,13 @@ function renderJobPackageWorkPoints(lines){
         saveJobPackageAuthorizedUnit(point.id, form);
       card.appendChild(form);
 
-      const deletePointButton = document.createElement('button');
-      deletePointButton.className = 'danger small';
-      deletePointButton.textContent = 'Delete Empty Work Point';
-      deletePointButton.onclick = ()=> deleteJobPackageWorkPoint(point);
-      card.appendChild(deletePointButton);
+      if(!point.units.length){
+        const deletePointButton = document.createElement('button');
+        deletePointButton.className = 'danger small';
+        deletePointButton.textContent = 'Delete Empty Work Point';
+        deletePointButton.onclick = ()=> deleteJobPackageWorkPoint(point);
+        card.appendChild(deletePointButton);
+      }
     }
 
     container.appendChild(card);
@@ -3440,6 +3482,246 @@ $('addJobPackageWorkPointBtn').onclick = async()=>{
 $('closeJobPackageDetailBtn').onclick = ()=>{
   currentOpenJobPackage = null;
   $('jobPackageDetailCard').classList.add('hidden');
+};
+
+
+const jobPacketMappingDefinitions = [
+  { id:'jobMapWorkPoint', aliases:['pole','polenumber','polelocation','workpoint','workpointnumber','location'] },
+  { id:'jobMapDescription', aliases:['description','workpointdescription','locationdescription','notes'] },
+  { id:'jobMapUnitCode', aliases:['unitcode','itemcode','code','workunit','unitnumber'] },
+  { id:'jobMapWorkType', aliases:['worktype','action','type','installremove'] },
+  { id:'jobMapQuantity', aliases:['quantity','qty','authorizedquantity'] },
+  { id:'jobMapInstallQuantity', aliases:['installquantity','installqty','installedquantity','install'] },
+  { id:'jobMapRemoveQuantity', aliases:['removequantity','removeqty','retirementquantity','retireqty','remove','retirement'] }
+];
+
+function resetJobPackageImport(){
+  currentJobPackageImportWorkbook = null;
+  currentJobPackageImportRows = [];
+  currentJobPackageImportFilename = null;
+  $('jobPackageImportFile').value = '';
+  $('jobPackageImportForm').classList.add('hidden');
+  $('jobPackageImportWorksheetWrap').classList.add('hidden');
+  $('jobPackageImportMapping').classList.add('hidden');
+  $('previewJobPackageImportBtn').classList.add('hidden');
+  $('confirmJobPackageImportBtn').classList.add('hidden');
+  $('jobPackageImportPreview').innerHTML = '';
+}
+
+function configureJobPacketMappings(headers){
+  jobPacketMappingDefinitions.forEach(definition => {
+    const select = $(definition.id);
+    select.innerHTML = '<option value="">Not provided</option>';
+    headers.forEach(header => {
+      const option = document.createElement('option');
+      option.value = header;
+      option.textContent = header;
+      if(definition.aliases.includes(normalizeImportHeader(header))){
+        option.selected = true;
+      }
+      select.appendChild(option);
+    });
+  });
+  $('jobPackageImportMapping').classList.remove('hidden');
+  $('previewJobPackageImportBtn').classList.remove('hidden');
+}
+
+function jobPacketMappedValue(row, selectId){
+  const column = $(selectId).value;
+  return column ? row[column] : '';
+}
+
+function normalizeJobPacketPoint(value){
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^(pole|wp|work[\s_-]*point)[\s#:_-]*/i, '')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+async function previewJobPackageImport(){
+  if(!$('jobMapWorkPoint').value || !$('jobMapUnitCode').value){
+    return alert('Select the Pole / Work Point and Unit Code columns.');
+  }
+  if(
+    !$('jobMapQuantity').value &&
+    !$('jobMapInstallQuantity').value &&
+    !$('jobMapRemoveQuantity').value
+  ){
+    return alert('Select a Quantity column or separate Install / Remove quantity columns.');
+  }
+
+  const sheetName = $('jobPackageImportWorksheet').value;
+  const sheet = currentJobPackageImportWorkbook?.Sheets?.[sheetName];
+  if(!sheet){
+    return alert('The selected worksheet could not be read.');
+  }
+
+  const sourceRows = XLSX.utils.sheet_to_json(sheet, {
+    defval:'', raw:false, blankrows:false
+  });
+  const grouped = new Map();
+
+  sourceRows.forEach((source, index) => {
+    const workPoint = String(jobPacketMappedValue(source, 'jobMapWorkPoint') || '').trim();
+    const unitCode = String(jobPacketMappedValue(source, 'jobMapUnitCode') || '').trim();
+    const description = String(jobPacketMappedValue(source, 'jobMapDescription') || '').trim();
+    let installQuantity = importPrice(jobPacketMappedValue(source, 'jobMapInstallQuantity'));
+    let retirementQuantity = importPrice(jobPacketMappedValue(source, 'jobMapRemoveQuantity'));
+    const genericQuantity = importPrice(jobPacketMappedValue(source, 'jobMapQuantity'));
+    const workType = String(jobPacketMappedValue(source, 'jobMapWorkType') || '').toLowerCase();
+
+    if($('jobMapQuantity').value){
+      if(/remove|retire|retirement|demo/.test(workType)){
+        retirementQuantity += genericQuantity;
+      }else{
+        installQuantity += genericQuantity;
+      }
+    }
+
+    const key = normalizeJobPacketPoint(workPoint) + '|' + unitCode.toLowerCase();
+    if(!grouped.has(key)){
+      grouped.set(key, {
+        row_number:index + 2,
+        work_point_code:workPoint,
+        work_point_description:description || null,
+        unit_code:unitCode,
+        install_quantity:0,
+        retirement_quantity:0,
+        errors:[]
+      });
+    }
+    const row = grouped.get(key);
+    row.install_quantity += Number.isFinite(installQuantity) ? installQuantity : 0;
+    row.retirement_quantity += Number.isFinite(retirementQuantity) ? retirementQuantity : 0;
+    if(!workPoint) row.errors.push('Missing work point');
+    if(!unitCode) row.errors.push('Missing unit code');
+    if(!Number.isFinite(installQuantity) || !Number.isFinite(retirementQuantity)){
+      row.errors.push('Invalid quantity');
+    }
+  });
+
+  currentJobPackageImportRows = [...grouped.values()];
+  if(!currentJobPackageImportRows.length){
+    return alert('No completed packet rows were found.');
+  }
+  if(currentJobPackageImportRows.length > 2000){
+    return alert('This release imports up to 2,000 consolidated work-point units at a time.');
+  }
+
+  const { data:validation, error } = await sb.rpc('validate_job_package_import', {
+    p_package_id:currentOpenJobPackage.id,
+    p_rows:currentJobPackageImportRows.map(({errors, ...row}) => row)
+  });
+  if(error){
+    return alert('Unable to validate packet: ' + error.message);
+  }
+
+  const validationByRow = new Map((validation || []).map(result => [
+    Number(result.row_number), result
+  ]));
+  currentJobPackageImportRows.forEach(row => {
+    const result = validationByRow.get(Number(row.row_number));
+    if(result && !result.is_valid){
+      row.errors.push(result.error_message || 'Unit could not be validated');
+    }
+    if(row.install_quantity + row.retirement_quantity <= 0){
+      row.errors.push('Quantity must be greater than zero');
+    }
+  });
+
+  renderJobPackageImportPreview();
+}
+
+function renderJobPackageImportPreview(){
+  const invalid = currentJobPackageImportRows.filter(row => row.errors.length);
+  let html = `<div class="import-summary"><strong>${currentJobPackageImportRows.length - invalid.length} ready</strong><br>` +
+    `${invalid.length} need attention. Nothing has been saved.</div>`;
+  html += '<div class="import-table-wrap"><table class="import-table"><thead><tr>' +
+    '<th>Row</th><th>Work Point</th><th>Unit</th><th>Install</th><th>Remove</th><th>Status</th>' +
+    '</tr></thead><tbody>';
+  currentJobPackageImportRows.slice(0, 100).forEach(row => {
+    html += `<tr><td>${row.row_number}</td><td>${escapeHtml(row.work_point_code || '—')}</td>` +
+      `<td>${escapeHtml(row.unit_code || '—')}</td><td>${row.install_quantity}</td>` +
+      `<td>${row.retirement_quantity}</td><td class="${row.errors.length ? 'import-error' : ''}">` +
+      `${escapeHtml(row.errors.length ? row.errors.join('; ') : 'Ready')}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  if(currentJobPackageImportRows.length > 100){
+    html += '<p class="muted">Preview shows the first 100 consolidated rows.</p>';
+  }
+  $('jobPackageImportPreview').innerHTML = html;
+  $('confirmJobPackageImportBtn').classList.toggle('hidden', invalid.length > 0);
+  $('confirmJobPackageImportBtn').textContent =
+    `Confirm Import of ${currentJobPackageImportRows.length} Units`;
+}
+
+$('toggleJobPackageImportBtn').onclick = ()=>{
+  $('jobPackageImportForm').classList.toggle('hidden');
+};
+
+$('cancelJobPackageImportBtn').onclick = resetJobPackageImport;
+$('previewJobPackageImportBtn').onclick = previewJobPackageImport;
+$('jobPackageImportWorksheet').onchange = ()=>{
+  const sheet = currentJobPackageImportWorkbook.Sheets[$('jobPackageImportWorksheet').value];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:false, blankrows:false });
+  if(rows.length) configureJobPacketMappings(Object.keys(rows[0]));
+  $('jobPackageImportPreview').innerHTML = '';
+  $('confirmJobPackageImportBtn').classList.add('hidden');
+};
+
+$('jobPackageImportFile').onchange = async event => {
+  const file = event.target.files?.[0];
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){
+    return alert('The spreadsheet reader did not load. Refresh and try again.');
+  }
+  try{
+    currentJobPackageImportFilename = file.name;
+    currentJobPackageImportWorkbook = XLSX.read(await file.arrayBuffer());
+    const names = currentJobPackageImportWorkbook.SheetNames || [];
+    if(!names.length) throw new Error('The file does not contain a worksheet.');
+    $('jobPackageImportWorksheet').innerHTML = '';
+    names.forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      $('jobPackageImportWorksheet').appendChild(option);
+    });
+    $('jobPackageImportWorksheetWrap').classList.toggle('hidden', names.length < 2);
+    const rows = XLSX.utils.sheet_to_json(currentJobPackageImportWorkbook.Sheets[names[0]], {
+      defval:'', raw:false, blankrows:false
+    });
+    if(!rows.length) throw new Error('No completed rows were found.');
+    configureJobPacketMappings(Object.keys(rows[0]));
+  }catch(error){
+    alert('Unable to read packet: ' + error.message);
+  }
+};
+
+$('confirmJobPackageImportBtn').onclick = async()=>{
+  if(!currentOpenJobPackage || !currentJobPackageImportRows.length) return;
+  if(!confirm(
+    `Import ${currentJobPackageImportRows.length} authorized unit rows into ` +
+    `"${currentOpenJobPackage.package_name}"? Nothing is saved until you confirm OK.`
+  )) return;
+
+  const button = $('confirmJobPackageImportBtn');
+  button.disabled = true;
+  button.textContent = 'Importing...';
+  const { data, error } = await sb.rpc('import_job_package_units', {
+    p_package_id:currentOpenJobPackage.id,
+    p_rows:currentJobPackageImportRows.map(({errors, ...row}) => row),
+    p_source_filename:currentJobPackageImportFilename
+  });
+  button.disabled = false;
+  if(error){
+    button.textContent = 'Confirm Import';
+    return alert('Nothing was imported: ' + error.message);
+  }
+  alert(`${data?.imported_rows || currentJobPackageImportRows.length} authorized unit rows imported.`);
+  resetJobPackageImport();
+  await loadJobPackageWorkPoints();
 };
 
 
