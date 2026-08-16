@@ -98,7 +98,7 @@ to authenticated;
 
 create or replace function public.approve_daily_report(
   p_report_id uuid,
-  p_review_notes text
+  p_review_notes text default null
 )
 returns void
 language plpgsql
