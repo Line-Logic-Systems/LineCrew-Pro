@@ -1111,6 +1111,39 @@ button:disabled{
     </div>
   </div>
 
+  <div class="card" id="productionFiltersCard">
+    <h3>Find Daily Reports</h3>
+    <div class="price-book-filter-grid">
+      <div>
+        <label for="productionSearch">Search</label>
+        <input id="productionSearch" type="search"
+          placeholder="Job number, job name or Foreman">
+      </div>
+      <div>
+        <label for="productionStatusFilter">Status</label>
+        <select id="productionStatusFilter">
+          <option value="">All active reports</option>
+          <option value="draft">Draft</option>
+          <option value="submitted">Submitted</option>
+          <option value="approved">Approved</option>
+          <option value="archived">Archived</option>
+        </select>
+      </div>
+      <div>
+        <label for="productionDateFrom">From Date</label>
+        <input id="productionDateFrom" type="date">
+      </div>
+      <div>
+        <label for="productionDateTo">Through Date</label>
+        <input id="productionDateTo" type="date">
+      </div>
+    </div>
+    <button id="clearProductionFilters" class="secondary small">
+      Clear Filters
+    </button>
+    <div id="productionFilterCount" class="muted"></div>
+  </div>
+
   <div id="productionLoading" class="card center hidden">
     Loading production...
   </div>
@@ -1983,6 +2016,7 @@ let currentDailyUnitUsageMemory = new Map();
 let currentDailyUnitReport = null;
 let currentDailyUnitBatchRows = [];
 let currentDailyReportValueSummaries = new Map();
+let productionSearchTimer = null;
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
 
@@ -4022,6 +4056,23 @@ $('backFromProduction').onclick = () => {
 
 
 $('refreshProductionBtn').onclick = async () => {
+  await loadProductionReports();
+};
+
+$('productionSearch').oninput = () => {
+  clearTimeout(productionSearchTimer);
+  productionSearchTimer = setTimeout(loadProductionReports, 250);
+};
+
+$('productionStatusFilter').onchange = loadProductionReports;
+$('productionDateFrom').onchange = loadProductionReports;
+$('productionDateTo').onchange = loadProductionReports;
+
+$('clearProductionFilters').onclick = async () => {
+  $('productionSearch').value = '';
+  $('productionStatusFilter').value = '';
+  $('productionDateFrom').value = '';
+  $('productionDateTo').value = '';
   await loadProductionReports();
 };
 
@@ -8561,6 +8612,7 @@ async function loadProductionReports(){
       overtime_hours,
       notes,
       status,
+      archived,
       review_notes,
       jobs (
         job_number,
@@ -8605,8 +8657,41 @@ async function loadProductionReports(){
     ])
   );
 
+  const search = $('productionSearch').value.trim().toLowerCase();
+  const statusFilter = $('productionStatusFilter').value;
+  const dateFrom = $('productionDateFrom').value;
+  const dateTo = $('productionDateTo').value;
+  const filteredReports = (reports || []).filter(report => {
+    const archived = report.archived === true;
+    if(statusFilter === 'archived'){
+      if(!archived) return false;
+    }else{
+      if(archived) return false;
+      if(statusFilter && String(report.status || 'draft').toLowerCase() !== statusFilter){
+        return false;
+      }
+    }
 
-  if(!reports || reports.length === 0){
+    if(dateFrom && String(report.work_date || '') < dateFrom) return false;
+    if(dateTo && String(report.work_date || '') > dateTo) return false;
+
+    if(search){
+      const haystack = [
+        report.jobs?.job_number,
+        report.jobs?.job_name,
+        report.foreman_name,
+        report.crew_name
+      ].map(value => String(value || '').toLowerCase()).join(' ');
+      if(!haystack.includes(search)) return false;
+    }
+    return true;
+  });
+
+  $('productionFilterCount').textContent =
+    'Showing ' + filteredReports.length + ' of ' + (reports || []).length + ' reports';
+
+
+  if(filteredReports.length === 0){
 
     $('productionEmpty').classList.remove('hidden');
 
@@ -8614,7 +8699,7 @@ async function loadProductionReports(){
   }
 
 
-  reports.forEach(report => {
+  filteredReports.forEach(report => {
 
     const card =
       document.createElement('div');
@@ -9592,7 +9677,69 @@ window.openDailyUnitEditor = openDailyUnitEditor;
   card.appendChild(approveBtn);
   card.appendChild(returnBtn);
 
-}   
+}
+
+if(String(currentProfile?.role || '').toLowerCase() === 'admin'){
+  const reportStatus = String(report.status || 'draft').toLowerCase();
+
+  if(reportStatus === 'draft' && report.archived !== true){
+    const deleteReportBtn = document.createElement('button');
+    deleteReportBtn.className = 'danger small';
+    deleteReportBtn.textContent = 'Delete Draft';
+    deleteReportBtn.onclick = async () => {
+      const typedJob = prompt(
+        'This permanently deletes this draft and its unit entries.\n\n' +
+        'Type the job number ' + jobNumber + ' to confirm:'
+      );
+      if(typedJob === null) return;
+      if(typedJob.trim().toLowerCase() !== String(jobNumber).trim().toLowerCase()){
+        alert('The job number did not match. Nothing was deleted.');
+        return;
+      }
+
+      deleteReportBtn.disabled = true;
+      deleteReportBtn.textContent = 'Deleting...';
+      const { error } = await sb.rpc('delete_draft_daily_report', {
+        p_report_id:report.id
+      });
+      if(error){
+        deleteReportBtn.disabled = false;
+        deleteReportBtn.textContent = 'Delete Draft';
+        alert('Unable to delete draft report: ' + error.message);
+        return;
+      }
+      alert('Draft daily report deleted.');
+      await loadProductionReports();
+    };
+    card.appendChild(deleteReportBtn);
+  }
+
+  if(reportStatus === 'approved' || report.archived === true){
+    const archiveBtn = document.createElement('button');
+    archiveBtn.className = 'secondary small';
+    archiveBtn.textContent = report.archived === true ? 'Restore Report' : 'Archive Report';
+    archiveBtn.onclick = async () => {
+      const nextArchived = report.archived !== true;
+      if(!confirm(
+        (nextArchived ? 'Archive' : 'Restore') +
+        ' this approved daily report? Its production history will be preserved.'
+      )) return;
+
+      archiveBtn.disabled = true;
+      const { error } = await sb.rpc('set_daily_report_archived', {
+        p_report_id:report.id,
+        p_archived:nextArchived
+      });
+      if(error){
+        archiveBtn.disabled = false;
+        alert('Unable to update report archive: ' + error.message);
+        return;
+      }
+      await loadProductionReports();
+    };
+    card.appendChild(archiveBtn);
+  }
+}
     
     $('productionList')
       .appendChild(card);
