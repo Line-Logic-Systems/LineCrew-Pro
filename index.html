@@ -1794,6 +1794,29 @@ async function loadApp(){
     return;
   }
 
+  const {
+    data:isSuspended,
+    error:accessStatusError
+  } = await sb.rpc('is_my_profile_suspended');
+
+  if(accessStatusError){
+    alert('Unable to verify account access: ' + accessStatusError.message);
+    return;
+  }
+
+  if(isSuspended){
+    await sb.auth.signOut();
+    currentProfile = null;
+    currentCompany = null;
+    window.history.replaceState(null, '', window.location.href);
+    show('authPage');
+    alert(
+      'Your LineCrew Pro access has been suspended. ' +
+      'Contact your company Admin.'
+    );
+    return;
+  }
+
 
   const {
     data:profile,
@@ -2129,7 +2152,7 @@ async function loadTeamMembers(){
 
   const { data:members, error } = await sb
     .from('profiles')
-    .select('id, full_name, role, company_id')
+    .select('id, full_name, role, company_id, active')
     .eq('company_id', currentProfile.company_id)
     .order('full_name', { ascending:true });
 
@@ -2156,7 +2179,8 @@ async function loadTeamMembers(){
 
   members.forEach(member => {
     const card = document.createElement('div');
-    card.className = 'job-card';
+    card.className =
+      'job-card' + (member.active === false ? ' inactive' : '');
 
     const name = document.createElement('strong');
     name.textContent = member.full_name || 'Unnamed Team Member';
@@ -2171,7 +2195,9 @@ async function loadTeamMembers(){
 
     const roleLine = document.createElement('div');
     roleLine.className = 'job-info';
-    roleLine.textContent = 'Role: ' + formatTeamRole(member.role);
+    roleLine.textContent =
+      'Role: ' + formatTeamRole(member.role) +
+      ' • Access: ' + (member.active === false ? 'Suspended' : 'Active');
     card.appendChild(roleLine);
 
     if(isAdmin){
@@ -2206,6 +2232,17 @@ async function loadTeamMembers(){
 
       controls.appendChild(roleSelect);
       controls.appendChild(saveButton);
+
+      if(member.id !== currentProfile.id){
+        const accessButton = document.createElement('button');
+        accessButton.className =
+          (member.active === false ? 'success' : 'warning') + ' small';
+        accessButton.textContent =
+          member.active === false ? 'Restore Access' : 'Suspend Access';
+        accessButton.onclick = () => changeTeamMemberAccess(member);
+        controls.appendChild(accessButton);
+      }
+
       card.appendChild(controls);
     }
 
@@ -2262,6 +2299,49 @@ async function updateTeamMemberRole(member, nextRole, adminCount){
     $('userRole').textContent = nextRole;
     $('adminNotice').classList.toggle('hidden', !userIsCompanyAdmin());
   }
+
+  await loadTeamMembers();
+}
+
+async function changeTeamMemberAccess(member){
+  if(!userIsCompanyAdmin() || member.id === currentProfile.id){
+    return;
+  }
+
+  const restoreAccess = member.active === false;
+  const memberName = member.full_name || 'this team member';
+
+  const confirmed = confirm(
+    (restoreAccess ? 'Restore access for ' : 'Suspend access for ') +
+    memberName + '?\n\n' +
+    (restoreAccess
+      ? 'They will be able to sign in and access this company again.'
+      : 'They will be signed out and blocked from company data. Their historical records will remain.')
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  const { error } = await sb.rpc(
+    'set_company_member_active',
+    {
+      p_member_id:member.id,
+      p_active:restoreAccess
+    }
+  );
+
+  if(error){
+    alert('Unable to change team access: ' + error.message);
+    await loadTeamMembers();
+    return;
+  }
+
+  alert(
+    restoreAccess
+      ? 'Team member access restored.'
+      : 'Team member access suspended.'
+  );
 
   await loadTeamMembers();
 }
