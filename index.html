@@ -1213,6 +1213,13 @@ button:disabled{
           Compare Unit Pricing
         </button>
 
+        <button
+          id="exportPriceBookComparisonBtn"
+          class="secondary hidden"
+        >
+          Export Full Comparison CSV
+        </button>
+
         <button id="closePriceBookComparisonBtn" class="secondary">
           Close Comparison
         </button>
@@ -1589,6 +1596,7 @@ let currentPriceBookCatalog = [];
 let currentPriceBookContractsById = new Map();
 let currentPriceBookCustomersById = new Map();
 let currentPriceBookComparisonVersions = [];
+let currentPriceBookComparisonReport = null;
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
 
@@ -3636,6 +3644,8 @@ function openPriceBook(
 
   $('priceBookComparisonCard').classList.add('hidden');
   $('priceBookComparisonResults').innerHTML = '';
+  $('exportPriceBookComparisonBtn').classList.add('hidden');
+  currentPriceBookComparisonReport = null;
 
   $('priceBookDetail')
     .dataset
@@ -3736,6 +3746,7 @@ $('closePriceBookDetailBtn').onclick = () => {
 
   currentOpenPriceBook = null;
   currentPriceBookComparisonVersions = [];
+  currentPriceBookComparisonReport = null;
 
 };
 
@@ -3775,6 +3786,8 @@ $('comparePriceBookBtn').onclick = () => {
 
   populatePriceBookComparisonVersions();
   $('priceBookComparisonResults').innerHTML = '';
+  $('exportPriceBookComparisonBtn').classList.add('hidden');
+  currentPriceBookComparisonReport = null;
   $('priceBookComparisonCard').classList.remove('hidden');
   $('priceBookComparisonCard').scrollIntoView({
     behavior:'smooth',
@@ -3785,6 +3798,8 @@ $('comparePriceBookBtn').onclick = () => {
 $('closePriceBookComparisonBtn').onclick = () => {
   $('priceBookComparisonCard').classList.add('hidden');
   $('priceBookComparisonResults').innerHTML = '';
+  $('exportPriceBookComparisonBtn').classList.add('hidden');
+  currentPriceBookComparisonReport = null;
 };
 
 function priceBookComparisonValueChanged(left, right){
@@ -3807,6 +3822,8 @@ $('runPriceBookComparisonBtn').onclick = async () => {
 
   $('runPriceBookComparisonBtn').disabled = true;
   $('runPriceBookComparisonBtn').textContent = 'Comparing...';
+  $('exportPriceBookComparisonBtn').classList.add('hidden');
+  currentPriceBookComparisonReport = null;
   $('priceBookComparisonResults').innerHTML =
     '<p class="muted">Loading both versions...</p>';
 
@@ -3851,6 +3868,7 @@ $('runPriceBookComparisonBtn').onclick = async () => {
     ...comparisonItems.keys()
   ]);
   const differences = [];
+  const comparisonRows = [];
   let addedCount = 0;
   let removedCount = 0;
   let changedCount = 0;
@@ -3864,13 +3882,17 @@ $('runPriceBookComparisonBtn').onclick = async () => {
 
       if(current && !previous){
         addedCount += 1;
-        differences.push({ type:'Added', code, current, previous:null });
+        const change = { type:'Added', code, current, previous:null };
+        differences.push(change);
+        comparisonRows.push(change);
         return;
       }
 
       if(previous && !current){
         removedCount += 1;
-        differences.push({ type:'Removed', code, current:null, previous });
+        const change = { type:'Removed', code, current:null, previous };
+        differences.push(change);
+        comparisonRows.push(change);
         return;
       }
 
@@ -3892,14 +3914,27 @@ $('runPriceBookComparisonBtn').onclick = async () => {
 
       if(detailsChanged || priceChanged){
         changedCount += 1;
-        differences.push({ type:'Changed', code, current, previous });
+        const change = { type:'Changed', code, current, previous };
+        differences.push(change);
+        comparisonRows.push(change);
       }else{
         unchangedCount += 1;
+        comparisonRows.push({ type:'Unchanged', code, current, previous });
       }
     });
 
   const openLabel = openBook.version_name || 'Original';
   const comparisonLabel = comparisonBook.version_name || 'Original';
+
+  currentPriceBookComparisonReport = {
+    openBook,
+    comparisonBook,
+    openLabel,
+    comparisonLabel,
+    rows:comparisonRows
+  };
+
+  $('exportPriceBookComparisonBtn').classList.remove('hidden');
 
   let html =
     '<div class="import-summary">' +
@@ -3971,6 +4006,91 @@ $('runPriceBookComparisonBtn').onclick = async () => {
   }
 
   $('priceBookComparisonResults').innerHTML = html;
+};
+
+$('exportPriceBookComparisonBtn').onclick = () => {
+
+  const report = currentPriceBookComparisonReport;
+
+  if(!report?.rows?.length){
+    alert('Run a Price Book comparison before exporting.');
+    return;
+  }
+
+  const headers = [
+    'Comparison Status',
+    'Unit Code',
+    report.comparisonLabel + ' Install Price',
+    report.openLabel + ' Install Price',
+    report.comparisonLabel + ' Retirement Price',
+    report.openLabel + ' Retirement Price',
+    report.comparisonLabel + ' Description',
+    report.openLabel + ' Description',
+    report.comparisonLabel + ' Unit of Measure',
+    report.openLabel + ' Unit of Measure',
+    report.comparisonLabel + ' Category',
+    report.openLabel + ' Category',
+    report.comparisonLabel + ' Status',
+    report.openLabel + ' Status'
+  ];
+
+  const rows = report.rows.map(change => {
+    const previous = change.previous;
+    const current = change.current;
+
+    return [
+      change.type,
+      current?.item_code || previous?.item_code || change.code,
+      previous ? Number(previous.install_price || 0).toFixed(2) : '',
+      current ? Number(current.install_price || 0).toFixed(2) : '',
+      previous ? Number(previous.retirement_price || 0).toFixed(2) : '',
+      current ? Number(current.retirement_price || 0).toFixed(2) : '',
+      previous?.description || '',
+      current?.description || '',
+      previous?.unit_of_measure || '',
+      current?.unit_of_measure || '',
+      previous?.category || '',
+      current?.category || '',
+      previous ? (previous.active ? 'Active' : 'Inactive') : '',
+      current ? (current.active ? 'Active' : 'Inactive') : ''
+    ];
+  });
+
+  const csv = '\uFEFF' + [headers, ...rows]
+    .map(row => row.map(csvCell).join(','))
+    .join('\r\n');
+
+  const safeName = String(report.openBook.name || 'price-book')
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'price-book';
+
+  const blob = new Blob([csv], {
+    type:'text/csv;charset=utf-8'
+  });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download =
+    safeName + '-' +
+    String(report.comparisonLabel)
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase() +
+    '-to-' +
+    String(report.openLabel)
+      .replace(/[^a-z0-9]+/gi, '-')
+      .replace(/^-+|-+$/g, '')
+      .toLowerCase() +
+    '-comparison.csv';
+
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(
+    () => URL.revokeObjectURL(link.href),
+    1000
+  );
 };
 
 $('editPriceBookDetailsBtn').onclick = () => {
