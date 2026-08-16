@@ -397,6 +397,24 @@ button:disabled{
 .daily-review-counts .pending{ color:#8a5800; font-weight:800; }
 .daily-review-counts .redline{ color:#b42318; font-weight:800; }
 
+.daily-report-history{
+  margin-top:12px;
+  padding:12px;
+  border:1px solid #d7e2eb;
+  border-radius:10px;
+  background:#f8fbfd;
+}
+
+.daily-history-event{
+  padding:9px 0;
+  border-bottom:1px solid #dfe8ef;
+  font-size:13px;
+}
+
+.daily-history-event:last-child{
+  border-bottom:0;
+}
+
 .daily-unit-code{
   font-weight:800;
   color:#0b3557;
@@ -8924,6 +8942,12 @@ ${report.review_notes ? `
     unitsButton.onclick = () => openDailyUnitEditor(report);
     card.appendChild(unitsButton);
 
+    const historyButton = document.createElement('button');
+    historyButton.className = 'secondary small';
+    historyButton.textContent = 'View History';
+    historyButton.onclick = () => toggleDailyReportHistory(report, card, historyButton);
+    card.appendChild(historyButton);
+
 if(
   String(report.status || 'draft').toLowerCase() === 'draft'
 ){
@@ -9052,6 +9076,67 @@ card.appendChild(editBtn);
 
   card.appendChild(submitBtn);
 
+}
+
+async function toggleDailyReportHistory(report, card, button){
+  const existing = card.querySelector('.daily-report-history');
+  if(existing){
+    existing.remove();
+    button.textContent = 'View History';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Loading History...';
+
+  const { data, error } = await sb.rpc('get_daily_report_audit_history', {
+    p_report_id: report.id
+  });
+
+  button.disabled = false;
+  button.textContent = 'Hide History';
+
+  if(error){
+    button.textContent = 'View History';
+    alert('Unable to load report history: ' + error.message);
+    return;
+  }
+
+  const history = document.createElement('div');
+  history.className = 'daily-report-history';
+
+  if(!data || data.length === 0){
+    history.innerHTML =
+      '<strong>Report History</strong>' +
+      '<p class="muted">No recorded actions yet. Actions performed before audit history was installed are not reconstructed.</p>';
+  }else{
+    history.innerHTML =
+      '<strong>Report History</strong>' +
+      data.map(event => {
+        const action = String(event.event_type || 'updated')
+          .replaceAll('_', ' ')
+          .replace(/\b\w/g, character => character.toUpperCase());
+        const actor = event.actor_name || 'System';
+        const role = event.actor_role
+          ? ' (' + String(event.actor_role).toUpperCase() + ')'
+          : '';
+        const timestamp = event.event_at
+          ? new Date(event.event_at).toLocaleString()
+          : 'Time unavailable';
+        return (
+          '<div class="daily-history-event">' +
+            '<strong>' + escapeHtml(action) + '</strong>' +
+            '<br><span>' + escapeHtml(actor + role) + '</span>' +
+            '<br><span class="muted">' + escapeHtml(timestamp) + '</span>' +
+            (event.event_notes
+              ? '<br><span>Notes: ' + escapeHtml(event.event_notes) + '</span>'
+              : '') +
+          '</div>'
+        );
+      }).join('');
+  }
+
+  card.appendChild(history);
 }
 
 function dailyReportValueSummaryMarkup(summary){
