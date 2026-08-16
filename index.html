@@ -1174,6 +1174,13 @@ button:disabled{
           </button>
 
           <button
+            id="editPriceBookDetailsBtn"
+            class="secondary small hidden"
+          >
+            Edit Version Details
+          </button>
+
+          <button
             id="closePriceBookDetailBtn"
             class="secondary small"
           >
@@ -1183,6 +1190,42 @@ button:disabled{
       </div>
 
       <div id="priceBookDetailContent"></div>
+
+      <div id="editPriceBookDetailsForm" class="card hidden">
+        <h3>Edit Price Book Version</h3>
+        <p class="muted">
+          Update this version's label, dates and notes. Its contract,
+          Price Book name and units will not change.
+        </p>
+
+        <label for="editPriceBookVersionName">Version Name</label>
+        <input
+          id="editPriceBookVersionName"
+          type="text"
+          placeholder="Original"
+        >
+
+        <label for="editPriceBookEffectiveStart">Effective Start</label>
+        <input id="editPriceBookEffectiveStart" type="date">
+
+        <label for="editPriceBookEffectiveEnd">Effective End</label>
+        <input id="editPriceBookEffectiveEnd" type="date">
+
+        <label for="editPriceBookNotes">Notes</label>
+        <textarea
+          id="editPriceBookNotes"
+          rows="3"
+          placeholder="Optional version notes"
+        ></textarea>
+
+        <button id="savePriceBookDetailsBtn" class="success">
+          Save Version Details
+        </button>
+
+        <button id="cancelPriceBookDetailsBtn" class="secondary">
+          Cancel
+        </button>
+      </div>
 
       <div id="duplicatePriceBookForm" class="card hidden">
         <h3>Create New Price Book Version</h3>
@@ -3507,6 +3550,10 @@ function openPriceBook(
     .classList
     .add('hidden');
 
+  $('editPriceBookDetailsForm')
+    .classList
+    .add('hidden');
+
   const canManagePriceBook =
     String(currentProfile?.role || '').toLowerCase() ===
       'admin';
@@ -3520,6 +3567,10 @@ function openPriceBook(
     .toggle('hidden', !canManagePriceBook);
 
   $('duplicatePriceBookBtn')
+    .classList
+    .toggle('hidden', !canManagePriceBook);
+
+  $('editPriceBookDetailsBtn')
     .classList
     .toggle('hidden', !canManagePriceBook);
 
@@ -3580,8 +3631,137 @@ $('closePriceBookDetailBtn').onclick = () => {
     .classList
     .add('hidden');
 
+  $('editPriceBookDetailsForm')
+    .classList
+    .add('hidden');
+
   currentOpenPriceBook = null;
 
+};
+
+$('editPriceBookDetailsBtn').onclick = () => {
+
+  if(
+    !userCanManagePriceBooks() ||
+    !currentOpenPriceBook
+  ){
+    return;
+  }
+
+  $('editPriceBookVersionName').value =
+    currentOpenPriceBook.version_name || '';
+
+  $('editPriceBookEffectiveStart').value =
+    currentOpenPriceBook.effective_start ||
+    currentOpenPriceBook.effective_date ||
+    '';
+
+  $('editPriceBookEffectiveEnd').value =
+    currentOpenPriceBook.effective_end || '';
+
+  $('editPriceBookNotes').value =
+    currentOpenPriceBook.notes || '';
+
+  $('duplicatePriceBookForm')
+    .classList
+    .add('hidden');
+
+  $('editPriceBookDetailsForm')
+    .classList
+    .remove('hidden');
+
+  $('editPriceBookDetailsForm')
+    .scrollIntoView({
+      behavior:'smooth',
+      block:'start'
+    });
+};
+
+$('cancelPriceBookDetailsBtn').onclick = () => {
+  $('editPriceBookDetailsForm')
+    .classList
+    .add('hidden');
+};
+
+$('savePriceBookDetailsBtn').onclick = async () => {
+
+  const priceBook = currentOpenPriceBook;
+  const companyId = currentProfile?.company_id;
+
+  if(
+    !priceBook ||
+    !companyId ||
+    !userCanManagePriceBooks()
+  ){
+    alert('Open a Price Book as a company admin before editing it.');
+    return;
+  }
+
+  const versionName =
+    $('editPriceBookVersionName').value.trim() || null;
+
+  const effectiveStart =
+    $('editPriceBookEffectiveStart').value || null;
+
+  const effectiveEnd =
+    $('editPriceBookEffectiveEnd').value || null;
+
+  const notes =
+    $('editPriceBookNotes').value.trim() || null;
+
+  if(effectiveEnd && !effectiveStart){
+    alert('Select an Effective Start before setting an Effective End.');
+    return;
+  }
+
+  if(
+    effectiveStart &&
+    effectiveEnd &&
+    effectiveEnd < effectiveStart
+  ){
+    alert('Effective End cannot be before Effective Start.');
+    return;
+  }
+
+  $('savePriceBookDetailsBtn').disabled = true;
+  $('savePriceBookDetailsBtn').textContent = 'Saving...';
+
+  const { error } = await sb
+    .from('price_books')
+    .update({
+      version_name:versionName,
+      effective_date:effectiveStart,
+      effective_start:effectiveStart,
+      effective_end:effectiveEnd,
+      notes:notes
+    })
+    .eq('id', priceBook.id)
+    .eq('company_id', companyId)
+    .eq('contract_id', priceBook.contract_id);
+
+  $('savePriceBookDetailsBtn').disabled = false;
+  $('savePriceBookDetailsBtn').textContent = 'Save Version Details';
+
+  if(error){
+    alert('Unable to update Price Book details: ' + error.message);
+    return;
+  }
+
+  await loadPriceBooks();
+
+  const refreshed =
+    priceBookNavigationRecords.get(priceBook.id);
+
+  if(refreshed){
+    openPriceBook(
+      refreshed.priceBook,
+      refreshed.contract,
+      refreshed.customer,
+      false
+    );
+  }
+
+  alert('Price Book version details updated.');
 };
 
 $('priceBookStatusBtn').onclick = async () => {
@@ -3685,6 +3865,10 @@ $('duplicatePriceBookBtn').onclick = () => {
 
   $('duplicatePriceBookNotes').value =
     currentOpenPriceBook.notes || '';
+
+  $('editPriceBookDetailsForm')
+    .classList
+    .add('hidden');
 
   $('duplicatePriceBookForm')
     .classList
