@@ -1181,6 +1181,13 @@ button:disabled{
           </button>
 
           <button
+            id="comparePriceBookBtn"
+            class="secondary small hidden"
+          >
+            Compare Versions
+          </button>
+
+          <button
             id="closePriceBookDetailBtn"
             class="secondary small"
           >
@@ -1190,6 +1197,28 @@ button:disabled{
       </div>
 
       <div id="priceBookDetailContent"></div>
+
+      <div id="priceBookComparisonCard" class="card hidden">
+        <h3>Compare Price Book Versions</h3>
+        <p class="muted">
+          Compare the open version against another saved version in this
+          contract. Prices are shown from the selected older version to the
+          currently open version.
+        </p>
+
+        <label for="priceBookComparisonVersion">Compare Against</label>
+        <select id="priceBookComparisonVersion"></select>
+
+        <button id="runPriceBookComparisonBtn" class="secondary">
+          Compare Unit Pricing
+        </button>
+
+        <button id="closePriceBookComparisonBtn" class="secondary">
+          Close Comparison
+        </button>
+
+        <div id="priceBookComparisonResults"></div>
+      </div>
 
       <div id="editPriceBookDetailsForm" class="card hidden">
         <h3>Edit Price Book Version</h3>
@@ -1559,6 +1588,7 @@ let priceBookNavigationRecords = new Map();
 let currentPriceBookCatalog = [];
 let currentPriceBookContractsById = new Map();
 let currentPriceBookCustomersById = new Map();
+let currentPriceBookComparisonVersions = [];
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
 
@@ -3591,6 +3621,22 @@ function openPriceBook(
       'Search, add and manage the unit pricing for this Price Book below.' +
     '</p>';
 
+  currentPriceBookComparisonVersions =
+    currentPriceBookCatalog.filter(version =>
+      version.id !== priceBook.id &&
+      version.contract_id === priceBook.contract_id &&
+      String(version.name || '').trim().toLowerCase() ===
+        String(priceBook.name || '').trim().toLowerCase()
+    );
+
+  $('comparePriceBookBtn').classList.toggle(
+    'hidden',
+    currentPriceBookComparisonVersions.length === 0
+  );
+
+  $('priceBookComparisonCard').classList.add('hidden');
+  $('priceBookComparisonResults').innerHTML = '';
+
   $('priceBookDetail')
     .dataset
     .priceBookId = priceBook.id;
@@ -3689,7 +3735,242 @@ $('closePriceBookDetailBtn').onclick = () => {
     .add('hidden');
 
   currentOpenPriceBook = null;
+  currentPriceBookComparisonVersions = [];
 
+};
+
+function populatePriceBookComparisonVersions(){
+
+  const select = $('priceBookComparisonVersion');
+
+  select.innerHTML = '';
+
+  currentPriceBookComparisonVersions
+    .slice()
+    .sort((a, b) => {
+      const aDate = a.effective_start || a.effective_date || '';
+      const bDate = b.effective_start || b.effective_date || '';
+      return String(bDate).localeCompare(String(aDate));
+    })
+    .forEach(version => {
+      const option = document.createElement('option');
+      option.value = version.id;
+      option.textContent =
+        (version.version_name || 'Original') +
+        ' — ' +
+        (version.effective_start || version.effective_date || 'No date') +
+        (version.active ? ' (Active)' : ' (Inactive)');
+      select.appendChild(option);
+    });
+}
+
+$('comparePriceBookBtn').onclick = () => {
+
+  if(
+    !currentOpenPriceBook ||
+    currentPriceBookComparisonVersions.length === 0
+  ){
+    return;
+  }
+
+  populatePriceBookComparisonVersions();
+  $('priceBookComparisonResults').innerHTML = '';
+  $('priceBookComparisonCard').classList.remove('hidden');
+  $('priceBookComparisonCard').scrollIntoView({
+    behavior:'smooth',
+    block:'start'
+  });
+};
+
+$('closePriceBookComparisonBtn').onclick = () => {
+  $('priceBookComparisonCard').classList.add('hidden');
+  $('priceBookComparisonResults').innerHTML = '';
+};
+
+function priceBookComparisonValueChanged(left, right){
+  return String(left ?? '').trim() !== String(right ?? '').trim();
+}
+
+$('runPriceBookComparisonBtn').onclick = async () => {
+
+  const openBook = currentOpenPriceBook;
+  const comparisonId = $('priceBookComparisonVersion').value;
+  const companyId = currentProfile?.company_id;
+  const comparisonBook = currentPriceBookComparisonVersions.find(
+    version => version.id === comparisonId
+  );
+
+  if(!openBook || !comparisonBook || !companyId){
+    alert('Select a saved Price Book version to compare.');
+    return;
+  }
+
+  $('runPriceBookComparisonBtn').disabled = true;
+  $('runPriceBookComparisonBtn').textContent = 'Comparing...';
+  $('priceBookComparisonResults').innerHTML =
+    '<p class="muted">Loading both versions...</p>';
+
+  const { data, error } = await sb
+    .from('price_book_items')
+    .select(`
+      price_book_id,
+      item_code,
+      item_name,
+      description,
+      install_price,
+      retirement_price,
+      unit_of_measure,
+      category,
+      active
+    `)
+    .eq('company_id', companyId)
+    .in('price_book_id', [openBook.id, comparisonBook.id]);
+
+  $('runPriceBookComparisonBtn').disabled = false;
+  $('runPriceBookComparisonBtn').textContent = 'Compare Unit Pricing';
+
+  if(error){
+    $('priceBookComparisonResults').innerHTML = '';
+    alert('Unable to compare Price Book versions: ' + error.message);
+    return;
+  }
+
+  const buildItemMap = priceBookId => new Map(
+    (data || [])
+      .filter(item => item.price_book_id === priceBookId)
+      .map(item => [
+        String(item.item_code || '').trim().toLowerCase(),
+        item
+      ])
+  );
+
+  const openItems = buildItemMap(openBook.id);
+  const comparisonItems = buildItemMap(comparisonBook.id);
+  const allCodes = new Set([
+    ...openItems.keys(),
+    ...comparisonItems.keys()
+  ]);
+  const differences = [];
+  let addedCount = 0;
+  let removedCount = 0;
+  let changedCount = 0;
+  let unchangedCount = 0;
+
+  [...allCodes]
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity:'base' }))
+    .forEach(code => {
+      const current = openItems.get(code);
+      const previous = comparisonItems.get(code);
+
+      if(current && !previous){
+        addedCount += 1;
+        differences.push({ type:'Added', code, current, previous:null });
+        return;
+      }
+
+      if(previous && !current){
+        removedCount += 1;
+        differences.push({ type:'Removed', code, current:null, previous });
+        return;
+      }
+
+      const detailsChanged = [
+        'item_name',
+        'description',
+        'unit_of_measure',
+        'category',
+        'active'
+      ].some(field =>
+        priceBookComparisonValueChanged(previous?.[field], current?.[field])
+      );
+
+      const priceChanged =
+        Number(previous?.install_price || 0) !==
+          Number(current?.install_price || 0) ||
+        Number(previous?.retirement_price || 0) !==
+          Number(current?.retirement_price || 0);
+
+      if(detailsChanged || priceChanged){
+        changedCount += 1;
+        differences.push({ type:'Changed', code, current, previous });
+      }else{
+        unchangedCount += 1;
+      }
+    });
+
+  const openLabel = openBook.version_name || 'Original';
+  const comparisonLabel = comparisonBook.version_name || 'Original';
+
+  let html =
+    '<div class="import-summary">' +
+      '<strong>' + escapeHtml(openLabel) + '</strong> compared with ' +
+      '<strong>' + escapeHtml(comparisonLabel) + '</strong><br>' +
+      addedCount + ' added · ' +
+      removedCount + ' removed · ' +
+      changedCount + ' changed · ' +
+      unchangedCount + ' unchanged' +
+    '</div>';
+
+  if(differences.length === 0){
+    html += '<p class="muted">These versions contain identical unit data.</p>';
+    $('priceBookComparisonResults').innerHTML = html;
+    return;
+  }
+
+  html +=
+    '<div class="import-table-wrap">' +
+      '<table class="import-table">' +
+        '<thead><tr>' +
+          '<th>Status</th>' +
+          '<th>Unit Code</th>' +
+          '<th>Install (' + escapeHtml(comparisonLabel) + ' → ' +
+            escapeHtml(openLabel) + ')</th>' +
+          '<th>Retirement (' + escapeHtml(comparisonLabel) + ' → ' +
+            escapeHtml(openLabel) + ')</th>' +
+          '<th>Description / Details</th>' +
+        '</tr></thead><tbody>';
+
+  differences.slice(0, 100).forEach(change => {
+    const previous = change.previous;
+    const current = change.current;
+    const detailsChanged = previous && current && [
+      'item_name',
+      'description',
+      'unit_of_measure',
+      'category',
+      'active'
+    ].some(field =>
+      priceBookComparisonValueChanged(previous[field], current[field])
+    );
+
+    html +=
+      '<tr>' +
+        '<td><strong>' + escapeHtml(change.type) + '</strong></td>' +
+        '<td>' + escapeHtml(current?.item_code || previous?.item_code || change.code) + '</td>' +
+        '<td>' +
+          escapeHtml(previous ? formatCurrency(previous.install_price) : '—') +
+          ' → ' +
+          escapeHtml(current ? formatCurrency(current.install_price) : '—') +
+        '</td>' +
+        '<td>' +
+          escapeHtml(previous ? formatCurrency(previous.retirement_price) : '—') +
+          ' → ' +
+          escapeHtml(current ? formatCurrency(current.retirement_price) : '—') +
+        '</td>' +
+        '<td>' + (detailsChanged ? 'Details changed' : '—') + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+
+  if(differences.length > 100){
+    html +=
+      '<p class="muted">Showing the first 100 of ' +
+      differences.length +
+      ' differences.</p>';
+  }
+
+  $('priceBookComparisonResults').innerHTML = html;
 };
 
 $('editPriceBookDetailsBtn').onclick = () => {
