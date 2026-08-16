@@ -994,6 +994,9 @@ button:disabled{
         <div>
           <label for="jobPackageWorkPointCode">Pole / Work Point</label>
           <input id="jobPackageWorkPointCode" placeholder="Example: Pole 18">
+          <div class="muted" style="font-size:13px;margin-top:5px">
+            Common formats such as 18, Pole 18 and WP-18 match automatically.
+          </div>
         </div>
         <div>
           <label for="jobPackageWorkPointDescription">Description</label>
@@ -3172,8 +3175,38 @@ function renderJobPackages(job, container){
     openButton.textContent = 'Manage Work Points';
     openButton.onclick = ()=> openJobPackageDetails(jobPackage);
     row.appendChild(openButton);
+    if(userIsCompanyAdmin()){
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'danger small';
+      deleteButton.textContent = 'Delete Test Package';
+      deleteButton.onclick = ()=> deleteJobPackage(jobPackage);
+      row.appendChild(deleteButton);
+    }
     container.appendChild(row);
   });
+}
+
+
+async function deleteJobPackage(jobPackage){
+  if(!confirm(
+    `Delete utility package "${jobPackage.package_name}"?\n\n` +
+    'Its package work points and authorized units will be removed. ' +
+    'Jobs, Price Books and daily reports will not be deleted.'
+  )){
+    return;
+  }
+
+  const { error } = await sb.rpc('delete_job_package', {
+    p_package_id:jobPackage.id
+  });
+
+  if(error){
+    return alert(error.message);
+  }
+
+  currentOpenJobPackage = null;
+  $('jobPackageDetailCard').classList.add('hidden');
+  await loadJobs();
 }
 
 
@@ -3287,6 +3320,13 @@ function renderJobPackageWorkPoints(lines){
             R: ${unit.approved_retirement_quantity}
           </div>
         `;
+        if(userIsCompanyAdmin()){
+          const deleteButton = document.createElement('button');
+          deleteButton.className = 'danger small';
+          deleteButton.textContent = 'Delete Authorized Unit';
+          deleteButton.onclick = ()=> deleteJobPackageAuthorizedUnit(unit);
+          row.appendChild(deleteButton);
+        }
         unitContainer.appendChild(row);
       });
     }
@@ -3303,10 +3343,50 @@ function renderJobPackageWorkPoints(lines){
       form.querySelector('.add-authorized-unit').onclick = ()=>
         saveJobPackageAuthorizedUnit(point.id, form);
       card.appendChild(form);
+
+      const deletePointButton = document.createElement('button');
+      deletePointButton.className = 'danger small';
+      deletePointButton.textContent = 'Delete Empty Work Point';
+      deletePointButton.onclick = ()=> deleteJobPackageWorkPoint(point);
+      card.appendChild(deletePointButton);
     }
 
     container.appendChild(card);
   });
+}
+
+
+async function deleteJobPackageAuthorizedUnit(unit){
+  if(!confirm(`Delete authorized unit ${unit.unit_code} from this work point?`)){
+    return;
+  }
+
+  const { error } = await sb.rpc('delete_job_package_authorized_unit', {
+    p_authorized_unit_id:unit.authorized_unit_id
+  });
+
+  if(error){
+    return alert(error.message);
+  }
+
+  await loadJobPackageWorkPoints();
+}
+
+
+async function deleteJobPackageWorkPoint(point){
+  if(!confirm(`Delete empty work point "${point.code}"?`)){
+    return;
+  }
+
+  const { error } = await sb.rpc('delete_job_package_work_point', {
+    p_work_point_id:point.id
+  });
+
+  if(error){
+    return alert(error.message);
+  }
+
+  await loadJobPackageWorkPoints();
 }
 
 
