@@ -707,6 +707,9 @@ button:disabled{
         <button id="copyJoinCodeBtn" class="secondary small">
           Copy Company Code
         </button>
+        <button id="rotateJoinCodeBtn" class="warning small">
+          Generate New Code
+        </button>
       </div>
     </div>
 
@@ -2128,6 +2131,44 @@ $('copyJoinCodeBtn').onclick = async () => {
   }catch(error){
     alert('Copy this company code: ' + currentCompany.join_code);
   }
+};
+
+$('rotateJoinCodeBtn').onclick = async () => {
+  if(!userIsCompanyAdmin()){
+    return;
+  }
+
+  const confirmed = confirm(
+    'Generate a new company code?\n\n' +
+    'The current code will stop working immediately. Existing team members will remain connected.'
+  );
+
+  if(!confirmed){
+    return;
+  }
+
+  $('rotateJoinCodeBtn').disabled = true;
+  $('rotateJoinCodeBtn').textContent = 'Generating...';
+
+  const { data:newCode, error } = await sb.rpc(
+    'rotate_company_join_code'
+  );
+
+  $('rotateJoinCodeBtn').disabled = false;
+  $('rotateJoinCodeBtn').textContent = 'Generate New Code';
+
+  if(error){
+    alert('Unable to generate a new company code: ' + error.message);
+    return;
+  }
+
+  currentCompany.join_code = newCode;
+  $('teamJoinCode').textContent = newCode;
+
+  alert(
+    'New company code created: ' + newCode + '\n\n' +
+    'The previous code no longer works.'
+  );
 };
 
 function formatTeamRole(role){
