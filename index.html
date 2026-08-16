@@ -1536,6 +1536,7 @@ let currentPriceBookItems = [];
 let currentPriceBookItemPage = 1;
 const PRICE_BOOK_ITEMS_PER_PAGE = 50;
 let currentPriceBookImportRows = [];
+let currentPriceBookImportSource = null;
 let currentOpenPriceBook = null;
 let currentPriceBookWorkbook = null;
 let currentPriceBookSourceRows = [];
@@ -3132,6 +3133,7 @@ async function loadPriceBooks(){
         effective_end,
         version_name,
         notes,
+        source_filename,
         active,
         created_at,
         updated_at
@@ -3469,6 +3471,29 @@ $('priceBookLibraryCustomer').onchange =
 
 /* OPEN PRICE BOOK */
 
+function formatAuditTimestamp(value){
+  if(!value){
+    return 'Not recorded';
+  }
+
+  const date = new Date(value);
+
+  if(Number.isNaN(date.getTime())){
+    return String(value);
+  }
+
+  return date.toLocaleString(
+    undefined,
+    {
+      year:'numeric',
+      month:'short',
+      day:'numeric',
+      hour:'numeric',
+      minute:'2-digit'
+    }
+  );
+}
+
 function openPriceBook(
   priceBook,
   contract,
@@ -3533,6 +3558,19 @@ function openPriceBook(
         ? '<br>Notes: ' +
             escapeHtml(priceBook.notes)
         : '') +
+      '<br>Import Source: <strong>' +
+        escapeHtml(priceBook.source_filename || 'Not recorded') +
+      '</strong>' +
+      '<br>Created: <strong>' +
+        escapeHtml(formatAuditTimestamp(priceBook.created_at)) +
+      '</strong>' +
+      '<br>Last Version Update: <strong>' +
+        escapeHtml(
+          formatAuditTimestamp(
+            priceBook.updated_at || priceBook.created_at
+          )
+        ) +
+      '</strong>' +
     '</div>' +
     '<p class="muted">' +
       'Search, add and manage the unit pricing for this Price Book below.' +
@@ -3733,7 +3771,8 @@ $('savePriceBookDetailsBtn').onclick = async () => {
       effective_date:effectiveStart,
       effective_start:effectiveStart,
       effective_end:effectiveEnd,
-      notes:notes
+      notes:notes,
+      updated_at:new Date().toISOString()
     })
     .eq('id', priceBook.id)
     .eq('company_id', companyId)
@@ -4172,6 +4211,7 @@ function resetPriceBookImport(){
     .add('hidden');
 
   currentPriceBookImportRows = [];
+  currentPriceBookImportSource = null;
   currentPriceBookSourceRows = [];
   currentPriceBookWorkbook = null;
   $('priceBookImportFile').value = '';
@@ -4773,6 +4813,7 @@ $('previewPastedPriceBookItemsBtn').onclick = () => {
     $('priceBookImportPaste').value.trim();
 
   currentPriceBookImportRows = [];
+  currentPriceBookImportSource = 'Pasted spreadsheet data';
   currentPriceBookWorkbook = null;
   $('priceBookWorksheetWrap')
     .classList
@@ -4830,6 +4871,7 @@ $('previewPastedPriceBookItemsBtn').onclick = () => {
 async function handlePriceBookImportFile(file){
 
   currentPriceBookImportRows = [];
+  currentPriceBookImportSource = null;
   currentPriceBookWorkbook = null;
   $('priceBookWorksheetWrap')
     .classList
@@ -4868,6 +4910,10 @@ async function handlePriceBookImportFile(file){
 
     return;
   }
+
+  currentPriceBookImportSource =
+    String(file.name || '').trim() ||
+    'Uploaded pricing file';
 
   if(typeof XLSX === 'undefined'){
 
@@ -5124,15 +5170,50 @@ $('confirmPriceBookImportBtn').onclick = async () => {
     return;
   }
 
+  const auditTimestamp =
+    new Date().toISOString();
+
+  const originalImportSource =
+    currentOpenPriceBook?.source_filename ||
+    currentPriceBookImportSource ||
+    null;
+
+  const { error:auditError } = await sb
+    .from('price_books')
+    .update({
+      source_filename:originalImportSource,
+      updated_at:auditTimestamp
+    })
+    .eq('id', priceBookId)
+    .eq('company_id', currentProfile.company_id);
+
   resetPriceBookImport();
 
-  await loadPriceBookItems(priceBookId);
+  await loadPriceBooks();
+
+  const refreshed =
+    priceBookNavigationRecords.get(priceBookId);
+
+  if(refreshed){
+    openPriceBook(
+      refreshed.priceBook,
+      refreshed.contract,
+      refreshed.customer,
+      false
+    );
+  }else{
+    await loadPriceBookItems(priceBookId);
+  }
 
   alert(
     insertRows.length +
     ' unit' +
     (insertRows.length === 1 ? '' : 's') +
-    ' imported successfully.'
+    ' imported successfully.' +
+    (auditError
+      ? '\n\nThe units were saved, but the import audit details could not be updated: ' +
+        auditError.message
+      : '')
   );
 };
 
