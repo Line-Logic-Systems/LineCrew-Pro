@@ -420,8 +420,8 @@ button:disabled{
 
 .daily-batch-entry{
   position:relative;
-  padding:12px;
-  margin:10px 0;
+  padding:8px;
+  margin:6px 0;
   border:1px solid #d7e1ea;
   border-radius:10px;
   background:#f9fbfc;
@@ -429,18 +429,26 @@ button:disabled{
 
 .daily-batch-grid{
   display:grid;
-  grid-template-columns:70px minmax(180px, .8fr) minmax(260px, 2fr) 150px 100px;
-  gap:10px;
+  grid-template-columns:54px minmax(130px, .8fr) minmax(180px, 1.6fr) 125px 76px;
+  gap:7px;
   align-items:start;
+}
+
+.daily-batch-grid > *{
+  min-width:0;
 }
 
 .daily-batch-grid input,
 .daily-batch-grid select{
+  box-sizing:border-box;
+  width:100%;
+  max-width:100%;
   margin:0;
+  padding:9px 8px;
 }
 
 .daily-batch-number{
-  padding-top:34px;
+  padding-top:31px;
   font-weight:800;
   color:var(--navy);
 }
