@@ -88,19 +88,19 @@ begin
     ) end,
     case
       when package_summary.package_count = 0 then 'pending_packet'
-      when authorization.authorized_unit_count = 0 then 'redline'
-      when production.reported_install > authorization.authorized_install or
-           production.reported_retirement > authorization.authorized_retirement
+      when auth_summary.authorized_unit_count = 0 then 'redline'
+      when production.reported_install > auth_summary.authorized_install or
+           production.reported_retirement > auth_summary.authorized_retirement
         then 'redline'
       else 'authorized'
     end,
     case
       when package_summary.package_count = 0
         then 'No utility job packet has been added yet. This entry will reconcile when a packet is imported.'
-      when authorization.authorized_unit_count = 0
+      when auth_summary.authorized_unit_count = 0
         then 'This unit is not authorized at this pole or work point in the utility job packet.'
-      when production.reported_install > authorization.authorized_install or
-           production.reported_retirement > authorization.authorized_retirement
+      when production.reported_install > auth_summary.authorized_install or
+           production.reported_retirement > auth_summary.authorized_retirement
         then 'Reported quantity exceeds the utility-authorized quantity at this pole or work point.'
       else null
     end
@@ -128,7 +128,7 @@ begin
       and public.normalize_work_point_key(point.work_point_code) =
           public.normalize_work_point_key(location_line.pole_location)
       and authorized.price_book_item_id = location_line.price_book_item_id
-  ) authorization
+  ) auth_summary
   cross join lateral (
     select coalesce(sum(other_location.install_quantity), 0) as reported_install,
       coalesce(sum(other_location.retirement_quantity), 0) as reported_retirement
