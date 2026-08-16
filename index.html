@@ -700,7 +700,7 @@ button:disabled{
       <h3>Invite Team Members</h3>
       <p class="muted">
         Give this code only to people who should join your company.
-        New members start with the Employee role.
+        New members start with the Foreman role.
       </p>
       <div class="button-row">
         <strong id="teamJoinCode" class="role"></strong>
@@ -1854,7 +1854,9 @@ async function loadApp(){
 
 
   $('userRole').textContent =
-    profile.role || 'employee';
+    String(profile.role || 'foreman').toLowerCase() === 'employee'
+      ? 'foreman'
+      : profile.role;
 
 
   if(profile.role === 'admin'){
@@ -2109,11 +2111,10 @@ function formatTeamRole(role){
   const roleLabels = {
     admin:'Admin',
     gf:'General Foreman',
-    foreman:'Foreman',
-    employee:'Employee'
+    foreman:'Foreman'
   };
 
-  return roleLabels[String(role || '').toLowerCase()] || 'Employee';
+  return roleLabels[String(role || '').toLowerCase()] || 'Foreman';
 }
 
 async function loadTeamMembers(){
@@ -2181,7 +2182,6 @@ async function loadTeamMembers(){
       roleSelect.className = 'team-role-select';
 
       [
-        ['employee', 'Employee'],
         ['foreman', 'Foreman'],
         ['gf', 'General Foreman'],
         ['admin', 'Admin']
@@ -2192,7 +2192,8 @@ async function loadTeamMembers(){
         roleSelect.appendChild(option);
       });
 
-      roleSelect.value = String(member.role || 'employee').toLowerCase();
+      const memberRole = String(member.role || 'foreman').toLowerCase();
+      roleSelect.value = memberRole === 'employee' ? 'foreman' : memberRole;
 
       const saveButton = document.createElement('button');
       saveButton.className = 'secondary small';
@@ -2219,7 +2220,8 @@ async function updateTeamMemberRole(member, nextRole, adminCount){
     return;
   }
 
-  const currentRole = String(member.role || 'employee').toLowerCase();
+  const storedRole = String(member.role || 'foreman').toLowerCase();
+  const currentRole = storedRole === 'employee' ? 'foreman' : storedRole;
 
   if(currentRole === nextRole){
     alert('This team member already has that role.');
@@ -2241,11 +2243,13 @@ async function updateTeamMemberRole(member, nextRole, adminCount){
     return;
   }
 
-  const { error } = await sb
-    .from('profiles')
-    .update({ role:nextRole })
-    .eq('id', member.id)
-    .eq('company_id', currentProfile.company_id);
+  const { error } = await sb.rpc(
+    'set_company_member_role',
+    {
+      p_member_id:member.id,
+      p_role:nextRole
+    }
+  );
 
   if(error){
     alert('Unable to update the team member’s role: ' + error.message);
