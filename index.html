@@ -5229,7 +5229,7 @@ $('sendAssistantQuestion').onclick = async () => {
 
   try{
     const { data, error } = await sb.functions.invoke('linecrew-assistant', {
-      body:{ question, page:getCurrentAppPageId() }
+      body:{ question, page:window.history.state?.lineCrewPage || 'dashboardPage' }
     });
     if(error) throw error;
     const answer = String(data?.answer || '').trim();
