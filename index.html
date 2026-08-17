@@ -1120,12 +1120,65 @@ button:disabled{
 
   </div>
 
+  <div id="dashboardReviewAlert" class="card hidden" role="status">
+    <div class="section-header">
+      <div>
+        <h3>Production Needs Review</h3>
+        <p id="dashboardReviewAlertText" class="muted"></p>
+      </div>
+      <button id="openProductionReview" class="small">Review Reports</button>
+    </div>
+  </div>
+
   <div id="adminNotice" class="card hidden">
     <h2>Admin Controls</h2>
 
     <p class="muted">
       Company settings, users, pricing and permissions.
     </p>
+
+    <div class="job-card">
+      <h3>Company Settings</h3>
+      <p class="muted">
+        These details appear in LineCrew Pro and on printed daily reports.
+      </p>
+      <div class="form-grid">
+        <div>
+          <label for="companyDisplayName">Company Display Name</label>
+          <input id="companyDisplayName" maxlength="120">
+        </div>
+        <div>
+          <label for="companyTimezone">Company Time Zone</label>
+          <select id="companyTimezone">
+            <option value="America/Chicago">Central Time</option>
+            <option value="America/New_York">Eastern Time</option>
+            <option value="America/Denver">Mountain Time</option>
+            <option value="America/Los_Angeles">Pacific Time</option>
+            <option value="America/Anchorage">Alaska Time</option>
+            <option value="Pacific/Honolulu">Hawaii Time</option>
+          </select>
+        </div>
+        <div>
+          <label for="companyContactEmail">Company Email</label>
+          <input id="companyContactEmail" type="email" maxlength="254">
+        </div>
+        <div>
+          <label for="companyContactPhone">Company Phone</label>
+          <input id="companyContactPhone" type="tel" maxlength="40">
+        </div>
+        <div>
+          <label for="companyLogoUrl">Logo Image URL</label>
+          <input id="companyLogoUrl" type="url" maxlength="1000" placeholder="https://...">
+        </div>
+        <div>
+          <label for="companyPrimaryColor">Brand Color</label>
+          <input id="companyPrimaryColor" type="color" value="#0b2d4d">
+        </div>
+      </div>
+      <button id="saveCompanySettings" class="success small">
+        Save Company Settings
+      </button>
+    </div>
 
     <div class="job-card">
       <h3>Redline Approval</h3>
@@ -2653,7 +2706,7 @@ async function loadApp(){
   } =
     await sb
       .from('companies')
-      .select('id,name,join_code,require_gf_redline_approval')
+      .select('*')
       .eq('id',profile.company_id)
       .single();
 
@@ -2672,6 +2725,17 @@ async function loadApp(){
   $('requireGfRedlineApproval').checked =
     company.require_gf_redline_approval === true;
 
+  $('companyDisplayName').value = company?.name || '';
+  $('companyContactEmail').value = company?.contact_email || '';
+  $('companyContactPhone').value = company?.contact_phone || '';
+  $('companyLogoUrl').value = company?.logo_url || '';
+  $('companyPrimaryColor').value =
+    /^#[0-9a-f]{6}$/i.test(company?.primary_color || '')
+      ? company.primary_color
+      : '#0b2d4d';
+  $('companyTimezone').value =
+    company?.timezone || 'America/Chicago';
+  applyCompanyBranding(company);
 
   $('companyName').textContent =
     company?.name || 'LineCrew Pro';
@@ -2700,6 +2764,7 @@ async function loadApp(){
       .add('hidden');
   }
 
+  await loadDashboardReviewAlert();
 
   const savedState = window.history.state;
 
@@ -4885,8 +4950,89 @@ sb.auth.onAuthStateChange((event)=>{
 
 /* PRODUCTION PAGE */
 
+async function loadDashboardReviewAlert(){
+  const alertCard = $('dashboardReviewAlert');
+  const canReview = ['admin','gf'].includes(
+    String(currentProfile?.role || '').toLowerCase()
+  );
+
+  if(!canReview){
+    alertCard.classList.add('hidden');
+    return;
+  }
+
+  const { count, error } = await sb
+    .from('daily_reports')
+    .select('id', { count:'exact', head:true })
+    .eq('company_id', currentProfile.company_id)
+    .eq('status', 'submitted');
+
+  if(error || !count){
+    alertCard.classList.add('hidden');
+    return;
+  }
+
+  $('dashboardReviewAlertText').textContent =
+    count + ' submitted daily report' + (count === 1 ? '' : 's') +
+    ' waiting for GF/Admin review.';
+  alertCard.classList.remove('hidden');
+}
+
+$('openProductionReview').onclick = async () => {
+  await navigateToAppPage('productionPage');
+};
+
 $('productionTile').onclick = async () => {
   await navigateToAppPage('productionPage');
+};
+
+function applyCompanyBranding(company){
+  const primaryColor =
+    /^#[0-9a-f]{6}$/i.test(company?.primary_color || '')
+      ? company.primary_color
+      : '#0b2d4d';
+  document.documentElement.style.setProperty('--navy', primaryColor);
+  document.querySelector('meta[name="theme-color"]')
+    ?.setAttribute('content', primaryColor);
+}
+
+$('saveCompanySettings').onclick = async () => {
+  if(!userIsCompanyAdmin()) return;
+
+  const name = $('companyDisplayName').value.trim();
+  if(!name){
+    alert('Company Display Name is required.');
+    return;
+  }
+
+  const button = $('saveCompanySettings');
+  button.disabled = true;
+  button.textContent = 'Saving...';
+
+  const { data, error } = await sb.rpc('update_company_settings', {
+    p_name:name,
+    p_contact_email:$('companyContactEmail').value.trim() || null,
+    p_contact_phone:$('companyContactPhone').value.trim() || null,
+    p_logo_url:$('companyLogoUrl').value.trim() || null,
+    p_primary_color:$('companyPrimaryColor').value,
+    p_timezone:$('companyTimezone').value
+  });
+
+  button.disabled = false;
+  button.textContent = 'Save Company Settings';
+
+  if(error){
+    alert('Unable to save company settings: ' + error.message);
+    return;
+  }
+
+  currentCompany = {
+    ...currentCompany,
+    ...(Array.isArray(data) ? data[0] : data)
+  };
+  $('companyName').textContent = currentCompany.name || 'LineCrew Pro';
+  applyCompanyBranding(currentCompany);
+  alert('Company settings saved.');
 };
 
 $('saveRedlineApprovalSetting').onclick = async () => {
@@ -10016,6 +10162,19 @@ ${report.review_notes ? `
     historyButton.onclick = () => toggleDailyReportHistory(report, card, historyButton);
     card.appendChild(historyButton);
 
+    const printButton = document.createElement('button');
+    printButton.className = 'secondary small';
+    printButton.textContent = 'Print / Save PDF';
+    printButton.onclick = () => printDailyReport(report);
+    card.appendChild(printButton);
+
+    const attachmentsButton = document.createElement('button');
+    attachmentsButton.className = 'secondary small';
+    attachmentsButton.textContent = 'Attachments';
+    attachmentsButton.onclick = () =>
+      toggleDailyReportAttachments(report, card, attachmentsButton);
+    card.appendChild(attachmentsButton);
+
 if(
   String(report.status || 'draft').toLowerCase() === 'draft'
 ){
@@ -10153,6 +10312,287 @@ card.appendChild(editBtn);
 
   card.appendChild(submitBtn);
 
+}
+
+function safeStorageFilename(filename){
+  const parts = String(filename || 'attachment').split('.');
+  const extension = parts.length > 1
+    ? '.' + parts.pop().replace(/[^a-z0-9]/gi, '').slice(0, 12).toLowerCase()
+    : '';
+  const base = parts.join('.')
+    .replace(/[^a-z0-9_-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'attachment';
+  return base + extension;
+}
+
+async function toggleDailyReportAttachments(report, card, button){
+  const existing = card.querySelector('.daily-report-attachments');
+  if(existing){
+    existing.remove();
+    button.textContent = 'Attachments';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Loading Attachments...';
+
+  const panel = document.createElement('div');
+  panel.className = 'daily-report-attachments daily-report-history';
+  panel.innerHTML =
+    '<strong>Report Attachments</strong>' +
+    '<p class="muted">Photos, utility paperwork, sketches, PDFs or spreadsheets. Maximum 15 MB per file.</p>' +
+    '<div class="attachment-upload-row">' +
+      '<input class="attachment-file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.xlsx,.csv">' +
+      '<input class="attachment-caption" maxlength="500" placeholder="Optional caption">' +
+      '<button class="success small attachment-upload">Upload</button>' +
+    '</div>' +
+    '<div class="attachment-list"><p class="muted">Loading...</p></div>';
+  card.appendChild(panel);
+
+  const refresh = async () => {
+    const list = panel.querySelector('.attachment-list');
+    const { data, error } = await sb
+      .from('daily_report_attachments')
+      .select('id,storage_path,original_filename,mime_type,file_size_bytes,caption,uploaded_by,created_at')
+      .eq('daily_report_id', report.id)
+      .order('created_at', { ascending:false });
+
+    if(error){
+      list.innerHTML =
+        '<p class="danger-text">Unable to load attachments: ' +
+        escapeHtml(error.message) + '</p>';
+      return;
+    }
+
+    list.innerHTML = '';
+    if(!data || data.length === 0){
+      list.innerHTML = '<p class="muted">No attachments added yet.</p>';
+      return;
+    }
+
+    data.forEach(attachment => {
+      const row = document.createElement('div');
+      row.className = 'job-card';
+      const size = attachment.file_size_bytes
+        ? (Number(attachment.file_size_bytes) / 1048576).toFixed(1) + ' MB'
+        : '';
+      row.innerHTML =
+        '<strong>' + escapeHtml(attachment.original_filename) + '</strong>' +
+        (attachment.caption
+          ? '<br><span>' + escapeHtml(attachment.caption) + '</span>'
+          : '') +
+        '<br><span class="muted">' +
+          escapeHtml(size) +
+          (attachment.created_at
+            ? ' · ' + escapeHtml(new Date(attachment.created_at).toLocaleString())
+            : '') +
+        '</span> ';
+
+      const openButton = document.createElement('button');
+      openButton.className = 'secondary small';
+      openButton.textContent = 'Open';
+      openButton.onclick = async () => {
+        const { data:signed, error:signedError } = await sb.storage
+          .from('daily-report-attachments')
+          .createSignedUrl(attachment.storage_path, 300);
+        if(signedError){
+          alert('Unable to open attachment: ' + signedError.message);
+          return;
+        }
+        window.open(signed.signedUrl, '_blank', 'noopener');
+      };
+      row.appendChild(openButton);
+
+      const canDelete =
+        attachment.uploaded_by === currentProfile?.id ||
+        ['admin','gf'].includes(String(currentProfile?.role || '').toLowerCase());
+      if(canDelete){
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'danger small';
+        deleteButton.textContent = 'Delete';
+        deleteButton.onclick = async () => {
+          if(!confirm('Delete this report attachment?')) return;
+          deleteButton.disabled = true;
+          const { data:path, error:metadataError } = await sb.rpc(
+            'delete_daily_report_attachment',
+            { p_attachment_id:attachment.id }
+          );
+          if(metadataError){
+            deleteButton.disabled = false;
+            alert('Unable to delete attachment: ' + metadataError.message);
+            return;
+          }
+          const { error:storageError } = await sb.storage
+            .from('daily-report-attachments')
+            .remove([path]);
+          if(storageError){
+            alert('Attachment record was removed, but storage cleanup needs Admin attention: ' +
+              storageError.message);
+          }
+          await refresh();
+        };
+        row.appendChild(deleteButton);
+      }
+      list.appendChild(row);
+    });
+  };
+
+  panel.querySelector('.attachment-upload').onclick = async event => {
+    const uploadButton = event.currentTarget;
+    const file = panel.querySelector('.attachment-file').files?.[0];
+    const caption = panel.querySelector('.attachment-caption').value.trim();
+    if(!file){
+      alert('Choose a file first.');
+      return;
+    }
+    if(file.size > 15728640){
+      alert('Attachment must be 15 MB or smaller.');
+      return;
+    }
+
+    uploadButton.disabled = true;
+    uploadButton.textContent = 'Uploading...';
+    const path =
+      currentProfile.company_id + '/' + report.id + '/' +
+      crypto.randomUUID() + '-' + safeStorageFilename(file.name);
+
+    const { error:uploadError } = await sb.storage
+      .from('daily-report-attachments')
+      .upload(path, file, { upsert:false, contentType:file.type || undefined });
+
+    if(uploadError){
+      uploadButton.disabled = false;
+      uploadButton.textContent = 'Upload';
+      alert('Unable to upload attachment: ' + uploadError.message);
+      return;
+    }
+
+    const { error:registerError } = await sb.rpc(
+      'register_daily_report_attachment',
+      {
+        p_report_id:report.id,
+        p_storage_path:path,
+        p_original_filename:file.name,
+        p_mime_type:file.type || null,
+        p_file_size_bytes:file.size,
+        p_caption:caption || null
+      }
+    );
+
+    if(registerError){
+      await sb.storage.from('daily-report-attachments').remove([path]);
+      uploadButton.disabled = false;
+      uploadButton.textContent = 'Upload';
+      alert('Unable to register attachment: ' + registerError.message);
+      return;
+    }
+
+    panel.querySelector('.attachment-file').value = '';
+    panel.querySelector('.attachment-caption').value = '';
+    uploadButton.disabled = false;
+    uploadButton.textContent = 'Upload';
+    await refresh();
+  };
+
+  button.disabled = false;
+  button.textContent = 'Hide Attachments';
+  await refresh();
+}
+
+async function printDailyReport(report){
+  const printWindow = window.open('', '_blank');
+  if(!printWindow){
+    alert('Allow pop-ups for LineCrew Pro to print this report.');
+    return;
+  }
+
+  printWindow.document.write(
+    '<p style="font-family:Arial;padding:24px">Preparing daily report...</p>'
+  );
+
+  const { data:units, error } = await sb.rpc(
+    'get_daily_report_unit_locations',
+    { p_report_id:report.id }
+  );
+
+  if(error){
+    printWindow.close();
+    alert('Unable to prepare printable report: ' + error.message);
+    return;
+  }
+
+  const companyName = currentCompany?.name || 'LineCrew Pro';
+  const unitRows = (units || []).map(item => {
+    const code = item.item_code || item.unit_code || '';
+    const description =
+      item.item_name || item.unit_name || item.description || item.unit_description || '';
+    const location = item.pole_location || item.work_point || '';
+    const installed = Number(item.install_quantity || 0);
+    const removed = Number(item.retirement_quantity || item.remove_quantity || 0);
+    const status = String(item.authorization_status || '').replaceAll('_', ' ');
+    return '<tr>' +
+      '<td>' + escapeHtml(location) + '</td>' +
+      '<td><strong>' + escapeHtml(code) + '</strong><br>' +
+        escapeHtml(description) + '</td>' +
+      '<td>' + installed + '</td>' +
+      '<td>' + removed + '</td>' +
+      '<td>' + escapeHtml(status) + '</td>' +
+    '</tr>';
+  }).join('');
+
+  const logo = currentCompany?.logo_url
+    ? '<img class="logo" src="' + escapeHtml(currentCompany.logo_url) + '" alt="">'
+    : '';
+
+  const html = '<!doctype html><html><head><title>Daily Report ' +
+    escapeHtml(report.jobs?.job_number || '') +
+    '</title><style>' +
+    'body{font-family:Arial,sans-serif;color:#102235;margin:32px}' +
+    '.header{display:flex;justify-content:space-between;gap:20px;border-bottom:3px solid ' +
+      (currentCompany?.primary_color || '#0b2d4d') + ';padding-bottom:16px}' +
+    '.logo{max-height:70px;max-width:220px;object-fit:contain}' +
+    'h1,h2{margin:0 0 8px}.meta{line-height:1.55;margin:20px 0}' +
+    'table{width:100%;border-collapse:collapse;margin-top:18px}' +
+    'th,td{border:1px solid #ccd6df;padding:8px;text-align:left;vertical-align:top}' +
+    'th{background:#eef3f7}.notes{white-space:pre-wrap;border:1px solid #ccd6df;padding:12px}' +
+    '.footer{margin-top:28px;color:#607080;font-size:12px}' +
+    '@media print{button{display:none}body{margin:12mm}}' +
+    '</style></head><body>' +
+    '<div class="header"><div><h1>' + escapeHtml(companyName) + '</h1>' +
+    '<h2>Daily Production Report</h2></div>' + logo + '</div>' +
+    '<div class="meta">' +
+    '<strong>Job:</strong> ' + escapeHtml(report.jobs?.job_number || '') +
+      ' — ' + escapeHtml(report.jobs?.job_name || '') + '<br>' +
+    '<strong>Work Date:</strong> ' + escapeHtml(report.work_date || '') + '<br>' +
+    '<strong>Foreman:</strong> ' + escapeHtml(report.foreman_name || '') + '<br>' +
+    '<strong>Crew:</strong> ' + escapeHtml(report.crew_name || '') + '<br>' +
+    '<strong>Hours:</strong> ' + Number(report.regular_hours || 0) +
+      ' regular / ' + Number(report.overtime_hours || 0) + ' OT<br>' +
+    '<strong>Weather:</strong> ' + escapeHtml(report.weather_conditions || '') + '<br>' +
+    '<strong>Delay:</strong> ' + Number(report.delay_hours || 0) +
+      ' hour(s) — ' + escapeHtml(report.delay_reason || '') + '<br>' +
+    '<strong>Status:</strong> ' + escapeHtml(String(report.status || '').toUpperCase()) +
+    '</div>' +
+    '<h2>Unit Production</h2>' +
+    '<table><thead><tr><th>Pole / Location</th><th>Unit</th>' +
+      '<th>Installed</th><th>Removed</th><th>Review</th></tr></thead><tbody>' +
+      (unitRows || '<tr><td colspan="5">No units entered.</td></tr>') +
+    '</tbody></table>' +
+    '<h2 style="margin-top:24px">Daily Notes</h2><div class="notes">' +
+      escapeHtml(report.notes || 'No notes entered.') + '</div>' +
+    (report.review_notes
+      ? '<h2 style="margin-top:24px">Review Notes</h2><div class="notes">' +
+        escapeHtml(report.review_notes) + '</div>'
+      : '') +
+    '<div class="footer">Generated by LineCrew Pro on ' +
+      escapeHtml(new Date().toLocaleString()) + '</div>' +
+    '<script>window.onload=function(){window.print()}<\/script>' +
+    '</body></html>';
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
 }
 
 async function toggleDailyReportHistory(report, card, button){
