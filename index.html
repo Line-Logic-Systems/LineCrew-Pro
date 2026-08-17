@@ -260,6 +260,67 @@ input[type="color"]{
 }
 
 
+.assistant-launcher{
+  position:fixed;
+  right:20px;
+  bottom:20px;
+  width:auto;
+  z-index:30;
+  box-shadow:0 8px 24px rgba(11,45,77,.22);
+}
+
+.assistant-panel{
+  position:fixed;
+  right:20px;
+  bottom:78px;
+  width:min(440px, calc(100vw - 32px));
+  max-height:min(680px, calc(100vh - 110px));
+  overflow:auto;
+  z-index:29;
+  border:1px solid var(--border);
+  box-shadow:0 18px 48px rgba(11,45,77,.25);
+}
+
+.assistant-messages{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin:12px 0;
+}
+
+.assistant-message{
+  padding:10px 12px;
+  border-radius:12px;
+  white-space:pre-wrap;
+  line-height:1.45;
+}
+
+.assistant-message.user{
+  background:#e8f1fa;
+  align-self:flex-end;
+  max-width:88%;
+}
+
+.assistant-message.assistant{
+  background:#f3f6f8;
+  border:1px solid var(--border);
+}
+
+.assistant-quick-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.assistant-quick-actions button{
+  width:auto;
+}
+
+@media (max-width:600px){
+  .assistant-launcher{right:12px;bottom:12px;}
+  .assistant-panel{right:8px;bottom:66px;width:calc(100vw - 16px);}
+}
+
 button{
   width:100%;
   padding:14px;
@@ -2490,6 +2551,31 @@ button:disabled{
 
 </section>
   
+  <button id="assistantLauncher" class="assistant-launcher hidden" aria-controls="assistantPanel" aria-expanded="false">
+    Ask LineCrew Assistant
+  </button>
+
+  <section id="assistantPanel" class="card assistant-panel hidden" aria-label="LineCrew Assistant">
+    <div class="section-header">
+      <div>
+        <h2>LineCrew Assistant</h2>
+        <p class="muted">Admin help for setup, pricing, jobs and production.</p>
+      </div>
+      <button id="closeAssistant" class="secondary small">Close</button>
+    </div>
+    <div class="assistant-quick-actions" id="assistantQuickActions">
+      <button class="secondary small" data-assistant-question="How do I import a Price Book?">Import Price Book</button>
+      <button class="secondary small" data-assistant-question="How do I upload a utility job packet?">Upload Job Packet</button>
+      <button class="secondary small" data-assistant-question="How do I review and approve a daily report?">Review Reports</button>
+      <button class="secondary small" data-assistant-question="What does a redline mean?">Redlines</button>
+    </div>
+    <div id="assistantMessages" class="assistant-messages" aria-live="polite"></div>
+    <label for="assistantQuestion">Ask a question</label>
+    <textarea id="assistantQuestion" rows="3" maxlength="1200" placeholder="Example: Why is this daily report pending?"></textarea>
+    <button id="sendAssistantQuestion">Ask Assistant</button>
+    <p class="muted">The assistant provides app guidance. Verify contract, safety and billing decisions before acting.</p>
+  </section>
+
   </main>
 
 
@@ -2809,12 +2895,15 @@ async function loadApp(){
 
   if(profile.role === 'admin'){
 
+    $('assistantLauncher').classList.remove('hidden');
     $('adminNotice')
       .classList
       .remove('hidden');
 
   }else{
 
+    $('assistantLauncher').classList.add('hidden');
+    $('assistantPanel').classList.add('hidden');
     $('adminNotice')
       .classList
       .add('hidden');
@@ -5044,6 +5133,123 @@ function escapeHtml(value){
 }
 
 
+/* LINECREW ASSISTANT */
+
+const assistantBuiltInHelp = [
+  {
+    terms:['price book','pricing','units','import price'],
+    answer:'To import pricing: open Price Books, open the correct contract Price Book, choose Import CSV / Excel, select the worksheet, map Unit Code, Description and price columns, preview the rows, then confirm. Duplicate the Price Book as a new version before loading revised utility pricing so history is preserved.'
+  },
+  {
+    terms:['job packet','utility packet','work point','pole packet'],
+    answer:'Open Jobs, select the job, add or open its Utility Job Package, then choose Import CSV / Excel. Map the pole/work-point, unit code and quantity fields, review the preview, and confirm. Production entered before the packet arrives will reconcile by normalized pole/location and unit code.'
+  },
+  {
+    terms:['daily report','approve','review','submitted'],
+    answer:'Open Production. Submitted reports appear in the review queue. Expand the report, review hours, units, pole locations and exception badges, then Approve or Return Report with notes. If your company requires GF redline approval, an Admin needs an override reason when the GF is unavailable.'
+  },
+  {
+    terms:['redline','not authorized','extra unit'],
+    answer:'A redline is production reported for a unit or quantity not authorized at that utility work point. It is kept visible for review instead of being silently rejected. The GF/Admin should verify the field change and approve or return the report according to company policy.'
+  },
+  {
+    terms:['pending packet','packet pending','no packet'],
+    answer:'Pending Packet means the Foreman reported production before a utility job packet was loaded. This is allowed. After an Admin imports the packet, LineCrew Pro reconciles matching pole/location and unit codes; unmatched work remains visible for review.'
+  },
+  {
+    terms:['team','foreman','general foreman','role','invite'],
+    answer:'Open Team, copy the company code and give it only to approved workers. New members join as Foremen. An Admin may promote them to General Foreman. Keep at least one Admin assigned at all times.'
+  },
+  {
+    terms:['password','forgot','login','sign in'],
+    answer:'On the Sign In screen, enter the account email and choose Forgot Password. Open the recovery email on the same device, enter matching passwords with at least eight characters, and save.'
+  },
+  {
+    terms:['customer','utility','contract'],
+    answer:'Open Price Books to manage Customers / Utilities and Contracts. Create the customer first, create its contract second, then create a Price Book tied to that contract. Every record remains scoped to the signed-in contractor company.'
+  }
+];
+
+function addAssistantMessage(role, text){
+  const message = document.createElement('div');
+  message.className = 'assistant-message ' + role;
+  message.textContent = text;
+  $('assistantMessages').appendChild(message);
+  message.scrollIntoView({block:'nearest'});
+}
+
+function findBuiltInAssistantAnswer(question){
+  const normalized = String(question || '').toLowerCase();
+  let best = null;
+  let bestScore = 0;
+  assistantBuiltInHelp.forEach(article => {
+    const score = article.terms.reduce(
+      (total, term) => total + (normalized.includes(term) ? 1 : 0),
+      0
+    );
+    if(score > bestScore){
+      best = article;
+      bestScore = score;
+    }
+  });
+  return best?.answer ||
+    'I can help with Price Books, utility job packets, daily reports, approvals, redlines, pending packets, team roles and account access. Try asking what you are trying to complete or what message you see.';
+}
+
+function setAssistantOpen(open){
+  $('assistantPanel').classList.toggle('hidden', !open);
+  $('assistantLauncher').setAttribute('aria-expanded', String(open));
+  if(open && !$('assistantMessages').children.length){
+    addAssistantMessage(
+      'assistant',
+      'How can I help? Ask about any LineCrew Pro workflow or problem.'
+    );
+  }
+  if(open) $('assistantQuestion').focus();
+}
+
+$('assistantLauncher').onclick = () => setAssistantOpen(true);
+$('closeAssistant').onclick = () => setAssistantOpen(false);
+
+document.querySelectorAll('[data-assistant-question]').forEach(button => {
+  button.onclick = () => {
+    $('assistantQuestion').value = button.dataset.assistantQuestion || '';
+    $('sendAssistantQuestion').click();
+  };
+});
+
+$('sendAssistantQuestion').onclick = async () => {
+  const question = $('assistantQuestion').value.trim();
+  if(!question) return;
+  addAssistantMessage('user', question);
+  $('assistantQuestion').value = '';
+  const button = $('sendAssistantQuestion');
+  button.disabled = true;
+  button.textContent = 'Thinking...';
+
+  try{
+    const { data, error } = await sb.functions.invoke('linecrew-assistant', {
+      body:{ question, page:window.history.state?.lineCrewPage || 'dashboardPage' }
+    });
+    if(error) throw error;
+    const answer = String(data?.answer || '').trim();
+    if(!answer) throw new Error('No answer returned');
+    addAssistantMessage('assistant', answer);
+  }catch(error){
+    addAssistantMessage('assistant', findBuiltInAssistantAnswer(question));
+  }finally{
+    button.disabled = false;
+    button.textContent = 'Ask Assistant';
+  }
+};
+
+$('assistantQuestion').addEventListener('keydown', event => {
+  if(event.key === 'Enter' && (event.ctrlKey || event.metaKey)){
+    event.preventDefault();
+    $('sendAssistantQuestion').click();
+  }
+});
+
 /* AUTH CHANGE */
 
 sb.auth.onAuthStateChange((event)=>{
@@ -5057,6 +5263,10 @@ sb.auth.onAuthStateChange((event)=>{
 
   if(event === 'SIGNED_OUT'){
 
+    $('assistantLauncher').classList.add('hidden');
+    $('assistantPanel').classList.add('hidden');
+    $('assistantMessages').innerHTML = '';
+    $('assistantQuestion').value = '';
     currentProfile = null;
     currentCompany = null;
 
