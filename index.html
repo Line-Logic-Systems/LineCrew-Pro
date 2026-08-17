@@ -237,6 +237,29 @@ textarea{
   color:var(--text);
 }
 
+input[type="color"]{
+  min-height:46px;
+  padding:4px;
+  cursor:pointer;
+}
+
+#adminNotice > summary{
+  list-style:none;
+}
+
+#adminNotice > summary::-webkit-details-marker{
+  display:none;
+}
+
+#adminNotice[open] > summary .role{
+  visibility:hidden;
+}
+
+.collapsible-card-body{
+  padding:0 22px 22px;
+}
+
+
 button{
   width:100%;
   padding:14px;
@@ -1009,6 +1032,17 @@ button:disabled{
     <input id="loginPassword" type="password">
 
     <button id="loginBtn">Sign In</button>
+    <button id="forgotPasswordBtn" class="secondary">Forgot Password</button>
+  </div>
+
+  <div id="passwordRecoveryCard" class="card hidden">
+    <h2>Choose a New Password</h2>
+    <p class="muted">Enter a new password for your LineCrew Pro account.</p>
+    <label for="recoveryPassword">New Password</label>
+    <input id="recoveryPassword" type="password" minlength="8" autocomplete="new-password">
+    <label for="recoveryPasswordConfirm">Confirm New Password</label>
+    <input id="recoveryPasswordConfirm" type="password" minlength="8" autocomplete="new-password">
+    <button id="saveRecoveryPassword">Save New Password</button>
   </div>
 
   <div class="card">
@@ -1087,6 +1121,13 @@ button:disabled{
       <strong id="userName"></strong><br>
       <span id="userRole" class="role"></span>
     </p>
+    <button id="toggleMyProfile" class="secondary small">Edit My Profile</button>
+    <div id="myProfileEditor" class="job-card hidden">
+      <label for="myProfileName">Display Name</label>
+      <input id="myProfileName" maxlength="120">
+      <button id="saveMyProfile" class="success small">Save My Profile</button>
+      <button id="cancelMyProfile" class="secondary small">Cancel</button>
+    </div>
   </div>
 
   <div class="grid">
@@ -1130,12 +1171,25 @@ button:disabled{
     </div>
   </div>
 
-  <div id="adminNotice" class="card hidden">
-    <h2>Admin Controls</h2>
+  <div id="companyOnboarding" class="card hidden">
+    <div class="section-header">
+      <div>
+        <h3>Company Setup Progress</h3>
+        <p id="companyOnboardingSummary" class="muted"></p>
+      </div>
+    </div>
+    <div id="companyOnboardingList"></div>
+  </div>
 
-    <p class="muted">
-      Company settings, users, pricing and permissions.
-    </p>
+  <details id="adminNotice" class="card collapsible-card hidden">
+    <summary>
+      <span>
+        <strong>Admin Controls</strong><br>
+        <span class="muted">Company settings, pricing and permissions</span>
+      </span>
+      <span class="role">Open</span>
+    </summary>
+    <div class="collapsible-card-body">
 
     <div class="job-card">
       <h3>Company Settings</h3>
@@ -1193,7 +1247,8 @@ button:disabled{
         Save Redline Setting
       </button>
     </div>
-  </div>
+    </div>
+  </details>
 
   <button class="secondary" id="signOutBtn">
     Sign Out
@@ -2743,6 +2798,7 @@ async function loadApp(){
 
   $('userName').textContent =
     profile.full_name || 'User';
+  $('myProfileName').value = profile.full_name || '';
 
 
   $('userRole').textContent =
@@ -2764,7 +2820,10 @@ async function loadApp(){
       .add('hidden');
   }
 
-  await loadDashboardReviewAlert();
+  await Promise.all([
+    loadDashboardReviewAlert(),
+    loadCompanyOnboarding()
+  ]);
 
   const savedState = window.history.state;
 
@@ -2821,6 +2880,70 @@ $('loginBtn').onclick = async()=>{
   await loadApp();
 };
 
+
+$('forgotPasswordBtn').onclick = async () => {
+  const email =
+    $('loginEmail').value.trim() ||
+    prompt('Enter the email address used for LineCrew Pro:', '')?.trim();
+
+  if(!email) return;
+
+  const button = $('forgotPasswordBtn');
+  button.disabled = true;
+  button.textContent = 'Sending Reset Link...';
+
+  const redirectTo =
+    window.location.origin + window.location.pathname;
+
+  const { error } = await sb.auth.resetPasswordForEmail(
+    email,
+    { redirectTo }
+  );
+
+  button.disabled = false;
+  button.textContent = 'Forgot Password';
+
+  if(error){
+    alert('Unable to send password reset email: ' + error.message);
+    return;
+  }
+
+  alert(
+    'Password reset email sent. Open the link in that email on this device, then choose a new password.'
+  );
+};
+
+$('saveRecoveryPassword').onclick = async () => {
+  const password = $('recoveryPassword').value;
+  const confirmation = $('recoveryPasswordConfirm').value;
+
+  if(password.length < 8){
+    alert('Use a password with at least 8 characters.');
+    return;
+  }
+  if(password !== confirmation){
+    alert('The passwords do not match.');
+    return;
+  }
+
+  const button = $('saveRecoveryPassword');
+  button.disabled = true;
+  button.textContent = 'Saving...';
+  const { error } = await sb.auth.updateUser({ password });
+  button.disabled = false;
+  button.textContent = 'Save New Password';
+
+  if(error){
+    alert('Unable to update password: ' + error.message);
+    return;
+  }
+
+  $('recoveryPassword').value = '';
+  $('recoveryPasswordConfirm').value = '';
+  $('passwordRecoveryCard').classList.add('hidden');
+  alert('Password updated. You are signed in.');
+  await loadApp();
+};
 
 /* SIGN UP */
 
@@ -4925,6 +5048,13 @@ function escapeHtml(value){
 
 sb.auth.onAuthStateChange((event)=>{
 
+  if(event === 'PASSWORD_RECOVERY'){
+    show('authPage');
+    $('passwordRecoveryCard').classList.remove('hidden');
+    $('recoveryPassword').focus();
+    return;
+  }
+
   if(event === 'SIGNED_OUT'){
 
     currentProfile = null;
@@ -4949,6 +5079,109 @@ sb.auth.onAuthStateChange((event)=>{
 });
 
 /* PRODUCTION PAGE */
+
+function onboardingStatusRow(label, complete, actionLabel, action){
+  const row = document.createElement('div');
+  row.className = 'job-card';
+  row.innerHTML =
+    '<div class="section-header"><div>' +
+      '<strong>' + escapeHtml(label) + '</strong><br>' +
+      '<span class="' + (complete ? 'authorized' : 'pending') + '">' +
+        (complete ? 'Complete' : 'Needs setup') +
+      '</span>' +
+    '</div></div>';
+  if(!complete){
+    const button = document.createElement('button');
+    button.className = 'secondary small';
+    button.textContent = actionLabel;
+    button.onclick = action;
+    row.querySelector('.section-header').appendChild(button);
+  }
+  return row;
+}
+
+async function loadCompanyOnboarding(){
+  const card = $('companyOnboarding');
+  if(!userIsCompanyAdmin()){
+    card.classList.add('hidden');
+    return;
+  }
+
+  const companyId = currentProfile.company_id;
+  const [team, customers, contracts, priceBooks, jobs, reports] =
+    await Promise.all([
+      sb.from('profiles').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('customers').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('contracts').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('price_books').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('jobs').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('daily_reports').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId)
+    ]);
+
+  const results = [team, customers, contracts, priceBooks, jobs, reports];
+  if(results.some(result => result.error)){
+    card.classList.add('hidden');
+    return;
+  }
+
+  const steps = [
+    {
+      label:'Invite at least one team member',
+      complete:Number(team.count || 0) > 1,
+      actionLabel:'Open Team',
+      action:() => navigateToAppPage('teamPage')
+    },
+    {
+      label:'Add a customer or utility',
+      complete:Number(customers.count || 0) > 0,
+      actionLabel:'Open Company Pricing',
+      action:() => navigateToAppPage('priceBooksPage')
+    },
+    {
+      label:'Create a contract',
+      complete:Number(contracts.count || 0) > 0,
+      actionLabel:'Open Contracts',
+      action:() => navigateToAppPage('priceBooksPage')
+    },
+    {
+      label:'Create and load a Price Book',
+      complete:Number(priceBooks.count || 0) > 0,
+      actionLabel:'Open Price Books',
+      action:() => navigateToAppPage('priceBooksPage')
+    },
+    {
+      label:'Create the first job',
+      complete:Number(jobs.count || 0) > 0,
+      actionLabel:'Open Jobs',
+      action:() => navigateToAppPage('jobsPage')
+    },
+    {
+      label:'Save the first daily report',
+      complete:Number(reports.count || 0) > 0,
+      actionLabel:'Open Production',
+      action:() => navigateToAppPage('productionPage')
+    }
+  ];
+
+  const completed = steps.filter(step => step.complete).length;
+  $('companyOnboardingSummary').textContent =
+    completed + ' of ' + steps.length + ' setup steps complete.';
+  const list = $('companyOnboardingList');
+  list.innerHTML = '';
+  steps.forEach(step => list.appendChild(
+    onboardingStatusRow(
+      step.label, step.complete, step.actionLabel, step.action
+    )
+  ));
+
+  card.classList.remove('hidden');
+}
 
 async function loadDashboardReviewAlert(){
   const alertCard = $('dashboardReviewAlert');
@@ -4984,6 +5217,45 @@ $('openProductionReview').onclick = async () => {
 
 $('productionTile').onclick = async () => {
   await navigateToAppPage('productionPage');
+};
+
+$('toggleMyProfile').onclick = () => {
+  $('myProfileEditor').classList.remove('hidden');
+  $('myProfileName').focus();
+};
+
+$('cancelMyProfile').onclick = () => {
+  $('myProfileName').value = currentProfile?.full_name || '';
+  $('myProfileEditor').classList.add('hidden');
+};
+
+$('saveMyProfile').onclick = async () => {
+  const fullName = $('myProfileName').value.trim();
+  if(fullName.length < 2){
+    alert('Enter your full name.');
+    return;
+  }
+
+  const button = $('saveMyProfile');
+  button.disabled = true;
+  button.textContent = 'Saving...';
+  const { data, error } = await sb.rpc('update_my_profile_name', {
+    p_full_name:fullName
+  });
+  button.disabled = false;
+  button.textContent = 'Save My Profile';
+
+  if(error){
+    alert('Unable to update your profile: ' + error.message);
+    return;
+  }
+
+  currentProfile.full_name =
+    (Array.isArray(data) ? data[0]?.full_name : data?.full_name) || fullName;
+  $('userName').textContent = currentProfile.full_name;
+  $('dailyForemanName').value = currentProfile.full_name;
+  $('myProfileEditor').classList.add('hidden');
+  alert('Your profile name was updated.');
 };
 
 function applyCompanyBranding(company){
