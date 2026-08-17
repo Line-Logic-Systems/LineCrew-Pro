@@ -6093,13 +6093,13 @@ async function loadCompanyOnboarding(){
       sb.from('profiles').select('id', { count:'exact', head:true })
         .eq('company_id', companyId),
       sb.from('customers').select('id', { count:'exact', head:true })
-        .eq('company_id', companyId),
+        .eq('company_id', companyId).eq('active', true),
       sb.from('contracts').select('id', { count:'exact', head:true })
-        .eq('company_id', companyId),
+        .eq('company_id', companyId).eq('active', true),
       sb.from('price_books').select('id', { count:'exact', head:true })
-        .eq('company_id', companyId),
+        .eq('company_id', companyId).eq('active', true),
       sb.from('jobs').select('id', { count:'exact', head:true })
-        .eq('company_id', companyId),
+        .eq('company_id', companyId).eq('active', true),
       sb.from('daily_reports').select('id', { count:'exact', head:true })
         .eq('company_id', companyId)
     ]);
@@ -6110,7 +6110,23 @@ async function loadCompanyOnboarding(){
     return;
   }
 
+  const companyContactComplete = Boolean(
+    String(currentCompany?.name || '').trim() &&
+    String(currentCompany?.contact_email || '').trim() &&
+    String(currentCompany?.contact_phone || '').trim() &&
+    String(currentCompany?.timezone || '').trim()
+  );
+
   const steps = [
+    {
+      label:'Complete company contact settings',
+      complete:companyContactComplete,
+      actionLabel:'Open Admin Controls',
+      action:() => {
+        $('adminNotice').open = true;
+        $('adminNotice').scrollIntoView({ behavior:'smooth', block:'start' });
+      }
+    },
     {
       label:'Invite at least one team member',
       complete:Number(team.count || 0) > 1,
@@ -6118,25 +6134,25 @@ async function loadCompanyOnboarding(){
       action:() => navigateToAppPage('teamPage')
     },
     {
-      label:'Add a customer or utility',
+      label:'Add an active customer or utility',
       complete:Number(customers.count || 0) > 0,
       actionLabel:'Open Company Pricing',
       action:() => navigateToAppPage('priceBooksPage')
     },
     {
-      label:'Create a contract',
+      label:'Create an active contract',
       complete:Number(contracts.count || 0) > 0,
       actionLabel:'Open Contracts',
       action:() => navigateToAppPage('priceBooksPage')
     },
     {
-      label:'Create and load a Price Book',
+      label:'Create and activate a Price Book',
       complete:Number(priceBooks.count || 0) > 0,
       actionLabel:'Open Price Books',
       action:() => navigateToAppPage('priceBooksPage')
     },
     {
-      label:'Create the first job',
+      label:'Create the first active job',
       complete:Number(jobs.count || 0) > 0,
       actionLabel:'Open Jobs',
       action:() => navigateToAppPage('jobsPage')
