@@ -8,7 +8,7 @@ const assert = (condition, message) => {
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
 assert(html.includes('/* LINECREW PRO SUPABASE */'), 'Missing main application script marker.');
-assert(html.includes('id="loginPage"'), 'Missing login page.');
+assert(html.includes('id="authPage"'), 'Missing authentication page.');
 assert(html.includes('id="dashboardPage"'), 'Missing dashboard page.');
 assert(html.includes('id="productionPage"'), 'Missing production page.');
 assert(html.includes('id="jobsPage"'), 'Missing jobs page.');
