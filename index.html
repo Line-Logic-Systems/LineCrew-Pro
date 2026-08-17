@@ -1875,6 +1875,10 @@ button:disabled{
           <select id="productionForemanFilter"><option value="">All foremen</option></select>
         </div>
         <div class="production-reporting-control hidden">
+          <label for="productionCrewFilter">Crew</label>
+          <select id="productionCrewFilter"><option value="">All crews</option></select>
+        </div>
+        <div class="production-reporting-control hidden">
           <label for="productionExceptionFilter">Unit Review</label>
           <select id="productionExceptionFilter">
             <option value="">All reports</option>
@@ -1936,6 +1940,14 @@ button:disabled{
         <p class="muted">
           Crew production, hours and exceptions for the selected storm reports.
         </p>
+      </div>
+      <div class="button-row">
+        <button id="exportStormBillingCsvBtn" class="secondary small">
+          Export Storm Billing
+        </button>
+        <button id="exportStormPayrollCsvBtn" class="secondary small">
+          Export Storm Payroll
+        </button>
       </div>
     </div>
     <div id="stormEventDashboardSummary" class="daily-value-summary"></div>
@@ -6230,11 +6242,14 @@ $('productionDateFrom').onchange = resetProductionPageAndLoad;
 $('productionDateTo').onchange = resetProductionPageAndLoad;
 $('productionJobFilter').onchange = resetProductionPageAndLoad;
 $('productionForemanFilter').onchange = resetProductionPageAndLoad;
+$('productionCrewFilter').onchange = resetProductionPageAndLoad;
 $('productionExceptionFilter').onchange = resetProductionPageAndLoad;
 $('productionCompletionFilter').onchange = resetProductionPageAndLoad;
 $('productionWorkModeFilter').onchange = resetProductionPageAndLoad;
 $('productionStormEventFilter').onchange = resetProductionPageAndLoad;
 $('exportProductionCsvBtn').onclick = exportFilteredProductionCsv;
+$('exportStormBillingCsvBtn').onclick = exportStormBillingCsv;
+$('exportStormPayrollCsvBtn').onclick = exportStormPayrollCsv;
 
 $('clearProductionFilters').onclick = async () => {
   $('productionSearch').value = '';
@@ -6243,6 +6258,7 @@ $('clearProductionFilters').onclick = async () => {
   $('productionDateTo').value = '';
   $('productionJobFilter').value = '';
   $('productionForemanFilter').value = '';
+  $('productionCrewFilter').value = '';
   $('productionExceptionFilter').value = '';
   $('productionCompletionFilter').value = '';
   $('productionWorkModeFilter').value = '';
@@ -10792,9 +10808,11 @@ function populateProductionReportingFilters(reports, canReviewProduction){
 
   const selectedJob = $('productionJobFilter').value;
   const selectedForeman = $('productionForemanFilter').value;
+  const selectedCrew = $('productionCrewFilter').value;
   const selectedStormEvent = $('productionStormEventFilter').value;
   const jobs = new Map();
   const foremen = new Set();
+  const crews = new Set();
   const stormEvents = new Set();
 
   reports.forEach(report => {
@@ -10805,6 +10823,7 @@ function populateProductionReportingFilters(reports, canReviewProduction){
       );
     }
     if(report.foreman_name) foremen.add(String(report.foreman_name));
+    if(report.crew_name) crews.add(String(report.crew_name));
     if(report.storm_mode === true && report.storm_event_name){
       stormEvents.add(String(report.storm_event_name));
     }
@@ -10828,6 +10847,14 @@ function populateProductionReportingFilters(reports, canReviewProduction){
     $('productionForemanFilter').appendChild(option);
   });
 
+  $('productionCrewFilter').innerHTML = '<option value="">All crews</option>';
+  [...crews].sort((a, b) => a.localeCompare(b)).forEach(name => {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    $('productionCrewFilter').appendChild(option);
+  });
+
   $('productionStormEventFilter').innerHTML =
     '<option value="">All storm events</option>';
   [...stormEvents].sort((a, b) => a.localeCompare(b)).forEach(eventName => {
@@ -10839,6 +10866,7 @@ function populateProductionReportingFilters(reports, canReviewProduction){
 
   if(jobs.has(selectedJob)) $('productionJobFilter').value = selectedJob;
   if(foremen.has(selectedForeman)) $('productionForemanFilter').value = selectedForeman;
+  if(crews.has(selectedCrew)) $('productionCrewFilter').value = selectedCrew;
   if(stormEvents.has(selectedStormEvent)){
     $('productionStormEventFilter').value = selectedStormEvent;
   }
@@ -11081,6 +11109,167 @@ function renderProductionPagination(totalReports){
   });
 }
 
+function stormExportReports(){
+  if(!['admin', 'gf'].includes(String(currentProfile?.role || '').toLowerCase())){
+    alert('Only an Admin or General Foreman can export storm reporting.');
+    return [];
+  }
+  const reports = currentProductionExportRows.filter(report => report.storm_mode === true);
+  if(reports.length === 0){
+    alert('No storm reports match the current filters.');
+  }
+  return reports;
+}
+
+function downloadStormCsv(headers, rows, filename){
+  const csv = '\uFEFF' + [headers, ...rows]
+    .map(row => row.map(csvCell).join(','))
+    .join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
+function exportStormBillingCsv(){
+  const reports = stormExportReports();
+  if(reports.length === 0) return;
+
+  const groups = new Map();
+  reports.forEach(report => {
+    const eventName = report.storm_event_name || 'Unassigned Storm Event';
+    const jobNumber = report.jobs?.job_number || '';
+    const jobName = report.jobs?.job_name || '';
+    const key = [eventName, report.job_id || '', jobNumber, jobName].join('|');
+    if(!groups.has(key)){
+      groups.set(key, {
+        eventName, jobNumber, jobName, fromDate:'', throughDate:'',
+        crews:new Set(), reports:0, approved:0, actual:0, field:0,
+        regularHours:0, overtimeHours:0, redlines:0, pending:0
+      });
+    }
+    const group = groups.get(key);
+    const workDate = String(report.work_date || '');
+    if(workDate && (!group.fromDate || workDate < group.fromDate)) group.fromDate = workDate;
+    if(workDate && (!group.throughDate || workDate > group.throughDate)) group.throughDate = workDate;
+    if(report.crew_name) group.crews.add(String(report.crew_name));
+    group.reports += 1;
+    if(String(report.status || '').toLowerCase() === 'approved') group.approved += 1;
+    const value = currentDailyReportValueSummaries.get(report.id) || {};
+    const authorization = currentDailyAuthorizationSummaries.get(report.id) || {};
+    group.actual += Number(value.actual_total || 0);
+    group.field += Number(value.adjusted_total || 0);
+    group.regularHours += Number(report.regular_hours || 0);
+    group.overtimeHours += Number(report.overtime_hours || 0);
+    group.redlines += Number(authorization.redline_count || 0);
+    group.pending += Number(authorization.pending_packet_count || 0);
+  });
+
+  const headers = [
+    'Storm Event', 'Job Number', 'Job Name', 'From Date', 'Through Date',
+    'Crews', 'Reports', 'Approved Reports', 'Actual Unit Value',
+    'Field Unit Value', 'Regular Hours', 'OT Hours', 'Redlines', 'Pending Packet'
+  ];
+  const totals = {
+    reports:0, approved:0, actual:0, field:0,
+    regularHours:0, overtimeHours:0, redlines:0, pending:0
+  };
+  const rows = [...groups.values()]
+    .sort((a, b) =>
+      a.eventName.localeCompare(b.eventName) ||
+      a.jobNumber.localeCompare(b.jobNumber) ||
+      a.jobName.localeCompare(b.jobName)
+    )
+    .map(group => {
+      Object.keys(totals).forEach(key => totals[key] += Number(group[key] || 0));
+      return [
+        group.eventName, group.jobNumber, group.jobName, group.fromDate,
+        group.throughDate, [...group.crews].sort().join('; '), group.reports,
+        group.approved, group.actual.toFixed(2), group.field.toFixed(2),
+        group.regularHours, group.overtimeHours, group.redlines, group.pending
+      ];
+    });
+  rows.push([
+    'TOTAL', '', '', '', '', '', totals.reports, totals.approved,
+    totals.actual.toFixed(2), totals.field.toFixed(2), totals.regularHours,
+    totals.overtimeHours, totals.redlines, totals.pending
+  ]);
+  downloadStormCsv(
+    headers,
+    rows,
+    'linecrew-storm-billing-' + new Date().toISOString().slice(0, 10) + '.csv'
+  );
+}
+
+function exportStormPayrollCsv(){
+  const reports = stormExportReports();
+  if(reports.length === 0) return;
+
+  const groups = new Map();
+  reports.forEach(report => {
+    const eventName = report.storm_event_name || 'Unassigned Storm Event';
+    const crewName = report.crew_name || 'Unassigned Crew';
+    const foremanName = report.foreman_name || 'Not recorded';
+    const key = [eventName, crewName, foremanName].join('|');
+    if(!groups.has(key)){
+      groups.set(key, {
+        eventName, crewName, foremanName, fromDate:'', throughDate:'',
+        reports:0, approved:0, regularHours:0, overtimeHours:0, actual:0, field:0
+      });
+    }
+    const group = groups.get(key);
+    const workDate = String(report.work_date || '');
+    if(workDate && (!group.fromDate || workDate < group.fromDate)) group.fromDate = workDate;
+    if(workDate && (!group.throughDate || workDate > group.throughDate)) group.throughDate = workDate;
+    group.reports += 1;
+    if(String(report.status || '').toLowerCase() === 'approved') group.approved += 1;
+    const value = currentDailyReportValueSummaries.get(report.id) || {};
+    group.regularHours += Number(report.regular_hours || 0);
+    group.overtimeHours += Number(report.overtime_hours || 0);
+    group.actual += Number(value.actual_total || 0);
+    group.field += Number(value.adjusted_total || 0);
+  });
+
+  const headers = [
+    'Storm Event', 'Crew', 'Foreman', 'From Date', 'Through Date',
+    'Reports', 'Approved Reports', 'Regular Hours', 'OT Hours',
+    'Total Hours', 'Actual Unit Value', 'Field Unit Value'
+  ];
+  const totals = {
+    reports:0, approved:0, regularHours:0, overtimeHours:0, actual:0, field:0
+  };
+  const rows = [...groups.values()]
+    .sort((a, b) =>
+      a.eventName.localeCompare(b.eventName) ||
+      a.crewName.localeCompare(b.crewName) ||
+      a.foremanName.localeCompare(b.foremanName)
+    )
+    .map(group => {
+      Object.keys(totals).forEach(key => totals[key] += Number(group[key] || 0));
+      return [
+        group.eventName, group.crewName, group.foremanName, group.fromDate,
+        group.throughDate, group.reports, group.approved, group.regularHours,
+        group.overtimeHours, group.regularHours + group.overtimeHours,
+        group.actual.toFixed(2), group.field.toFixed(2)
+      ];
+    });
+  rows.push([
+    'TOTAL', '', '', '', '', totals.reports, totals.approved,
+    totals.regularHours, totals.overtimeHours,
+    totals.regularHours + totals.overtimeHours,
+    totals.actual.toFixed(2), totals.field.toFixed(2)
+  ]);
+  downloadStormCsv(
+    headers,
+    rows,
+    'linecrew-storm-payroll-' + new Date().toISOString().slice(0, 10) + '.csv'
+  );
+}
+
 function exportFilteredProductionCsv(){
   if(!['admin', 'gf'].includes(String(currentProfile?.role || '').toLowerCase())){
     alert('Only an Admin or General Foreman can export company production reporting.');
@@ -11242,6 +11431,7 @@ async function loadProductionReports(){
   const dateTo = $('productionDateTo').value;
   const jobFilter = canReviewProduction ? $('productionJobFilter').value : '';
   const foremanFilter = canReviewProduction ? $('productionForemanFilter').value : '';
+  const crewFilter = canReviewProduction ? $('productionCrewFilter').value : '';
   const exceptionFilter = canReviewProduction ? $('productionExceptionFilter').value : '';
   const completionFilter = canReviewProduction ? $('productionCompletionFilter').value : '';
   const workModeFilter = canReviewProduction ? $('productionWorkModeFilter').value : '';
@@ -11261,6 +11451,7 @@ async function loadProductionReports(){
     if(dateTo && String(report.work_date || '') > dateTo) return false;
     if(jobFilter && String(report.job_id || '') !== jobFilter) return false;
     if(foremanFilter && String(report.foreman_name || '') !== foremanFilter) return false;
+    if(crewFilter && String(report.crew_name || '') !== crewFilter) return false;
     if(workModeFilter === 'storm' && report.storm_mode !== true) return false;
     if(workModeFilter === 'regular' && report.storm_mode === true) return false;
     if(stormEventFilter && String(report.storm_event_name || '') !== stormEventFilter){
