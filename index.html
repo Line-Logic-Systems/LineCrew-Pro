@@ -1794,6 +1794,16 @@ button:disabled{
     </div>
   </details>
 
+  <div id="safetyJsaReportingSummary" class="card hidden">
+    <div class="section-header">
+      <div>
+        <h3>Safety Reporting</h3>
+        <p class="muted">Summary of the completed JSAs matching the filters above.</p>
+      </div>
+    </div>
+    <div id="safetyJsaReportingMetrics" class="daily-value-summary"></div>
+  </div>
+
   <div id="safetyJsaLoading" class="card center hidden">Loading safety briefings...</div>
   <div id="safetyJsaEmpty" class="card center hidden">
     <h3>No JSAs Yet</h3>
@@ -3778,6 +3788,34 @@ function renderSafetyJsas(){
   $('safetyJsaList').replaceChildren();
   $('safetyJsaEmpty').classList.toggle('hidden', records.length > 0);
   $('safetyJsaFilterCount').textContent = 'Showing ' + records.length + ' of ' + currentSafetyJsas.length;
+
+  const summary = $('safetyJsaReportingSummary');
+  const metrics = $('safetyJsaReportingMetrics');
+  summary.classList.toggle('hidden', records.length === 0);
+  metrics.replaceChildren();
+  if(records.length > 0){
+    const jobs = new Set(
+      records.map(jsa => String(jsa.job_number || jsa.job_name || '').trim()).filter(Boolean)
+    );
+    const foremen = new Set(
+      records.map(jsa => String(jsa.foreman_name || '').trim()).filter(Boolean)
+    );
+    const crews = new Set(
+      records.map(jsa => String(jsa.crew_name || '').trim()).filter(Boolean)
+    );
+    const crewSignIns = records.reduce((total, jsa) =>
+      total + String(jsa.crew_members || '')
+        .split(/\r?\n|,/)
+        .map(name => name.trim())
+        .filter(Boolean).length
+    , 0);
+    metrics.innerHTML =
+      '<span><strong>' + records.length + '</strong><br>Completed JSAs</span>' +
+      '<span><strong>' + jobs.size + '</strong><br>Jobs</span>' +
+      '<span><strong>' + foremen.size + '</strong><br>Foremen</span>' +
+      '<span><strong>' + crews.size + '</strong><br>Crews</span>' +
+      '<span><strong>' + crewSignIns + '</strong><br>Crew Sign-ins</span>';
+  }
   records.forEach(jsa => {
     const card = document.createElement('details');
     card.className = 'job-card compact-report-card';
