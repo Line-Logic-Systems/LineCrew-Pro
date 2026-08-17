@@ -113,6 +113,104 @@ main{
   font-size:14px;
 }
 
+.production-pagination{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:10px;
+  margin:12px 0;
+}
+
+.production-pagination .pagination-status{
+  color:var(--muted);
+  font-weight:700;
+}
+
+.production-pagination .pagination-actions{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.production-pagination select{
+  width:auto;
+  min-width:92px;
+  padding:9px 10px;
+}
+
+.production-pagination button{
+  margin:0;
+}
+
+.compact-report-card{
+  padding:0;
+  overflow:hidden;
+}
+
+.compact-report-card > summary{
+  display:grid;
+  grid-template-columns:auto minmax(0, 1fr) auto;
+  align-items:center;
+  gap:12px;
+  padding:14px 16px;
+  cursor:pointer;
+  list-style:none;
+}
+
+.compact-report-card > summary::-webkit-details-marker{
+  display:none;
+}
+
+.compact-report-card > summary::before{
+  content:'▶';
+  color:var(--blue);
+  font-size:12px;
+}
+
+.compact-report-card[open] > summary::before{
+  content:'▼';
+}
+
+.compact-report-card .report-summary-main{
+  min-width:0;
+}
+
+.compact-report-card .report-summary-main strong,
+.compact-report-card .report-summary-main span{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.compact-report-card .report-summary-meta{
+  text-align:right;
+  white-space:nowrap;
+  font-size:14px;
+}
+
+.compact-report-card .report-card-details{
+  border-top:1px solid var(--border);
+  padding:14px 16px 6px;
+}
+
+.compact-report-card > button{
+  margin:4px 4px 12px;
+}
+
+@media(max-width:600px){
+  .compact-report-card > summary{
+    grid-template-columns:auto minmax(0, 1fr);
+  }
+
+  .compact-report-card .report-summary-meta{
+    grid-column:2;
+    text-align:left;
+  }
+}
+
 h2{
   margin-top:0;
 }
@@ -1582,7 +1680,9 @@ button:disabled{
   <div id="dailyUnitList"></div>
 </div>
 
+  <div id="productionPaginationTop" class="production-pagination hidden"></div>
   <div id="productionList"></div>
+  <div id="productionPaginationBottom" class="production-pagination hidden"></div>
 
 </section>
 
@@ -2345,6 +2445,8 @@ let currentDailyUnitBatchRows = [];
 let currentDailyReportValueSummaries = new Map();
 let currentDailyAuthorizationSummaries = new Map();
 let currentProductionExportRows = [];
+let currentProductionPage = 1;
+let currentProductionPageSize = 10;
 let productionSearchTimer = null;
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
@@ -4826,18 +4928,24 @@ $('refreshProductionBtn').onclick = async () => {
   await loadProductionReports();
 };
 
+function resetProductionPageAndLoad(){
+  currentProductionPage = 1;
+  return loadProductionReports();
+}
+
 $('productionSearch').oninput = () => {
   clearTimeout(productionSearchTimer);
+  currentProductionPage = 1;
   productionSearchTimer = setTimeout(loadProductionReports, 250);
 };
 
-$('productionStatusFilter').onchange = loadProductionReports;
-$('productionDateFrom').onchange = loadProductionReports;
-$('productionDateTo').onchange = loadProductionReports;
-$('productionJobFilter').onchange = loadProductionReports;
-$('productionForemanFilter').onchange = loadProductionReports;
-$('productionExceptionFilter').onchange = loadProductionReports;
-$('productionCompletionFilter').onchange = loadProductionReports;
+$('productionStatusFilter').onchange = resetProductionPageAndLoad;
+$('productionDateFrom').onchange = resetProductionPageAndLoad;
+$('productionDateTo').onchange = resetProductionPageAndLoad;
+$('productionJobFilter').onchange = resetProductionPageAndLoad;
+$('productionForemanFilter').onchange = resetProductionPageAndLoad;
+$('productionExceptionFilter').onchange = resetProductionPageAndLoad;
+$('productionCompletionFilter').onchange = resetProductionPageAndLoad;
 $('exportProductionCsvBtn').onclick = exportFilteredProductionCsv;
 
 $('clearProductionFilters').onclick = async () => {
@@ -4849,6 +4957,7 @@ $('clearProductionFilters').onclick = async () => {
   $('productionForemanFilter').value = '';
   $('productionExceptionFilter').value = '';
   $('productionCompletionFilter').value = '';
+  currentProductionPage = 1;
   await loadProductionReports();
 };
 
@@ -9442,6 +9551,76 @@ function renderProductionReportingSummary(reports, canReviewProduction){
     '<span><strong>' + pending + '</strong><br>Pending Packet</span>';
 }
 
+function renderProductionPagination(totalReports){
+  const totalPages = Math.max(1, Math.ceil(totalReports / currentProductionPageSize));
+  currentProductionPage = Math.min(Math.max(1, currentProductionPage), totalPages);
+
+  const first = totalReports === 0
+    ? 0
+    : ((currentProductionPage - 1) * currentProductionPageSize) + 1;
+  const last = Math.min(totalReports, currentProductionPage * currentProductionPageSize);
+
+  ['productionPaginationTop', 'productionPaginationBottom'].forEach(id => {
+    const container = $(id);
+    container.classList.toggle('hidden', totalReports <= currentProductionPageSize);
+    container.innerHTML = '';
+
+    if(totalReports <= currentProductionPageSize) return;
+
+    const status = document.createElement('span');
+    status.className = 'pagination-status';
+    status.textContent =
+      'Showing ' + first + '–' + last + ' of ' + totalReports + ' matching reports';
+
+    const actions = document.createElement('div');
+    actions.className = 'pagination-actions';
+
+    const pageSize = document.createElement('select');
+    pageSize.setAttribute('aria-label', 'Reports per page');
+    [10, 25, 50].forEach(size => {
+      const option = document.createElement('option');
+      option.value = String(size);
+      option.textContent = size + ' per page';
+      option.selected = size === currentProductionPageSize;
+      pageSize.appendChild(option);
+    });
+    pageSize.onchange = async () => {
+      currentProductionPageSize = Number(pageSize.value || 10);
+      currentProductionPage = 1;
+      await loadProductionReports();
+      $('productionPaginationTop').scrollIntoView({ behavior:'smooth', block:'start' });
+    };
+
+    const previous = document.createElement('button');
+    previous.className = 'secondary small';
+    previous.textContent = '← Previous';
+    previous.disabled = currentProductionPage <= 1;
+    previous.onclick = async () => {
+      if(currentProductionPage <= 1) return;
+      currentProductionPage -= 1;
+      await loadProductionReports();
+      $('productionPaginationTop').scrollIntoView({ behavior:'smooth', block:'start' });
+    };
+
+    const pageLabel = document.createElement('span');
+    pageLabel.textContent = 'Page ' + currentProductionPage + ' of ' + totalPages;
+
+    const next = document.createElement('button');
+    next.className = 'secondary small';
+    next.textContent = 'Next →';
+    next.disabled = currentProductionPage >= totalPages;
+    next.onclick = async () => {
+      if(currentProductionPage >= totalPages) return;
+      currentProductionPage += 1;
+      await loadProductionReports();
+      $('productionPaginationTop').scrollIntoView({ behavior:'smooth', block:'start' });
+    };
+
+    actions.append(pageSize, previous, pageLabel, next);
+    container.append(status, actions);
+  });
+}
+
 function exportFilteredProductionCsv(){
   if(!['admin', 'gf'].includes(String(currentProfile?.role || '').toLowerCase())){
     alert('Only an Admin or General Foreman can export company production reporting.');
@@ -9672,10 +9851,30 @@ async function loadProductionReports(){
       (submittedPending === 1 ? 'y' : 'ies');
   }
 
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredReports.length / currentProductionPageSize)
+  );
+  currentProductionPage = Math.min(
+    Math.max(1, currentProductionPage),
+    totalPages
+  );
+  const pageStart =
+    (currentProductionPage - 1) * currentProductionPageSize;
+  const pagedReports = filteredReports.slice(
+    pageStart,
+    pageStart + currentProductionPageSize
+  );
+
   $('productionFilterCount').textContent =
-    'Showing ' + filteredReports.length + ' of ' + (reports || []).length + ' reports';
+    filteredReports.length === 0
+      ? 'No matching reports'
+      : 'Showing ' + (pageStart + 1) + '–' +
+        (pageStart + pagedReports.length) + ' of ' +
+        filteredReports.length + ' matching reports';
 
   renderProductionReportingSummary(filteredReports, canReviewProduction);
+  renderProductionPagination(filteredReports.length);
 
 
   if(filteredReports.length === 0){
@@ -9686,12 +9885,12 @@ async function loadProductionReports(){
   }
 
 
-  filteredReports.forEach(report => {
+  pagedReports.forEach(report => {
 
     const card =
-      document.createElement('div');
+      document.createElement('details');
 
-    card.className = 'job-card';
+    card.className = 'job-card compact-report-card';
 
 
     const jobNumber =
@@ -9716,6 +9915,18 @@ async function loadProductionReports(){
 
 
     card.innerHTML = `
+      <summary>
+        <div class="report-summary-main">
+          <strong>${escapeHtml(jobNumber)}</strong>
+          <span>${escapeHtml(jobName || foreman)}</span>
+        </div>
+        <div class="report-summary-meta">
+          ${escapeHtml(report.work_date || 'No date')}
+          &nbsp;•&nbsp;
+          <strong>${escapeHtml(String(report.status || 'draft').toUpperCase())}</strong>
+        </div>
+      </summary>
+      <div class="report-card-details">
 
       <div class="job-number">
         ${escapeHtml(jobNumber)}
@@ -9786,6 +9997,7 @@ ${report.review_notes ? `
 ` : ''}
         ${dailyReportValueSummaryMarkup(valueSummary)}
         ${dailyReportAuthorizationSummaryMarkup(report, authorizationSummary)}
+      </div>
       </div>
     `;
 
