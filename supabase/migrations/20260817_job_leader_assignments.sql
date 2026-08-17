@@ -170,7 +170,7 @@ begin
     and profile.company_id = v_company_id
     and profile.active is true;
 
-  if v_member_role not in ('foreman', 'gf') then
+  if v_member_role is null or v_member_role not in ('foreman', 'gf') then
     raise exception using errcode = '22023',
       message = 'Select an active Foreman or General Foreman from your company.';
   end if;
