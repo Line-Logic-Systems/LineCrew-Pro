@@ -56,6 +56,29 @@ main{
   padding:24px 16px 100px;
 }
 
+.storm-mode-banner{
+  border:2px solid var(--orange);
+  background:#fff7ed;
+  color:#7c2d12;
+  font-weight:700;
+}
+
+.storm-mode-banner strong{
+  color:#9a3412;
+}
+
+.jsa-section{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:16px;
+  margin:18px 0;
+  background:#f8fafc;
+}
+
+.jsa-section h3{
+  margin-top:0;
+}
+
 .card{
   background:var(--card);
   border-radius:20px;
@@ -1175,6 +1198,11 @@ button:disabled{
 
 <section id="dashboardPage" class="hidden">
 
+  <div class="card storm-mode-banner hidden" data-storm-mode-banner>
+    <strong>Storm Mode Active</strong>
+    <div class="storm-mode-banner-text"></div>
+  </div>
+
   <div class="card">
     <h2 id="companyName">Company</h2>
 
@@ -1306,6 +1334,22 @@ button:disabled{
       </p>
       <button id="saveRedlineApprovalSetting" class="success small">
         Save Redline Setting
+      </button>
+    </div>
+
+    <div class="job-card">
+      <h3>Storm Mode</h3>
+      <label class="checkbox-row" for="stormModeEnabled">
+        <input id="stormModeEnabled" type="checkbox">
+        Enable Storm Mode for this company
+      </label>
+      <label for="stormEventName">Storm / Event Name</label>
+      <input id="stormEventName" maxlength="120" placeholder="Example: Hurricane Recovery 2026">
+      <p class="muted">
+        New daily reports are tagged with this event. Turning Storm Mode off does not remove historical tags.
+      </p>
+      <button id="saveStormModeSetting" class="success small">
+        Save Storm Mode
       </button>
     </div>
     </div>
@@ -1599,6 +1643,11 @@ button:disabled{
 <!-- PRODUCTION PAGE -->
 <section id="productionPage" class="hidden">
 
+  <div class="card storm-mode-banner hidden" data-storm-mode-banner>
+    <strong>Storm Mode Active</strong>
+    <div class="storm-mode-banner-text"></div>
+  </div>
+
   <div class="toolbar">
     <button class="secondary" id="backFromProduction">
       ← Back to Dashboard
@@ -1795,6 +1844,39 @@ button:disabled{
     rows="4"
     placeholder="Daily notes"
   ></textarea>
+
+  <div class="jsa-section">
+    <h3>Job Safety Analysis (JSA)</h3>
+    <p class="muted">
+      Complete the crew safety briefing for this same daily report before adding production.
+    </p>
+
+    <label for="jsaJobBriefing">Work Plan / Job Briefing *</label>
+    <textarea id="jsaJobBriefing" rows="2" placeholder="Work planned for today"></textarea>
+
+    <label for="jsaHazards">Hazards Identified *</label>
+    <textarea id="jsaHazards" rows="3" placeholder="Traffic, energized lines, falls, equipment, weather..."></textarea>
+
+    <label for="jsaControls">Controls / Safe Work Practices *</label>
+    <textarea id="jsaControls" rows="3" placeholder="How the crew will control each hazard"></textarea>
+
+    <label for="jsaPpe">Required PPE *</label>
+    <textarea id="jsaPpe" rows="2" placeholder="Hard hat, gloves, FR clothing, fall protection..."></textarea>
+
+    <label for="jsaEmergencyPlan">Emergency Plan / Nearest Facility *</label>
+    <textarea id="jsaEmergencyPlan" rows="2" placeholder="Emergency response, address or nearest medical facility"></textarea>
+
+    <label for="jsaCrewMembers">Crew Members Attending Briefing *</label>
+    <textarea id="jsaCrewMembers" rows="2" placeholder="Names of crew members"></textarea>
+
+    <label for="jsaSpecialEquipment">Special Equipment / Additional Notes</label>
+    <textarea id="jsaSpecialEquipment" rows="2" placeholder="Optional"></textarea>
+
+    <label class="checkbox-row" for="jsaAcknowledged">
+      <input id="jsaAcknowledged" type="checkbox">
+      I confirm this JSA was reviewed with the crew before work began.
+    </label>
+  </div>
 
   <div class="button-row">
     <button
@@ -2663,6 +2745,83 @@ function userCanSeeActualContractPrices(){
   );
 }
 
+function applyStormModeUi(){
+  const enabled = currentCompany?.storm_mode_enabled === true;
+  const eventName = String(currentCompany?.storm_event_name || '').trim();
+  document.querySelectorAll('[data-storm-mode-banner]').forEach(banner => {
+    banner.classList.toggle('hidden', !enabled);
+    const label = banner.querySelector('.storm-mode-banner-text');
+    if(label){
+      label.textContent = eventName
+        ? eventName + ' — new daily reports will be tagged automatically.'
+        : 'New daily reports will be tagged automatically.';
+    }
+  });
+}
+
+function resetDailyJsaForm(){
+  ['jsaJobBriefing','jsaHazards','jsaControls','jsaPpe',
+   'jsaEmergencyPlan','jsaCrewMembers','jsaSpecialEquipment']
+    .forEach(id => { $(id).value = ''; });
+  $('jsaAcknowledged').checked = false;
+}
+
+async function loadDailyReportJsa(reportId){
+  resetDailyJsaForm();
+  const { data, error } = await sb.rpc('get_daily_report_jsa', {
+    p_report_id:reportId
+  });
+  if(error){
+    alert('Unable to load this report JSA: ' + error.message);
+    return;
+  }
+  const jsa = Array.isArray(data) ? data[0] : data;
+  if(!jsa) return;
+  $('jsaJobBriefing').value = jsa.job_briefing || '';
+  $('jsaHazards').value = jsa.hazards || '';
+  $('jsaControls').value = jsa.controls || '';
+  $('jsaPpe').value = jsa.ppe || '';
+  $('jsaEmergencyPlan').value = jsa.emergency_plan || '';
+  $('jsaCrewMembers').value = jsa.crew_members || '';
+  $('jsaSpecialEquipment').value = jsa.special_equipment || '';
+  $('jsaAcknowledged').checked = jsa.foreman_acknowledged === true;
+}
+
+function dailyJsaPayload(){
+  return {
+    p_job_briefing:$('jsaJobBriefing').value.trim(),
+    p_hazards:$('jsaHazards').value.trim(),
+    p_controls:$('jsaControls').value.trim(),
+    p_ppe:$('jsaPpe').value.trim(),
+    p_emergency_plan:$('jsaEmergencyPlan').value.trim(),
+    p_crew_members:$('jsaCrewMembers').value.trim(),
+    p_special_equipment:$('jsaSpecialEquipment').value.trim() || null,
+    p_foreman_acknowledged:$('jsaAcknowledged').checked
+  };
+}
+
+function validateDailyJsa(){
+  const payload = dailyJsaPayload();
+  const required = [
+    ['p_job_briefing','Work Plan / Job Briefing'],
+    ['p_hazards','Hazards Identified'],
+    ['p_controls','Controls / Safe Work Practices'],
+    ['p_ppe','Required PPE'],
+    ['p_emergency_plan','Emergency Plan'],
+    ['p_crew_members','Crew Members']
+  ];
+  const missing = required.filter(([key]) => !payload[key]).map(([,label]) => label);
+  if(missing.length){
+    alert('Complete these JSA fields before saving: ' + missing.join(', '));
+    return null;
+  }
+  if(!payload.p_foreman_acknowledged){
+    alert('Confirm that the JSA was reviewed with the crew before saving.');
+    return null;
+  }
+  return payload;
+}
+
 
 /* PAGE NAVIGATION */
 
@@ -2865,6 +3024,11 @@ async function loadApp(){
 
   $('requireGfRedlineApproval').checked =
     company.require_gf_redline_approval === true;
+  $('stormModeEnabled').checked =
+    company.storm_mode_enabled === true;
+  $('stormEventName').value =
+    company.storm_event_name || '';
+  applyStormModeUi();
 
   $('companyDisplayName').value = company?.name || '';
   $('companyContactEmail').value = company?.contact_email || '';
@@ -5544,6 +5708,36 @@ $('saveRedlineApprovalSetting').onclick = async () => {
       ? 'GF approval is now required for redline reports. Admin override requires a reason.'
       : 'GF approval is no longer required for redline reports.'
   );
+};
+
+$('saveStormModeSetting').onclick = async () => {
+  if(!userIsCompanyAdmin()) return;
+  const enabled = $('stormModeEnabled').checked;
+  const eventName = $('stormEventName').value.trim();
+  if(enabled && !eventName){
+    alert('Enter the storm or event name before enabling Storm Mode.');
+    return;
+  }
+  const button = $('saveStormModeSetting');
+  button.disabled = true;
+  button.textContent = 'Saving...';
+  const { data, error } = await sb.rpc('set_company_storm_mode', {
+    p_enabled:enabled,
+    p_event_name:eventName || null
+  });
+  button.disabled = false;
+  button.textContent = 'Save Storm Mode';
+  if(error){
+    alert('Unable to save Storm Mode: ' + error.message);
+    return;
+  }
+  const saved = Array.isArray(data) ? data[0] : data;
+  currentCompany = { ...currentCompany, ...(saved || {}), storm_mode_enabled:enabled,
+    storm_event_name:enabled ? eventName : null };
+  applyStormModeUi();
+  alert(enabled
+    ? 'Storm Mode is active for ' + eventName + '. New daily reports will be tagged.'
+    : 'Storm Mode is off. Historical storm report tags are preserved.');
 };
 
 
@@ -10700,6 +10894,8 @@ editBtn.onclick = async () => {
   $('dailyNotes').value =
     report.notes || '';
 
+  await loadDailyReportJsa(report.id);
+
   $('dailyJobId').innerHTML =
     '<option value="">Select active job</option>';
 
@@ -12017,6 +12213,7 @@ $('createDailyReportBtn').onclick = async () => {
   $('dailyDelayHours').value = 0;
   $('dailyDelayReason').value = '';
   $('dailyNotes').value = '';
+  resetDailyJsaForm();
   $('saveDailyReportBtn').textContent = 'Save & Add Units';
 
   $('dailyJobId').innerHTML =
@@ -12112,6 +12309,8 @@ $('saveDailyReportBtn').onclick = async () => {
     return;
   }
 
+  const jsaPayload = validateDailyJsa();
+  if(!jsaPayload) return;
 
   $('saveDailyReportBtn').disabled = true;
   $('saveDailyReportBtn').textContent = 'Saving...';
@@ -12194,6 +12393,36 @@ if(reportId){
     );
     await loadProductionReports();
     return;
+  }
+
+  const { error:jsaError } = await sb.rpc(
+    'save_daily_report_jsa',
+    {
+      p_report_id:savedReportId,
+      ...jsaPayload
+    }
+  );
+
+  if(jsaError){
+    alert(
+      'The report was saved, but its JSA could not be saved. Reopen Edit Report and try again: ' +
+      jsaError.message
+    );
+    await loadProductionReports();
+    return;
+  }
+
+  if(Object.prototype.hasOwnProperty.call(currentCompany || {}, 'storm_mode_enabled')){
+    const { error:stormError } = await sb.rpc(
+      'set_daily_report_storm_context',
+      { p_report_id:savedReportId }
+    );
+    if(stormError){
+      alert(
+        'The report and JSA were saved, but the Storm Mode tag could not be applied: ' +
+        stormError.message
+      );
+    }
   }
 
   const { data:savedReport, error:savedReportError } = await sb
