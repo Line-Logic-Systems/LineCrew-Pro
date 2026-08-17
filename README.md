@@ -11,3 +11,4 @@ admin-only, company-scoped transaction and prevents multiple active versions
 of the same company/contract/Price Book family.
 
 Deployment refresh: 2026-08-17.
+Deployment retry after GitHub Pages recovery: 2026-08-17.
