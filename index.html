@@ -1468,6 +1468,7 @@ button:disabled{
         <h3>Active Job Progress</h3>
         <p class="muted">Authorized, reported and approved production across active jobs.</p>
       </div>
+      <button id="exportJobProgressCsvBtn" class="secondary small">Export Job Progress</button>
     </div>
     <div class="job-progress-filters">
       <div>
@@ -5773,6 +5774,78 @@ async function deleteJob(job){
 
 /* JOB SEARCH AND REFRESH */
 
+function getJobProgressExportJobs(){
+  const search = String($('jobProgressSearch').value || '').trim().toLowerCase();
+  const attention = $('jobProgressAttention').value;
+  const sort = $('jobProgressSort').value;
+  const jobs = currentJobsCatalog.filter(job => {
+    if(job.active !== true) return false;
+    if(
+      search &&
+      !String(job.job_number || '').toLowerCase().includes(search) &&
+      !String(job.job_name || '').toLowerCase().includes(search)
+    ) return false;
+    const summary = currentJobProgressSummaries.get(job.id) || {};
+    if(attention === 'redline') return Number(summary.redline_count || 0) > 0;
+    if(attention === 'pending') return Number(summary.pending_packet_count || 0) > 0;
+    if(attention === 'incomplete') return Number(summary.reported_percent || 0) < 100;
+    if(attention === 'complete') return Number(summary.reported_percent || 0) >= 100;
+    return true;
+  });
+  return jobs.sort((first, second) => {
+    const firstSummary = currentJobProgressSummaries.get(first.id) || {};
+    const secondSummary = currentJobProgressSummaries.get(second.id) || {};
+    if(sort === 'progress_low') return Number(firstSummary.reported_percent || 0) - Number(secondSummary.reported_percent || 0);
+    if(sort === 'progress_high') return Number(secondSummary.reported_percent || 0) - Number(firstSummary.reported_percent || 0);
+    if(sort === 'redlines') return Number(secondSummary.redline_count || 0) - Number(firstSummary.redline_count || 0);
+    if(sort === 'pending') return Number(secondSummary.pending_packet_count || 0) - Number(firstSummary.pending_packet_count || 0);
+    return String(first.job_number || '').localeCompare(String(second.job_number || ''), undefined, { numeric:true, sensitivity:'base' });
+  });
+}
+
+function exportJobProgressCsv(){
+  const jobs = getJobProgressExportJobs();
+  if(jobs.length === 0){
+    alert('There are no matching active jobs to export.');
+    return;
+  }
+  const headers = [
+    'Job Number','Job Name','Customer','Utility','Contract','Contract Number',
+    'Authorized Value','Reported Value','Reported Percent','Approved Value',
+    'Approved Percent','Remaining Value','Packages','Work Points',
+    'Daily Reports','Redlines','Pending Packet'
+  ];
+  const rows = jobs.map(job => {
+    const summary = currentJobProgressSummaries.get(job.id) || {};
+    const contract = job.contracts || {};
+    return [
+      job.job_number || '',job.job_name || '',
+      contract.customers?.name || job.customer_name || '',
+      job.utility_name || '',contract.contract_name || '',contract.contract_number || '',
+      Number(summary.authorized_value || 0).toFixed(2),
+      Number(summary.reported_value || 0).toFixed(2),
+      Number(summary.reported_percent || 0).toFixed(1),
+      Number(summary.approved_value || 0).toFixed(2),
+      Number(summary.approved_percent || 0).toFixed(1),
+      Number(summary.remaining_value || 0).toFixed(2),
+      Number(summary.package_count || 0),Number(summary.work_point_count || 0),
+      Number(summary.report_count || 0),Number(summary.redline_count || 0),
+      Number(summary.pending_packet_count || 0)
+    ];
+  });
+  const csv = '\uFEFF' + [headers, ...rows]
+    .map(row => row.map(csvCell).join(','))
+    .join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'linecrew-job-progress-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
 $('jobProgressSearch').oninput = () => {
   currentJobProgressVisibleCount = 25;
   renderJobProgressDashboard(currentJobsCatalog, true);
@@ -5800,6 +5873,8 @@ $('jobProgressShowMore').onclick = () => {
   currentJobProgressVisibleCount += 25;
   renderJobProgressDashboard(currentJobsCatalog, true);
 };
+
+$('exportJobProgressCsvBtn').onclick = exportJobProgressCsv;
 
 $('refreshJobsBtn').onclick =
   loadJobs;
