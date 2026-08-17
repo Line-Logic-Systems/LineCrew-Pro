@@ -445,6 +445,28 @@ button:disabled{
   margin:0 0 12px;
 }
 
+.job-leader-panel{
+  margin-top:12px;
+  padding:12px;
+  border:1px solid #d7e2eb;
+  border-radius:10px;
+  background:#f8fbfd;
+}
+
+.job-leader-row{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:7px 0;
+  border-bottom:1px solid #dfe8ef;
+}
+
+.job-leader-row:last-child{
+  border-bottom:0;
+}
+
 .job-progress-filters{
   display:grid;
   grid-template-columns:minmax(220px, 1fr) minmax(180px, 240px) minmax(180px, 240px) auto;
@@ -2224,6 +2246,8 @@ let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
 let currentJobPackageCatalog = [];
 let currentJobProgressSummaries = new Map();
+let currentJobAssignableLeaders = [];
+let currentJobLeaderAssignments = new Map();
 let currentJobsCatalog = [];
 let currentOpenJobId = null;
 let currentJobProgressVisibleCount = 25;
@@ -3272,9 +3296,32 @@ async function loadJobs(){
     currentJobProgressSummaries = new Map(
       (jobProgress || []).map(progress => [progress.job_id, progress])
     );
+
+    const { data:leaders, error:leadersError } =
+      await sb.rpc('get_assignable_job_leaders');
+    if(leadersError){
+      alert('Unable to load assignable job leaders: ' + leadersError.message);
+      return;
+    }
+    currentJobAssignableLeaders = leaders || [];
+
+    const { data:assignments, error:assignmentsError } =
+      await sb.rpc('get_job_leader_assignments');
+    if(assignmentsError){
+      alert('Unable to load job leader assignments: ' + assignmentsError.message);
+      return;
+    }
+    currentJobLeaderAssignments = new Map();
+    (assignments || []).forEach(assignment => {
+      const list = currentJobLeaderAssignments.get(assignment.job_id) || [];
+      list.push(assignment);
+      currentJobLeaderAssignments.set(assignment.job_id, list);
+    });
   }else{
     currentJobPackageCatalog = [];
     currentJobProgressSummaries = new Map();
+    currentJobAssignableLeaders = [];
+    currentJobLeaderAssignments = new Map();
   }
 
   renderJobProgressDashboard(jobs, canViewJobPackages);
@@ -3587,6 +3634,8 @@ function renderJob(job){
 
     </div>
 
+    <div class="job-leader-panel hidden" id="job-leaders-${job.id}"></div>
+
     <div
       class="actions"
       id="actions-${job.id}"
@@ -3610,6 +3659,13 @@ function renderJob(job){
   const canManage =
     currentProfile.role === 'admin' ||
     currentProfile.role === 'gf';
+
+  if(canManage){
+    renderJobLeaderAssignments(
+      job,
+      card.querySelector(`#job-leaders-${job.id}`)
+    );
+  }
 
 
   if(canManage){
@@ -3681,6 +3737,115 @@ function renderJob(job){
   if(['admin', 'gf'].includes(String(currentProfile.role || '').toLowerCase())){
     renderJobPackages(job, card.querySelector(`#job-packages-${job.id}`));
   }
+}
+
+
+function renderJobLeaderAssignments(job, container){
+  const assignments = currentJobLeaderAssignments.get(job.id) || [];
+  const assignedIds = new Set(assignments.map(item => item.member_id));
+  const available = currentJobAssignableLeaders.filter(
+    leader => !assignedIds.has(leader.member_id)
+  );
+
+  container.classList.remove('hidden');
+  container.replaceChildren();
+
+  const title = document.createElement('strong');
+  title.textContent = 'Assigned Job Leaders';
+  container.appendChild(title);
+
+  const help = document.createElement('p');
+  help.className = 'muted';
+  help.textContent =
+    'Assign responsibility without restricting anyone’s current job access.';
+  container.appendChild(help);
+
+  if(assignments.length === 0){
+    const empty = document.createElement('p');
+    empty.className = 'muted';
+    empty.textContent = 'No Foreman or General Foreman assigned yet.';
+    container.appendChild(empty);
+  }
+
+  assignments.forEach(assignment => {
+    const row = document.createElement('div');
+    row.className = 'job-leader-row';
+
+    const name = document.createElement('span');
+    name.innerHTML =
+      '<strong>' + escapeHtml(assignment.full_name) + '</strong> · ' +
+      escapeHtml(formatTeamRole(assignment.member_role));
+
+    const remove = document.createElement('button');
+    remove.className = 'small danger';
+    remove.textContent = 'Unassign';
+    remove.onclick = () => changeJobLeaderAssignment(
+      job,
+      assignment.member_id,
+      false
+    );
+
+    row.appendChild(name);
+    row.appendChild(remove);
+    container.appendChild(row);
+  });
+
+  if(available.length > 0){
+    const controls = document.createElement('div');
+    controls.className = 'import-actions';
+
+    const select = document.createElement('select');
+    select.className = 'team-role-select';
+    available.forEach(leader => {
+      const option = document.createElement('option');
+      option.value = leader.member_id;
+      option.textContent =
+        leader.full_name + ' — ' + formatTeamRole(leader.member_role);
+      select.appendChild(option);
+    });
+
+    const assign = document.createElement('button');
+    assign.className = 'small success';
+    assign.textContent = 'Assign Leader';
+    assign.onclick = () => changeJobLeaderAssignment(
+      job,
+      select.value,
+      true
+    );
+
+    controls.appendChild(select);
+    controls.appendChild(assign);
+    container.appendChild(controls);
+  }
+}
+
+async function changeJobLeaderAssignment(job, memberId, assigned){
+  if(!['admin', 'gf'].includes(String(currentProfile.role || '').toLowerCase())){
+    return;
+  }
+
+  const leader = currentJobAssignableLeaders.find(
+    item => item.member_id === memberId
+  );
+  const leaderName = leader?.full_name || 'this team member';
+  const confirmed = confirm(
+    (assigned ? 'Assign ' : 'Unassign ') + leaderName +
+    (assigned ? ' to ' : ' from ') + job.job_number + '?'
+  );
+  if(!confirmed) return;
+
+  const { error } = await sb.rpc('set_job_leader_assignment', {
+    p_job_id:job.id,
+    p_member_id:memberId,
+    p_assigned:assigned
+  });
+
+  if(error){
+    alert('Unable to update the job assignment: ' + error.message);
+    return;
+  }
+
+  await loadJobs();
 }
 
 
