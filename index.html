@@ -144,6 +144,73 @@ main{
   margin:0;
 }
 
+.compact-report-card{
+  padding:0;
+  overflow:hidden;
+}
+
+.compact-report-card > summary{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  align-items:center;
+  gap:12px;
+  padding:14px 16px;
+  cursor:pointer;
+  list-style:none;
+}
+
+.compact-report-card > summary::-webkit-details-marker{
+  display:none;
+}
+
+.compact-report-card > summary::before{
+  content:'▶';
+  color:var(--blue);
+  font-size:12px;
+}
+
+.compact-report-card[open] > summary::before{
+  content:'▼';
+}
+
+.compact-report-card .report-summary-main{
+  min-width:0;
+}
+
+.compact-report-card .report-summary-main strong,
+.compact-report-card .report-summary-main span{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.compact-report-card .report-summary-meta{
+  text-align:right;
+  white-space:nowrap;
+  font-size:14px;
+}
+
+.compact-report-card .report-card-details{
+  border-top:1px solid var(--border);
+  padding:14px 16px 6px;
+}
+
+.compact-report-card > button{
+  margin:4px 4px 12px;
+}
+
+@media(max-width:600px){
+  .compact-report-card > summary{
+    grid-template-columns:auto minmax(0, 1fr);
+  }
+
+  .compact-report-card .report-summary-meta{
+    grid-column:2;
+    text-align:left;
+  }
+}
+
 h2{
   margin-top:0;
 }
@@ -9821,9 +9888,9 @@ async function loadProductionReports(){
   pagedReports.forEach(report => {
 
     const card =
-      document.createElement('div');
+      document.createElement('details');
 
-    card.className = 'job-card';
+    card.className = 'job-card compact-report-card';
 
 
     const jobNumber =
@@ -9848,6 +9915,18 @@ async function loadProductionReports(){
 
 
     card.innerHTML = `
+      <summary>
+        <div class="report-summary-main">
+          <strong>${escapeHtml(jobNumber)}</strong>
+          <span>${escapeHtml(jobName || foreman)}</span>
+        </div>
+        <div class="report-summary-meta">
+          ${escapeHtml(report.work_date || 'No date')}
+          &nbsp;•&nbsp;
+          <strong>${escapeHtml(String(report.status || 'draft').toUpperCase())}</strong>
+        </div>
+      </summary>
+      <div class="report-card-details">
 
       <div class="job-number">
         ${escapeHtml(jobNumber)}
@@ -9918,6 +9997,7 @@ ${report.review_notes ? `
 ` : ''}
         ${dailyReportValueSummaryMarkup(valueSummary)}
         ${dailyReportAuthorizationSummaryMarkup(report, authorizationSummary)}
+      </div>
       </div>
     `;
 
