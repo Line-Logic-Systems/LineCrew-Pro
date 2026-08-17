@@ -1891,6 +1891,20 @@ button:disabled{
             <option value="complete">Completed</option>
           </select>
         </div>
+        <div class="production-reporting-control hidden">
+          <label for="productionWorkModeFilter">Work Mode</label>
+          <select id="productionWorkModeFilter">
+            <option value="">Regular &amp; Storm</option>
+            <option value="regular">Regular work only</option>
+            <option value="storm">Storm work only</option>
+          </select>
+        </div>
+        <div class="production-reporting-control hidden">
+          <label for="productionStormEventFilter">Storm Event</label>
+          <select id="productionStormEventFilter">
+            <option value="">All storm events</option>
+          </select>
+        </div>
       </div>
       <button id="clearProductionFilters" class="secondary small">
         Clear Filters
@@ -6205,6 +6219,8 @@ $('productionJobFilter').onchange = resetProductionPageAndLoad;
 $('productionForemanFilter').onchange = resetProductionPageAndLoad;
 $('productionExceptionFilter').onchange = resetProductionPageAndLoad;
 $('productionCompletionFilter').onchange = resetProductionPageAndLoad;
+$('productionWorkModeFilter').onchange = resetProductionPageAndLoad;
+$('productionStormEventFilter').onchange = resetProductionPageAndLoad;
 $('exportProductionCsvBtn').onclick = exportFilteredProductionCsv;
 
 $('clearProductionFilters').onclick = async () => {
@@ -6216,6 +6232,8 @@ $('clearProductionFilters').onclick = async () => {
   $('productionForemanFilter').value = '';
   $('productionExceptionFilter').value = '';
   $('productionCompletionFilter').value = '';
+  $('productionWorkModeFilter').value = '';
+  $('productionStormEventFilter').value = '';
   currentProductionPage = 1;
   await loadProductionReports();
 };
@@ -10761,8 +10779,10 @@ function populateProductionReportingFilters(reports, canReviewProduction){
 
   const selectedJob = $('productionJobFilter').value;
   const selectedForeman = $('productionForemanFilter').value;
+  const selectedStormEvent = $('productionStormEventFilter').value;
   const jobs = new Map();
   const foremen = new Set();
+  const stormEvents = new Set();
 
   reports.forEach(report => {
     if(report.job_id){
@@ -10772,6 +10792,9 @@ function populateProductionReportingFilters(reports, canReviewProduction){
       );
     }
     if(report.foreman_name) foremen.add(String(report.foreman_name));
+    if(report.storm_mode === true && report.storm_event_name){
+      stormEvents.add(String(report.storm_event_name));
+    }
   });
 
   $('productionJobFilter').innerHTML = '<option value="">All jobs</option>';
@@ -10792,8 +10815,20 @@ function populateProductionReportingFilters(reports, canReviewProduction){
     $('productionForemanFilter').appendChild(option);
   });
 
+  $('productionStormEventFilter').innerHTML =
+    '<option value="">All storm events</option>';
+  [...stormEvents].sort((a, b) => a.localeCompare(b)).forEach(eventName => {
+    const option = document.createElement('option');
+    option.value = eventName;
+    option.textContent = eventName;
+    $('productionStormEventFilter').appendChild(option);
+  });
+
   if(jobs.has(selectedJob)) $('productionJobFilter').value = selectedJob;
   if(foremen.has(selectedForeman)) $('productionForemanFilter').value = selectedForeman;
+  if(stormEvents.has(selectedStormEvent)){
+    $('productionStormEventFilter').value = selectedStormEvent;
+  }
 }
 
 function renderProductionReportingSummary(reports, canReviewProduction){
@@ -11065,6 +11100,8 @@ async function loadProductionReports(){
   const foremanFilter = canReviewProduction ? $('productionForemanFilter').value : '';
   const exceptionFilter = canReviewProduction ? $('productionExceptionFilter').value : '';
   const completionFilter = canReviewProduction ? $('productionCompletionFilter').value : '';
+  const workModeFilter = canReviewProduction ? $('productionWorkModeFilter').value : '';
+  const stormEventFilter = canReviewProduction ? $('productionStormEventFilter').value : '';
   const filteredReports = (reports || []).filter(report => {
     const archived = report.archived === true;
     if(statusFilter === 'archived'){
@@ -11080,6 +11117,11 @@ async function loadProductionReports(){
     if(dateTo && String(report.work_date || '') > dateTo) return false;
     if(jobFilter && String(report.job_id || '') !== jobFilter) return false;
     if(foremanFilter && String(report.foreman_name || '') !== foremanFilter) return false;
+    if(workModeFilter === 'storm' && report.storm_mode !== true) return false;
+    if(workModeFilter === 'regular' && report.storm_mode === true) return false;
+    if(stormEventFilter && String(report.storm_event_name || '') !== stormEventFilter){
+      return false;
+    }
 
     const reportStatus = String(report.status || 'draft').toLowerCase();
     if(completionFilter === 'complete' && reportStatus !== 'approved') return false;
@@ -11097,7 +11139,8 @@ async function loadProductionReports(){
         report.jobs?.job_number,
         report.jobs?.job_name,
         report.foreman_name,
-        report.crew_name
+        report.crew_name,
+        report.storm_event_name
       ].map(value => String(value || '').toLowerCase()).join(' ');
       if(!haystack.includes(search)) return false;
     }
