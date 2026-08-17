@@ -6328,23 +6328,23 @@ async function loadCustomers(){
         ? customer.customer_type.toUpperCase()
         : 'CUSTOMER';
 
-    card.innerHTML = \`
+    card.innerHTML = `
       <summary>
         <div class="report-summary-main">
-          <strong>\${escapeHtml(customer.name)}</strong>
-          <span>\${escapeHtml(typeText)}</span>
+          <strong>${escapeHtml(customer.name)}</strong>
+          <span>${escapeHtml(typeText)}</span>
         </div>
-        <span class="status \${customer.active ? 'active' : 'closed'}">\${customer.active ? 'ACTIVE' : 'INACTIVE'}</span>
+        <span class="status ${customer.active ? 'active' : 'closed'}">${customer.active ? 'ACTIVE' : 'INACTIVE'}</span>
       </summary>
       <div class="report-card-details">
-        \${customer.contact_name ? \`Contact: \${escapeHtml(customer.contact_name)}<br>\` : ''}
-        \${customer.contact_email ? \`Email: \${escapeHtml(customer.contact_email)}<br>\` : ''}
-        \${customer.contact_phone ? \`Phone: \${escapeHtml(customer.contact_phone)}<br>\` : ''}
-        \${customer.notes ? \`Notes: \${escapeHtml(customer.notes)}\` : ''}
-        \${!customer.contact_name && !customer.contact_email && !customer.contact_phone && !customer.notes
+        ${customer.contact_name ? `Contact: ${escapeHtml(customer.contact_name)}<br>` : ''}
+        ${customer.contact_email ? `Email: ${escapeHtml(customer.contact_email)}<br>` : ''}
+        ${customer.contact_phone ? `Phone: ${escapeHtml(customer.contact_phone)}<br>` : ''}
+        ${customer.notes ? `Notes: ${escapeHtml(customer.notes)}` : ''}
+        ${!customer.contact_name && !customer.contact_email && !customer.contact_phone && !customer.notes
           ? '<span class="muted">No additional customer details.</span>' : ''}
       </div>
-    \`;
+    `;
 
     if(userIsCompanyAdmin()){
       const actions = document.createElement('div');
@@ -6775,25 +6775,25 @@ async function loadContracts(){
       customer?.name
     ].map(value => String(value || '').toLowerCase()).join(' ');
 
-    card.innerHTML = \`
+    card.innerHTML = `
       <summary>
         <div class="report-summary-main">
-          <strong>\${escapeHtml(contract.contract_name)}</strong>
-          <span>\${customer ? escapeHtml(customer.name) : 'Customer not available'}\${contract.contract_number ? ' — ' + escapeHtml(contract.contract_number) : ''}</span>
+          <strong>${escapeHtml(contract.contract_name)}</strong>
+          <span>${customer ? escapeHtml(customer.name) : 'Customer not available'}${contract.contract_number ? ' — ' + escapeHtml(contract.contract_number) : ''}</span>
         </div>
-        <span class="status \${contract.active ? 'active' : 'closed'}">\${contract.active ? 'ACTIVE' : 'INACTIVE'}</span>
+        <span class="status ${contract.active ? 'active' : 'closed'}">${contract.active ? 'ACTIVE' : 'INACTIVE'}</span>
       </summary>
       <div class="report-card-details">
-        \${contract.start_date ? \`Start: \${escapeHtml(contract.start_date)}<br>\` : ''}
-        \${contract.end_date ? \`End: \${escapeHtml(contract.end_date)}<br>\` : ''}
-        \${contract.notes ? \`Notes: \${escapeHtml(contract.notes)}<br>\` : ''}
-        \${userIsCompanyAdmin() ? \`Foreman Field Value: <strong>\${
+        ${contract.start_date ? `Start: ${escapeHtml(contract.start_date)}<br>` : ''}
+        ${contract.end_date ? `End: ${escapeHtml(contract.end_date)}<br>` : ''}
+        ${contract.notes ? `Notes: ${escapeHtml(contract.notes)}<br>` : ''}
+        ${userIsCompanyAdmin() ? `Foreman Field Value: <strong>${
           currentContractFieldSettings.has(contract.id)
             ? escapeHtml(currentContractFieldSettings.get(contract.id)) + '%'
             : 'Actual price (no adjustment)'
-        }</strong>\` : ''}
+        }</strong>` : ''}
       </div>
-    \`;
+    `;
 
     if(userIsCompanyAdmin()){
       const actions = document.createElement('div');
