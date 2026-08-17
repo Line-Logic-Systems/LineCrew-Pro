@@ -1703,8 +1703,62 @@ button:disabled{
     <label for="safetyJsaEmergency">Emergency Plan / Nearest Facility *</label>
     <textarea id="safetyJsaEmergency" rows="2" placeholder="Emergency response and nearest medical facility"></textarea>
 
-    <label for="safetyJsaCrewMembers">Crew Members Attending Briefing *</label>
-    <textarea id="safetyJsaCrewMembers" rows="2" placeholder="Names of crew members"></textarea>
+    <fieldset class="jsa-signatures">
+      <legend>Crew Member Signatures *</legend>
+      <p class="muted">Each crew member types their full name after the morning briefing. At least one signature is required.</p>
+      <div class="form-grid">
+      <div>
+        <label for="safetyJsaSignature1">Crew Member 1</label>
+        <input id="safetyJsaSignature1" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature" required>
+      </div>
+      <div>
+        <label for="safetyJsaSignature2">Crew Member 2</label>
+        <input id="safetyJsaSignature2" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      <div>
+        <label for="safetyJsaSignature3">Crew Member 3</label>
+        <input id="safetyJsaSignature3" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      <div>
+        <label for="safetyJsaSignature4">Crew Member 4</label>
+        <input id="safetyJsaSignature4" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      <div>
+        <label for="safetyJsaSignature5">Crew Member 5</label>
+        <input id="safetyJsaSignature5" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      <div>
+        <label for="safetyJsaSignature6">Crew Member 6</label>
+        <input id="safetyJsaSignature6" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      <div>
+        <label for="safetyJsaSignature7">Crew Member 7</label>
+        <input id="safetyJsaSignature7" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      <div>
+        <label for="safetyJsaSignature8">Crew Member 8</label>
+        <input id="safetyJsaSignature8" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      <div>
+        <label for="safetyJsaSignature9">Crew Member 9</label>
+        <input id="safetyJsaSignature9" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      <div>
+        <label for="safetyJsaSignature10">Crew Member 10</label>
+        <input id="safetyJsaSignature10" class="jsa-signature-input" type="text"
+          placeholder="Type full name as signature">
+      </div>
+      </div>
+    </fieldset>
 
     <label for="safetyJsaEquipment">Special Equipment / Additional Notes</label>
     <textarea id="safetyJsaEquipment" rows="2" placeholder="Optional"></textarea>
@@ -3360,9 +3414,10 @@ function resetSafetyJsaForm(){
   $('safetyJsaDate').value = new Date().toISOString().slice(0,10);
   $('safetyJsaForeman').value = currentProfile?.full_name || '';
   ['safetyJsaCrew','safetyJsaWeather','safetyJsaBriefing','safetyJsaHazards',
-   'safetyJsaControls','safetyJsaPpe','safetyJsaEmergency',
-   'safetyJsaCrewMembers','safetyJsaEquipment']
+   'safetyJsaControls','safetyJsaPpe','safetyJsaEmergency','safetyJsaEquipment']
     .forEach(id => { $(id).value = ''; });
+  document.querySelectorAll('.jsa-signature-input')
+    .forEach(input => { input.value = ''; });
   $('safetyJsaAcknowledged').checked = false;
 }
 
@@ -3400,7 +3455,14 @@ $('cancelSafetyJsaBtn').onclick = () => {
   $('safetyJsaForm').classList.add('hidden');
 };
 
+function getSafetyJsaSignatures(){
+  return Array.from(document.querySelectorAll('.jsa-signature-input'))
+    .map(input => input.value.trim())
+    .filter(Boolean);
+}
+
 $('saveSafetyJsaBtn').onclick = async () => {
+  const signatures = getSafetyJsaSignatures();
   const payload = {
     p_job_id:$('safetyJsaJob').value,
     p_work_date:$('safetyJsaDate').value,
@@ -3411,7 +3473,7 @@ $('saveSafetyJsaBtn').onclick = async () => {
     p_controls:$('safetyJsaControls').value.trim(),
     p_ppe:$('safetyJsaPpe').value.trim(),
     p_emergency_plan:$('safetyJsaEmergency').value.trim(),
-    p_crew_members:$('safetyJsaCrewMembers').value.trim(),
+    p_crew_members:signatures.join('\n'),
     p_special_equipment:$('safetyJsaEquipment').value.trim() || null,
     p_foreman_acknowledged:$('safetyJsaAcknowledged').checked
   };
