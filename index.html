@@ -408,6 +408,17 @@ button:disabled{
   border:1px solid #d7e2eb;
   border-radius:10px;
   background:#fff;
+  cursor:pointer;
+}
+
+.job-progress-row:hover{
+  border-color:#7aa9ca;
+  background:#f8fbfd;
+}
+
+.job-card.job-highlight{
+  outline:3px solid #1f7ed0;
+  outline-offset:2px;
 }
 
 .progress-track{
@@ -3244,8 +3255,33 @@ function renderJobProgressDashboard(jobs, canView){
         ' &nbsp;•&nbsp; ' + escapeHtml(formatCurrency(summary.remaining_value || 0)) + ' Remaining' +
         ' &nbsp;•&nbsp; <span class="redline">' + Number(summary.redline_count || 0) + ' Redline</span>' +
         ' &nbsp;•&nbsp; <span class="pending">' + Number(summary.pending_packet_count || 0) + ' Pending</span></div>';
+    row.title = 'Open ' + job.job_number + ' job details';
+    row.setAttribute('role', 'button');
+    row.tabIndex = 0;
+    row.onclick = () => openJobFromProgress(job.id);
+    row.onkeydown = event => {
+      if(event.key === 'Enter' || event.key === ' '){
+        event.preventDefault();
+        openJobFromProgress(job.id);
+      }
+    };
     $('jobProgressList').appendChild(row);
   });
+}
+
+function openJobFromProgress(jobId){
+  const card = document.getElementById('job-card-' + jobId);
+  if(!card){
+    alert('Unable to locate this job in the current list.');
+    return;
+  }
+
+  document.querySelectorAll('.job-card.job-highlight').forEach(item =>
+    item.classList.remove('job-highlight')
+  );
+  card.classList.add('job-highlight');
+  card.scrollIntoView({ behavior:'smooth', block:'start' });
+  setTimeout(() => card.classList.remove('job-highlight'), 2500);
 }
 
 
@@ -3264,6 +3300,7 @@ function renderJob(job){
         ? ''
         : ' inactive'
     );
+  card.id = 'job-card-' + job.id;
 
 
   const statusText =
