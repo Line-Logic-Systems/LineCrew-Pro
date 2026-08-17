@@ -1787,7 +1787,10 @@ button:disabled{
         <div><label for="safetyJsaFromDate">From Date</label><input id="safetyJsaFromDate" type="date"></div>
         <div><label for="safetyJsaThroughDate">Through Date</label><input id="safetyJsaThroughDate" type="date"></div>
       </div>
-      <button id="clearSafetyJsaFiltersBtn" class="secondary small">Clear Filters</button>
+      <div class="button-row">
+        <button id="clearSafetyJsaFiltersBtn" class="secondary small">Clear Filters</button>
+        <button id="exportSafetyJsasBtn" class="secondary small">Export Filtered CSV</button>
+      </div>
     </div>
   </details>
 
@@ -3700,6 +3703,38 @@ function getFilteredSafetyJsas(){
   });
 }
 
+function exportFilteredSafetyJsas(){
+  const records = getFilteredSafetyJsas();
+  if(records.length === 0){
+    alert('There are no matching JSAs to export.');
+    return;
+  }
+  const headers = [
+    'Work Date','Job Number','Job Name','Foreman','Crew','Morning Conditions',
+    'Work Plan / Job Briefing','Hazards Identified','Controls / Safe Work Practices',
+    'Required PPE','Emergency Plan / Nearest Facility',
+    'Special Equipment / Additional Notes','Crew Member Signatures','Crew Acknowledged'
+  ];
+  const rows = records.map(jsa => [
+    jsa.work_date || '',jsa.job_number || '',jsa.job_name || '',
+    jsa.foreman_name || '',jsa.crew_name || '',jsa.weather_conditions || '',
+    jsa.job_briefing || '',jsa.hazards || '',jsa.controls || '',jsa.ppe || '',
+    jsa.emergency_plan || '',jsa.special_equipment || '',jsa.crew_members || '',
+    jsa.crew_acknowledged ? 'Yes' : 'No'
+  ]);
+  const csv = '\uFEFF' + [headers, ...rows]
+    .map(row => row.map(csvCell).join(','))
+    .join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'linecrew-jsa-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
 function printSafetyJsa(jsa){
   const popup = window.open('', '_blank');
   if(!popup){
@@ -3792,6 +3827,7 @@ $('clearSafetyJsaFiltersBtn').onclick = () => {
   $('safetyJsaThroughDate').value = '';
   renderSafetyJsas();
 };
+$('exportSafetyJsasBtn').onclick = exportFilteredSafetyJsas;
 
 /* TEAM */
 
