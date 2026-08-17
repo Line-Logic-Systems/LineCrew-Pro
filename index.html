@@ -5263,6 +5263,10 @@ sb.auth.onAuthStateChange((event)=>{
 
   if(event === 'SIGNED_OUT'){
 
+    $('assistantLauncher').classList.add('hidden');
+    $('assistantPanel').classList.add('hidden');
+    $('assistantMessages').innerHTML = '';
+    $('assistantQuestion').value = '';
     currentProfile = null;
     currentCompany = null;
 
