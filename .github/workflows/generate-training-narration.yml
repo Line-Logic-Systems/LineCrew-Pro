@@ -1,0 +1,39 @@
+name: Generate training narration
+
+on:
+  workflow_dispatch:
+    inputs:
+      voice_id:
+        description: ElevenLabs voice ID selected for the LineCrew Pro narrator
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  narration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Generate slide narration
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID: ${{ inputs.voice_id }}
+        run: node scripts/generate-training-narration.mjs
+
+      - name: Upload narration package
+        uses: actions/upload-artifact@v4
+        with:
+          name: linecrew-pro-training-narration
+          path: training/narration/output/
+          if-no-files-found: error
+          retention-days: 14
