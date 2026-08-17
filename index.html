@@ -1192,6 +1192,31 @@ button:disabled{
         <label for="productionDateTo">Through Date</label>
         <input id="productionDateTo" type="date">
       </div>
+      <div class="production-reporting-control hidden">
+        <label for="productionJobFilter">Job</label>
+        <select id="productionJobFilter"><option value="">All jobs</option></select>
+      </div>
+      <div class="production-reporting-control hidden">
+        <label for="productionForemanFilter">Foreman</label>
+        <select id="productionForemanFilter"><option value="">All foremen</option></select>
+      </div>
+      <div class="production-reporting-control hidden">
+        <label for="productionExceptionFilter">Unit Review</label>
+        <select id="productionExceptionFilter">
+          <option value="">All reports</option>
+          <option value="redline">Has redlines</option>
+          <option value="pending">Pending packet</option>
+          <option value="clear">No exceptions</option>
+        </select>
+      </div>
+      <div class="production-reporting-control hidden">
+        <label for="productionCompletionFilter">Completion</label>
+        <select id="productionCompletionFilter">
+          <option value="">All stages</option>
+          <option value="in_progress">In progress</option>
+          <option value="complete">Completed</option>
+        </select>
+      </div>
     </div>
     <button id="clearProductionFilters" class="secondary small">
       Clear Filters
@@ -1204,6 +1229,17 @@ button:disabled{
   </div>
 
   <div id="productionReviewQueueSummary" class="card hidden"></div>
+
+  <div id="productionReportingSummary" class="card hidden">
+    <div class="section-header">
+      <div>
+        <h3>Production Reporting</h3>
+        <p class="muted">Summary of the reports matching the filters above.</p>
+      </div>
+      <button id="exportProductionCsvBtn" class="secondary small">Export Filtered CSV</button>
+    </div>
+    <div id="productionReportingMetrics" class="daily-value-summary"></div>
+  </div>
 
   <div id="productionEmpty" class="card center hidden">
     <h3>No Production Reports Yet</h3>
@@ -2074,6 +2110,7 @@ let currentDailyUnitReport = null;
 let currentDailyUnitBatchRows = [];
 let currentDailyReportValueSummaries = new Map();
 let currentDailyAuthorizationSummaries = new Map();
+let currentProductionExportRows = [];
 let productionSearchTimer = null;
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
@@ -4157,12 +4194,21 @@ $('productionSearch').oninput = () => {
 $('productionStatusFilter').onchange = loadProductionReports;
 $('productionDateFrom').onchange = loadProductionReports;
 $('productionDateTo').onchange = loadProductionReports;
+$('productionJobFilter').onchange = loadProductionReports;
+$('productionForemanFilter').onchange = loadProductionReports;
+$('productionExceptionFilter').onchange = loadProductionReports;
+$('productionCompletionFilter').onchange = loadProductionReports;
+$('exportProductionCsvBtn').onclick = exportFilteredProductionCsv;
 
 $('clearProductionFilters').onclick = async () => {
   $('productionSearch').value = '';
   $('productionStatusFilter').value = '';
   $('productionDateFrom').value = '';
   $('productionDateTo').value = '';
+  $('productionJobFilter').value = '';
+  $('productionForemanFilter').value = '';
+  $('productionExceptionFilter').value = '';
+  $('productionCompletionFilter').value = '';
   await loadProductionReports();
 };
 
@@ -8680,6 +8726,132 @@ async function deletePriceBookItem(item){
   alert('Unit item deleted.');
 }
 
+function populateProductionReportingFilters(reports, canReviewProduction){
+  if(!canReviewProduction) return;
+
+  const selectedJob = $('productionJobFilter').value;
+  const selectedForeman = $('productionForemanFilter').value;
+  const jobs = new Map();
+  const foremen = new Set();
+
+  reports.forEach(report => {
+    if(report.job_id){
+      jobs.set(
+        String(report.job_id),
+        [report.jobs?.job_number, report.jobs?.job_name].filter(Boolean).join(' — ') || 'Unnamed job'
+      );
+    }
+    if(report.foreman_name) foremen.add(String(report.foreman_name));
+  });
+
+  $('productionJobFilter').innerHTML = '<option value="">All jobs</option>';
+  [...jobs.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .forEach(([id, label]) => {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = label;
+      $('productionJobFilter').appendChild(option);
+    });
+
+  $('productionForemanFilter').innerHTML = '<option value="">All foremen</option>';
+  [...foremen].sort((a, b) => a.localeCompare(b)).forEach(name => {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    $('productionForemanFilter').appendChild(option);
+  });
+
+  if(jobs.has(selectedJob)) $('productionJobFilter').value = selectedJob;
+  if(foremen.has(selectedForeman)) $('productionForemanFilter').value = selectedForeman;
+}
+
+function renderProductionReportingSummary(reports, canReviewProduction){
+  $('productionReportingSummary').classList.toggle('hidden', !canReviewProduction);
+  currentProductionExportRows = canReviewProduction ? reports : [];
+  if(!canReviewProduction) return;
+
+  let actualValue = 0;
+  let fieldValue = 0;
+  let regularHours = 0;
+  let overtimeHours = 0;
+  let redlines = 0;
+  let pending = 0;
+  let approved = 0;
+
+  reports.forEach(report => {
+    const value = currentDailyReportValueSummaries.get(report.id) || {};
+    const authorization = currentDailyAuthorizationSummaries.get(report.id) || {};
+    actualValue += Number(value.actual_total || 0);
+    fieldValue += Number(value.adjusted_total || 0);
+    regularHours += Number(report.regular_hours || 0);
+    overtimeHours += Number(report.overtime_hours || 0);
+    redlines += Number(authorization.redline_count || 0);
+    pending += Number(authorization.pending_packet_count || 0);
+    if(String(report.status || '').toLowerCase() === 'approved') approved += 1;
+  });
+
+  $('productionReportingMetrics').innerHTML =
+    '<span><strong>' + reports.length + '</strong><br>Reports</span>' +
+    '<span><strong>' + approved + '</strong><br>Completed</span>' +
+    '<span><strong>' + escapeHtml(formatCurrency(actualValue)) + '</strong><br>Actual Unit Value</span>' +
+    '<span><strong>' + escapeHtml(formatCurrency(fieldValue)) + '</strong><br>Field Unit Value</span>' +
+    '<span><strong>' + regularHours + '</strong><br>Regular Hours</span>' +
+    '<span><strong>' + overtimeHours + '</strong><br>OT Hours</span>' +
+    '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
+    '<span><strong>' + pending + '</strong><br>Pending Packet</span>';
+}
+
+function exportFilteredProductionCsv(){
+  if(!['admin', 'gf'].includes(String(currentProfile?.role || '').toLowerCase())){
+    alert('Only an Admin or General Foreman can export company production reporting.');
+    return;
+  }
+  if(currentProductionExportRows.length === 0){
+    alert('No production reports match the current filters.');
+    return;
+  }
+
+  const headers = [
+    'Job Number', 'Job Name', 'Work Date', 'Foreman', 'Crew', 'Status',
+    'Regular Hours', 'OT Hours', 'Actual Unit Value', 'Field Unit Value',
+    'Authorized Units', 'Pending Packet Units', 'Redline Units',
+    'Report Notes', 'Review Notes'
+  ];
+  const rows = currentProductionExportRows.map(report => {
+    const value = currentDailyReportValueSummaries.get(report.id) || {};
+    const authorization = currentDailyAuthorizationSummaries.get(report.id) || {};
+    return [
+      report.jobs?.job_number || '',
+      report.jobs?.job_name || '',
+      report.work_date || '',
+      report.foreman_name || '',
+      report.crew_name || '',
+      report.archived === true ? 'Archived' : String(report.status || 'draft'),
+      Number(report.regular_hours || 0),
+      Number(report.overtime_hours || 0),
+      Number(value.actual_total || 0).toFixed(2),
+      Number(value.adjusted_total || 0).toFixed(2),
+      Number(authorization.authorized_count || 0),
+      Number(authorization.pending_packet_count || 0),
+      Number(authorization.redline_count || 0),
+      report.notes || '',
+      report.review_notes || ''
+    ];
+  });
+  const csv = '\uFEFF' + [headers, ...rows]
+    .map(row => row.map(csvCell).join(','))
+    .join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'linecrew-production-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
 async function loadProductionReports(){
 
   $('productionLoading').classList.remove('hidden');
@@ -8769,10 +8941,19 @@ async function loadProductionReports(){
     );
   }
 
+  document.querySelectorAll('.production-reporting-control').forEach(control =>
+    control.classList.toggle('hidden', !canReviewProduction)
+  );
+  populateProductionReportingFilters(reports || [], canReviewProduction);
+
   const search = $('productionSearch').value.trim().toLowerCase();
   const statusFilter = $('productionStatusFilter').value;
   const dateFrom = $('productionDateFrom').value;
   const dateTo = $('productionDateTo').value;
+  const jobFilter = canReviewProduction ? $('productionJobFilter').value : '';
+  const foremanFilter = canReviewProduction ? $('productionForemanFilter').value : '';
+  const exceptionFilter = canReviewProduction ? $('productionExceptionFilter').value : '';
+  const completionFilter = canReviewProduction ? $('productionCompletionFilter').value : '';
   const filteredReports = (reports || []).filter(report => {
     const archived = report.archived === true;
     if(statusFilter === 'archived'){
@@ -8786,6 +8967,19 @@ async function loadProductionReports(){
 
     if(dateFrom && String(report.work_date || '') < dateFrom) return false;
     if(dateTo && String(report.work_date || '') > dateTo) return false;
+    if(jobFilter && String(report.job_id || '') !== jobFilter) return false;
+    if(foremanFilter && String(report.foreman_name || '') !== foremanFilter) return false;
+
+    const reportStatus = String(report.status || 'draft').toLowerCase();
+    if(completionFilter === 'complete' && reportStatus !== 'approved') return false;
+    if(completionFilter === 'in_progress' && !['draft', 'submitted'].includes(reportStatus)) return false;
+
+    const authorization = currentDailyAuthorizationSummaries.get(report.id) || {};
+    const redlines = Number(authorization.redline_count || 0);
+    const pending = Number(authorization.pending_packet_count || 0);
+    if(exceptionFilter === 'redline' && redlines === 0) return false;
+    if(exceptionFilter === 'pending' && pending === 0) return false;
+    if(exceptionFilter === 'clear' && (redlines > 0 || pending > 0)) return false;
 
     if(search){
       const haystack = [
@@ -8833,6 +9027,8 @@ async function loadProductionReports(){
 
   $('productionFilterCount').textContent =
     'Showing ' + filteredReports.length + ' of ' + (reports || []).length + ' reports';
+
+  renderProductionReportingSummary(filteredReports, canReviewProduction);
 
 
   if(filteredReports.length === 0){
