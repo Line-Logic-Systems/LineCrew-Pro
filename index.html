@@ -10125,6 +10125,13 @@ ${report.review_notes ? `
     printButton.onclick = () => printDailyReport(report);
     card.appendChild(printButton);
 
+    const attachmentsButton = document.createElement('button');
+    attachmentsButton.className = 'secondary small';
+    attachmentsButton.textContent = 'Attachments';
+    attachmentsButton.onclick = () =>
+      toggleDailyReportAttachments(report, card, attachmentsButton);
+    card.appendChild(attachmentsButton);
+
 if(
   String(report.status || 'draft').toLowerCase() === 'draft'
 ){
@@ -10262,6 +10269,192 @@ card.appendChild(editBtn);
 
   card.appendChild(submitBtn);
 
+}
+
+function safeStorageFilename(filename){
+  const parts = String(filename || 'attachment').split('.');
+  const extension = parts.length > 1
+    ? '.' + parts.pop().replace(/[^a-z0-9]/gi, '').slice(0, 12).toLowerCase()
+    : '';
+  const base = parts.join('.')
+    .replace(/[^a-z0-9_-]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'attachment';
+  return base + extension;
+}
+
+async function toggleDailyReportAttachments(report, card, button){
+  const existing = card.querySelector('.daily-report-attachments');
+  if(existing){
+    existing.remove();
+    button.textContent = 'Attachments';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Loading Attachments...';
+
+  const panel = document.createElement('div');
+  panel.className = 'daily-report-attachments daily-report-history';
+  panel.innerHTML =
+    '<strong>Report Attachments</strong>' +
+    '<p class="muted">Photos, utility paperwork, sketches, PDFs or spreadsheets. Maximum 15 MB per file.</p>' +
+    '<div class="attachment-upload-row">' +
+      '<input class="attachment-file" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.xlsx,.csv">' +
+      '<input class="attachment-caption" maxlength="500" placeholder="Optional caption">' +
+      '<button class="success small attachment-upload">Upload</button>' +
+    '</div>' +
+    '<div class="attachment-list"><p class="muted">Loading...</p></div>';
+  card.appendChild(panel);
+
+  const refresh = async () => {
+    const list = panel.querySelector('.attachment-list');
+    const { data, error } = await sb
+      .from('daily_report_attachments')
+      .select('id,storage_path,original_filename,mime_type,file_size_bytes,caption,uploaded_by,created_at')
+      .eq('daily_report_id', report.id)
+      .order('created_at', { ascending:false });
+
+    if(error){
+      list.innerHTML =
+        '<p class="danger-text">Unable to load attachments: ' +
+        escapeHtml(error.message) + '</p>';
+      return;
+    }
+
+    list.innerHTML = '';
+    if(!data || data.length === 0){
+      list.innerHTML = '<p class="muted">No attachments added yet.</p>';
+      return;
+    }
+
+    data.forEach(attachment => {
+      const row = document.createElement('div');
+      row.className = 'job-card';
+      const size = attachment.file_size_bytes
+        ? (Number(attachment.file_size_bytes) / 1048576).toFixed(1) + ' MB'
+        : '';
+      row.innerHTML =
+        '<strong>' + escapeHtml(attachment.original_filename) + '</strong>' +
+        (attachment.caption
+          ? '<br><span>' + escapeHtml(attachment.caption) + '</span>'
+          : '') +
+        '<br><span class="muted">' +
+          escapeHtml(size) +
+          (attachment.created_at
+            ? ' · ' + escapeHtml(new Date(attachment.created_at).toLocaleString())
+            : '') +
+        '</span> ';
+
+      const openButton = document.createElement('button');
+      openButton.className = 'secondary small';
+      openButton.textContent = 'Open';
+      openButton.onclick = async () => {
+        const { data:signed, error:signedError } = await sb.storage
+          .from('daily-report-attachments')
+          .createSignedUrl(attachment.storage_path, 300);
+        if(signedError){
+          alert('Unable to open attachment: ' + signedError.message);
+          return;
+        }
+        window.open(signed.signedUrl, '_blank', 'noopener');
+      };
+      row.appendChild(openButton);
+
+      const canDelete =
+        attachment.uploaded_by === currentProfile?.id ||
+        ['admin','gf'].includes(String(currentProfile?.role || '').toLowerCase());
+      if(canDelete){
+        const deleteButton = document.createElement('button');
+        deleteButton.className = 'danger small';
+        deleteButton.textContent = 'Delete';
+        deleteButton.onclick = async () => {
+          if(!confirm('Delete this report attachment?')) return;
+          deleteButton.disabled = true;
+          const { data:path, error:metadataError } = await sb.rpc(
+            'delete_daily_report_attachment',
+            { p_attachment_id:attachment.id }
+          );
+          if(metadataError){
+            deleteButton.disabled = false;
+            alert('Unable to delete attachment: ' + metadataError.message);
+            return;
+          }
+          const { error:storageError } = await sb.storage
+            .from('daily-report-attachments')
+            .remove([path]);
+          if(storageError){
+            alert('Attachment record was removed, but storage cleanup needs Admin attention: ' +
+              storageError.message);
+          }
+          await refresh();
+        };
+        row.appendChild(deleteButton);
+      }
+      list.appendChild(row);
+    });
+  };
+
+  panel.querySelector('.attachment-upload').onclick = async event => {
+    const uploadButton = event.currentTarget;
+    const file = panel.querySelector('.attachment-file').files?.[0];
+    const caption = panel.querySelector('.attachment-caption').value.trim();
+    if(!file){
+      alert('Choose a file first.');
+      return;
+    }
+    if(file.size > 15728640){
+      alert('Attachment must be 15 MB or smaller.');
+      return;
+    }
+
+    uploadButton.disabled = true;
+    uploadButton.textContent = 'Uploading...';
+    const path =
+      currentProfile.company_id + '/' + report.id + '/' +
+      crypto.randomUUID() + '-' + safeStorageFilename(file.name);
+
+    const { error:uploadError } = await sb.storage
+      .from('daily-report-attachments')
+      .upload(path, file, { upsert:false, contentType:file.type || undefined });
+
+    if(uploadError){
+      uploadButton.disabled = false;
+      uploadButton.textContent = 'Upload';
+      alert('Unable to upload attachment: ' + uploadError.message);
+      return;
+    }
+
+    const { error:registerError } = await sb.rpc(
+      'register_daily_report_attachment',
+      {
+        p_report_id:report.id,
+        p_storage_path:path,
+        p_original_filename:file.name,
+        p_mime_type:file.type || null,
+        p_file_size_bytes:file.size,
+        p_caption:caption || null
+      }
+    );
+
+    if(registerError){
+      await sb.storage.from('daily-report-attachments').remove([path]);
+      uploadButton.disabled = false;
+      uploadButton.textContent = 'Upload';
+      alert('Unable to register attachment: ' + registerError.message);
+      return;
+    }
+
+    panel.querySelector('.attachment-file').value = '';
+    panel.querySelector('.attachment-caption').value = '';
+    uploadButton.disabled = false;
+    uploadButton.textContent = 'Upload';
+    await refresh();
+  };
+
+  button.disabled = false;
+  button.textContent = 'Hide Attachments';
+  await refresh();
 }
 
 async function printDailyReport(report){
