@@ -421,6 +421,30 @@ button:disabled{
   outline-offset:2px;
 }
 
+.closed-jobs-list{
+  padding:12px;
+  border:1px solid #d7e2eb;
+  border-radius:10px;
+  background:#f8fafc;
+}
+
+.closed-jobs-list summary{
+  cursor:pointer;
+  font-weight:800;
+}
+
+.closed-jobs-list button{
+  display:block;
+  width:100%;
+  margin-top:9px;
+  text-align:left;
+}
+
+.job-detail-back{
+  width:auto;
+  margin:0 0 12px;
+}
+
 .progress-track{
   height:10px;
   margin:8px 0;
@@ -2149,6 +2173,8 @@ let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
 let currentJobPackageCatalog = [];
 let currentJobProgressSummaries = new Map();
+let currentJobsCatalog = [];
+let currentOpenJobId = null;
 let currentOpenJobPackage = null;
 let currentJobPackageImportWorkbook = null;
 let currentJobPackageImportRows = [];
@@ -2232,6 +2258,11 @@ async function displayAppPage(page, state = {}){
       .toggle('hidden', !canManageJobs);
 
     await loadJobContractOptions();
+    currentOpenJobId =
+      state.view === 'jobDetail' && state.jobId
+        ? state.jobId
+        : null;
+
     await loadJobs();
   }
 
@@ -3161,6 +3192,8 @@ async function loadJobs(){
     return;
   }
 
+  currentJobsCatalog = jobs;
+
   const canViewJobPackages = ['admin', 'gf'].includes(
     String(currentProfile.role || '').toLowerCase()
   );
@@ -3194,7 +3227,21 @@ async function loadJobs(){
 
   renderJobProgressDashboard(jobs, canViewJobPackages);
 
-  jobs.forEach(renderJob);
+  if(canViewJobPackages){
+    const selectedJob = currentOpenJobId
+      ? currentJobsCatalog.find(job => job.id === currentOpenJobId)
+      : null;
+
+    if(selectedJob){
+      showJobDetail(selectedJob, false);
+    }else{
+      currentOpenJobId = null;
+      $('jobsList').innerHTML = '';
+      $('jobProgressDashboard').classList.remove('hidden');
+    }
+  }else{
+    jobs.forEach(renderJob);
+  }
 }
 
 function renderJobProgressDashboard(jobs, canView){
@@ -3231,7 +3278,6 @@ function renderJobProgressDashboard(jobs, canView){
   $('jobProgressList').innerHTML = '';
   if(activeJobs.length === 0){
     $('jobProgressList').innerHTML = '<p class="muted">No active jobs.</p>';
-    return;
   }
 
   activeJobs.forEach(job => {
@@ -3267,21 +3313,81 @@ function renderJobProgressDashboard(jobs, canView){
     };
     $('jobProgressList').appendChild(row);
   });
+
+  const closedJobs = jobs.filter(job => job.active !== true);
+  if(closedJobs.length > 0){
+    const closedSection = document.createElement('details');
+    closedSection.className = 'closed-jobs-list';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Closed Jobs (' + closedJobs.length + ')';
+    closedSection.appendChild(summary);
+
+    closedJobs.forEach(job => {
+      const button = document.createElement('button');
+      button.className = 'secondary';
+      button.textContent = job.job_number + ' — ' + job.job_name;
+      button.onclick = () => openJobFromProgress(job.id);
+      closedSection.appendChild(button);
+    });
+
+    $('jobProgressList').appendChild(closedSection);
+  }
 }
 
 function openJobFromProgress(jobId){
-  const card = document.getElementById('job-card-' + jobId);
-  if(!card){
-    alert('Unable to locate this job in the current list.');
+  const job = currentJobsCatalog.find(item => item.id === jobId);
+  if(!job){
+    alert('Unable to load this job. Refresh Jobs and try again.');
     return;
   }
 
-  document.querySelectorAll('.job-card.job-highlight').forEach(item =>
-    item.classList.remove('job-highlight')
+  currentOpenJobId = jobId;
+  setAppHistory({
+    lineCrewPage:'jobsPage',
+    view:'jobDetail',
+    jobId
+  });
+  showJobDetail(job);
+}
+
+function showJobDetail(job, scroll = true){
+  currentOpenJobId = job.id;
+  $('jobProgressDashboard').classList.add('hidden');
+  $('showCreateJobBtn').classList.add('hidden');
+  $('jobsList').innerHTML = '';
+
+  const backButton = document.createElement('button');
+  backButton.className = 'secondary job-detail-back';
+  backButton.textContent = '← Back to Jobs';
+  backButton.onclick = closeJobDetail;
+  $('jobsList').appendChild(backButton);
+
+  renderJob(job);
+  const card = document.getElementById('job-card-' + job.id);
+  if(card){
+    card.classList.add('job-highlight');
+    if(scroll){
+      card.scrollIntoView({ behavior:'smooth', block:'start' });
+    }
+    setTimeout(() => card.classList.remove('job-highlight'), 1800);
+  }
+}
+
+function closeJobDetail(){
+  if(window.history.state?.view === 'jobDetail'){
+    window.history.back();
+    return;
+  }
+
+  currentOpenJobId = null;
+  setAppHistory({ lineCrewPage:'jobsPage' });
+  $('jobsList').innerHTML = '';
+  $('jobProgressDashboard').classList.remove('hidden');
+  $('showCreateJobBtn').classList.toggle(
+    'hidden',
+    !['admin', 'gf'].includes(String(currentProfile?.role || '').toLowerCase())
   );
-  card.classList.add('job-highlight');
-  card.scrollIntoView({ behavior:'smooth', block:'start' });
-  setTimeout(() => card.classList.remove('job-highlight'), 2500);
+  $('jobProgressDashboard').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 
