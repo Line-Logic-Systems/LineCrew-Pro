@@ -2171,6 +2171,24 @@ button:disabled{
   </button>
 
 </div>
+
+    <details class="collapsible-card" id="customerFiltersCard">
+      <summary>
+        <span>Find Customers / Utilities</span>
+        <span id="customerFilterCount" class="collapsible-summary-count"></span>
+      </summary>
+      <div class="collapsible-card-content">
+        <label for="customerLibrarySearch">Search</label>
+        <input id="customerLibrarySearch" type="search"
+          placeholder="Name, type, contact, email, phone or notes">
+        <label for="customerLibraryStatus">Status</label>
+        <select id="customerLibraryStatus">
+          <option value="active">Active customers</option>
+          <option value="all">All customers</option>
+          <option value="inactive">Inactive customers</option>
+        </select>
+      </div>
+    </details>
     
     <div id="customersList"></div>
 
@@ -2263,6 +2281,25 @@ button:disabled{
   </button>
 
 </div>
+
+    <details class="collapsible-card" id="contractFiltersCard">
+      <summary>
+        <span>Find Contracts</span>
+        <span id="contractFilterCount" class="collapsible-summary-count"></span>
+      </summary>
+      <div class="collapsible-card-content">
+        <label for="contractLibrarySearch">Search</label>
+        <input id="contractLibrarySearch" type="search"
+          placeholder="Contract, number, customer or notes">
+        <label for="contractLibraryStatus">Status</label>
+        <select id="contractLibraryStatus">
+          <option value="active">Active contracts</option>
+          <option value="all">All contracts</option>
+          <option value="inactive">Inactive contracts</option>
+        </select>
+      </div>
+    </details>
+
     <div id="contractsList"></div>
 
   </div>
@@ -6276,6 +6313,15 @@ async function loadCustomers(){
     card.className =
       'job-card' +
       (customer.active ? '' : ' inactive');
+    card.dataset.active = customer.active ? 'true' : 'false';
+    card.dataset.searchText = [
+      customer.name,
+      customer.customer_type,
+      customer.contact_name,
+      customer.contact_email,
+      customer.contact_phone,
+      customer.notes
+    ].map(value => String(value || '').toLowerCase()).join(' ');
 
     const typeText =
       customer.customer_type
@@ -6344,7 +6390,30 @@ async function loadCustomers(){
   });
 
   $('customersList').replaceChildren(customerFragment);
+  applyCustomerFilters();
 }
+
+function applyCustomerFilters(){
+  const query = String($('customerLibrarySearch')?.value || '').trim().toLowerCase();
+  const status = $('customerLibraryStatus')?.value || 'active';
+  let visible = 0;
+  const cards = Array.from($('customersList').querySelectorAll('.job-card'));
+  cards.forEach(card => {
+    const matchesText = !query || String(card.dataset.searchText || '').includes(query);
+    const isActive = card.dataset.active === 'true';
+    const matchesStatus =
+      status === 'all' ||
+      (status === 'active' && isActive) ||
+      (status === 'inactive' && !isActive);
+    const showCard = matchesText && matchesStatus;
+    card.classList.toggle('hidden', !showCard);
+    if(showCard) visible += 1;
+  });
+  $('customerFilterCount').textContent = 'Showing ' + visible + ' of ' + currentCustomerCatalog.length;
+}
+
+$('customerLibrarySearch').addEventListener('input', applyCustomerFilters);
+$('customerLibraryStatus').addEventListener('change', applyCustomerFilters);
 
 function editCustomer(customer){
 
@@ -6717,6 +6786,13 @@ async function loadContracts(){
     const customer = currentCustomerCatalog.find(
       item => item.id === contract.customer_id
     );
+    card.dataset.active = contract.active ? 'true' : 'false';
+    card.dataset.searchText = [
+      contract.contract_name,
+      contract.contract_number,
+      contract.notes,
+      customer?.name
+    ].map(value => String(value || '').toLowerCase()).join(' ');
 
     card.innerHTML = `
       <strong>${escapeHtml(contract.contract_name)}</strong>
@@ -6785,7 +6861,30 @@ async function loadContracts(){
   });
 
   $('contractsList').replaceChildren(contractFragment);
+  applyContractFilters();
 }
+
+function applyContractFilters(){
+  const query = String($('contractLibrarySearch')?.value || '').trim().toLowerCase();
+  const status = $('contractLibraryStatus')?.value || 'active';
+  let visible = 0;
+  const cards = Array.from($('contractsList').querySelectorAll('.job-card'));
+  cards.forEach(card => {
+    const matchesText = !query || String(card.dataset.searchText || '').includes(query);
+    const isActive = card.dataset.active === 'true';
+    const matchesStatus =
+      status === 'all' ||
+      (status === 'active' && isActive) ||
+      (status === 'inactive' && !isActive);
+    const showCard = matchesText && matchesStatus;
+    card.classList.toggle('hidden', !showCard);
+    if(showCard) visible += 1;
+  });
+  $('contractFilterCount').textContent = 'Showing ' + visible + ' of ' + currentContractCatalog.length;
+}
+
+$('contractLibrarySearch').addEventListener('input', applyContractFilters);
+$('contractLibraryStatus').addEventListener('change', applyContractFilters);
 
 function populateContractCustomers(selectedCustomerId = ''){
 
