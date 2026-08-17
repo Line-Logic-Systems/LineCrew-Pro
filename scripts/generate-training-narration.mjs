@@ -2,12 +2,28 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 const key = process.env.ELEVENLABS_API_KEY;
-const voiceId = process.env.ELEVENLABS_VOICE_ID;
+const requestedVoiceName = (process.env.ELEVENLABS_VOICE_NAME || "Roger").trim();
 const manifestPath = process.env.NARRATION_MANIFEST || "training/narration/slides.json";
 const outputDir = process.env.NARRATION_OUTPUT_DIR || "training/narration/output";
 
 if (!key) throw new Error("ELEVENLABS_API_KEY is required.");
-if (!voiceId) throw new Error("ELEVENLABS_VOICE_ID is required.");
+
+const voicesResponse = await fetch("https://api.elevenlabs.io/v1/voices", {
+  headers: { "xi-api-key": key },
+});
+if (!voicesResponse.ok) {
+  throw new Error(`Unable to load ElevenLabs voices (${voicesResponse.status}): ${await voicesResponse.text()}`);
+}
+const voices = (await voicesResponse.json()).voices || [];
+const selectedVoice = voices.find(
+  (voice) => String(voice.name || "").toLowerCase() === requestedVoiceName.toLowerCase()
+);
+if (!selectedVoice) {
+  const available = voices.map((voice) => voice.name).filter(Boolean).sort().join(", ");
+  throw new Error(`Voice \"${requestedVoiceName}\" was not found. Available voices: ${available}`);
+}
+const voiceId = selectedVoice.voice_id;
+process.stdout.write(`Using ElevenLabs voice: ${selectedVoice.name}\n`);
 
 const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8"));
 await fs.mkdir(outputDir, { recursive: true });
