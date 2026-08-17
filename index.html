@@ -1440,6 +1440,35 @@ button:disabled{
     value="0"
   >
 
+  <label for="dailyWeatherConditions">Weather</label>
+  <select id="dailyWeatherConditions">
+    <option value="">Not recorded</option>
+    <option value="Clear">Clear</option>
+    <option value="Cloudy">Cloudy</option>
+    <option value="Rain">Rain</option>
+    <option value="Storm">Storm</option>
+    <option value="High Wind">High Wind</option>
+    <option value="Extreme Heat">Extreme Heat</option>
+    <option value="Extreme Cold">Extreme Cold</option>
+    <option value="Other">Other</option>
+  </select>
+
+  <label for="dailyDelayHours">Delay Hours</label>
+  <input
+    id="dailyDelayHours"
+    type="number"
+    min="0"
+    step="0.25"
+    value="0"
+  >
+
+  <label for="dailyDelayReason">Delay Reason</label>
+  <textarea
+    id="dailyDelayReason"
+    rows="2"
+    placeholder="Required when delay hours are entered"
+  ></textarea>
+
   <label for="dailyNotes">Notes</label>
   <textarea
     id="dailyNotes"
@@ -9372,7 +9401,8 @@ function exportFilteredProductionCsv(){
 
   const headers = [
     'Job Number', 'Job Name', 'Work Date', 'Foreman', 'Crew', 'Status',
-    'Regular Hours', 'OT Hours', 'Actual Unit Value', 'Field Unit Value',
+    'Regular Hours', 'OT Hours', 'Weather', 'Delay Hours', 'Delay Reason',
+    'Actual Unit Value', 'Field Unit Value',
     'Authorized Units', 'Pending Packet Units', 'Redline Units',
     'Report Notes', 'Review Notes'
   ];
@@ -9388,6 +9418,9 @@ function exportFilteredProductionCsv(){
       report.archived === true ? 'Archived' : String(report.status || 'draft'),
       Number(report.regular_hours || 0),
       Number(report.overtime_hours || 0),
+      report.weather_conditions || '',
+      Number(report.delay_hours || 0),
+      report.delay_reason || '',
       Number(value.actual_total || 0).toFixed(2),
       Number(value.adjusted_total || 0).toFixed(2),
       Number(authorization.authorized_count || 0),
@@ -9430,6 +9463,9 @@ async function loadProductionReports(){
       crew_name,
       regular_hours,
       overtime_hours,
+      weather_conditions,
+      delay_hours,
+      delay_reason,
       notes,
       status,
       archived,
@@ -9664,6 +9700,19 @@ async function loadProductionReports(){
           ${escapeHtml(overtimeHours)}
         </strong>
 
+        ${report.weather_conditions ? `
+          <br>
+          Weather:
+          <strong>${escapeHtml(report.weather_conditions)}</strong>
+        ` : ''}
+
+        ${Number(report.delay_hours || 0) > 0 ? `
+          <br>
+          Delay:
+          <strong>${escapeHtml(Number(report.delay_hours || 0))} hour(s)</strong>
+          ${report.delay_reason ? ` — ${escapeHtml(report.delay_reason)}` : ''}
+        ` : ''}
+
         <br>
 
         Status:
@@ -9732,6 +9781,15 @@ editBtn.onclick = async () => {
 
   $('dailyCrewName').value =
     report.crew_name || '';
+
+  $('dailyWeatherConditions').value =
+    report.weather_conditions || '';
+
+  $('dailyDelayHours').value =
+    report.delay_hours || 0;
+
+  $('dailyDelayReason').value =
+    report.delay_reason || '';
 
   $('dailyNotes').value =
     report.notes || '';
@@ -10768,6 +10826,9 @@ $('createDailyReportBtn').onclick = async () => {
   $('dailyRegularHours').value = 0;
   $('dailyOvertimeHours').value = 0;
   $('dailyCrewName').value = '';
+  $('dailyWeatherConditions').value = '';
+  $('dailyDelayHours').value = 0;
+  $('dailyDelayReason').value = '';
   $('dailyNotes').value = '';
   $('saveDailyReportBtn').textContent = 'Save & Add Units';
 
@@ -10842,8 +10903,27 @@ $('saveDailyReportBtn').onclick = async () => {
   const crewName =
     $('dailyCrewName').value.trim();
 
+  const weatherConditions =
+    $('dailyWeatherConditions').value || null;
+
+  const delayHours =
+    Number($('dailyDelayHours').value || 0);
+
+  const delayReason =
+    $('dailyDelayReason').value.trim();
+
   const notes =
     $('dailyNotes').value.trim();
+
+  if(delayHours < 0){
+    alert('Delay hours cannot be negative.');
+    return;
+  }
+
+  if(delayHours > 0 && !delayReason){
+    alert('Please enter a delay reason when delay hours are greater than zero.');
+    return;
+  }
 
 
   $('saveDailyReportBtn').disabled = true;
@@ -10909,6 +10989,25 @@ if(reportId){
 
 
   const savedReportId = reportId || data;
+
+  const { error:contextError } = await sb.rpc(
+    'set_daily_report_context',
+    {
+      p_report_id: savedReportId,
+      p_weather_conditions: weatherConditions,
+      p_delay_hours: delayHours,
+      p_delay_reason: delayReason || null
+    }
+  );
+
+  if(contextError){
+    alert(
+      'The report was saved, but its weather and delay details could not be saved: ' +
+      contextError.message
+    );
+    await loadProductionReports();
+    return;
+  }
 
   const { data:savedReport, error:savedReportError } = await sb
     .from('daily_reports')
