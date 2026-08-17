@@ -1120,6 +1120,16 @@ button:disabled{
 
   </div>
 
+  <div id="dashboardReviewAlert" class="card hidden" role="status">
+    <div class="section-header">
+      <div>
+        <h3>Production Needs Review</h3>
+        <p id="dashboardReviewAlertText" class="muted"></p>
+      </div>
+      <button id="openProductionReview" class="small">Review Reports</button>
+    </div>
+  </div>
+
   <div id="adminNotice" class="card hidden">
     <h2>Admin Controls</h2>
 
@@ -2754,6 +2764,7 @@ async function loadApp(){
       .add('hidden');
   }
 
+  await loadDashboardReviewAlert();
 
   const savedState = window.history.state;
 
@@ -4938,6 +4949,38 @@ sb.auth.onAuthStateChange((event)=>{
 });
 
 /* PRODUCTION PAGE */
+
+async function loadDashboardReviewAlert(){
+  const alertCard = $('dashboardReviewAlert');
+  const canReview = ['admin','gf'].includes(
+    String(currentProfile?.role || '').toLowerCase()
+  );
+
+  if(!canReview){
+    alertCard.classList.add('hidden');
+    return;
+  }
+
+  const { count, error } = await sb
+    .from('daily_reports')
+    .select('id', { count:'exact', head:true })
+    .eq('company_id', currentProfile.company_id)
+    .eq('status', 'submitted');
+
+  if(error || !count){
+    alertCard.classList.add('hidden');
+    return;
+  }
+
+  $('dashboardReviewAlertText').textContent =
+    count + ' submitted daily report' + (count === 1 ? '' : 's') +
+    ' waiting for GF/Admin review.';
+  alertCard.classList.remove('hidden');
+}
+
+$('openProductionReview').onclick = async () => {
+  await navigateToAppPage('productionPage');
+};
 
 $('productionTile').onclick = async () => {
   await navigateToAppPage('productionPage');
