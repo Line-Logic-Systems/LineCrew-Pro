@@ -237,6 +237,29 @@ textarea{
   color:var(--text);
 }
 
+input[type="color"]{
+  min-height:46px;
+  padding:4px;
+  cursor:pointer;
+}
+
+#adminNotice > summary{
+  list-style:none;
+}
+
+#adminNotice > summary::-webkit-details-marker{
+  display:none;
+}
+
+#adminNotice[open] > summary .role{
+  visibility:hidden;
+}
+
+.collapsible-card-body{
+  padding:0 22px 22px;
+}
+
+
 button{
   width:100%;
   padding:14px;
@@ -1147,12 +1170,15 @@ button:disabled{
     <div id="companyOnboardingList"></div>
   </div>
 
-  <div id="adminNotice" class="card hidden">
-    <h2>Admin Controls</h2>
-
-    <p class="muted">
-      Company settings, users, pricing and permissions.
-    </p>
+  <details id="adminNotice" class="card collapsible-card hidden">
+    <summary>
+      <span>
+        <strong>Admin Controls</strong><br>
+        <span class="muted">Company settings, pricing and permissions</span>
+      </span>
+      <span class="role">Open</span>
+    </summary>
+    <div class="collapsible-card-body">
 
     <div class="job-card">
       <h3>Company Settings</h3>
@@ -1210,7 +1236,8 @@ button:disabled{
         Save Redline Setting
       </button>
     </div>
-  </div>
+    </div>
+  </details>
 
   <button class="secondary" id="signOutBtn">
     Sign Out
