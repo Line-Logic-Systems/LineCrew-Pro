@@ -13,9 +13,10 @@ The narration workflow converts the approved per-slide scripts in
 
 ## Generate audio
 
-1. In ElevenLabs, preview voices and copy the selected voice ID.
+1. In ElevenLabs, preview voices and note the exact narrator name. The default is
+   **Roger**.
 2. Open **Actions → Generate training narration → Run workflow**.
-3. Paste the voice ID and run the workflow.
+3. Keep **Roger** or type another exact ElevenLabs voice name, then run the workflow.
 4. Download the `linecrew-pro-training-narration` artifact after completion.
 
 The artifact contains `slide-01.mp3` through `slide-33.mp3` plus the script
