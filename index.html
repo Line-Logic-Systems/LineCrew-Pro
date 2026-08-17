@@ -1248,6 +1248,13 @@ button:disabled{
       </span>
     </div>
 
+    <div class="metric" id="safetyTile">
+      <strong>Safety / JSA</strong>
+      <span class="muted">
+        Morning job safety briefings
+      </span>
+    </div>
+
   </div>
 
   <div id="dashboardReviewAlert" class="card hidden" role="status">
@@ -1640,6 +1647,87 @@ button:disabled{
   <div id="jobsList"></div>
 </section>
   
+<!-- SAFETY / JSA PAGE -->
+<section id="safetyPage" class="hidden">
+  <div class="card storm-mode-banner hidden" data-storm-mode-banner>
+    <strong>Storm Mode Active</strong>
+    <div class="storm-mode-banner-text"></div>
+  </div>
+
+  <div class="toolbar">
+    <button class="secondary" id="backFromSafety">← Back to Dashboard</button>
+    <button id="refreshSafetyBtn">Refresh Safety</button>
+  </div>
+
+  <div class="card">
+    <div class="section-header">
+      <div>
+        <h2>Safety / JSA</h2>
+        <p class="muted">Morning job safety briefings completed before work begins.</p>
+      </div>
+      <button id="createJsaBtn" class="success">+ Complete Morning JSA</button>
+    </div>
+  </div>
+
+  <div id="safetyJsaForm" class="card hidden">
+    <h2>Morning Job Safety Analysis</h2>
+    <p class="muted">This is separate from the end-of-day production report.</p>
+
+    <label for="safetyJsaJob">Job *</label>
+    <select id="safetyJsaJob"><option value="">Select active job</option></select>
+
+    <label for="safetyJsaDate">Work Date *</label>
+    <input id="safetyJsaDate" type="date">
+
+    <label for="safetyJsaForeman">Foreman</label>
+    <input id="safetyJsaForeman" readonly>
+
+    <label for="safetyJsaCrew">Crew *</label>
+    <input id="safetyJsaCrew" placeholder="Example: Crew 1">
+
+    <label for="safetyJsaWeather">Morning Weather / Conditions</label>
+    <input id="safetyJsaWeather" placeholder="Example: Clear, wet ground, 10 mph wind">
+
+    <label for="safetyJsaBriefing">Work Plan / Job Briefing *</label>
+    <textarea id="safetyJsaBriefing" rows="2" placeholder="Work planned for today"></textarea>
+
+    <label for="safetyJsaHazards">Hazards Identified *</label>
+    <textarea id="safetyJsaHazards" rows="3" placeholder="Traffic, energized lines, falls, equipment, weather..."></textarea>
+
+    <label for="safetyJsaControls">Controls / Safe Work Practices *</label>
+    <textarea id="safetyJsaControls" rows="3" placeholder="How the crew will control each hazard"></textarea>
+
+    <label for="safetyJsaPpe">Required PPE *</label>
+    <textarea id="safetyJsaPpe" rows="2" placeholder="Hard hat, gloves, FR clothing, fall protection..."></textarea>
+
+    <label for="safetyJsaEmergency">Emergency Plan / Nearest Facility *</label>
+    <textarea id="safetyJsaEmergency" rows="2" placeholder="Emergency response and nearest medical facility"></textarea>
+
+    <label for="safetyJsaCrewMembers">Crew Members Attending Briefing *</label>
+    <textarea id="safetyJsaCrewMembers" rows="2" placeholder="Names of crew members"></textarea>
+
+    <label for="safetyJsaEquipment">Special Equipment / Additional Notes</label>
+    <textarea id="safetyJsaEquipment" rows="2" placeholder="Optional"></textarea>
+
+    <label class="checkbox-row" for="safetyJsaAcknowledged">
+      <input id="safetyJsaAcknowledged" type="checkbox">
+      I confirm this JSA was reviewed with the crew before work began.
+    </label>
+
+    <div class="button-row">
+      <button id="saveSafetyJsaBtn" class="success">Save Morning JSA</button>
+      <button id="cancelSafetyJsaBtn" class="secondary">Cancel</button>
+    </div>
+  </div>
+
+  <div id="safetyJsaLoading" class="card center hidden">Loading safety briefings...</div>
+  <div id="safetyJsaEmpty" class="card center hidden">
+    <h3>No JSAs Yet</h3>
+    <p class="muted">Morning safety briefings will appear here.</p>
+  </div>
+  <div id="safetyJsaList"></div>
+</section>
+
 <!-- PRODUCTION PAGE -->
 <section id="productionPage" class="hidden">
 
@@ -1844,39 +1932,6 @@ button:disabled{
     rows="4"
     placeholder="Daily notes"
   ></textarea>
-
-  <div class="jsa-section">
-    <h3>Job Safety Analysis (JSA)</h3>
-    <p class="muted">
-      Complete the crew safety briefing for this same daily report before adding production.
-    </p>
-
-    <label for="jsaJobBriefing">Work Plan / Job Briefing *</label>
-    <textarea id="jsaJobBriefing" rows="2" placeholder="Work planned for today"></textarea>
-
-    <label for="jsaHazards">Hazards Identified *</label>
-    <textarea id="jsaHazards" rows="3" placeholder="Traffic, energized lines, falls, equipment, weather..."></textarea>
-
-    <label for="jsaControls">Controls / Safe Work Practices *</label>
-    <textarea id="jsaControls" rows="3" placeholder="How the crew will control each hazard"></textarea>
-
-    <label for="jsaPpe">Required PPE *</label>
-    <textarea id="jsaPpe" rows="2" placeholder="Hard hat, gloves, FR clothing, fall protection..."></textarea>
-
-    <label for="jsaEmergencyPlan">Emergency Plan / Nearest Facility *</label>
-    <textarea id="jsaEmergencyPlan" rows="2" placeholder="Emergency response, address or nearest medical facility"></textarea>
-
-    <label for="jsaCrewMembers">Crew Members Attending Briefing *</label>
-    <textarea id="jsaCrewMembers" rows="2" placeholder="Names of crew members"></textarea>
-
-    <label for="jsaSpecialEquipment">Special Equipment / Additional Notes</label>
-    <textarea id="jsaSpecialEquipment" rows="2" placeholder="Optional"></textarea>
-
-    <label class="checkbox-row" for="jsaAcknowledged">
-      <input id="jsaAcknowledged" type="checkbox">
-      I confirm this JSA was reviewed with the crew before work began.
-    </label>
-  </div>
 
   <div class="button-row">
     <button
@@ -2732,6 +2787,7 @@ const APP_PAGE_IDS = new Set([
   'teamPage',
   'jobsPage',
   'productionPage',
+  'safetyPage',
   'priceBooksPage'
 ]);
 
@@ -2759,70 +2815,6 @@ function applyStormModeUi(){
   });
 }
 
-function resetDailyJsaForm(){
-  ['jsaJobBriefing','jsaHazards','jsaControls','jsaPpe',
-   'jsaEmergencyPlan','jsaCrewMembers','jsaSpecialEquipment']
-    .forEach(id => { $(id).value = ''; });
-  $('jsaAcknowledged').checked = false;
-}
-
-async function loadDailyReportJsa(reportId){
-  resetDailyJsaForm();
-  const { data, error } = await sb.rpc('get_daily_report_jsa', {
-    p_report_id:reportId
-  });
-  if(error){
-    alert('Unable to load this report JSA: ' + error.message);
-    return;
-  }
-  const jsa = Array.isArray(data) ? data[0] : data;
-  if(!jsa) return;
-  $('jsaJobBriefing').value = jsa.job_briefing || '';
-  $('jsaHazards').value = jsa.hazards || '';
-  $('jsaControls').value = jsa.controls || '';
-  $('jsaPpe').value = jsa.ppe || '';
-  $('jsaEmergencyPlan').value = jsa.emergency_plan || '';
-  $('jsaCrewMembers').value = jsa.crew_members || '';
-  $('jsaSpecialEquipment').value = jsa.special_equipment || '';
-  $('jsaAcknowledged').checked = jsa.foreman_acknowledged === true;
-}
-
-function dailyJsaPayload(){
-  return {
-    p_job_briefing:$('jsaJobBriefing').value.trim(),
-    p_hazards:$('jsaHazards').value.trim(),
-    p_controls:$('jsaControls').value.trim(),
-    p_ppe:$('jsaPpe').value.trim(),
-    p_emergency_plan:$('jsaEmergencyPlan').value.trim(),
-    p_crew_members:$('jsaCrewMembers').value.trim(),
-    p_special_equipment:$('jsaSpecialEquipment').value.trim() || null,
-    p_foreman_acknowledged:$('jsaAcknowledged').checked
-  };
-}
-
-function validateDailyJsa(){
-  const payload = dailyJsaPayload();
-  const required = [
-    ['p_job_briefing','Work Plan / Job Briefing'],
-    ['p_hazards','Hazards Identified'],
-    ['p_controls','Controls / Safe Work Practices'],
-    ['p_ppe','Required PPE'],
-    ['p_emergency_plan','Emergency Plan'],
-    ['p_crew_members','Crew Members']
-  ];
-  const missing = required.filter(([key]) => !payload[key]).map(([,label]) => label);
-  if(missing.length){
-    alert('Complete these JSA fields before saving: ' + missing.join(', '));
-    return null;
-  }
-  if(!payload.p_foreman_acknowledged){
-    alert('Confirm that the JSA was reviewed with the crew before saving.');
-    return null;
-  }
-  return payload;
-}
-
-
 /* PAGE NAVIGATION */
 
 function show(page){
@@ -2832,7 +2824,8 @@ function show(page){
   $('dashboardPage').classList.add('hidden');
   $('teamPage').classList.add('hidden');
   $('jobsPage').classList.add('hidden');
-$('productionPage').classList.add('hidden');
+  $('productionPage').classList.add('hidden');
+  $('safetyPage').classList.add('hidden');
   $('priceBooksPage').classList.add('hidden');
   $(page).classList.remove('hidden');
 }
@@ -2881,6 +2874,10 @@ async function displayAppPage(page, state = {}){
 
   if(page === 'productionPage'){
     await loadProductionReports();
+  }
+
+  if(page === 'safetyPage'){
+    await loadSafetyJsas();
   }
 
   if(page === 'priceBooksPage'){
@@ -3347,6 +3344,155 @@ $('signOutBtn').onclick =
 
 $('setupSignOut').onclick =
   signOut;
+
+
+/* SAFETY / JSA */
+
+$('safetyTile').onclick = async () => {
+  await navigateToAppPage('safetyPage');
+};
+
+$('backFromSafety').onclick = () => returnToDashboard();
+$('refreshSafetyBtn').onclick = loadSafetyJsas;
+
+function resetSafetyJsaForm(){
+  $('safetyJsaJob').value = '';
+  $('safetyJsaDate').value = new Date().toISOString().slice(0,10);
+  $('safetyJsaForeman').value = currentProfile?.full_name || '';
+  ['safetyJsaCrew','safetyJsaWeather','safetyJsaBriefing','safetyJsaHazards',
+   'safetyJsaControls','safetyJsaPpe','safetyJsaEmergency',
+   'safetyJsaCrewMembers','safetyJsaEquipment']
+    .forEach(id => { $(id).value = ''; });
+  $('safetyJsaAcknowledged').checked = false;
+}
+
+async function loadSafetyJobs(){
+  const select = $('safetyJsaJob');
+  select.innerHTML = '<option value="">Select active job</option>';
+  const { data, error } = await sb
+    .from('jobs')
+    .select('id, job_number, job_name')
+    .eq('company_id', currentProfile.company_id)
+    .eq('active', true)
+    .order('job_number', { ascending:true });
+  if(error){
+    alert('Unable to load active jobs: ' + error.message);
+    return false;
+  }
+  (data || []).forEach(job => {
+    const option = document.createElement('option');
+    option.value = job.id;
+    option.textContent = job.job_number + ' — ' + job.job_name;
+    select.appendChild(option);
+  });
+  return true;
+}
+
+$('createJsaBtn').onclick = async () => {
+  resetSafetyJsaForm();
+  if(await loadSafetyJobs()){
+    $('safetyJsaForm').classList.remove('hidden');
+    $('safetyJsaJob').focus();
+  }
+};
+
+$('cancelSafetyJsaBtn').onclick = () => {
+  $('safetyJsaForm').classList.add('hidden');
+};
+
+$('saveSafetyJsaBtn').onclick = async () => {
+  const payload = {
+    p_job_id:$('safetyJsaJob').value,
+    p_work_date:$('safetyJsaDate').value,
+    p_crew_name:$('safetyJsaCrew').value.trim(),
+    p_weather_conditions:$('safetyJsaWeather').value.trim() || null,
+    p_job_briefing:$('safetyJsaBriefing').value.trim(),
+    p_hazards:$('safetyJsaHazards').value.trim(),
+    p_controls:$('safetyJsaControls').value.trim(),
+    p_ppe:$('safetyJsaPpe').value.trim(),
+    p_emergency_plan:$('safetyJsaEmergency').value.trim(),
+    p_crew_members:$('safetyJsaCrewMembers').value.trim(),
+    p_special_equipment:$('safetyJsaEquipment').value.trim() || null,
+    p_foreman_acknowledged:$('safetyJsaAcknowledged').checked
+  };
+  const required = [
+    ['p_job_id','Job'],['p_work_date','Work Date'],['p_crew_name','Crew'],
+    ['p_job_briefing','Work Plan'],['p_hazards','Hazards'],
+    ['p_controls','Controls'],['p_ppe','PPE'],
+    ['p_emergency_plan','Emergency Plan'],['p_crew_members','Crew Members']
+  ];
+  const missing = required.filter(([key]) => !payload[key]).map(([,label]) => label);
+  if(missing.length){
+    alert('Complete these JSA fields: ' + missing.join(', '));
+    return;
+  }
+  if(!payload.p_foreman_acknowledged){
+    alert('Confirm that the JSA was reviewed with the crew.');
+    return;
+  }
+  const button = $('saveSafetyJsaBtn');
+  button.disabled = true;
+  button.textContent = 'Saving...';
+  const { error } = await sb.rpc('create_standalone_jsa', payload);
+  button.disabled = false;
+  button.textContent = 'Save Morning JSA';
+  if(error){
+    alert('Unable to save the morning JSA: ' + error.message);
+    return;
+  }
+  $('safetyJsaForm').classList.add('hidden');
+  alert('Morning JSA saved.');
+  await loadSafetyJsas();
+};
+
+async function loadSafetyJsas(){
+  $('safetyJsaLoading').classList.remove('hidden');
+  $('safetyJsaEmpty').classList.add('hidden');
+  $('safetyJsaList').innerHTML = '';
+
+  const { data, error } = await sb.rpc('get_company_jsas');
+  $('safetyJsaLoading').classList.add('hidden');
+  if(error){
+    alert('Unable to load safety briefings: ' + error.message);
+    return;
+  }
+  const records = data || [];
+  if(!records.length){
+    $('safetyJsaEmpty').classList.remove('hidden');
+    return;
+  }
+  records.forEach(jsa => {
+    const card = document.createElement('details');
+    card.className = 'job-card compact-report-card';
+    card.innerHTML =
+      '<summary><div class="report-summary-main"><strong>' +
+      escapeHtml(jsa.job_number || 'Job') + '</strong><span>' +
+      escapeHtml(jsa.foreman_name || 'Foreman') + ' — ' +
+      escapeHtml(jsa.crew_name || 'Crew') +
+      '</span></div><div class="report-summary-meta">' +
+      escapeHtml(jsa.work_date || '') + ' • COMPLETED</div></summary>' +
+      '<div class="report-card-details">' +
+      '<div class="job-title">' + escapeHtml(jsa.job_name || '') + '</div>' +
+      '<div class="job-info"><strong>Work Plan / Briefing</strong><br>' +
+      escapeHtml(jsa.job_briefing || '').replace(/\n/g,'<br>') + '<br><br>' +
+      '<strong>Hazards</strong><br>' +
+      escapeHtml(jsa.hazards || '').replace(/\n/g,'<br>') + '<br><br>' +
+      '<strong>Controls</strong><br>' +
+      escapeHtml(jsa.controls || '').replace(/\n/g,'<br>') + '<br><br>' +
+      '<strong>Required PPE</strong><br>' +
+      escapeHtml(jsa.ppe || '').replace(/\n/g,'<br>') + '<br><br>' +
+      '<strong>Emergency Plan</strong><br>' +
+      escapeHtml(jsa.emergency_plan || '').replace(/\n/g,'<br>') + '<br><br>' +
+      '<strong>Crew Members</strong><br>' +
+      escapeHtml(jsa.crew_members || '').replace(/\n/g,'<br>') +
+      (jsa.weather_conditions ? '<br><br><strong>Conditions</strong><br>' +
+        escapeHtml(jsa.weather_conditions) : '') +
+      (jsa.special_equipment ? '<br><br><strong>Special Equipment / Notes</strong><br>' +
+        escapeHtml(jsa.special_equipment).replace(/\n/g,'<br>') : '') +
+      '</div></div>';
+    $('safetyJsaList').appendChild(card);
+  });
+}
 
 
 /* TEAM */
@@ -10848,13 +10994,6 @@ ${report.review_notes ? `
     historyButton.onclick = () => toggleDailyReportHistory(report, card, historyButton);
     card.appendChild(historyButton);
 
-    const jsaButton = document.createElement('button');
-    jsaButton.className = 'secondary small';
-    jsaButton.textContent = 'View JSA';
-    jsaButton.onclick = () =>
-      toggleDailyReportJsa(report, card, jsaButton);
-    card.appendChild(jsaButton);
-
     const printButton = document.createElement('button');
     printButton.className = 'secondary small';
     printButton.textContent = 'Print / Save PDF';
@@ -10910,8 +11049,6 @@ editBtn.onclick = async () => {
 
   $('dailyNotes').value =
     report.notes || '';
-
-  await loadDailyReportJsa(report.id);
 
   $('dailyJobId').innerHTML =
     '<option value="">Select active job</option>';
@@ -11007,58 +11144,6 @@ card.appendChild(editBtn);
 
   card.appendChild(submitBtn);
 
-}
-
-async function toggleDailyReportJsa(report, card, button){
-  const existing = card.querySelector('.daily-report-jsa-review');
-  if(existing){
-    existing.remove();
-    button.textContent = 'View JSA';
-    return;
-  }
-
-  button.disabled = true;
-  button.textContent = 'Loading JSA...';
-  const { data, error } = await sb.rpc('get_daily_report_jsa', {
-    p_report_id:report.id
-  });
-  button.disabled = false;
-  button.textContent = 'Hide JSA';
-
-  if(error){
-    button.textContent = 'View JSA';
-    alert('Unable to load the JSA: ' + error.message);
-    return;
-  }
-
-  const jsa = Array.isArray(data) ? data[0] : data;
-  const panel = document.createElement('div');
-  panel.className = 'job-card daily-report-jsa-review';
-
-  if(!jsa){
-    panel.innerHTML =
-      '<h3>Job Safety Analysis</h3>' +
-      '<p class="muted">No JSA is recorded for this report. Older reports created before the JSA feature may not have one.</p>';
-  }else{
-    const field = (label, value) =>
-      '<div class="job-info"><strong>' + escapeHtml(label) + '</strong><br>' +
-      escapeHtml(value || 'Not recorded').replace(/\n/g, '<br>') + '</div>';
-    panel.innerHTML =
-      '<h3>Job Safety Analysis</h3>' +
-      '<p class="muted">Crew briefing acknowledged ' +
-      escapeHtml(jsa.acknowledged_at
-        ? formatCompanyDateTime(jsa.acknowledged_at)
-        : '—') + '</p>' +
-      field('Work Plan / Job Briefing', jsa.job_briefing) +
-      field('Hazards Identified', jsa.hazards) +
-      field('Controls / Safe Work Practices', jsa.controls) +
-      field('Required PPE', jsa.ppe) +
-      field('Emergency Plan / Nearest Facility', jsa.emergency_plan) +
-      field('Crew Members Attending', jsa.crew_members) +
-      field('Special Equipment / Additional Notes', jsa.special_equipment);
-  }
-
-  card.querySelector('.report-card-details')?.appendChild(panel);
 }
 
 function safeStorageFilename(filename){
@@ -12282,7 +12367,6 @@ $('createDailyReportBtn').onclick = async () => {
   $('dailyDelayHours').value = 0;
   $('dailyDelayReason').value = '';
   $('dailyNotes').value = '';
-  resetDailyJsaForm();
   $('saveDailyReportBtn').textContent = 'Save & Add Units';
 
   $('dailyJobId').innerHTML =
@@ -12378,9 +12462,6 @@ $('saveDailyReportBtn').onclick = async () => {
     return;
   }
 
-  const jsaPayload = validateDailyJsa();
-  if(!jsaPayload) return;
-
   $('saveDailyReportBtn').disabled = true;
   $('saveDailyReportBtn').textContent = 'Saving...';
 
@@ -12459,23 +12540,6 @@ if(reportId){
     alert(
       'The report was saved, but its weather and delay details could not be saved: ' +
       contextError.message
-    );
-    await loadProductionReports();
-    return;
-  }
-
-  const { error:jsaError } = await sb.rpc(
-    'save_daily_report_jsa',
-    {
-      p_report_id:savedReportId,
-      ...jsaPayload
-    }
-  );
-
-  if(jsaError){
-    alert(
-      'The report was saved, but its JSA could not be saved. Reopen Edit Report and try again: ' +
-      jsaError.message
     );
     await loadProductionReports();
     return;
