@@ -1353,10 +1353,15 @@ button:disabled{
       <label for="stormEventName">Storm / Event Name</label>
       <input id="stormEventName" maxlength="120" placeholder="Example: Hurricane Recovery 2026">
       <p class="muted">
-        New daily reports are tagged with this event. Turning Storm Mode off does not remove historical tags.
+        Choose the Foremen or General Foremen whose crews are working the event. Only their new daily reports will be tagged. Everyone else remains in normal production.
       </p>
+      <div id="stormCrewAssignments" class="job-card">
+        <strong>Participating Crews / Foremen</strong>
+        <p id="stormCrewAssignmentsStatus" class="muted">Loading eligible team members...</p>
+        <div id="stormCrewAssignmentsList"></div>
+      </div>
       <button id="saveStormModeSetting" class="success small">
-        Save Storm Mode
+        Save Storm Mode & Crews
       </button>
     </div>
     </div>
@@ -2842,6 +2847,8 @@ const $ = id =>
 
 let currentProfile = null;
 let currentCompany = null;
+let currentStormModeAssigned = false;
+let stormAssignableMembers = [];
 let currentSafetyJsas = [];
 let currentPriceBookItems = [];
 let currentPriceBookItemPage = 1;
@@ -2906,7 +2913,9 @@ function userCanSeeActualContractPrices(){
 }
 
 function applyStormModeUi(){
-  const enabled = currentCompany?.storm_mode_enabled === true;
+  const enabled =
+    currentCompany?.storm_mode_enabled === true &&
+    currentStormModeAssigned === true;
   const eventName = String(currentCompany?.storm_event_name || '').trim();
   document.querySelectorAll('[data-storm-mode-banner]').forEach(banner => {
     banner.classList.toggle('hidden', !enabled);
@@ -2917,6 +2926,87 @@ function applyStormModeUi(){
         : 'New daily reports will be tagged automatically.';
     }
   });
+}
+
+async function loadStormModeAssignments(){
+  currentStormModeAssigned = false;
+  stormAssignableMembers = [];
+
+  const { data:assignedData, error:assignedError } = await sb.rpc(
+    'is_current_user_in_storm_mode'
+  );
+
+  if(!assignedError){
+    currentStormModeAssigned = assignedData === true;
+  }
+
+  if(userIsCompanyAdmin()){
+    const { data:members, error:membersError } = await sb.rpc(
+      'get_storm_mode_assignments'
+    );
+
+    if(!membersError){
+      stormAssignableMembers = members || [];
+    }else{
+      const status = $('stormCrewAssignmentsStatus');
+      if(status){
+        status.textContent =
+          'Run the Storm crew assignment migration before selecting crews.';
+      }
+    }
+  }
+
+  renderStormCrewAssignments();
+  applyStormModeUi();
+}
+
+function renderStormCrewAssignments(){
+  const list = $('stormCrewAssignmentsList');
+  const status = $('stormCrewAssignmentsStatus');
+  if(!list || !status) return;
+
+  list.replaceChildren();
+
+  if(!userIsCompanyAdmin()){
+    status.textContent = '';
+    return;
+  }
+
+  if(!stormAssignableMembers.length){
+    if(!status.textContent.includes('migration')){
+      status.textContent =
+        'No active Foremen or General Foremen are available.';
+    }
+    return;
+  }
+
+  status.textContent =
+    'Select every crew leader participating in this storm or event.';
+
+  stormAssignableMembers.forEach(member => {
+    const label = document.createElement('label');
+    label.className = 'checkbox-row';
+
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.className = 'storm-crew-assignment';
+    input.value = member.user_id;
+    input.checked = member.assigned === true;
+
+    const role = formatTeamRole(member.role);
+    const text = document.createElement('span');
+    text.textContent =
+      (member.full_name || 'Unnamed Team Member') + ' — ' + role;
+
+    label.append(input, text);
+    list.appendChild(label);
+  });
+}
+
+function selectedStormCrewIds(){
+  return Array.from(
+    document.querySelectorAll('.storm-crew-assignment:checked')
+  ).map(input => input.value);
 }
 
 /* PAGE NAVIGATION */
@@ -3129,7 +3219,7 @@ async function loadApp(){
     company.storm_mode_enabled === true;
   $('stormEventName').value =
     company.storm_event_name || '';
-  applyStormModeUi();
+  await loadStormModeAssignments();
 
   $('companyDisplayName').value = company?.name || '';
   $('companyContactEmail').value = company?.contact_email || '';
@@ -6029,29 +6119,61 @@ $('saveStormModeSetting').onclick = async () => {
   if(!userIsCompanyAdmin()) return;
   const enabled = $('stormModeEnabled').checked;
   const eventName = $('stormEventName').value.trim();
+  const selectedUserIds = selectedStormCrewIds();
+
   if(enabled && !eventName){
     alert('Enter the storm or event name before enabling Storm Mode.');
     return;
   }
+
+  if(enabled && !selectedUserIds.length){
+    alert('Select at least one participating Foreman or crew leader.');
+    return;
+  }
+
   const button = $('saveStormModeSetting');
   button.disabled = true;
   button.textContent = 'Saving...';
+
+  const { error:assignmentError } = await sb.rpc(
+    'set_storm_mode_assignments',
+    { p_user_ids:selectedUserIds }
+  );
+
+  if(assignmentError){
+    button.disabled = false;
+    button.textContent = 'Save Storm Mode & Crews';
+    alert('Unable to save Storm Mode crews: ' + assignmentError.message);
+    return;
+  }
+
   const { data, error } = await sb.rpc('set_company_storm_mode', {
     p_enabled:enabled,
     p_event_name:eventName || null
   });
+
   button.disabled = false;
-  button.textContent = 'Save Storm Mode';
+  button.textContent = 'Save Storm Mode & Crews';
+
   if(error){
     alert('Unable to save Storm Mode: ' + error.message);
     return;
   }
+
   const saved = Array.isArray(data) ? data[0] : data;
-  currentCompany = { ...currentCompany, ...(saved || {}), storm_mode_enabled:enabled,
-    storm_event_name:enabled ? eventName : null };
-  applyStormModeUi();
+  currentCompany = {
+    ...currentCompany,
+    ...(saved || {}),
+    storm_mode_enabled:enabled,
+    storm_event_name:enabled ? eventName : null
+  };
+
+  await loadStormModeAssignments();
+
   alert(enabled
-    ? 'Storm Mode is active for ' + eventName + '. New daily reports will be tagged.'
+    ? 'Storm Mode is active for ' + eventName + ' on ' +
+      selectedUserIds.length + ' selected crew' +
+      (selectedUserIds.length === 1 ? '.' : 's.')
     : 'Storm Mode is off. Historical storm report tags are preserved.');
 };
 
