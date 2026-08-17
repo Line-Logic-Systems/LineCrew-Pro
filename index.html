@@ -397,6 +397,33 @@ button:disabled{
 .daily-review-counts .pending{ color:#8a5800; font-weight:800; }
 .daily-review-counts .redline{ color:#b42318; font-weight:800; }
 
+.job-progress-list{
+  display:grid;
+  gap:12px;
+  margin-top:14px;
+}
+
+.job-progress-row{
+  padding:13px;
+  border:1px solid #d7e2eb;
+  border-radius:10px;
+  background:#fff;
+}
+
+.progress-track{
+  height:10px;
+  margin:8px 0;
+  overflow:hidden;
+  border-radius:999px;
+  background:#e6edf3;
+}
+
+.progress-fill{
+  height:100%;
+  border-radius:999px;
+  background:#198754;
+}
+
 .daily-report-history{
   margin-top:12px;
   padding:12px;
@@ -983,6 +1010,17 @@ button:disabled{
 
   </div>
 
+
+  <div id="jobProgressDashboard" class="card hidden">
+    <div class="section-header">
+      <div>
+        <h3>Active Job Progress</h3>
+        <p class="muted">Authorized, reported and approved production across active jobs.</p>
+      </div>
+    </div>
+    <div id="jobProgressTotals" class="daily-value-summary"></div>
+    <div id="jobProgressList" class="job-progress-list"></div>
+  </div>
 
   <!-- CREATE JOB FORM -->
 
@@ -2099,6 +2137,7 @@ let currentContractCatalog = [];
 let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
 let currentJobPackageCatalog = [];
+let currentJobProgressSummaries = new Map();
 let currentOpenJobPackage = null;
 let currentJobPackageImportWorkbook = null;
 let currentJobPackageImportRows = [];
@@ -3127,11 +3166,86 @@ async function loadJobs(){
     }
 
     currentJobPackageCatalog = jobPackages || [];
+
+    const { data:jobProgress, error:jobProgressError } =
+      await sb.rpc('get_job_progress_dashboard');
+    if(jobProgressError){
+      alert('Unable to load job progress: ' + jobProgressError.message);
+      return;
+    }
+    currentJobProgressSummaries = new Map(
+      (jobProgress || []).map(progress => [progress.job_id, progress])
+    );
   }else{
     currentJobPackageCatalog = [];
+    currentJobProgressSummaries = new Map();
   }
 
+  renderJobProgressDashboard(jobs, canViewJobPackages);
+
   jobs.forEach(renderJob);
+}
+
+function renderJobProgressDashboard(jobs, canView){
+  $('jobProgressDashboard').classList.toggle('hidden', !canView);
+  if(!canView) return;
+
+  const activeJobs = jobs.filter(job => job.active === true);
+  let authorized = 0;
+  let reported = 0;
+  let approved = 0;
+  let remaining = 0;
+  let redlines = 0;
+  let pending = 0;
+
+  activeJobs.forEach(job => {
+    const summary = currentJobProgressSummaries.get(job.id) || {};
+    authorized += Number(summary.authorized_value || 0);
+    reported += Number(summary.reported_value || 0);
+    approved += Number(summary.approved_value || 0);
+    remaining += Number(summary.remaining_value || 0);
+    redlines += Number(summary.redline_count || 0);
+    pending += Number(summary.pending_packet_count || 0);
+  });
+
+  $('jobProgressTotals').innerHTML =
+    '<span><strong>' + activeJobs.length + '</strong><br>Active Jobs</span>' +
+    '<span><strong>' + escapeHtml(formatCurrency(authorized)) + '</strong><br>Authorized</span>' +
+    '<span><strong>' + escapeHtml(formatCurrency(reported)) + '</strong><br>Reported</span>' +
+    '<span><strong>' + escapeHtml(formatCurrency(approved)) + '</strong><br>Approved</span>' +
+    '<span><strong>' + escapeHtml(formatCurrency(remaining)) + '</strong><br>Remaining</span>' +
+    '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
+    '<span><strong>' + pending + '</strong><br>Pending Packet</span>';
+
+  $('jobProgressList').innerHTML = '';
+  if(activeJobs.length === 0){
+    $('jobProgressList').innerHTML = '<p class="muted">No active jobs.</p>';
+    return;
+  }
+
+  activeJobs.forEach(job => {
+    const summary = currentJobProgressSummaries.get(job.id) || {};
+    const reportedPercent = Number(summary.reported_percent || 0);
+    const approvedPercent = Number(summary.approved_percent || 0);
+    const row = document.createElement('div');
+    row.className = 'job-progress-row';
+    row.innerHTML =
+      '<div class="section-header"><div><strong>' + escapeHtml(job.job_number) + '</strong>' +
+      '<div>' + escapeHtml(job.job_name) + '</div></div>' +
+      '<strong>' + reportedPercent.toFixed(1) + '% Reported</strong></div>' +
+      '<div class="progress-track"><div class="progress-fill" style="width:' +
+        Math.min(Math.max(reportedPercent, 0), 100) + '%"></div></div>' +
+      '<div class="muted">Approved: ' + approvedPercent.toFixed(1) + '% · ' +
+        Number(summary.package_count || 0) + ' package(s) · ' +
+        Number(summary.work_point_count || 0) + ' work point(s) · ' +
+        Number(summary.report_count || 0) + ' daily report(s)</div>' +
+      '<div class="daily-review-counts"><span class="authorized">' +
+        escapeHtml(formatCurrency(summary.authorized_value || 0)) + ' Authorized</span>' +
+        ' &nbsp;•&nbsp; ' + escapeHtml(formatCurrency(summary.remaining_value || 0)) + ' Remaining' +
+        ' &nbsp;•&nbsp; <span class="redline">' + Number(summary.redline_count || 0) + ' Redline</span>' +
+        ' &nbsp;•&nbsp; <span class="pending">' + Number(summary.pending_packet_count || 0) + ' Pending</span></div>';
+    $('jobProgressList').appendChild(row);
+  });
 }
 
 
