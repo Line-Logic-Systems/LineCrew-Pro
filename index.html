@@ -445,6 +445,28 @@ button:disabled{
   margin:0 0 12px;
 }
 
+.job-progress-filters{
+  display:grid;
+  grid-template-columns:minmax(220px, 1fr) minmax(180px, 260px) auto;
+  gap:10px;
+  align-items:end;
+  margin:12px 0;
+}
+
+.job-progress-filters label{
+  margin-top:0;
+}
+
+.job-progress-filters button{
+  margin-top:0;
+}
+
+@media(max-width:700px){
+  .job-progress-filters{
+    grid-template-columns:1fr;
+  }
+}
+
 .progress-track{
   height:10px;
   margin:8px 0;
@@ -1053,7 +1075,25 @@ button:disabled{
         <p class="muted">Authorized, reported and approved production across active jobs.</p>
       </div>
     </div>
+    <div class="job-progress-filters">
+      <div>
+        <label for="jobProgressSearch">Find Jobs</label>
+        <input id="jobProgressSearch" placeholder="Job number or job name">
+      </div>
+      <div>
+        <label for="jobProgressAttention">Show</label>
+        <select id="jobProgressAttention">
+          <option value="">All active jobs</option>
+          <option value="redline">Jobs with redlines</option>
+          <option value="pending">Jobs pending a utility packet</option>
+          <option value="incomplete">Incomplete jobs</option>
+          <option value="complete">100% reported jobs</option>
+        </select>
+      </div>
+      <button id="clearJobProgressFilters" class="secondary small">Clear</button>
+    </div>
     <div id="jobProgressTotals" class="daily-value-summary"></div>
+    <p id="jobProgressCount" class="muted"></p>
     <div id="jobProgressList" class="job-progress-list"></div>
   </div>
 
@@ -3249,6 +3289,22 @@ function renderJobProgressDashboard(jobs, canView){
   if(!canView) return;
 
   const activeJobs = jobs.filter(job => job.active === true);
+  const search = String($('jobProgressSearch').value || '').trim().toLowerCase();
+  const attention = $('jobProgressAttention').value;
+  const matchesSearch = job =>
+    !search ||
+    String(job.job_number || '').toLowerCase().includes(search) ||
+    String(job.job_name || '').toLowerCase().includes(search);
+
+  const matchingActiveJobs = activeJobs.filter(job => {
+    if(!matchesSearch(job)) return false;
+    const summary = currentJobProgressSummaries.get(job.id) || {};
+    if(attention === 'redline') return Number(summary.redline_count || 0) > 0;
+    if(attention === 'pending') return Number(summary.pending_packet_count || 0) > 0;
+    if(attention === 'incomplete') return Number(summary.reported_percent || 0) < 100;
+    if(attention === 'complete') return Number(summary.reported_percent || 0) >= 100;
+    return true;
+  });
   let authorized = 0;
   let reported = 0;
   let approved = 0;
@@ -3275,12 +3331,17 @@ function renderJobProgressDashboard(jobs, canView){
     '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
     '<span><strong>' + pending + '</strong><br>Pending Packet</span>';
 
+  $('jobProgressCount').textContent =
+    'Showing ' + matchingActiveJobs.length + ' of ' + activeJobs.length + ' active jobs';
   $('jobProgressList').innerHTML = '';
-  if(activeJobs.length === 0){
-    $('jobProgressList').innerHTML = '<p class="muted">No active jobs.</p>';
+  if(matchingActiveJobs.length === 0){
+    $('jobProgressList').innerHTML =
+      '<p class="muted">' +
+      (activeJobs.length === 0 ? 'No active jobs.' : 'No active jobs match these filters.') +
+      '</p>';
   }
 
-  activeJobs.forEach(job => {
+  matchingActiveJobs.forEach(job => {
     const summary = currentJobProgressSummaries.get(job.id) || {};
     const reportedPercent = Number(summary.reported_percent || 0);
     const approvedPercent = Number(summary.approved_percent || 0);
@@ -3314,7 +3375,7 @@ function renderJobProgressDashboard(jobs, canView){
     $('jobProgressList').appendChild(row);
   });
 
-  const closedJobs = jobs.filter(job => job.active !== true);
+  const closedJobs = jobs.filter(job => job.active !== true && matchesSearch(job));
   if(closedJobs.length > 0){
     const closedSection = document.createElement('details');
     closedSection.className = 'closed-jobs-list';
@@ -4352,7 +4413,19 @@ async function deleteJob(job){
 }
 
 
-/* REFRESH JOBS */
+/* JOB SEARCH AND REFRESH */
+
+$('jobProgressSearch').oninput = () =>
+  renderJobProgressDashboard(currentJobsCatalog, true);
+
+$('jobProgressAttention').onchange = () =>
+  renderJobProgressDashboard(currentJobsCatalog, true);
+
+$('clearJobProgressFilters').onclick = () => {
+  $('jobProgressSearch').value = '';
+  $('jobProgressAttention').value = '';
+  renderJobProgressDashboard(currentJobsCatalog, true);
+};
 
 $('refreshJobsBtn').onclick =
   loadJobs;
