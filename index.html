@@ -1774,6 +1774,18 @@ button:disabled{
     </div>
   </div>
 
+  <details class="card collapsible-card" id="safetyJsaFiltersCard">
+    <summary><span>Find Completed JSAs</span><span id="safetyJsaFilterCount" class="collapsible-summary-count"></span></summary>
+    <div class="collapsible-card-content">
+      <div class="price-book-filter-grid">
+        <div><label for="safetyJsaSearch">Search</label><input id="safetyJsaSearch" type="search" placeholder="Job, Foreman, crew or crew member"></div>
+        <div><label for="safetyJsaFromDate">From Date</label><input id="safetyJsaFromDate" type="date"></div>
+        <div><label for="safetyJsaThroughDate">Through Date</label><input id="safetyJsaThroughDate" type="date"></div>
+      </div>
+      <button id="clearSafetyJsaFiltersBtn" class="secondary small">Clear Filters</button>
+    </div>
+  </details>
+
   <div id="safetyJsaLoading" class="card center hidden">Loading safety briefings...</div>
   <div id="safetyJsaEmpty" class="card center hidden">
     <h3>No JSAs Yet</h3>
@@ -2793,6 +2805,7 @@ const $ = id =>
 
 let currentProfile = null;
 let currentCompany = null;
+let currentSafetyJsas = [];
 let currentPriceBookItems = [];
 let currentPriceBookItemPage = 1;
 const PRICE_BOOK_ITEMS_PER_PAGE = 50;
@@ -3507,55 +3520,112 @@ $('saveSafetyJsaBtn').onclick = async () => {
   await loadSafetyJsas();
 };
 
-async function loadSafetyJsas(){
-  $('safetyJsaLoading').classList.remove('hidden');
-  $('safetyJsaEmpty').classList.add('hidden');
-  $('safetyJsaList').innerHTML = '';
+function getFilteredSafetyJsas(){
+  const query = String($('safetyJsaSearch').value || '').trim().toLowerCase();
+  const fromDate = $('safetyJsaFromDate').value || '';
+  const throughDate = $('safetyJsaThroughDate').value || '';
+  return currentSafetyJsas.filter(jsa => {
+    const date = String(jsa.work_date || '');
+    if(fromDate && date < fromDate) return false;
+    if(throughDate && date > throughDate) return false;
+    if(!query) return true;
+    return [jsa.job_number,jsa.job_name,jsa.foreman_name,jsa.crew_name,jsa.crew_members]
+      .some(value => String(value || '').toLowerCase().includes(query));
+  });
+}
 
-  const { data, error } = await sb.rpc('get_company_jsas');
-  $('safetyJsaLoading').classList.add('hidden');
-  if(error){
-    alert('Unable to load safety briefings: ' + error.message);
+function printSafetyJsa(jsa){
+  const popup = window.open('', '_blank');
+  if(!popup){
+    alert('Allow pop-ups to print or save this JSA as a PDF.');
     return;
   }
-  const records = data || [];
-  if(!records.length){
-    $('safetyJsaEmpty').classList.remove('hidden');
-    return;
-  }
+  const field = (label, value) =>
+    '<h3>' + escapeHtml(label) + '</h3><div>' +
+    escapeHtml(value || '').split('\n').join('<br>') + '</div>';
+  popup.document.write(
+    '<!doctype html><html><head><title>Morning JSA</title><style>' +
+    'body{font-family:Arial,sans-serif;max-width:850px;margin:32px auto;padding:0 24px;color:#10243a}' +
+    'h1{margin-bottom:4px}h2{margin-top:0;color:#52677d}h3{margin:22px 0 6px}' +
+    '.meta{border:1px solid #ccd8e3;padding:14px;border-radius:8px;line-height:1.5}' +
+    '@media print{body{margin:0;max-width:none}}</style></head><body>' +
+    '<h1>Morning Job Safety Analysis</h1><h2>' +
+    escapeHtml(jsa.job_number || 'Job') + ' — ' + escapeHtml(jsa.job_name || '') + '</h2>' +
+    '<div class="meta"><strong>Date:</strong> ' + escapeHtml(jsa.work_date || '') +
+    '<br><strong>Foreman:</strong> ' + escapeHtml(jsa.foreman_name || '') +
+    '<br><strong>Crew:</strong> ' + escapeHtml(jsa.crew_name || '') + '</div>' +
+    field('Work Plan / Job Briefing', jsa.job_briefing) +
+    field('Hazards Identified', jsa.hazards) +
+    field('Controls / Safe Work Practices', jsa.controls) +
+    field('Required PPE', jsa.ppe) +
+    field('Emergency Plan / Nearest Facility', jsa.emergency_plan) +
+    field('Crew Member Signatures', jsa.crew_members) +
+    (jsa.weather_conditions ? field('Morning Conditions', jsa.weather_conditions) : '') +
+    (jsa.special_equipment ? field('Special Equipment / Additional Notes', jsa.special_equipment) : '') +
+    '</body></html>'
+  );
+  popup.document.close();
+  popup.focus();
+  setTimeout(() => popup.print(), 250);
+}
+
+function renderSafetyJsas(){
+  const records = getFilteredSafetyJsas();
+  $('safetyJsaList').replaceChildren();
+  $('safetyJsaEmpty').classList.toggle('hidden', records.length > 0);
+  $('safetyJsaFilterCount').textContent = 'Showing ' + records.length + ' of ' + currentSafetyJsas.length;
   records.forEach(jsa => {
     const card = document.createElement('details');
     card.className = 'job-card compact-report-card';
     card.innerHTML =
       '<summary><div class="report-summary-main"><strong>' +
       escapeHtml(jsa.job_number || 'Job') + '</strong><span>' +
-      escapeHtml(jsa.foreman_name || 'Foreman') + ' — ' +
-      escapeHtml(jsa.crew_name || 'Crew') +
+      escapeHtml(jsa.foreman_name || 'Foreman') + ' — ' + escapeHtml(jsa.crew_name || 'Crew') +
       '</span></div><div class="report-summary-meta">' +
       escapeHtml(jsa.work_date || '') + ' • COMPLETED</div></summary>' +
-      '<div class="report-card-details">' +
-      '<div class="job-title">' + escapeHtml(jsa.job_name || '') + '</div>' +
+      '<div class="report-card-details"><div class="job-title">' + escapeHtml(jsa.job_name || '') + '</div>' +
       '<div class="job-info"><strong>Work Plan / Briefing</strong><br>' +
-      escapeHtml(jsa.job_briefing || '').replace(/\n/g,'<br>') + '<br><br>' +
-      '<strong>Hazards</strong><br>' +
-      escapeHtml(jsa.hazards || '').replace(/\n/g,'<br>') + '<br><br>' +
-      '<strong>Controls</strong><br>' +
-      escapeHtml(jsa.controls || '').replace(/\n/g,'<br>') + '<br><br>' +
-      '<strong>Required PPE</strong><br>' +
-      escapeHtml(jsa.ppe || '').replace(/\n/g,'<br>') + '<br><br>' +
-      '<strong>Emergency Plan</strong><br>' +
-      escapeHtml(jsa.emergency_plan || '').replace(/\n/g,'<br>') + '<br><br>' +
-      '<strong>Crew Members</strong><br>' +
-      escapeHtml(jsa.crew_members || '').replace(/\n/g,'<br>') +
-      (jsa.weather_conditions ? '<br><br><strong>Conditions</strong><br>' +
-        escapeHtml(jsa.weather_conditions) : '') +
+      escapeHtml(jsa.job_briefing || '').split('\n').join('<br>') + '<br><br><strong>Hazards</strong><br>' +
+      escapeHtml(jsa.hazards || '').split('\n').join('<br>') + '<br><br><strong>Controls</strong><br>' +
+      escapeHtml(jsa.controls || '').split('\n').join('<br>') + '<br><br><strong>Required PPE</strong><br>' +
+      escapeHtml(jsa.ppe || '').split('\n').join('<br>') + '<br><br><strong>Emergency Plan</strong><br>' +
+      escapeHtml(jsa.emergency_plan || '').split('\n').join('<br>') + '<br><br><strong>Crew Members</strong><br>' +
+      escapeHtml(jsa.crew_members || '').split('\n').join('<br>') +
+      (jsa.weather_conditions ? '<br><br><strong>Conditions</strong><br>' + escapeHtml(jsa.weather_conditions) : '') +
       (jsa.special_equipment ? '<br><br><strong>Special Equipment / Notes</strong><br>' +
-        escapeHtml(jsa.special_equipment).replace(/\n/g,'<br>') : '') +
-      '</div></div>';
+        escapeHtml(jsa.special_equipment).split('\n').join('<br>') : '') + '</div></div>';
+    const button = document.createElement('button');
+    button.className = 'secondary small';
+    button.textContent = 'Print / Save PDF';
+    button.onclick = () => printSafetyJsa(jsa);
+    card.querySelector('.report-card-details').appendChild(button);
     $('safetyJsaList').appendChild(card);
   });
 }
 
+async function loadSafetyJsas(){
+  $('safetyJsaLoading').classList.remove('hidden');
+  $('safetyJsaEmpty').classList.add('hidden');
+  $('safetyJsaList').replaceChildren();
+  const { data, error } = await sb.rpc('get_company_jsas');
+  $('safetyJsaLoading').classList.add('hidden');
+  if(error){
+    alert('Unable to load safety briefings: ' + error.message);
+    return;
+  }
+  currentSafetyJsas = data || [];
+  renderSafetyJsas();
+}
+
+['safetyJsaSearch','safetyJsaFromDate','safetyJsaThroughDate'].forEach(id => {
+  $(id).addEventListener(id === 'safetyJsaSearch' ? 'input' : 'change', renderSafetyJsas);
+});
+$('clearSafetyJsaFiltersBtn').onclick = () => {
+  $('safetyJsaSearch').value = '';
+  $('safetyJsaFromDate').value = '';
+  $('safetyJsaThroughDate').value = '';
+  renderSafetyJsas();
+};
 
 /* TEAM */
 
