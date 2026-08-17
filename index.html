@@ -2706,7 +2706,7 @@ async function loadApp(){
   } =
     await sb
       .from('companies')
-      .select('id,name,join_code,require_gf_redline_approval,contact_email,contact_phone,logo_url,primary_color,timezone')
+      .select('*')
       .eq('id',profile.company_id)
       .single();
 
