@@ -1945,6 +1945,9 @@ button:disabled{
         </p>
       </div>
       <div class="button-row">
+        <button id="printStormEventSummaryBtn" class="secondary small">
+          Print / Save PDF
+        </button>
         <button id="exportStormBillingCsvBtn" class="secondary small">
           Export Storm Billing
         </button>
@@ -6284,6 +6287,7 @@ $('productionCompletionFilter').onchange = resetProductionPageAndLoad;
 $('productionWorkModeFilter').onchange = resetProductionPageAndLoad;
 $('productionStormEventFilter').onchange = resetProductionPageAndLoad;
 $('exportProductionCsvBtn').onclick = exportFilteredProductionCsv;
+$('printStormEventSummaryBtn').onclick = printStormEventSummary;
 $('exportStormBillingCsvBtn').onclick = exportStormBillingCsv;
 $('exportStormPayrollCsvBtn').onclick = exportStormPayrollCsv;
 
@@ -11073,6 +11077,36 @@ function renderStormEventDashboard(reports, canReviewProduction){
 
       list.appendChild(card);
     });
+}
+
+function printStormEventSummary(){
+  if($('stormEventDashboard').classList.contains('hidden')){
+    alert('Select Storm work or a Storm Event before printing the summary.');
+    return;
+  }
+  const popup = window.open('', '_blank');
+  if(!popup){
+    alert('Allow pop-ups to print or save the Storm Event summary as a PDF.');
+    return;
+  }
+  popup.document.write(
+    '<!doctype html><html><head><title>' +
+    escapeHtml($('stormEventDashboardTitle').textContent || 'Storm Event Summary') +
+    '</title><style>' +
+    'body{font-family:Arial,sans-serif;max-width:1000px;margin:28px auto;padding:0 24px;color:#10243a}' +
+    'h1{margin-bottom:6px}.muted{color:#52677d}.job-card{border:1px solid #ccd8e3;border-radius:8px;padding:14px;margin:12px 0}' +
+    '.section-header{display:flex;justify-content:space-between;gap:12px}.daily-value-summary{display:flex;flex-wrap:wrap;gap:18px;padding:12px;background:#eef4f8;border-radius:8px;margin-top:10px}' +
+    '.daily-value-summary span{min-width:90px}.status{font-weight:bold}.button-row,button{display:none}' +
+    '@media print{body{margin:0;max-width:none}.job-card{break-inside:avoid}}</style></head><body>' +
+    '<h1>' + escapeHtml($('stormEventDashboardTitle').textContent || 'Storm Event Summary') + '</h1>' +
+    '<p class="muted">Generated ' + escapeHtml(new Date().toLocaleString()) + '</p>' +
+    '<div class="daily-value-summary">' + $('stormEventDashboardSummary').innerHTML + '</div>' +
+    '<h2>Crew Summary</h2>' + $('stormCrewDashboardList').innerHTML +
+    '</body></html>'
+  );
+  popup.document.close();
+  popup.focus();
+  setTimeout(() => popup.print(), 250);
 }
 
 function renderProductionPagination(totalReports){
