@@ -2168,9 +2168,14 @@ button:disabled{
         </p>
       </div>
 
-      <button id="addCustomerBtn" class="success">
-        + Add Customer
-      </button>
+      <div class="import-actions">
+        <button id="exportCustomersBtn" class="secondary">
+          Export Customers
+        </button>
+        <button id="addCustomerBtn" class="success">
+          + Add Customer
+        </button>
+      </div>
 
     </div>
 
@@ -2269,9 +2274,14 @@ button:disabled{
         </p>
       </div>
 
-      <button id="addContractBtn" class="success">
-        + Add Contract
-      </button>
+      <div class="import-actions">
+        <button id="exportContractsBtn" class="secondary">
+          Export Contracts
+        </button>
+        <button id="addContractBtn" class="success">
+          + Add Contract
+        </button>
+      </div>
 
     </div>
 <!-- ADD CONTRACT FORM -->
@@ -6718,6 +6728,41 @@ function applyCustomerFilters(){
 $('customerLibrarySearch').addEventListener('input', applyCustomerFilters);
 $('customerLibraryStatus').addEventListener('change', applyCustomerFilters);
 
+function downloadCompanyCatalogCsv(headers, rows, filename){
+  const csv = '\uFEFF' + [headers, ...rows]
+    .map(row => row.map(csvCell).join(','))
+    .join('\r\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
+$('exportCustomersBtn').onclick = () => {
+  if(!userIsCompanyAdmin()) return;
+  if(currentCustomerCatalog.length === 0){
+    alert('There are no customers or utilities to export.');
+    return;
+  }
+  downloadCompanyCatalogCsv(
+    ['Customer / Utility Name', 'Type', 'Contact Name', 'Contact Email', 'Contact Phone', 'Notes', 'Status'],
+    currentCustomerCatalog.map(customer => [
+      customer.name || '',
+      customer.customer_type || '',
+      customer.contact_name || '',
+      customer.contact_email || '',
+      customer.contact_phone || '',
+      customer.notes || '',
+      customer.active ? 'Active' : 'Inactive'
+    ]),
+    'linecrew-customers-' + new Date().toISOString().slice(0, 10) + '.csv'
+  );
+};
+
 function editCustomer(customer){
 
   if(!userIsCompanyAdmin()){
@@ -7167,6 +7212,33 @@ function applyContractFilters(){
 
 $('contractLibrarySearch').addEventListener('input', applyContractFilters);
 $('contractLibraryStatus').addEventListener('change', applyContractFilters);
+
+$('exportContractsBtn').onclick = () => {
+  if(!userIsCompanyAdmin()) return;
+  if(currentContractCatalog.length === 0){
+    alert('There are no contracts to export.');
+    return;
+  }
+  downloadCompanyCatalogCsv(
+    ['Contract Name', 'Contract Number', 'Customer / Utility', 'Start Date', 'End Date', 'Foreman Field Value Percent', 'Notes', 'Status'],
+    currentContractCatalog.map(contract => {
+      const customer = currentCustomerCatalog.find(item => item.id === contract.customer_id);
+      return [
+        contract.contract_name || '',
+        contract.contract_number || '',
+        customer?.name || '',
+        contract.start_date || '',
+        contract.end_date || '',
+        currentContractFieldSettings.has(contract.id)
+          ? currentContractFieldSettings.get(contract.id)
+          : 'Actual price',
+        contract.notes || '',
+        contract.active ? 'Active' : 'Inactive'
+      ];
+    }),
+    'linecrew-contracts-' + new Date().toISOString().slice(0, 10) + '.csv'
+  );
+};
 
 function populateContractCustomers(selectedCustomerId = ''){
 
