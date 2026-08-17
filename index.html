@@ -1087,6 +1087,13 @@ button:disabled{
       <strong id="userName"></strong><br>
       <span id="userRole" class="role"></span>
     </p>
+    <button id="toggleMyProfile" class="secondary small">Edit My Profile</button>
+    <div id="myProfileEditor" class="job-card hidden">
+      <label for="myProfileName">Display Name</label>
+      <input id="myProfileName" maxlength="120">
+      <button id="saveMyProfile" class="success small">Save My Profile</button>
+      <button id="cancelMyProfile" class="secondary small">Cancel</button>
+    </div>
   </div>
 
   <div class="grid">
@@ -1128,6 +1135,16 @@ button:disabled{
       </div>
       <button id="openProductionReview" class="small">Review Reports</button>
     </div>
+  </div>
+
+  <div id="companyOnboarding" class="card hidden">
+    <div class="section-header">
+      <div>
+        <h3>Company Setup Progress</h3>
+        <p id="companyOnboardingSummary" class="muted"></p>
+      </div>
+    </div>
+    <div id="companyOnboardingList"></div>
   </div>
 
   <div id="adminNotice" class="card hidden">
@@ -2743,6 +2760,7 @@ async function loadApp(){
 
   $('userName').textContent =
     profile.full_name || 'User';
+  $('myProfileName').value = profile.full_name || '';
 
 
   $('userRole').textContent =
@@ -2764,7 +2782,10 @@ async function loadApp(){
       .add('hidden');
   }
 
-  await loadDashboardReviewAlert();
+  await Promise.all([
+    loadDashboardReviewAlert(),
+    loadCompanyOnboarding()
+  ]);
 
   const savedState = window.history.state;
 
@@ -4950,6 +4971,109 @@ sb.auth.onAuthStateChange((event)=>{
 
 /* PRODUCTION PAGE */
 
+function onboardingStatusRow(label, complete, actionLabel, action){
+  const row = document.createElement('div');
+  row.className = 'job-card';
+  row.innerHTML =
+    '<div class="section-header"><div>' +
+      '<strong>' + escapeHtml(label) + '</strong><br>' +
+      '<span class="' + (complete ? 'authorized' : 'pending') + '">' +
+        (complete ? 'Complete' : 'Needs setup') +
+      '</span>' +
+    '</div></div>';
+  if(!complete){
+    const button = document.createElement('button');
+    button.className = 'secondary small';
+    button.textContent = actionLabel;
+    button.onclick = action;
+    row.querySelector('.section-header').appendChild(button);
+  }
+  return row;
+}
+
+async function loadCompanyOnboarding(){
+  const card = $('companyOnboarding');
+  if(!userIsCompanyAdmin()){
+    card.classList.add('hidden');
+    return;
+  }
+
+  const companyId = currentProfile.company_id;
+  const [team, customers, contracts, priceBooks, jobs, reports] =
+    await Promise.all([
+      sb.from('profiles').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('customers').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('contracts').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('price_books').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('jobs').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId),
+      sb.from('daily_reports').select('id', { count:'exact', head:true })
+        .eq('company_id', companyId)
+    ]);
+
+  const results = [team, customers, contracts, priceBooks, jobs, reports];
+  if(results.some(result => result.error)){
+    card.classList.add('hidden');
+    return;
+  }
+
+  const steps = [
+    {
+      label:'Invite at least one team member',
+      complete:Number(team.count || 0) > 1,
+      actionLabel:'Open Team',
+      action:() => navigateToAppPage('teamPage')
+    },
+    {
+      label:'Add a customer or utility',
+      complete:Number(customers.count || 0) > 0,
+      actionLabel:'Open Company Pricing',
+      action:() => navigateToAppPage('priceBooksPage')
+    },
+    {
+      label:'Create a contract',
+      complete:Number(contracts.count || 0) > 0,
+      actionLabel:'Open Contracts',
+      action:() => navigateToAppPage('priceBooksPage')
+    },
+    {
+      label:'Create and load a Price Book',
+      complete:Number(priceBooks.count || 0) > 0,
+      actionLabel:'Open Price Books',
+      action:() => navigateToAppPage('priceBooksPage')
+    },
+    {
+      label:'Create the first job',
+      complete:Number(jobs.count || 0) > 0,
+      actionLabel:'Open Jobs',
+      action:() => navigateToAppPage('jobsPage')
+    },
+    {
+      label:'Save the first daily report',
+      complete:Number(reports.count || 0) > 0,
+      actionLabel:'Open Production',
+      action:() => navigateToAppPage('productionPage')
+    }
+  ];
+
+  const completed = steps.filter(step => step.complete).length;
+  $('companyOnboardingSummary').textContent =
+    completed + ' of ' + steps.length + ' setup steps complete.';
+  const list = $('companyOnboardingList');
+  list.innerHTML = '';
+  steps.forEach(step => list.appendChild(
+    onboardingStatusRow(
+      step.label, step.complete, step.actionLabel, step.action
+    )
+  ));
+
+  card.classList.remove('hidden');
+}
+
 async function loadDashboardReviewAlert(){
   const alertCard = $('dashboardReviewAlert');
   const canReview = ['admin','gf'].includes(
@@ -4984,6 +5108,45 @@ $('openProductionReview').onclick = async () => {
 
 $('productionTile').onclick = async () => {
   await navigateToAppPage('productionPage');
+};
+
+$('toggleMyProfile').onclick = () => {
+  $('myProfileEditor').classList.remove('hidden');
+  $('myProfileName').focus();
+};
+
+$('cancelMyProfile').onclick = () => {
+  $('myProfileName').value = currentProfile?.full_name || '';
+  $('myProfileEditor').classList.add('hidden');
+};
+
+$('saveMyProfile').onclick = async () => {
+  const fullName = $('myProfileName').value.trim();
+  if(fullName.length < 2){
+    alert('Enter your full name.');
+    return;
+  }
+
+  const button = $('saveMyProfile');
+  button.disabled = true;
+  button.textContent = 'Saving...';
+  const { data, error } = await sb.rpc('update_my_profile_name', {
+    p_full_name:fullName
+  });
+  button.disabled = false;
+  button.textContent = 'Save My Profile';
+
+  if(error){
+    alert('Unable to update your profile: ' + error.message);
+    return;
+  }
+
+  currentProfile.full_name =
+    (Array.isArray(data) ? data[0]?.full_name : data?.full_name) || fullName;
+  $('userName').textContent = currentProfile.full_name;
+  $('dailyForemanName').value = currentProfile.full_name;
+  $('myProfileEditor').classList.add('hidden');
+  alert('Your profile name was updated.');
 };
 
 function applyCompanyBranding(company){
