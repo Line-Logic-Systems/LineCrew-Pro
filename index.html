@@ -11157,6 +11157,30 @@ function stormExportReports(){
   return reports;
 }
 
+function confirmStormExportReadiness(reports, exportName){
+  const unapproved = reports.filter(report =>
+    String(report.status || '').toLowerCase() !== 'approved'
+  ).length;
+  const redlines = reports.reduce((total, report) => {
+    const authorization = currentDailyAuthorizationSummaries.get(report.id) || {};
+    return total + Number(authorization.redline_count || 0);
+  }, 0);
+  const pending = reports.reduce((total, report) => {
+    const authorization = currentDailyAuthorizationSummaries.get(report.id) || {};
+    return total + Number(authorization.pending_packet_count || 0);
+  }, 0);
+  if(unapproved === 0 && redlines === 0 && pending === 0){
+    return true;
+  }
+  return confirm(
+    exportName + ' includes records that may need review:\n\n' +
+    unapproved + ' report(s) are not approved\n' +
+    redlines + ' redline unit entr' + (redlines === 1 ? 'y' : 'ies') + '\n' +
+    pending + ' unit entr' + (pending === 1 ? 'y is' : 'ies are') + ' pending a utility packet\n\n' +
+    'Continue exporting?'
+  );
+}
+
 function downloadStormCsv(headers, rows, filename){
   const csv = '\uFEFF' + [headers, ...rows]
     .map(row => row.map(csvCell).join(','))
@@ -11174,6 +11198,7 @@ function downloadStormCsv(headers, rows, filename){
 function exportStormBillingCsv(){
   const reports = stormExportReports();
   if(reports.length === 0) return;
+  if(!confirmStormExportReadiness(reports, 'Storm Billing export')) return;
 
   const groups = new Map();
   reports.forEach(report => {
@@ -11244,6 +11269,7 @@ function exportStormBillingCsv(){
 function exportStormPayrollCsv(){
   const reports = stormExportReports();
   if(reports.length === 0) return;
+  if(!confirmStormExportReadiness(reports, 'Storm Payroll export')) return;
 
   const groups = new Map();
   reports.forEach(report => {
