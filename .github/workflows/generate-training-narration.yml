@@ -3,9 +3,10 @@ name: Generate training narration
 on:
   workflow_dispatch:
     inputs:
-      voice_id:
-        description: ElevenLabs voice ID selected for the LineCrew Pro narrator
-        required: true
+      voice_name:
+        description: ElevenLabs narrator voice name
+        required: false
+        default: Roger
         type: string
 
 permissions:
@@ -27,7 +28,7 @@ jobs:
       - name: Generate slide narration
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          ELEVENLABS_VOICE_ID: ${{ inputs.voice_id }}
+          ELEVENLABS_VOICE_NAME: ${{ inputs.voice_name }}
         run: node scripts/generate-training-narration.mjs
 
       - name: Upload narration package
