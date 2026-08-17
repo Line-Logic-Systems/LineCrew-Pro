@@ -10458,7 +10458,7 @@ function exportFilteredProductionCsv(){
     'Regular Hours', 'OT Hours', 'Weather', 'Delay Hours', 'Delay Reason',
     'Actual Unit Value', 'Field Unit Value',
     'Authorized Units', 'Pending Packet Units', 'Redline Units',
-    'Report Notes', 'Review Notes'
+    'Storm Mode', 'Storm Event', 'Report Notes', 'Review Notes'
   ];
   const rows = currentProductionExportRows.map(report => {
     const value = currentDailyReportValueSummaries.get(report.id) || {};
@@ -10480,6 +10480,8 @@ function exportFilteredProductionCsv(){
       Number(authorization.authorized_count || 0),
       Number(authorization.pending_packet_count || 0),
       Number(authorization.redline_count || 0),
+      report.storm_mode === true ? 'Yes' : 'No',
+      report.storm_event_name || '',
       report.notes || '',
       report.review_notes || ''
     ];
@@ -10524,6 +10526,8 @@ async function loadProductionReports(){
       status,
       archived,
       review_notes,
+      storm_mode,
+      storm_event_name,
       jobs (
         job_number,
         job_name
@@ -10746,6 +10750,7 @@ async function loadProductionReports(){
           ${escapeHtml(report.work_date || 'No date')}
           &nbsp;•&nbsp;
           <strong>${escapeHtml(String(report.status || 'draft').toUpperCase())}</strong>
+          ${report.storm_mode ? '<span class="status warning">STORM</span>' : ''}
         </div>
       </summary>
       <div class="report-card-details">
@@ -10808,6 +10813,11 @@ async function loadProductionReports(){
               .toUpperCase()
           )}
         </strong>
+        ${report.storm_mode ? `
+          <br>
+          Storm Event:
+          <strong>${escapeHtml(report.storm_event_name || 'Storm Mode')}</strong>
+        ` : ''}
 ${report.review_notes ? `
   <br>
   <span class="muted">
@@ -10837,6 +10847,13 @@ ${report.review_notes ? `
     historyButton.textContent = 'View History';
     historyButton.onclick = () => toggleDailyReportHistory(report, card, historyButton);
     card.appendChild(historyButton);
+
+    const jsaButton = document.createElement('button');
+    jsaButton.className = 'secondary small';
+    jsaButton.textContent = 'View JSA';
+    jsaButton.onclick = () =>
+      toggleDailyReportJsa(report, card, jsaButton);
+    card.appendChild(jsaButton);
 
     const printButton = document.createElement('button');
     printButton.className = 'secondary small';
@@ -10990,6 +11007,58 @@ card.appendChild(editBtn);
 
   card.appendChild(submitBtn);
 
+}
+
+async function toggleDailyReportJsa(report, card, button){
+  const existing = card.querySelector('.daily-report-jsa-review');
+  if(existing){
+    existing.remove();
+    button.textContent = 'View JSA';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Loading JSA...';
+  const { data, error } = await sb.rpc('get_daily_report_jsa', {
+    p_report_id:report.id
+  });
+  button.disabled = false;
+  button.textContent = 'Hide JSA';
+
+  if(error){
+    button.textContent = 'View JSA';
+    alert('Unable to load the JSA: ' + error.message);
+    return;
+  }
+
+  const jsa = Array.isArray(data) ? data[0] : data;
+  const panel = document.createElement('div');
+  panel.className = 'job-card daily-report-jsa-review';
+
+  if(!jsa){
+    panel.innerHTML =
+      '<h3>Job Safety Analysis</h3>' +
+      '<p class="muted">No JSA is recorded for this report. Older reports created before the JSA feature may not have one.</p>';
+  }else{
+    const field = (label, value) =>
+      '<div class="job-info"><strong>' + escapeHtml(label) + '</strong><br>' +
+      escapeHtml(value || 'Not recorded').replace(/\n/g, '<br>') + '</div>';
+    panel.innerHTML =
+      '<h3>Job Safety Analysis</h3>' +
+      '<p class="muted">Crew briefing acknowledged ' +
+      escapeHtml(jsa.acknowledged_at
+        ? formatCompanyDateTime(jsa.acknowledged_at)
+        : '—') + '</p>' +
+      field('Work Plan / Job Briefing', jsa.job_briefing) +
+      field('Hazards Identified', jsa.hazards) +
+      field('Controls / Safe Work Practices', jsa.controls) +
+      field('Required PPE', jsa.ppe) +
+      field('Emergency Plan / Nearest Facility', jsa.emergency_plan) +
+      field('Crew Members Attending', jsa.crew_members) +
+      field('Special Equipment / Additional Notes', jsa.special_equipment);
+  }
+
+  card.querySelector('.report-card-details')?.appendChild(panel);
 }
 
 function safeStorageFilename(filename){
