@@ -17,10 +17,12 @@ The repository's original migration history starts after several core tables wer
 
 ## Capture process
 
-1. An Admin runs the manual GitHub workflow.
+1. An Admin runs the manual GitHub workflow, or merges a reviewed change to this capture documentation/tooling into `chatgpt-dev`.
 2. Supabase CLI exports the live `public` schema without table data.
 3. The validator checks the core tables, Row Level Security, policies, functions, and absence of row data.
 4. GitHub opens a draft pull request into `chatgpt-dev` for review.
+
+After creating or rotating the protected `SUPABASE_DB_URL` secret, use a reviewed documentation-only change here to safely trigger a fresh capture without changing application code.
 
 ## Recovery order
 
