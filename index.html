@@ -5907,6 +5907,10 @@ function escapeHtml(value){
 
 const assistantBuiltInHelp = [
   {
+    terms:['add job','new job','create job','start job','job setup'],
+    answer:'Admin steps to add a job: 1. Open Jobs from the dashboard. 2. Choose + Create Job. 3. Enter the job number and job name. 4. Select the correct Customer / Utility and Contract. 5. Add any available description, dates or notes. 6. Choose Save Job. 7. Open the new job to assign job leaders or add a Utility Job Package. A utility packet is optional at the start, so Foremen can report production before it arrives.'
+  },
+  {
     terms:['add admin','more admins','new admin','promote admin','make admin'],
     answer:'Admin steps: 1. Open Team. 2. If the person has not joined, copy the Company Code and have them create an account and join; new members begin as Foremen. 3. Refresh Team. 4. Find the member and change Role to Admin. 5. Choose Save Role. 6. Have the new Admin refresh or sign out and back in. Only promote trusted users because Admins can access actual pricing and company controls, and always keep at least one Admin.'
   },
@@ -5993,12 +5997,15 @@ function addAssistantMessage(role, text){
 }
 
 function findBuiltInAssistantAnswer(question){
-  const normalized = String(question || '').toLowerCase();
+  const normalized = String(question || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
   let best = null;
   let bestScore = 0;
   assistantBuiltInHelp.forEach(article => {
     const score = article.terms.reduce(
-      (total, term) => total + (normalized.includes(term) ? 1 : 0),
+      (total, term) => total + (normalized.includes(String(term).toLowerCase()) ? 1 : 0),
       0
     );
     if(score > bestScore){
@@ -6007,7 +6014,7 @@ function findBuiltInAssistantAnswer(question){
     }
   });
   return best?.answer ||
-    'I can guide an Admin through company setup, Team roles, Customers, Contracts, Price Books, Jobs, utility packets, Morning JSA, Daily Reports, approvals, redlines, Pending Packets, Storm Mode, reporting, exports and account access. Tell me the role, screen and task or copy the exact message you see.';
+    'I could not match that question to an offline help article. Try naming the screen and action, such as “create a job,” “promote a Foreman,” “import a Price Book,” or “approve a Daily Report.”';
 }
 
 function setAssistantOpen(open){
@@ -6050,7 +6057,12 @@ $('sendAssistantQuestion').onclick = async () => {
     if(!answer) throw new Error('No answer returned');
     addAssistantMessage('assistant', answer);
   }catch(error){
-    addAssistantMessage('assistant', findBuiltInAssistantAnswer(question));
+    console.warn('Secure assistant unavailable; using built-in help.', error);
+    addAssistantMessage(
+      'assistant',
+      'Secure AI is currently unavailable, so I am using built-in LineCrew Pro help.\n\n' +
+      findBuiltInAssistantAnswer(question)
+    );
   }finally{
     button.disabled = false;
     button.textContent = 'Ask Assistant';
