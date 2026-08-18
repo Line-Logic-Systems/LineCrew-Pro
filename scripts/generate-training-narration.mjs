@@ -15,9 +15,15 @@ if (!voicesResponse.ok) {
   throw new Error(`Unable to load ElevenLabs voices (${voicesResponse.status}): ${await voicesResponse.text()}`);
 }
 const voices = (await voicesResponse.json()).voices || [];
-const selectedVoice = voices.find(
-  (voice) => String(voice.name || "").toLowerCase() === requestedVoiceName.toLowerCase()
-);
+const normalizedRequestedVoiceName = requestedVoiceName.toLowerCase();
+const selectedVoice =
+  voices.find(
+    (voice) => String(voice.name || "").toLowerCase() === normalizedRequestedVoiceName
+  ) ||
+  voices.find((voice) => {
+    const normalizedVoiceName = String(voice.name || "").toLowerCase();
+    return normalizedVoiceName.startsWith(`${normalizedRequestedVoiceName} -`);
+  });
 if (!selectedVoice) {
   const available = voices.map((voice) => voice.name).filter(Boolean).sort().join(", ");
   throw new Error(`Voice \"${requestedVoiceName}\" was not found. Available voices: ${available}`);
