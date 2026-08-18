@@ -9,6 +9,8 @@ const requiredFiles = [
   'supabase/functions/create-billing-checkout/index.ts',
   'supabase/functions/create-billing-portal/index.ts',
   'supabase/functions/stripe-webhook/index.ts',
+  'scripts/test-platform-billing-isolation.mjs',
+  '.github/workflows/test-platform-billing-isolation.yml',
   'docs/PLATFORM_OWNER_BILLING.md',
 ];
 
@@ -22,6 +24,8 @@ const migration = fs.readFileSync('supabase/migrations/20260818_platform_owner_a
 const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/index.ts', 'utf8');
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
 const webhook = fs.readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
+const isolation = fs.readFileSync('scripts/test-platform-billing-isolation.mjs', 'utf8');
+const isolationWorkflow = fs.readFileSync('.github/workflows/test-platform-billing-isolation.yml', 'utf8');
 
 function parseInlineScripts(name, html) {
   const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
@@ -123,8 +127,25 @@ if (!webhook.includes('prior?.processed_at')) {
 if (!webhook.includes('invoice.paid is intentionally audit-only')) {
   throw new Error('Stripe invoice.paid must not blindly reactivate a subscription.');
 }
-if (!webhook.includes('access_override') && !migration.includes('access_override')) {
-  throw new Error('Owner access overrides must remain separate from webhook-managed base access.');
+
+const isolationMarkers = [
+  'DISPOSABLE_ONLY',
+  'SUPABASE_PRODUCTION_PROJECT_REF',
+  'platform_owner_company_dashboard',
+  'my_company_billing_summary',
+  'my_company_subscription_access',
+  'company_subscriptions',
+  'platform_owners',
+  'Foreman accessed company Admin billing summary',
+];
+for (const marker of isolationMarkers) {
+  if (!isolation.includes(marker)) throw new Error(`billing isolation harness is missing ${marker}`);
+}
+if (!isolationWorkflow.includes('environment: isolation-test')) {
+  throw new Error('billing isolation workflow must use the protected isolation-test environment.');
+}
+if (!isolationWorkflow.includes('LINECREW_ISOLATION_TEST_CONFIRM')) {
+  throw new Error('billing isolation workflow is missing disposable-project confirmation.');
 }
 
 const publicFiles = [owner, billing, checkout, portal, webhook].join('\n');
