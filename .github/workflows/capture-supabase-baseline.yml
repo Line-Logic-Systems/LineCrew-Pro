@@ -2,6 +2,13 @@ name: Capture Supabase schema baseline
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - chatgpt-dev
+    paths:
+      - .github/workflows/capture-supabase-baseline.yml
+      - scripts/validate-supabase-baseline.mjs
+      - supabase/baseline/README.md
 
 permissions:
   contents: write
