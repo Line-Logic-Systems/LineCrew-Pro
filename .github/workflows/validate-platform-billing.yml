@@ -1,0 +1,27 @@
+name: Validate platform owner and billing
+
+on:
+  push:
+    branches:
+      - feature/platform-owner-billing
+      - chatgpt-dev
+  pull_request:
+    paths:
+      - 'owner.html'
+      - 'supabase/migrations/20260818_platform_owner_and_billing.sql'
+      - 'supabase/functions/create-billing-checkout/**'
+      - 'supabase/functions/create-billing-portal/**'
+      - 'supabase/functions/stripe-webhook/**'
+      - 'scripts/validate-platform-billing.mjs'
+      - '.github/workflows/validate-platform-billing.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate platform billing foundation
+        run: node scripts/validate-platform-billing.mjs
