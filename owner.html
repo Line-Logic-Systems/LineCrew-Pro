@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Line Logic Platform Owner</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--card:#fff;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754;--red:#b83232;--orange:#d97706}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:var(--navy);color:white;padding:22px}header h1{margin:0;font-size:28px}header p{margin:6px 0 0;opacity:.85}main{max-width:1250px;margin:auto;padding:22px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.hidden{display:none!important}.muted{color:var(--muted)}button{border:0;border-radius:9px;padding:10px 14px;background:var(--blue);color:#fff;font-weight:700;cursor:pointer}button.secondary{background:#e8eef4;color:var(--text)}button.danger{background:var(--red)}input,select,textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin:5px 0 12px;font:inherit}.toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.toolbar>div{min-width:180px;flex:1}.summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.metric{background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:14px}.metric strong{display:block;font-size:24px}.table-wrap{overflow:auto}.company-table{width:100%;border-collapse:collapse;min-width:1100px}.company-table th,.company-table td{padding:10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}.company-table th{font-size:12px;text-transform:uppercase;color:var(--muted)}.badge{display:inline-block;border-radius:999px;padding:4px 8px;font-size:12px;font-weight:700;background:#e8eef4}.badge.active{background:#d1fae5;color:#065f46}.badge.past_due,.badge.canceled,.badge.paused{background:#fee2e2;color:#991b1b}.badge.trialing{background:#fef3c7;color:#92400e}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{padding:7px 10px;font-size:12px}.modal{position:fixed;inset:0;background:rgba(8,23,38,.55);display:flex;align-items:center;justify-content:center;padding:20px}.modal-card{width:min(560px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:20px}.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:800px){.summary{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}.toolbar{display:block}}
+</style>
+</head>
+<body>
+<header><h1>Line Logic Systems</h1><p>Platform Owner Console · LineCrew Pro</p></header>
+<main>
+<section id="authCard" class="card">
+  <h2>Platform Owner Sign In</h2>
+  <p class="muted">This console is separate from contractor Admin access. Only users explicitly listed as platform owners can open it.</p>
+  <label>Email</label><input id="email" type="email" autocomplete="username">
+  <label>Password</label><input id="password" type="password" autocomplete="current-password">
+  <button id="signInBtn">Sign In</button>
+  <p id="authStatus" class="muted"></p>
+</section>
+
+<section id="console" class="hidden">
+  <div class="card toolbar">
+    <div><h2 style="margin:0">Contractor Companies</h2><p class="muted" style="margin:5px 0 0">Platform-level account and subscription status only.</p></div>
+    <div><label>Search</label><input id="search" placeholder="Company name or plan"></div>
+    <div><label>Status</label><select id="statusFilter"><option value="">All</option><option>trialing</option><option>active</option><option>past_due</option><option>paused</option><option>canceled</option><option>incomplete</option></select></div>
+    <div style="flex:0"><button id="refreshBtn" class="secondary">Refresh</button></div>
+    <div style="flex:0"><button id="signOutBtn" class="secondary">Sign Out</button></div>
+  </div>
+
+  <div class="summary">
+    <div class="metric"><span class="muted">Companies</span><strong id="mCompanies">0</strong></div>
+    <div class="metric"><span class="muted">Active / Trial</span><strong id="mActive">0</strong></div>
+    <div class="metric"><span class="muted">Monthly Contract Value</span><strong id="mMrr">$0</strong></div>
+    <div class="metric"><span class="muted">Active Users</span><strong id="mUsers">0</strong></div>
+  </div>
+
+  <div class="card table-wrap">
+    <table class="company-table">
+      <thead><tr><th>Company</th><th>Usage</th><th>Plan</th><th>Price</th><th>Status</th><th>Access</th><th>Period / Trial</th><th>Billing</th><th>Actions</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="muted hidden">No companies match the current filters.</p>
+  </div>
+</section>
+</main>
+
+<div id="editModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <h2 id="editTitle">Edit Subscription</h2>
+    <input id="editCompanyId" type="hidden">
+    <div class="split"><div><label>Plan Code</label><input id="editPlan" placeholder="pilot, standard, pro, custom"></div><div><label>Monthly Price ($)</label><input id="editPrice" type="number" min="0" step="0.01"></div></div>
+    <div class="split"><div><label>Status</label><select id="editStatus"><option>trialing</option><option>active</option><option>past_due</option><option>paused</option><option>canceled</option><option>incomplete</option></select></div><div><label>Trial Ends</label><input id="editTrial" type="datetime-local"></div></div>
+    <label><input id="editAccess" type="checkbox" style="width:auto;margin-right:8px">Company app access enabled</label>
+    <label>Internal Notes</label><textarea id="editNotes" rows="3" placeholder="Optional owner-only note"></textarea>
+    <div class="actions"><button id="saveEditBtn">Save</button><button id="cancelEditBtn" class="secondary">Cancel</button></div>
+    <p id="editStatusText" class="muted"></p>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL='https://ldgkyxuozbozgkvwzadg.supabase.co';
+const SUPABASE_KEY='sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const $=id=>document.getElementById(id);
+let companies=[];
+
+const money=cents=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format((Number(cents)||0)/100);
+const fmtDate=value=>value?new Date(value).toLocaleDateString(): '—';
+const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+
+async function verifyOwner(){
+  const {data,error}=await sb.rpc('is_platform_owner');
+  if(error||data!==true) throw new Error('This account is not authorized as a Line Logic platform owner.');
+}
+async function load(){
+  await verifyOwner();
+  const {data,error}=await sb.rpc('platform_owner_company_dashboard');
+  if(error) throw error;
+  companies=data||[];
+  $('authCard').classList.add('hidden');$('console').classList.remove('hidden');
+  render();
+}
+function filtered(){
+  const q=$('search').value.trim().toLowerCase(); const s=$('statusFilter').value;
+  return companies.filter(c=>(!s||c.subscription_status===s)&&(!q||[c.company_name,c.plan_code,c.subscription_status].some(v=>String(v||'').toLowerCase().includes(q))));
+}
+function render(){
+  const rows=filtered(); $('rows').innerHTML=''; $('empty').classList.toggle('hidden',rows.length>0);
+  rows.forEach(c=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><strong>${esc(c.company_name)}</strong><div class="muted">${esc(c.company_id)}</div></td>
+      <td>${Number(c.active_users)||0} users<br>${Number(c.active_jobs)||0} active jobs<br>${Number(c.total_reports)||0} reports</td>
+      <td>${esc(c.plan_code||'unconfigured')}</td><td>${money(c.monthly_price_cents)}</td>
+      <td><span class="badge ${esc(c.subscription_status)}">${esc(c.subscription_status)}</span></td>
+      <td>${c.access_enabled?'Enabled':'Blocked'}</td>
+      <td>Trial: ${fmtDate(c.trial_ends_at)}<br>Period end: ${fmtDate(c.current_period_end)}</td>
+      <td>${esc(c.provider||'manual')}<br><span class="muted">${c.stripe_customer_id?'Stripe linked':'Not linked'}</span></td>
+      <td><div class="actions"><button data-edit="${esc(c.company_id)}">Edit</button></div></td>`;
+    $('rows').appendChild(tr);
+  });
+  $('rows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));
+  $('mCompanies').textContent=companies.length;
+  $('mActive').textContent=companies.filter(c=>['active','trialing'].includes(c.subscription_status)&&c.access_enabled).length;
+  $('mMrr').textContent=money(companies.filter(c=>c.subscription_status==='active'&&c.access_enabled).reduce((s,c)=>s+(Number(c.monthly_price_cents)||0),0));
+  $('mUsers').textContent=companies.reduce((s,c)=>s+(Number(c.active_users)||0),0);
+}
+function toLocalInput(v){if(!v)return'';const d=new Date(v);const z=d.getTimezoneOffset()*60000;return new Date(d-z).toISOString().slice(0,16)}
+function openEdit(id){const c=companies.find(x=>x.company_id===id);if(!c)return;$('editCompanyId').value=id;$('editTitle').textContent='Edit '+c.company_name;$('editPlan').value=c.plan_code==='unconfigured'?'pilot':(c.plan_code||'pilot');$('editPrice').value=((Number(c.monthly_price_cents)||0)/100).toFixed(2);$('editStatus').value=c.subscription_status||'trialing';$('editAccess').checked=c.access_enabled!==false;$('editTrial').value=toLocalInput(c.trial_ends_at);$('editNotes').value='';$('editStatusText').textContent='';$('editModal').classList.remove('hidden')}
+async function saveEdit(){
+  const cents=Math.round(Number($('editPrice').value||0)*100); if(!Number.isFinite(cents)||cents<0)return alert('Enter a valid monthly price.');
+  $('saveEditBtn').disabled=true;$('editStatusText').textContent='Saving...';
+  const trial=$('editTrial').value?new Date($('editTrial').value).toISOString():null;
+  const {error}=await sb.rpc('platform_owner_set_subscription',{p_company_id:$('editCompanyId').value,p_plan_code:$('editPlan').value.trim()||'custom',p_monthly_price_cents:cents,p_status:$('editStatus').value,p_access_enabled:$('editAccess').checked,p_trial_ends_at:trial,p_notes:$('editNotes').value.trim()||null});
+  $('saveEditBtn').disabled=false;if(error){$('editStatusText').textContent=error.message;return}
+  $('editModal').classList.add('hidden');await load();
+}
+$('signInBtn').onclick=async()=>{try{$('authStatus').textContent='Signing in...';const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;await load();$('authStatus').textContent=''}catch(e){$('authStatus').textContent=e.message}}
+$('signOutBtn').onclick=async()=>{await sb.auth.signOut();location.reload()};$('refreshBtn').onclick=()=>load().catch(e=>alert(e.message));$('search').oninput=render;$('statusFilter').onchange=render;$('saveEditBtn').onclick=saveEdit;$('cancelEditBtn').onclick=()=>$('editModal').classList.add('hidden');
+(async()=>{const {data}=await sb.auth.getSession();if(data.session){try{await load()}catch(e){$('authStatus').textContent=e.message}}})();
+</script>
+</body>
+</html>
