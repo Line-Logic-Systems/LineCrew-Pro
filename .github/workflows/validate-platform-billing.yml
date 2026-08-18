@@ -11,6 +11,8 @@ on:
       - 'billing.html'
       - 'docs/PLATFORM_OWNER_BILLING.md'
       - 'supabase/migrations/20260818_platform_owner_and_billing.sql'
+      - 'supabase/migrations/20260818_crew_tier_usage_policy.sql'
+      - 'supabase/migrations/20260818_crew_tier_automation_and_visibility.sql'
       - 'supabase/functions/create-billing-checkout/**'
       - 'supabase/functions/create-billing-portal/**'
       - 'supabase/functions/stripe-webhook/**'
