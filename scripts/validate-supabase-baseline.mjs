@@ -21,12 +21,19 @@ if (Buffer.byteLength(sql, "utf8") < 10_000) {
   errors.push("The schema dump is unexpectedly small (less than 10 KB).");
 }
 
+// Stored function bodies commonly contain INSERT/COPY statements that define
+// application behavior but do not represent table rows in the dump. Remove
+// dollar-quoted bodies before checking for top-level data-loading statements.
+const topLevelSql = sql
+  .replace(/\$([A-Za-z_][A-Za-z0-9_]*)\$[\s\S]*?\$\1\$/g, "")
+  .replace(/\$\$[\s\S]*?\$\$/g, "");
+
 const forbiddenDataPatterns = [
-  /^\s*copy\s+public\./gim,
-  /^\s*insert\s+into\s+(?:only\s+)?public\./gim
+  /^\s*copy\s+(?:"public"\.|public\.).*\s+from\s+stdin\s*;/gim,
+  /^\s*insert\s+into\s+(?:only\s+)?(?:"public"\.|public\.).*\bvalues\b/gim
 ];
 
-if (forbiddenDataPatterns.some((pattern) => pattern.test(sql))) {
+if (forbiddenDataPatterns.some((pattern) => pattern.test(topLevelSql))) {
   errors.push("The dump appears to contain public table row data. The baseline must be schema-only.");
 }
 
@@ -77,7 +84,7 @@ if (!/create\s+policy\b/i.test(normalized)) {
   errors.push("No RLS policies were found in the schema dump.");
 }
 
-if (!/create(?:\s+or\s+replace)?\s+function\s+public\./i.test(normalized)) {
+if (!/create(?:\s+or\s+replace)?\s+function\s+(?:public|"public")\s*\./i.test(sql)) {
   errors.push("No public database functions were found in the schema dump.");
 }
 
