@@ -8,6 +8,8 @@ on:
   pull_request:
     paths:
       - 'owner.html'
+      - 'billing.html'
+      - 'docs/PLATFORM_OWNER_BILLING.md'
       - 'supabase/migrations/20260818_platform_owner_and_billing.sql'
       - 'supabase/functions/create-billing-checkout/**'
       - 'supabase/functions/create-billing-portal/**'
@@ -23,5 +25,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
       - name: Validate platform billing foundation
         run: node scripts/validate-platform-billing.mjs
+      - name: Type-check Stripe billing Edge Functions
+        run: |
+          deno check supabase/functions/create-billing-checkout/index.ts
+          deno check supabase/functions/create-billing-portal/index.ts
+          deno check supabase/functions/stripe-webhook/index.ts
