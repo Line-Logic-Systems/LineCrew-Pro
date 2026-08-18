@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 760" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#203d56"/><stop offset=".52" stop-color="#4a6072"/><stop offset=".78" stop-color="#c7763d"/><stop offset="1" stop-color="#f1a24f"/>
+  </linearGradient>
+  <radialGradient id="sun" cx="20%" cy="78%" r="34%"><stop offset="0" stop-color="#ffd27a" stop-opacity=".95"/><stop offset=".18" stop-color="#f7a744" stop-opacity=".58"/><stop offset=".55" stop-color="#d97b37" stop-opacity=".12"/><stop offset="1" stop-color="#d97b37" stop-opacity="0"/></radialGradient>
+  <linearGradient id="shade" x1="0" x2="1"><stop offset="0" stop-color="#061a2d" stop-opacity=".12"/><stop offset=".52" stop-color="#061a2d" stop-opacity=".38"/><stop offset="1" stop-color="#061a2d" stop-opacity=".55"/></linearGradient>
+  <filter id="soft"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>
+<rect width="1800" height="760" fill="url(#sky)"/>
+<rect width="1800" height="760" fill="url(#sun)"/>
+<g opacity=".2" fill="#d9e3eb" filter="url(#soft)"><path d="M0 180 C250 110 420 160 610 130 S930 95 1120 150 S1500 160 1800 90 L1800 240 L0 260Z"/><path d="M0 330 C230 280 430 300 620 275 S980 220 1190 290 S1530 320 1800 250 L1800 360 L0 390Z"/></g>
+<g fill="#101b22"><path d="M0 690 C180 670 330 676 470 682 C650 689 770 664 940 677 C1110 690 1250 665 1415 675 C1570 684 1700 670 1800 678 L1800 760 L0 760Z"/></g>
+<!-- distribution poles left/horizon -->
+<g stroke="#11181d" fill="#11181d" stroke-linecap="round">
+  <g stroke-width="15"><path d="M115 55 L98 700"/></g><rect x="39" y="91" width="165" height="15" rx="4" transform="rotate(-2 121 98)"/><rect x="53" y="148" width="140" height="11" rx="3" transform="rotate(-1 123 154)"/>
+  <g stroke-width="4"><path d="M47 101 C290 130 430 178 610 245"/><path d="M50 154 C310 185 430 220 630 286"/><path d="M182 101 C390 111 570 153 760 220"/></g>
+  <g transform="translate(247 398) scale(.54)"><rect x="0" y="0" width="22" height="525"/><rect x="-48" y="34" width="118" height="13"/><path d="M-48 42 C110 65 230 94 355 132" fill="none" stroke="#11181d" stroke-width="5"/></g>
+  <g transform="translate(385 466) scale(.4)"><rect x="0" y="0" width="23" height="535"/><rect x="-47" y="33" width="117" height="13"/></g>
+</g>
+<!-- lineman on main pole, detailed silhouette -->
+<g fill="#0b1116" stroke="#0b1116" stroke-linecap="round">
+  <circle cx="150" cy="224" r="18"/><path d="M134 217 q17 -24 38 -3 l7 5 q-32 -2 -50 5z"/>
+  <path d="M144 242 C161 239 177 251 178 273 L174 329 L145 330 L133 275 C130 258 134 247 144 242Z"/>
+  <path d="M143 267 L112 309" stroke-width="13" fill="none"/><path d="M171 269 L199 299" stroke-width="12" fill="none"/><circle cx="109" cy="312" r="7"/><circle cx="202" cy="302" r="7"/>
+  <path d="M149 328 L126 381" stroke-width="15" fill="none"/><path d="M170 329 L185 384" stroke-width="15" fill="none"/><path d="M126 378 L106 419" stroke-width="12" fill="none"/><path d="M185 383 L207 420" stroke-width="12" fill="none"/>
+  <path d="M131 299 Q160 315 181 301" fill="none" stroke-width="7"/><path d="M128 306 l-22 7 l7 14 l24 -7z"/>
+  <path d="M105 416 l-18 6 l4 9 l22 -1z"/><path d="M204 417 l20 1 l-1 10 l-22 2z"/>
+  <path d="M157 246 C154 225 154 211 154 197" fill="none" stroke-width="4"/>
+</g>
+<!-- bucket + worker -->
+<g fill="#11181d" stroke="#11181d"><path d="M236 418 L305 432 L299 484 L249 481Z"/><circle cx="267" cy="395" r="14"/><path d="M254 409 q14 -17 28 1 l3 33 l-35 -4z"/><path d="M282 471 L463 620" stroke-width="22" fill="none"/><path d="M293 459 L474 608" stroke="#303a41" stroke-width="7" fill="none"/></g>
+<!-- bucket truck -->
+<g fill="#10171c" stroke="#10171c"><path d="M399 624 h174 l45 36 h97 l17 42 H388z"/><rect x="535" y="591" width="94" height="73" rx="7"/><path d="M629 607 h48 l36 54 h-84z"/><rect x="375" y="663" width="354" height="39" rx="9"/><circle cx="444" cy="706" r="37"/><circle cx="648" cy="706" r="37"/><circle cx="444" cy="706" r="17" fill="#27343d"/><circle cx="648" cy="706" r="17" fill="#27343d"/></g>
+<!-- transmission tower right -->
+<g stroke="#111a20" fill="none" stroke-width="7" opacity=".95"><path d="M1585 108 L1495 704 M1585 108 L1673 704 M1512 653 H1657 M1524 575 H1645 M1538 490 H1632 M1550 408 H1619 M1561 328 H1608 M1570 250 H1600"/><path d="M1540 490 L1645 575 M1630 490 L1524 575 M1550 408 L1632 490 M1619 408 L1538 490 M1561 328 L1619 408 M1608 328 L1550 408 M1570 250 L1608 328 M1600 250 L1561 328"/><path d="M1585 108 L1546 247 H1623Z"/><path d="M1548 244 H1622 M1502 320 H1667 M1471 405 H1698"/></g>
+<g stroke="#111a20" stroke-width="4"><path d="M1503 320 C1355 282 1220 276 1095 292"/><path d="M1667 320 C1710 316 1755 317 1800 325"/><path d="M1471 405 C1325 367 1190 365 1060 384"/><path d="M1698 405 C1738 400 1770 402 1800 410"/></g>
+<!-- smaller transmission towers -->
+<g stroke="#26323a" fill="none" opacity=".88"><g transform="translate(1010 420) scale(.45)" stroke-width="8"><path d="M100 0 L20 610 M100 0 L180 610 M38 520 H162 M50 410 H150 M62 300 H138 M73 195 H127 M62 300 L150 410 M138 300 L50 410 M73 195 L138 300 M127 195 L62 300 M42 292 H158"/></g><g transform="translate(1240 500) scale(.31)" stroke-width="10"><path d="M100 0 L20 610 M100 0 L180 610 M38 520 H162 M50 410 H150 M62 300 H138 M73 195 H127 M42 292 H158"/></g></g>
+<rect width="1800" height="760" fill="url(#shade)"/>
+</svg>
