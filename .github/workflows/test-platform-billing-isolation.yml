@@ -1,0 +1,36 @@
+name: Test platform billing isolation
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type DISPOSABLE_ONLY to confirm this targets a disposable Supabase project
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  billing-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: isolation-test
+    env:
+      SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+      SUPABASE_TEST_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+      SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
+      SUPABASE_TEST_PROJECT_REF: ${{ secrets.SUPABASE_TEST_PROJECT_REF }}
+      SUPABASE_PRODUCTION_PROJECT_REF: ${{ secrets.SUPABASE_PRODUCTION_PROJECT_REF }}
+      LINECREW_ISOLATION_TEST_CONFIRM: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify disposable-project confirmation
+        run: test "$LINECREW_ISOLATION_TEST_CONFIRM" = "DISPOSABLE_ONLY"
+      - name: Verify billing isolation test script is present
+        run: test -f scripts/test-platform-billing-isolation.mjs
+      - name: Run platform billing isolation attacks
+        run: node scripts/test-platform-billing-isolation.mjs
