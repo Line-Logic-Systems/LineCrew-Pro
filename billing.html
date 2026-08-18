@@ -7,7 +7,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--card:#fff;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754;--red:#b83232;--orange:#d97706}
-*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:var(--navy);color:white;padding:24px 20px}header h1{margin:0;font-size:28px}header p{margin:6px 0 0;opacity:.86}main{max-width:760px;margin:auto;padding:24px 16px 90px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.hidden{display:none!important}.muted{color:var(--muted)}button,a.button{display:inline-block;border:0;border-radius:9px;padding:11px 15px;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;margin:4px 6px 4px 0}button.secondary,a.secondary{background:#e8eef4;color:var(--text)}input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin:5px 0 12px;font:inherit}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.metric{border:1px solid var(--border);border-radius:12px;padding:15px;background:#f8fafc}.metric strong{display:block;font-size:21px;margin-top:5px}.badge{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700;background:#e8eef4}.badge.active{background:#d1fae5;color:#065f46}.badge.trialing{background:#fef3c7;color:#92400e}.badge.past_due,.badge.paused,.badge.canceled{background:#fee2e2;color:#991b1b}.notice{border-left:4px solid var(--blue);padding:12px 14px;background:#eff6ff;border-radius:8px}.notice.warn{border-left-color:var(--orange);background:#fff7ed}.notice.success{border-left-color:var(--green);background:#ecfdf5}@media(max-width:620px){.grid{grid-template-columns:1fr}}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:var(--navy);color:white;padding:24px 20px}header h1{margin:0;font-size:28px}header p{margin:6px 0 0;opacity:.86}main{max-width:820px;margin:auto;padding:24px 16px 90px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.hidden{display:none!important}.muted{color:var(--muted)}button,a.button{display:inline-block;border:0;border-radius:9px;padding:11px 15px;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;margin:4px 6px 4px 0}button.secondary,a.secondary{background:#e8eef4;color:var(--text)}input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin:5px 0 12px;font:inherit}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.metric{border:1px solid var(--border);border-radius:12px;padding:15px;background:#f8fafc}.metric strong{display:block;font-size:21px;margin-top:5px}.badge{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700;background:#e8eef4}.badge.active,.badge.within_plan{background:#d1fae5;color:#065f46}.badge.trialing,.badge.grace{background:#fef3c7;color:#92400e}.badge.past_due,.badge.paused,.badge.canceled,.badge.upgrade_required,.badge.custom_quote_required{background:#fee2e2;color:#991b1b}.notice{border-left:4px solid var(--blue);padding:12px 14px;background:#eff6ff;border-radius:8px}.notice.warn{border-left-color:var(--orange);background:#fff7ed}.notice.success{border-left-color:var(--green);background:#ecfdf5}@media(max-width:620px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -39,6 +39,17 @@
   </div>
 
   <div class="card" style="margin-top:18px;margin-bottom:0;box-shadow:none">
+    <h3 style="margin-top:0">Crew Plan Usage</h3>
+    <div class="grid">
+      <div class="metric"><span class="muted">Included Crews</span><strong id="crewLimit">—</strong></div>
+      <div class="metric"><span class="muted">30-Day Peak Billable Crews</span><strong id="crewPeak">0</strong></div>
+      <div class="metric"><span class="muted">30-Day Overage Crew-Days</span><strong id="crewDays">0 / 6</strong></div>
+      <div class="metric"><span class="muted">Crew Tier Status</span><strong><span id="crewStatus" class="badge">—</span></strong></div>
+    </div>
+    <p id="crewHelp" class="muted"></p>
+  </div>
+
+  <div class="card" style="margin-top:18px;margin-bottom:0;box-shadow:none">
     <h3 style="margin-top:0">Subscription</h3>
     <p id="period" class="muted"></p>
     <p id="billingHelp" class="muted"></p>
@@ -58,6 +69,7 @@ let billing=null;
 
 const money=(cents,currency='usd')=>new Intl.NumberFormat('en-US',{style:'currency',currency:String(currency||'usd').toUpperCase()}).format((Number(cents)||0)/100);
 const date=value=>value?new Date(value).toLocaleDateString():'—';
+const label=v=>String(v||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
 
 async function requireAdmin(){
   const {data:{session}}=await sb.auth.getSession();
@@ -79,11 +91,22 @@ async function load(){
 
   $('companyName').textContent=company.name+' Billing';
   $('companyContact').textContent=company.contact_email||'No billing contact email is saved in Company Settings.';
-  $('plan').textContent=billing.plan_code||'pilot';
+  $('plan').textContent=label(billing.plan_code||'pilot');
   $('price').textContent=money(billing.monthly_price_cents,billing.currency);
-  $('status').textContent=billing.status||'trialing';
+  $('status').textContent=label(billing.status||'trialing');
   $('status').className='badge '+String(billing.status||'');
   $('access').textContent=billing.access_enabled?'Enabled':'Blocked';
+
+  $('crewLimit').textContent=billing.included_crew_limit==null?'Custom / Pilot':String(billing.included_crew_limit);
+  $('crewPeak').textContent=String(Number(billing.rolling_peak_billable_crews)||0);
+  $('crewDays').textContent=(Number(billing.rolling_overage_crew_days)||0)+' / 6';
+  $('crewStatus').textContent=label(billing.crew_overage_status||'within_plan');
+  $('crewStatus').className='badge '+String(billing.crew_overage_status||'within_plan');
+  const crewStatus=String(billing.crew_overage_status||'within_plan');
+  if(crewStatus==='grace') $('crewHelp').textContent='Temporary extra crews are still inside the rolling six crew-day allowance. Removing crews does not erase crew-days already used in the last 30 days.';
+  else if(crewStatus==='upgrade_required') $('crewHelp').textContent='The rolling six crew-day allowance has been exceeded. Recommended plan: '+label(billing.recommended_plan_code)+'.';
+  else if(crewStatus==='custom_quote_required') $('crewHelp').textContent='Usage requires a Large Enterprise custom quote because the 30-day peak exceeded 40 billable crews.';
+  else $('crewHelp').textContent='Crew tier is within plan. Storm Mode crews designated by the company are excluded from normal billable crew usage while Storm Mode is active.';
 
   const period=[];
   if(billing.trial_ends_at) period.push('Trial ends '+date(billing.trial_ends_at));
