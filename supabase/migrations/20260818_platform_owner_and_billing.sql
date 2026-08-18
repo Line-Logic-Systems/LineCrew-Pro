@@ -8,6 +8,7 @@ create table if not exists public.platform_owners (
 
 alter table public.platform_owners enable row level security;
 revoke all on public.platform_owners from anon, authenticated;
+grant all on public.platform_owners to service_role;
 
 create table if not exists public.company_subscriptions (
   id uuid primary key default gen_random_uuid(),
@@ -17,13 +18,17 @@ create table if not exists public.company_subscriptions (
   currency text not null default 'usd',
   status text not null default 'trialing' check (status in ('trialing','active','past_due','paused','canceled','incomplete')),
   access_enabled boolean not null default true,
+  access_override boolean null,
   trial_ends_at timestamptz null,
   current_period_start timestamptz null,
   current_period_end timestamptz null,
+  past_due_since timestamptz null,
   cancel_at_period_end boolean not null default false,
   stripe_customer_id text null unique,
   stripe_subscription_id text null unique,
   stripe_price_id text null,
+  billing_interval text null check (billing_interval is null or billing_interval in ('day','week','month','year')),
+  billing_interval_count integer null check (billing_interval_count is null or billing_interval_count > 0),
   provider text not null default 'manual' check (provider in ('manual','stripe')),
   notes text null,
   created_at timestamptz not null default now(),
@@ -32,6 +37,7 @@ create table if not exists public.company_subscriptions (
 
 alter table public.company_subscriptions enable row level security;
 revoke all on public.company_subscriptions from anon, authenticated;
+grant all on public.company_subscriptions to service_role;
 
 create table if not exists public.billing_events (
   id uuid primary key default gen_random_uuid(),
@@ -47,6 +53,32 @@ create table if not exists public.billing_events (
 
 alter table public.billing_events enable row level security;
 revoke all on public.billing_events from anon, authenticated;
+grant all on public.billing_events to service_role;
+
+create table if not exists public.platform_owner_audit_events (
+  id uuid primary key default gen_random_uuid(),
+  actor_user_id uuid null references auth.users(id) on delete set null,
+  company_id uuid null references public.companies(id) on delete set null,
+  action text not null,
+  before_state jsonb null,
+  after_state jsonb null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists platform_owner_audit_company_created_idx
+  on public.platform_owner_audit_events(company_id, created_at desc);
+
+alter table public.platform_owner_audit_events enable row level security;
+revoke all on public.platform_owner_audit_events from anon, authenticated;
+grant all on public.platform_owner_audit_events to service_role;
+
+-- Preserve every existing contractor's access when billing is first installed.
+insert into public.company_subscriptions (
+  company_id, plan_code, monthly_price_cents, status, access_enabled, provider
+)
+select c.id, 'pilot', 0, 'trialing', true, 'manual'
+from public.companies c
+on conflict (company_id) do nothing;
 
 create or replace function public.is_platform_owner()
 returns boolean
@@ -69,6 +101,8 @@ create or replace function public.platform_owner_company_dashboard()
 returns table (
   company_id uuid,
   company_name text,
+  contact_email text,
+  company_created_at timestamptz,
   active_users bigint,
   active_jobs bigint,
   total_reports bigint,
@@ -77,11 +111,14 @@ returns table (
   monthly_price_cents integer,
   subscription_status text,
   access_enabled boolean,
+  access_override boolean,
   trial_ends_at timestamptz,
   current_period_end timestamptz,
+  cancel_at_period_end boolean,
   provider text,
-  stripe_customer_id text,
-  stripe_subscription_id text
+  stripe_customer_linked boolean,
+  stripe_subscription_linked boolean,
+  internal_notes text
 )
 language plpgsql
 security definer
@@ -96,19 +133,24 @@ begin
   select
     c.id,
     c.name,
+    c.contact_email,
+    c.created_at,
     (select count(*) from public.profiles p where p.company_id = c.id and coalesce(p.active, true) = true),
     (select count(*) from public.jobs j where j.company_id = c.id and coalesce(j.active, true) = true),
     (select count(*) from public.daily_reports dr where dr.company_id = c.id),
     (select max(dr.created_at) from public.daily_reports dr where dr.company_id = c.id),
-    coalesce(cs.plan_code, 'unconfigured'),
+    coalesce(cs.plan_code, 'pilot'),
     coalesce(cs.monthly_price_cents, 0),
-    coalesce(cs.status, 'incomplete'),
-    coalesce(cs.access_enabled, false),
+    coalesce(cs.status, 'trialing'),
+    coalesce(cs.access_override, cs.access_enabled, true),
+    cs.access_override,
     cs.trial_ends_at,
     cs.current_period_end,
+    coalesce(cs.cancel_at_period_end, false),
     coalesce(cs.provider, 'manual'),
-    cs.stripe_customer_id,
-    cs.stripe_subscription_id
+    cs.stripe_customer_id is not null,
+    cs.stripe_subscription_id is not null,
+    cs.notes
   from public.companies c
   left join public.company_subscriptions cs on cs.company_id = c.id
   order by lower(c.name), c.created_at;
@@ -123,7 +165,7 @@ create or replace function public.platform_owner_set_subscription(
   p_plan_code text,
   p_monthly_price_cents integer,
   p_status text,
-  p_access_enabled boolean,
+  p_access_override boolean default null,
   p_trial_ends_at timestamptz default null,
   p_notes text default null
 )
@@ -134,6 +176,9 @@ set search_path = public
 as $$
 declare
   result public.company_subscriptions;
+  v_before jsonb;
+  v_provider text;
+  v_base_access boolean;
 begin
   if not public.is_platform_owner() then
     raise exception 'Platform owner access required';
@@ -151,22 +196,58 @@ begin
     raise exception 'Company not found';
   end if;
 
-  insert into public.company_subscriptions (
-    company_id, plan_code, monthly_price_cents, status, access_enabled,
-    trial_ends_at, notes, provider, updated_at
+  select to_jsonb(cs), cs.provider
+  into v_before, v_provider
+  from public.company_subscriptions cs
+  where cs.company_id = p_company_id;
+
+  v_base_access := p_status in ('trialing','active','past_due');
+
+  if v_provider = 'stripe' then
+    -- Stripe remains the source of truth for price/status/period data. Platform
+    -- owners may still change the internal plan label, notes, or force an access
+    -- override without a later webhook silently undoing that support decision.
+    update public.company_subscriptions cs
+    set
+      plan_code = coalesce(nullif(trim(p_plan_code), ''), cs.plan_code),
+      access_override = p_access_override,
+      notes = p_notes,
+      updated_at = now()
+    where cs.company_id = p_company_id
+    returning cs.* into result;
+  else
+    insert into public.company_subscriptions (
+      company_id, plan_code, monthly_price_cents, status, access_enabled,
+      access_override, trial_ends_at, notes, provider, updated_at
+    ) values (
+      p_company_id,
+      coalesce(nullif(trim(p_plan_code), ''), 'custom'),
+      p_monthly_price_cents,
+      p_status,
+      v_base_access,
+      p_access_override,
+      p_trial_ends_at,
+      p_notes,
+      'manual',
+      now()
+    )
+    on conflict (company_id) do update set
+      plan_code = excluded.plan_code,
+      monthly_price_cents = excluded.monthly_price_cents,
+      status = excluded.status,
+      access_enabled = excluded.access_enabled,
+      access_override = excluded.access_override,
+      trial_ends_at = excluded.trial_ends_at,
+      notes = excluded.notes,
+      updated_at = now()
+    returning * into result;
+  end if;
+
+  insert into public.platform_owner_audit_events (
+    actor_user_id, company_id, action, before_state, after_state
   ) values (
-    p_company_id, coalesce(nullif(trim(p_plan_code), ''), 'custom'), p_monthly_price_cents,
-    p_status, p_access_enabled, p_trial_ends_at, p_notes, 'manual', now()
-  )
-  on conflict (company_id) do update set
-    plan_code = excluded.plan_code,
-    monthly_price_cents = excluded.monthly_price_cents,
-    status = excluded.status,
-    access_enabled = excluded.access_enabled,
-    trial_ends_at = excluded.trial_ends_at,
-    notes = excluded.notes,
-    updated_at = now()
-  returning * into result;
+    auth.uid(), p_company_id, 'subscription_settings_updated', v_before, to_jsonb(result)
+  );
 
   return result;
 end;
@@ -205,7 +286,7 @@ begin
     v_company_id,
     coalesce(cs.plan_code, 'pilot'),
     coalesce(cs.status, 'trialing'),
-    coalesce(cs.access_enabled, true),
+    coalesce(cs.access_override, cs.access_enabled, true),
     cs.trial_ends_at,
     cs.current_period_end
   from (select 1) x
@@ -216,51 +297,58 @@ $$;
 revoke all on function public.my_company_subscription_access() from public, anon;
 grant execute on function public.my_company_subscription_access() to authenticated;
 
-create or replace function public.billing_service_upsert_subscription(
-  p_company_id uuid,
-  p_stripe_customer_id text,
-  p_stripe_subscription_id text,
-  p_stripe_price_id text,
-  p_status text,
-  p_current_period_start timestamptz,
-  p_current_period_end timestamptz,
-  p_cancel_at_period_end boolean,
-  p_access_enabled boolean
+create or replace function public.my_company_billing_summary()
+returns table (
+  plan_code text,
+  monthly_price_cents integer,
+  currency text,
+  status text,
+  access_enabled boolean,
+  provider text,
+  trial_ends_at timestamptz,
+  current_period_end timestamptz,
+  cancel_at_period_end boolean,
+  stripe_customer_linked boolean,
+  stripe_subscription_linked boolean
 )
-returns void
 language plpgsql
 security definer
 set search_path = public
+stable
 as $$
+declare
+  v_company_id uuid;
+  v_role text;
+  v_active boolean;
 begin
-  if current_setting('request.jwt.claim.role', true) is distinct from 'service_role' then
-    raise exception 'Service role required';
+  select p.company_id, lower(coalesce(p.role,'')), coalesce(p.active, true)
+  into v_company_id, v_role, v_active
+  from public.profiles p
+  where p.id = auth.uid();
+
+  if v_company_id is null or not v_active or v_role <> 'admin' then
+    raise exception 'Company Admin access required';
   end if;
 
-  insert into public.company_subscriptions (
-    company_id, provider, stripe_customer_id, stripe_subscription_id, stripe_price_id,
-    status, current_period_start, current_period_end, cancel_at_period_end,
-    access_enabled, updated_at
-  ) values (
-    p_company_id, 'stripe', p_stripe_customer_id, p_stripe_subscription_id, p_stripe_price_id,
-    p_status, p_current_period_start, p_current_period_end, p_cancel_at_period_end,
-    p_access_enabled, now()
-  )
-  on conflict (company_id) do update set
-    provider = 'stripe',
-    stripe_customer_id = excluded.stripe_customer_id,
-    stripe_subscription_id = excluded.stripe_subscription_id,
-    stripe_price_id = excluded.stripe_price_id,
-    status = excluded.status,
-    current_period_start = excluded.current_period_start,
-    current_period_end = excluded.current_period_end,
-    cancel_at_period_end = excluded.cancel_at_period_end,
-    access_enabled = excluded.access_enabled,
-    updated_at = now();
+  return query
+  select
+    coalesce(cs.plan_code, 'pilot'),
+    coalesce(cs.monthly_price_cents, 0),
+    coalesce(cs.currency, 'usd'),
+    coalesce(cs.status, 'trialing'),
+    coalesce(cs.access_override, cs.access_enabled, true),
+    coalesce(cs.provider, 'manual'),
+    cs.trial_ends_at,
+    cs.current_period_end,
+    coalesce(cs.cancel_at_period_end, false),
+    cs.stripe_customer_id is not null,
+    cs.stripe_subscription_id is not null
+  from (select 1) x
+  left join public.company_subscriptions cs on cs.company_id = v_company_id;
 end;
 $$;
 
-revoke all on function public.billing_service_upsert_subscription(uuid,text,text,text,text,timestamptz,timestamptz,boolean,boolean) from public, anon, authenticated;
-grant execute on function public.billing_service_upsert_subscription(uuid,text,text,text,text,timestamptz,timestamptz,boolean,boolean) to service_role;
+revoke all on function public.my_company_billing_summary() from public, anon;
+grant execute on function public.my_company_billing_summary() to authenticated;
 
 commit;
