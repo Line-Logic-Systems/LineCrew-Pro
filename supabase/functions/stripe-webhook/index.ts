@@ -67,7 +67,10 @@ function normalizedMonthlyAmount(unitAmount: number, interval: string | null, in
 Deno.serve(async request => {
   if (request.method !== "POST") return json({ error: "POST required." }, 405);
 
-  let service: ReturnType<typeof createClient> | null = null;
+  // No generated Database type is checked into this repository yet. Keeping
+  // this one catch-scope handle untyped avoids falsely narrowing every table
+  // mutation to `never` while Deno still type-checks all surrounding logic.
+  let service: any = null;
   let eventId: string | null = null;
 
   try {
@@ -137,10 +140,13 @@ Deno.serve(async request => {
           .maybeSingle();
         if (lookupError) throw lookupError;
 
+        const subscriptionId = typeof object.subscription === "string"
+          ? object.subscription
+          : object.subscription?.id || null;
         const link = {
           provider: "stripe",
           stripe_customer_id: customerId,
-          stripe_subscription_id: typeof object.subscription === "string" ? object.subscription : null,
+          stripe_subscription_id: subscriptionId,
           ...(planCode ? { plan_code: planCode } : {}),
           updated_at: new Date().toISOString(),
         };
