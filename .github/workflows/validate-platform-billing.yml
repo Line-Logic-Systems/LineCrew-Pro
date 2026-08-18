@@ -15,7 +15,9 @@ on:
       - 'supabase/functions/create-billing-portal/**'
       - 'supabase/functions/stripe-webhook/**'
       - 'scripts/validate-platform-billing.mjs'
+      - 'scripts/test-platform-billing-isolation.mjs'
       - '.github/workflows/validate-platform-billing.yml'
+      - '.github/workflows/test-platform-billing-isolation.yml'
 
 jobs:
   validate:
@@ -29,7 +31,9 @@ jobs:
         with:
           deno-version: v2.x
       - name: Validate platform billing foundation
-        run: node scripts/validate-platform-billing.mjs
+        run: |
+          node scripts/validate-platform-billing.mjs
+          node --check scripts/test-platform-billing-isolation.mjs
       - name: Type-check Stripe billing Edge Functions
         run: |
           deno check supabase/functions/create-billing-checkout/index.ts
