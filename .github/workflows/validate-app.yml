@@ -29,3 +29,6 @@ jobs:
 
       - name: Validate application
         run: node scripts/validate-app.mjs
+
+      - name: Audit Supabase migration history
+        run: node scripts/audit-supabase-migrations.mjs
