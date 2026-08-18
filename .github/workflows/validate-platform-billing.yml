@@ -16,6 +16,7 @@ on:
       - 'supabase/functions/create-billing-checkout/**'
       - 'supabase/functions/create-billing-portal/**'
       - 'supabase/functions/stripe-webhook/**'
+      - 'supabase/functions/capture-crew-usage/**'
       - 'scripts/validate-platform-billing.mjs'
       - 'scripts/test-platform-billing-isolation.mjs'
       - '.github/workflows/validate-platform-billing.yml'
@@ -36,8 +37,9 @@ jobs:
         run: |
           node scripts/validate-platform-billing.mjs
           node --check scripts/test-platform-billing-isolation.mjs
-      - name: Type-check Stripe billing Edge Functions
+      - name: Type-check billing Edge Functions
         run: |
           deno check supabase/functions/create-billing-checkout/index.ts
           deno check supabase/functions/create-billing-portal/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
+          deno check supabase/functions/capture-crew-usage/index.ts
