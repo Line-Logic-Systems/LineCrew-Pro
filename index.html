@@ -5907,6 +5907,14 @@ function escapeHtml(value){
 
 const assistantBuiltInHelp = [
   {
+    terms:['add admin','more admins','new admin','promote admin','make admin'],
+    answer:'Admin steps: 1. Open Team. 2. If the person has not joined, copy the Company Code and have them create an account and join; new members begin as Foremen. 3. Refresh Team. 4. Find the member and change Role to Admin. 5. Choose Save Role. 6. Have the new Admin refresh or sign out and back in. Only promote trusted users because Admins can access actual pricing and company controls, and always keep at least one Admin.'
+  },
+  {
+    terms:['promote foreman','make general foreman','promote to general','change role','save role'],
+    answer:'Admin steps: 1. Open Team. 2. Find the Foreman. 3. Change the Role dropdown to General Foreman. 4. Choose Save Role. 5. Choose Refresh Team and confirm the new role. The promoted user may need to refresh or sign out and back in before GF permissions appear.'
+  },
+  {
     terms:['price book','pricing','units','import price'],
     answer:'To import pricing: open Price Books, open the correct contract Price Book, choose Import CSV / Excel, select the worksheet, map Unit Code, Description and price columns, preview the rows, then confirm. Duplicate the Price Book as a new version before loading revised utility pricing so history is preserved.'
   },
@@ -5928,7 +5936,43 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['team','foreman','general foreman','role','invite'],
-    answer:'Open Team, copy the company code and give it only to approved workers. New members join as Foremen. An Admin may promote them to General Foreman. Keep at least one Admin assigned at all times.'
+    answer:'Open Team. Give the Company Code only to approved workers; new members join as Foremen. To change access, find the member, choose Foreman, General Foreman or Admin in the Role dropdown, then choose Save Role. Refresh Team afterward. Keep at least one Admin and promote only trusted people to Admin.'
+  },
+  {
+    terms:['jsa','job safety','morning safety','safety briefing','crew signature'],
+    answer:'Morning JSA is separate from the Daily Report. The Foreman opens Safety / Morning JSA before work, selects the job and date, completes crew, weather, work plan, hazards, controls, PPE, emergency plan, equipment and notes, records crew signatures or acknowledgments, checks the Foreman acknowledgment and saves. Follow the contractor safety program and onsite competent-person direction.'
+  },
+  {
+    terms:['storm mode','storm event','storm crew','storm report'],
+    answer:'An Admin creates or activates a storm event and selects the participating crews. New reports from those crews are tagged automatically; all other crews remain in normal mode. Use storm filters for reporting and deactivate the event when storm operations end. Storm mode organizes records and does not automatically change pricing or payroll.'
+  },
+  {
+    terms:['create daily','enter daily','add daily','save units','manage units','submit report'],
+    answer:'Foreman workflow: Production > Create Daily Report; select job/date and enter crew, hours, weather/delay and notes; save the draft; choose Manage Units; enter pole/location, search and select the contract unit, choose Install or Remove and quantity on as many lines as needed; Save All Units; choose Done Adding Units; review attachments and details; then Submit Report.'
+  },
+  {
+    terms:['adjustment','adjusted price','field value','foreman price','percentage'],
+    answer:'An Admin edits the Contract and sets the Foreman field-value adjustment percentage. Foremen see the permitted field value; Admins and General Foremen can see actual and adjusted values when both exist. If no adjustment is set, the permitted value follows the actual price. Verify the percentage and contract before field rollout.'
+  },
+  {
+    terms:['job progress','percentage complete','completion','authorized value','remaining value'],
+    answer:'Open Jobs to view Active Job Progress. Authorized value comes from imported utility-package units. Reported completion reflects eligible submitted production; Approved completion reflects approved production. Select the job to review packages, work points and exception counts. A job without a packet may show Pending Packet and no authorized total until the packet is imported.'
+  },
+  {
+    terms:['attachment','photo','print','pdf','save pdf'],
+    answer:'Open the Daily Report and use Attachments to add supporting files. Use Print / Save PDF for a printable report copy. Review the report, units and attachments before approval; stored files and report records remain scoped to the signed-in contractor company.'
+  },
+  {
+    terms:['export','csv','reporting','filter reports','production report'],
+    answer:'Open Production and choose Show Filters. Filter by status, dates, job, Foreman, exception/completion state, crew or storm context when available. Production Reporting recalculates for those results. Choose Export Filtered CSV to download the matching report summary. Price Books and setup lists have their own CSV exports.'
+  },
+  {
+    terms:['company settings','logo','brand color','time zone','company name'],
+    answer:'Admin steps: open Admin Controls > Company Settings, enter the display name, time zone, email, phone, logo image URL and brand color, then choose Save Company Settings. Confirm the branding and company details on the dashboard and printed reports.'
+  },
+  {
+    terms:['delete job','cannot delete','foreign key','archive'],
+    answer:'Commercial history should normally be closed or archived, not deleted. A job with Daily Reports, packages or other dependent records cannot be deleted until those test dependencies are deliberately removed. For real work, close the Job and archive completed reports so audit history is preserved.'
   },
   {
     terms:['password','forgot','login','sign in'],
@@ -5963,7 +6007,7 @@ function findBuiltInAssistantAnswer(question){
     }
   });
   return best?.answer ||
-    'I can help with Price Books, utility job packets, daily reports, approvals, redlines, pending packets, team roles and account access. Try asking what you are trying to complete or what message you see.';
+    'I can guide an Admin through company setup, Team roles, Customers, Contracts, Price Books, Jobs, utility packets, Morning JSA, Daily Reports, approvals, redlines, Pending Packets, Storm Mode, reporting, exports and account access. Tell me the role, screen and task or copy the exact message you see.';
 }
 
 function setAssistantOpen(open){

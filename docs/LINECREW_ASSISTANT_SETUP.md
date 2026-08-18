@@ -2,7 +2,7 @@
 
 ## What works immediately
 
-The Admin-only assistant includes built-in help for Price Books, utility job packets, daily reports, approvals, redlines, pending packets, team roles, contracts and password recovery. If the AI service is not deployed or is unavailable, these answers remain available.
+The Admin-only assistant includes built-in help for company setup, Team roles, Customers, Contracts, Price Books, Jobs, utility job packets, Morning JSA, daily reports, approvals, redlines, pending packets, Storm Mode, reporting, exports and password recovery. It can explain Foreman, General Foreman and Admin workflows to an Admin. If the AI service is not deployed or is unavailable, core answers remain available.
 
 ## Enable live AI answers
 
@@ -36,8 +36,12 @@ Supabase supplies `SUPABASE_URL` and `SUPABASE_ANON_KEY` to hosted Edge Function
 3. Ask: “How do I import a Price Book?”
 4. Ask: “Why would a report show Pending Packet?”
 5. Ask: “What should I check before approving a redline?”
-6. Temporarily disable the Edge Function and confirm built-in answers still appear.
-7. Re-enable the function and confirm live answers return.
+6. Ask: “How do I promote a Foreman to General Foreman?”
+7. Ask: “How can I add another Admin?”
+8. Ask: “How does a Foreman complete the Morning JSA?”
+9. Ask: “How do I assign only some crews to Storm Mode?”
+10. Temporarily disable the Edge Function and confirm built-in answers still appear for the role questions.
+11. Re-enable the function and confirm live answers return.
 
 ## Real-world use
 
