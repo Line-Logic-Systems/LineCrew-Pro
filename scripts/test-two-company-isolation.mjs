@@ -112,14 +112,18 @@ async function userRest(token, table, query = "", options = {}) {
   });
 }
 
+function selectColumnsFor(table) {
+  return table === "companies" ? "id" : "id,company_id";
+}
+
 async function expectOwnRow(token, table, id) {
-  const result = await userRest(token, table, `id=eq.${id}&select=id,company_id`);
+  const result = await userRest(token, table, `id=eq.${id}&select=${selectColumnsFor(table)}`);
   assert(result.ok, `Same-company ${table} read failed: ${JSON.stringify(result.data)}`);
   assert(result.data.length === 1 && result.data[0].id === id, `Same-company ${table} row was not visible.`);
 }
 
 async function expectForeignHidden(token, table, id) {
-  const result = await userRest(token, table, `id=eq.${id}&select=id,company_id`);
+  const result = await userRest(token, table, `id=eq.${id}&select=${selectColumnsFor(table)}`);
   assert(result.ok, `Cross-company ${table} read returned an unexpected API error: ${JSON.stringify(result.data)}`);
   assert(Array.isArray(result.data) && result.data.length === 0, `SECURITY FAILURE: cross-company ${table} row was visible.`);
 }
