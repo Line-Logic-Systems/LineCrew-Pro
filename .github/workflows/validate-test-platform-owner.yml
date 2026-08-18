@@ -1,0 +1,31 @@
+name: Validate test platform owner tooling
+
+on:
+  push:
+    branches:
+      - feature/platform-owner-billing
+    paths:
+      - 'scripts/manage-test-platform-owner.mjs'
+      - 'scripts/validate-test-platform-owner.mjs'
+      - '.github/workflows/manage-test-platform-owner.yml'
+      - '.github/workflows/validate-test-platform-owner.yml'
+  pull_request:
+    paths:
+      - 'scripts/manage-test-platform-owner.mjs'
+      - 'scripts/validate-test-platform-owner.mjs'
+      - '.github/workflows/manage-test-platform-owner.yml'
+      - '.github/workflows/validate-test-platform-owner.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate guarded test owner manager
+        run: node --experimental-vm-modules scripts/validate-test-platform-owner.mjs
