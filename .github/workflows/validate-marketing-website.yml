@@ -1,0 +1,30 @@
+name: Validate marketing website
+
+on:
+  push:
+    branches:
+      - feature/marketing-website
+      - chatgpt-dev
+    paths:
+      - 'website/**'
+      - 'scripts/validate-marketing-website.mjs'
+      - '.github/workflows/validate-marketing-website.yml'
+  pull_request:
+    paths:
+      - 'website/**'
+      - 'scripts/validate-marketing-website.mjs'
+      - '.github/workflows/validate-marketing-website.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate public marketing site
+        run: node scripts/validate-marketing-website.mjs
