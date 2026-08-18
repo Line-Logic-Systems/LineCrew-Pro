@@ -1,0 +1,132 @@
+name: Capture Supabase schema baseline
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - chatgpt-dev
+    paths:
+      - .github/workflows/capture-supabase-baseline.yml
+      - scripts/validate-supabase-baseline.mjs
+      - supabase/baseline/README.md
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: capture-supabase-baseline
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Export and verify schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASELINE_PATH: supabase/baseline/00000000000000_public_schema.sql
+      TARGET_BRANCH: chatgpt-dev
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt-dev
+          fetch-depth: 0
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.84.2
+
+      - name: Verify protected database connection is configured
+        shell: bash
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Add the SUPABASE_DB_URL repository Actions secret before running this workflow."
+            exit 1
+          fi
+
+      - name: Export public schema only
+        shell: bash
+        run: |
+          mkdir -p "$(dirname "$BASELINE_PATH")"
+          supabase db dump \
+            --db-url "$SUPABASE_DB_URL" \
+            --schema public \
+            --file "$BASELINE_PATH"
+
+      - name: Validate baseline safety and completeness
+        run: node scripts/validate-supabase-baseline.mjs "$BASELINE_PATH"
+
+      - name: Record capture metadata
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const path = process.env.BASELINE_PATH;
+          const contents = fs.readFileSync(path);
+          const manifest = {
+            captured_at_utc: new Date().toISOString(),
+            source: 'Supabase production public schema',
+            contains_row_data: false,
+            sha256: crypto.createHash('sha256').update(contents).digest('hex'),
+            generated_by: `GitHub Actions run ${process.env.GITHUB_RUN_ID}`
+          };
+          fs.writeFileSync('supabase/baseline/manifest.json', `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
+
+      - name: Upload verified baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-supabase-public-schema
+          path: |
+            ${{ env.BASELINE_PATH }}
+            supabase/baseline/manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Commit baseline on a review branch
+        id: commit
+        shell: bash
+        run: |
+          branch="automation/supabase-baseline-${GITHUB_RUN_ID}"
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$BASELINE_PATH" supabase/baseline/manifest.json
+          git commit -m "Capture verified Supabase schema baseline"
+          git push --set-upstream origin "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Open baseline review pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_BRANCH: ${{ steps.commit.outputs.branch }}
+        shell: bash
+        run: |
+          body_file="$(mktemp)"
+          cat > "$body_file" <<'BODY'
+          ## Supabase schema baseline
+
+          This pull request was generated from the live Supabase **public schema only**.
+
+          Safety checks performed automatically:
+          - No table row data was requested or committed.
+          - The core LineCrew Pro tables are present.
+          - Row Level Security and tenant policies are present.
+          - Database functions required by the app are present.
+
+          Review the generated SQL and manifest before merging. Do not merge directly to `main`.
+          BODY
+
+          if ! gh pr create \
+            --draft \
+            --base "$TARGET_BRANCH" \
+            --head "$HEAD_BRANCH" \
+            --title "Capture verified Supabase schema baseline" \
+            --body-file "$body_file"; then
+            echo "::warning::The verified baseline branch was pushed, but GitHub could not open the pull request automatically. Open a PR from $HEAD_BRANCH into $TARGET_BRANCH."
+          fi
