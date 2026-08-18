@@ -178,6 +178,8 @@ declare
   result public.company_subscriptions;
   v_before jsonb;
   v_provider text;
+  v_stripe_subscription_id text;
+  v_existing_status text;
   v_base_access boolean;
 begin
   if not public.is_platform_owner() then
@@ -196,17 +198,20 @@ begin
     raise exception 'Company not found';
   end if;
 
-  select to_jsonb(cs), cs.provider
-  into v_before, v_provider
+  select to_jsonb(cs), cs.provider, cs.stripe_subscription_id, cs.status
+  into v_before, v_provider, v_stripe_subscription_id, v_existing_status
   from public.company_subscriptions cs
   where cs.company_id = p_company_id;
 
   v_base_access := p_status in ('trialing','active','past_due');
 
-  if v_provider = 'stripe' then
-    -- Stripe remains the source of truth for price/status/period data. Platform
-    -- owners may still change the internal plan label, notes, or force an access
-    -- override without a later webhook silently undoing that support decision.
+  if v_provider = 'stripe'
+     and v_stripe_subscription_id is not null
+     and coalesce(v_existing_status, '') <> 'canceled' then
+    -- Stripe remains the source of truth for a linked live subscription's
+    -- price/status/period data. Platform owners may still change the internal
+    -- plan label, notes, or force an access override without a later webhook
+    -- silently undoing that support decision.
     update public.company_subscriptions cs
     set
       plan_code = coalesce(nullif(trim(p_plan_code), ''), cs.plan_code),
@@ -216,6 +221,9 @@ begin
     where cs.company_id = p_company_id
     returning cs.* into result;
   else
+    -- Manual mode is also the safe recovery path after an abandoned Checkout
+    -- (Stripe customer only) or a fully canceled Stripe subscription. Existing
+    -- Stripe identifiers are preserved so a later Checkout can reuse/link them.
     insert into public.company_subscriptions (
       company_id, plan_code, monthly_price_cents, status, access_enabled,
       access_override, trial_ends_at, notes, provider, updated_at
@@ -239,6 +247,7 @@ begin
       access_override = excluded.access_override,
       trial_ends_at = excluded.trial_ends_at,
       notes = excluded.notes,
+      provider = 'manual',
       updated_at = now()
     returning * into result;
   end if;
