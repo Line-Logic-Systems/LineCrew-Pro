@@ -55,6 +55,7 @@ as $$
     end
     from public.profiles p
     where p.id = auth.uid()
+      and p.active is true
   ), false);
 $$;
 
@@ -73,8 +74,8 @@ declare
   owner_count integer;
 begin
   select * into actor from public.profiles where id = auth.uid();
-  if actor.id is null or lower(actor.role) <> 'admin' then
-    raise exception 'Current Admin access required';
+  if actor.id is null or actor.active is not true or lower(actor.role) <> 'admin' then
+    raise exception 'Current active Admin access required';
   end if;
 
   select count(*) into owner_count
@@ -116,8 +117,8 @@ begin
   end if;
 
   select * into actor from public.profiles where id = auth.uid();
-  if actor.id is null or lower(actor.role) not in ('owner','admin','superintendent') then
-    raise exception 'Company management access required';
+  if actor.id is null or actor.active is not true or lower(actor.role) not in ('owner','admin','superintendent') then
+    raise exception 'Active company management access required';
   end if;
 
   if lower(actor.role) = 'superintendent'
@@ -223,8 +224,8 @@ declare
   ];
 begin
   select * into actor from public.profiles where id = auth.uid();
-  if actor.id is null or lower(actor.role) not in ('owner','admin') then
-    raise exception 'Admin or Owner access required';
+  if actor.id is null or actor.active is not true or lower(actor.role) not in ('owner','admin') then
+    raise exception 'Active Admin or Owner access required';
   end if;
 
   select * into target from public.profiles where id = target_user_id;
