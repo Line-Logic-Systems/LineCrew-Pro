@@ -6,7 +6,7 @@ const read=f=>fs.readFileSync(f,'utf8');
 const html=read('website/index.html');
 const signup=read('website/signup.html');
 const styles=read('website/styles.css');
-for(const marker of ['Daily Production','JSA & Safety','Job Packets','Storm Mode','$499','$749','$1,199','$1,799','Request a Demo','BUILT BY LINEMEN. FOR LINEMEN.']){if(!html.includes(marker))throw new Error(`Homepage missing ${marker}`)}
+for(const marker of ['Daily Production','JSA &amp; Safety','Job Packets','Storm Mode','$499','$749','$1,199','$1,799','Request a Demo','BUILT BY LINEMEN. FOR LINEMEN.']){if(!html.includes(marker))throw new Error(`Homepage missing ${marker}`)}
 if(!html.includes('https://app.linecrewpro.com/'))throw new Error('Homepage App Login must point to app.linecrewpro.com');
 if(!styles.includes("../hero-clean.jpg"))throw new Error('Approved hero image is not wired into website CSS');
 if(!signup.includes('Continue to secure checkout')||!signup.includes('disabled'))throw new Error('Signup preview must keep paid checkout disabled.');
