@@ -24,20 +24,26 @@ jobs:
           p = Path('index.html')
           text = p.read_text()
           tag = '<script src="expanded-jsa.js?v=20260819"></script>'
-          if tag not in text:
-              if '</body>' not in text:
-                  raise SystemExit('index.html is missing </body>')
-              text = text.replace('</body>', f'  {tag}\n</body>', 1)
-              p.write_text(text)
+          injected = f'  {tag}\n'
+          # Remove any prior injected copy, including one accidentally placed
+          # inside a printable HTML string, then inject at the real final body tag.
+          text = text.replace(injected, '')
+          idx = text.rfind('</body>')
+          if idx < 0:
+              raise SystemExit('index.html is missing the final </body> tag')
+          text = text[:idx] + injected + text[idx:]
+          p.write_text(text)
           PY
+      - name: Verify JavaScript syntax
+        run: node --check expanded-jsa.js
       - name: Commit injected tag when needed
         run: |
           if git diff --quiet -- index.html; then
-            echo "Expanded JSA script tag already present."
+            echo "Expanded JSA script tag already present at the final body tag."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
-          git commit -m "Load expanded digital JSA UI"
+          git commit -m "Load expanded digital JSA UI at app entrypoint"
           git push origin HEAD:${GITHUB_REF_NAME}
