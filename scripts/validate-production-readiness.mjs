@@ -7,13 +7,21 @@ const mustExist = [
   'index.html',
   'vercel.json',
   'scripts/validate-app.mjs',
-  'supabase/functions/linecrew-assistant/index.ts'
+  'supabase/functions/linecrew-assistant/index.ts',
+  'supabase/migrations/20260818_owner_superintendent_roles.sql',
+  'supabase/migrations/20260818_owner_superintendent_team_access.sql',
+  'supabase/migrations/202608190100_owner_legacy_compatibility.sql',
+  'supabase/migrations/202608190200_superintendent_legacy_compatibility.sql'
 ];
 for (const file of mustExist) assert(fs.existsSync(file), `Missing ${file}`);
 
 const index = fs.readFileSync('index.html', 'utf8');
 const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
 const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts', 'utf8');
+const roleMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_roles.sql', 'utf8');
+const accessMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_team_access.sql', 'utf8');
+const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', 'utf8');
+const superintendentCompat = fs.readFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
@@ -28,14 +36,56 @@ const publicSecretPatterns = [
   ['Supabase service role JWT marker', /service[_-]?role[^\n]{0,80}eyJ/i],
   ['Private key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/]
 ];
-for (const [label, pattern] of publicSecretPatterns) {
-  assert(!pattern.test(index), `${label} appears in public index.html`);
-}
+for (const [label, pattern] of publicSecretPatterns) assert(!pattern.test(index), `${label} appears in public index.html`);
 
 assert(assistant.includes('client.auth.getUser()'), 'AI assistant must authenticate the caller.');
-assert(assistant.includes('String(profile.role).toLowerCase() !== "admin"'), 'AI assistant must enforce Admin-only access server-side.');
+assert(assistant.includes('.select("company_id, role, role_permissions")'), 'AI assistant must load role and permission overrides server-side.');
+assert(assistant.includes('role === "owner"'), 'Owner must be authorized for the company assistant.');
+assert(assistant.includes('role === "admin"'), 'Admin must be authorized for the company assistant.');
+assert(assistant.includes('role === "superintendent"'), 'Superintendent authorization must be evaluated server-side.');
+assert(assistant.includes('permissions.ai_assistant !== false'), 'Superintendent AI access must honor the ai_assistant permission override.');
 assert(assistant.includes('.eq("company_id", companyId)'), 'AI assistant company data queries must be tenant-scoped.');
 assert(!assistant.includes('Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")'), 'AI assistant should not use a service-role key for user-scoped reads.');
+
+for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
+assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');
+assert(roleMigration.includes('linecrew_claim_initial_owner'), 'Role migration must provide a safe initial Owner claim path.');
+assert(roleMigration.includes('linecrew_set_member_role'), 'Role migration must centralize role changes.');
+assert(roleMigration.includes('Only an Owner can manage Owner or Admin roles'), 'Admins must not be able to manage Owners or peer Admins.');
+assert(roleMigration.includes('Assign another Owner before removing the last Owner'), 'The last Owner must be protected from removal.');
+assert(roleMigration.includes('A Superintendent can manage General Foreman and Foreman roles only'), 'Superintendent delegated role management must stop above GF/Foreman.');
+assert(roleMigration.includes("role_permissions ->> 'role_management'"), 'Superintendent role-management capability must be enforced server-side.');
+assert(roleMigration.includes('linecrew_set_superintendent_permissions'), 'Superintendent permission overrides must be server-enforced.');
+assert(roleMigration.includes("jsonb_typeof(item.value) <> 'boolean'"), 'Superintendent overrides must accept boolean values only.');
+assert(roleMigration.includes('actor.active is not true'), 'Role-management RPCs must reject suspended leadership profiles.');
+assert(roleMigration.includes('and p.active is true'), 'Capability checks must reject suspended profiles.');
+
+assert(accessMigration.includes('set_company_member_active'), 'Team access changes need a secured hierarchy RPC.');
+assert(accessMigration.includes("target_role in ('owner','admin')"), 'Admins must not suspend Owners or peer Admins.');
+assert(accessMigration.includes("target_role not in ('foreman','gf')"), 'Superintendents must not suspend peers or higher roles.');
+assert(accessMigration.includes('Assign another active Owner before suspending the last Owner'), 'The final active Owner must be protected from suspension.');
+
+assert(ownerCompat.includes("'owner'"), 'Legacy secured RPCs must recognize Owner.');
+assert(superintendentCompat.includes('linecrew_has_capability'), 'Legacy Superintendent RPC compatibility must be capability-gated.');
+for (const cap of ['jobs','job_packages','production_review','reporting','storm_mode','safety_records','actual_pricing','price_books','company_settings','team_management']) {
+  assert(superintendentCompat.includes(`'${cap}'`), `Superintendent compatibility is missing ${cap}.`);
+}
+assert(superintendentCompat.includes("v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing')"), 'Actual pricing visibility must remain independently gated for Superintendents.');
+
+for (const marker of [
+  "['owner','admin'].includes(currentUserRole())",
+  "role === 'superintendent'",
+  "linecrew_set_member_role",
+  "linecrew_set_superintendent_permissions",
+  "linecrew_claim_initial_owner",
+  "userCanManageCustomersContracts()",
+  "userCanManagePriceBooks()",
+  "userCanManageJobPackages()",
+  "userCanReviewProduction()",
+  "userCanUseReporting()",
+  "userCanManageStormMode()",
+  "userCanUseAssistant()"
+]) assert(index.includes(marker), `Role-aware frontend marker missing: ${marker}`);
 
 if (failures.length) {
   console.error('Production readiness validation failed:');
@@ -44,7 +94,11 @@ if (failures.length) {
 }
 
 console.log('Production readiness validation passed.');
-console.log('- Vercel security headers present');
-console.log('- Public app shell contains no known server-side secret patterns');
-console.log('- Admin-only AI server authorization present');
-console.log('- AI company queries remain tenant-scoped');
+console.log('- Vercel security headers and secret checks passed');
+console.log('- Owner/Admin/permitted-Superintendent AI authorization present');
+console.log('- Owner/Admin/Superintendent hierarchy protections present');
+console.log('- Suspended leadership profiles cannot use role/capability management');
+console.log('- Legacy Owner compatibility present');
+console.log('- Capability-aware Superintendent legacy RPC compatibility present');
+console.log('- Actual pricing remains independently gated');
+console.log('- Team, job, package, reporting, storm and assistant UI capability wiring present');

@@ -29,3 +29,16 @@ jobs:
 
       - name: Validate application
         run: node scripts/validate-app.mjs
+
+      - name: Audit legacy role checks
+        run: |
+          node scripts/audit-role-checks.mjs
+          cat docs/ROLE_AUDIT.md
+
+      - name: Validate Superintendent compatibility generator
+        run: |
+          node scripts/generate-superintendent-compatibility.mjs
+          test -s supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
+          grep -q "linecrew_has_capability" supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
+          grep -q "superintendent" supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
+          head -n 40 supabase/migrations/202608190200_superintendent_legacy_compatibility.sql

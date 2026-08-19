@@ -1,0 +1,29 @@
+name: Harden Role Foundation
+
+on:
+  push:
+    branches:
+      - feature/owner-superintendent-roles
+    paths:
+      - scripts/harden-role-foundation.mjs
+      - .github/workflows/harden-role-foundation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/owner-superintendent-roles
+      - run: node scripts/harden-role-foundation.mjs
+      - name: Commit hardened migration
+        run: |
+          if git diff --quiet -- supabase/migrations/20260818_owner_superintendent_roles.sql; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/migrations/20260818_owner_superintendent_roles.sql
+          git commit -m "Require active profiles for role and permission management"
+          git push origin HEAD:feature/owner-superintendent-roles
