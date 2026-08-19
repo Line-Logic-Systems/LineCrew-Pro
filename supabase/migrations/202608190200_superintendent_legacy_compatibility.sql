@@ -1,6 +1,7 @@
 -- Generated capability-aware Superintendent compatibility layer.
 -- Applies after Owner/Superintendent foundation migrations.
 -- Existing Admin/Owner/GF/Foreman behavior is preserved; Superintendent access is gated by the named capability.
+-- Actual pricing remains separately controlled by actual_pricing.
 -- SQL-language helper functions without a PL/pgSQL BEGIN block are intentionally left unchanged.
 
 begin;
@@ -324,7 +325,8 @@ begin
 
   v_report_has_adjustment := coalesce(v_report_has_adjustment, false);
 
-  v_can_see_actual := v_role in ('admin', 'gf', 'owner', 'superintendent');
+  v_can_see_actual := v_role in ('admin', 'gf', 'owner') or
+    (v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing'));
 
   return query
   select
@@ -739,7 +741,7 @@ end;
 $$;
 
 -- Source: 20260815_secure_daily_unit_production.sql
--- Superintendent capability: production_review
+-- Superintendent capability: reporting
 create or replace function public.get_daily_report_value_summaries()
 returns table (
   report_id uuid,
@@ -764,10 +766,10 @@ begin
     select 1 from public.profiles p
     where p.id = auth.uid()
       and lower(coalesce(p.role,'')) = 'superintendent'
-  ) and not public.linecrew_has_capability('production_review') then
+  ) and not public.linecrew_has_capability('reporting') then
     raise exception using
       errcode = '42501',
-      message = 'This Superintendent does not have production review permission.';
+      message = 'This Superintendent does not have reporting permission.';
   end if;
   select p.company_id, lower(coalesce(p.role, '')), p.active
   into v_company_id, v_role, v_profile_active
@@ -781,7 +783,8 @@ begin
       message = 'An active Foreman, General Foreman or Admin profile is required.';
   end if;
 
-  v_can_see_actual := v_role in ('admin', 'gf', 'owner', 'superintendent');
+  v_can_see_actual := v_role in ('admin', 'gf', 'owner') or
+    (v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing'));
 
   return query
   select
@@ -983,7 +986,8 @@ begin
       message = 'Price Book was not found in your company.';
   end if;
 
-  v_can_see_actual := v_role in ('admin', 'gf', 'owner', 'superintendent');
+  v_can_see_actual := v_role in ('admin', 'gf', 'owner') or
+    (v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing'));
 
   return query
   select
@@ -1456,7 +1460,7 @@ end;
 $$;
 
 -- Source: 20260816_daily_report_review_queue.sql
--- Superintendent capability: production_review
+-- Superintendent capability: reporting
 create or replace function public.get_daily_report_authorization_summaries()
 returns table (
   report_id uuid,
@@ -1479,10 +1483,10 @@ begin
     select 1 from public.profiles p
     where p.id = auth.uid()
       and lower(coalesce(p.role,'')) = 'superintendent'
-  ) and not public.linecrew_has_capability('production_review') then
+  ) and not public.linecrew_has_capability('reporting') then
     raise exception using
       errcode = '42501',
-      message = 'This Superintendent does not have production review permission.';
+      message = 'This Superintendent does not have reporting permission.';
   end if;
   select profile.company_id, lower(coalesce(profile.role, '')), profile.active
   into v_company_id, v_role, v_active
@@ -1677,7 +1681,8 @@ begin
       message = 'Foremen can view unit production only on their own reports.';
   end if;
 
-  v_can_see_actual := v_role in ('admin', 'gf', 'owner', 'superintendent');
+  v_can_see_actual := v_role in ('admin', 'gf', 'owner') or
+    (v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing'));
 
   return query
   select
