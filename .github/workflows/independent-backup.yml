@@ -1,0 +1,44 @@
+name: Independent Disaster Backup
+
+on:
+  schedule:
+    - cron: '17 8 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Install backup client
+        run: npm install --no-save @supabase/supabase-js@2
+      - name: Export Supabase data and storage
+        env:
+          SUPABASE_URL: ${{ secrets.BACKUP_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/backup-supabase.mjs
+      - name: Archive full Git repository
+        run: |
+          git bundle create backup-output/linecrew-pro-repository.bundle --all
+          git log -1 --format='%H %cI' > backup-output/repository-head.txt
+      - name: Package backup
+        run: tar -czf linecrew-pro-backup.tgz backup-output
+      - name: Upload encrypted-platform artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linecrew-pro-disaster-backup-${{ github.run_number }}
+          path: linecrew-pro-backup.tgz
+          retention-days: 30
+          if-no-files-found: error
