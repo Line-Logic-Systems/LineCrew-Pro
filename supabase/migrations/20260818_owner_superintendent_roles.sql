@@ -1,12 +1,21 @@
 -- LineCrew Pro: Owner + configurable Superintendent role foundation
 -- Apply in Supabase before enabling the matching frontend controls.
--- Existing role codes are: foreman, gf, admin. New codes: superintendent, owner.
+-- Owner is company-level full access. Superintendent starts with broad operational
+-- access, but Admin/Owner may disable individual capabilities per user.
 
 alter table public.profiles
   add column if not exists role_permissions jsonb not null default '{}'::jsonb;
 
 comment on column public.profiles.role_permissions is
   'Per-user role overrides. Intended for superintendent access controls; keys are capability names and values are booleans.';
+
+-- Replace the legacy three-role constraint with the full company hierarchy.
+alter table public.profiles
+  drop constraint if exists profiles_role_supported;
+
+alter table public.profiles
+  add constraint profiles_role_supported
+  check (lower(role) in ('foreman', 'gf', 'superintendent', 'admin', 'owner'));
 
 create or replace function public.linecrew_validate_profile_role()
 returns trigger
@@ -83,8 +92,9 @@ $$;
 revoke all on function public.linecrew_claim_initial_owner() from public;
 grant execute on function public.linecrew_claim_initial_owner() to authenticated;
 
+-- Central role-management RPC.
 -- Owner may assign/remove Admins and manage all lower roles.
--- Admin may manage Superintendent/GF/Foreman but can never create, demote, or edit an Owner or another Admin.
+-- Admin may manage Superintendent/GF/Foreman but can never create, demote, or edit an Owner or Admin.
 create or replace function public.linecrew_set_member_role(
   target_user_id uuid,
   new_role text
@@ -145,6 +155,26 @@ $$;
 
 revoke all on function public.linecrew_set_member_role(uuid,text) from public;
 grant execute on function public.linecrew_set_member_role(uuid,text) to authenticated;
+
+-- Preserve the RPC name used by the existing Team screen, but route it through
+-- the new hierarchy so a manipulated older client cannot bypass Owner protections.
+create or replace function public.set_company_member_role(
+  p_member_id uuid,
+  p_role text
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.linecrew_set_member_role(p_member_id, p_role);
+end;
+$$;
+
+revoke all on function public.set_company_member_role(uuid,text) from public;
+revoke all on function public.set_company_member_role(uuid,text) from anon;
+grant execute on function public.set_company_member_role(uuid,text) to authenticated;
 
 -- Owner/Admin-controlled Superintendent overrides.
 create or replace function public.linecrew_set_superintendent_permissions(
