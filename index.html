@@ -5859,15 +5859,15 @@ function escapeHtml(value){
 const assistantBuiltInHelp = [
   {
     terms:['add job','new job','create job','start job','job setup'],
-    answer:'Admin steps to add a job: 1. Open Jobs from the dashboard. 2. Choose + Create Job. 3. Enter the job number and job name. 4. Select the correct Customer / Utility and Contract. 5. Add any available description, dates or notes. 6. Choose Save Job. 7. Open the new job to assign job leaders or add a Utility Job Package. A utility packet is optional at the start, so Foremen can report production before it arrives.'
+    answer:'Job-management steps: Owner, Admin, General Foreman, or a Superintendent with Jobs permission opens Jobs from the dashboard, chooses + Create Job, enters the job number/name and correct Contract, then saves. Utility Job Packages are controlled separately by the Job Packages permission for Superintendents.'
   },
   {
     terms:['add admin','more admins','new admin','promote admin','make admin'],
-    answer:'Admin steps: 1. Open Team. 2. If the person has not joined, copy the Company Code and have them create an account and join; new members begin as Foremen. 3. Refresh Team. 4. Find the member and change Role to Admin. 5. Choose Save Role. 6. Have the new Admin refresh or sign out and back in. Only promote trusted users because Admins can access actual pricing and company controls, and always keep at least one Admin.'
+    answer:'Only an Owner can add, remove, promote, or demote an Admin. Open Team, find the member, choose Admin in the Role dropdown, and Save Role. Admins cannot change Owners or other Admins. Keep at least one active Owner at all times.'
   },
   {
     terms:['promote foreman','make general foreman','promote to general','change role','save role'],
-    answer:'Admin steps: 1. Open Team. 2. Find the Foreman. 3. Change the Role dropdown to General Foreman. 4. Choose Save Role. 5. Choose Refresh Team and confirm the new role. The promoted user may need to refresh or sign out and back in before GF permissions appear.'
+    answer:'Open Team and find the Foreman. Owner/Admin can change the role to General Foreman or Superintendent; a Superintendent with Role Management permission can promote/demote Foremen and General Foremen only. Choose Save Role and have the user refresh or sign out and back in.'
   },
   {
     terms:['price book','pricing','units','import price'],
@@ -5879,19 +5879,19 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['daily report','approve','review','submitted'],
-    answer:'Open Production. Submitted reports appear in the review queue. Expand the report, review hours, units, pole locations and exception badges, then Approve or Return Report with notes. If your company requires GF redline approval, an Admin needs an override reason when the GF is unavailable.'
+    answer:'Open Production. Submitted reports appear in the review queue for General Foremen and leadership with Production Review permission. Review hours, units, pole locations and exceptions, then Approve or Return Report with notes. If GF redline approval is required, Owner/Admin or an authorized Superintendent must enter an override reason when using the leadership override.'
   },
   {
     terms:['redline','not authorized','extra unit'],
-    answer:'A redline is production reported for a unit or quantity not authorized at that utility work point. It is kept visible for review instead of being silently rejected. The GF/Admin should verify the field change and approve or return the report according to company policy.'
+    answer:'A redline is production reported for a unit or quantity not authorized at that utility work point. It stays visible for deliberate review. A General Foreman or leadership user with Production Review permission should verify the field change and approve or return the report according to company policy.'
   },
   {
     terms:['pending packet','packet pending','no packet'],
-    answer:'Pending Packet means the Foreman reported production before a utility job packet was loaded. This is allowed. After an Admin imports the packet, LineCrew Pro reconciles matching pole/location and unit codes; unmatched work remains visible for review.'
+    answer:'Pending Packet means production was reported before a utility job packet was loaded. This is allowed. After Owner/Admin or a Superintendent with Job Packages permission imports the packet, LineCrew Pro reconciles matching pole/location and unit codes; unmatched work remains visible for review.'
   },
   {
     terms:['team','foreman','general foreman','role','invite'],
-    answer:'Open Team. Give the Company Code only to approved workers; new members join as Foremen. To change access, find the member, choose Foreman, General Foreman or Admin in the Role dropdown, then choose Save Role. Refresh Team afterward. Keep at least one Admin and promote only trusted people to Admin.'
+    answer:'Open Team. New members join as Foremen. The company hierarchy is Owner > Admin > Superintendent > General Foreman > Foreman. Only Owner can manage Admin/Owner roles. Admin can manage Superintendent/GF/Foreman. A Superintendent with Role Management permission can manage GF/Foreman only. Owner/Admin can also customize each Superintendent’s permissions.'
   },
   {
     terms:['jsa','job safety','morning safety','safety briefing','crew signature'],
@@ -5899,7 +5899,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['storm mode','storm event','storm crew','storm report'],
-    answer:'An Admin creates or activates a storm event and selects the participating crews. New reports from those crews are tagged automatically; all other crews remain in normal mode. Use storm filters for reporting and deactivate the event when storm operations end. Storm mode organizes records and does not automatically change pricing or payroll.'
+    answer:'Owner/Admin or a Superintendent with Storm Mode permission can create or activate a storm event and select participating crews. New reports from those crews are tagged automatically; all other crews remain in normal mode. Storm Mode organizes records and does not automatically change pricing or payroll.'
   },
   {
     terms:['create daily','enter daily','add daily','save units','manage units','submit report'],
@@ -5907,7 +5907,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['adjustment','adjusted price','field value','foreman price','percentage'],
-    answer:'An Admin edits the Contract and sets the Foreman field-value adjustment percentage. Foremen see the permitted field value; Admins and General Foremen can see actual and adjusted values when both exist. If no adjustment is set, the permitted value follows the actual price. Verify the percentage and contract before field rollout.'
+    answer:'Owner/Admin or an authorized Superintendent edits the Contract and sets the Foreman field-value adjustment percentage. Foremen see the permitted field value. Owner/Admin/GF and a Superintendent with Actual Contract Pricing permission can see actual values. Verify the percentage and contract before field rollout.'
   },
   {
     terms:['job progress','percentage complete','completion','authorized value','remaining value'],
@@ -9770,7 +9770,7 @@ $('confirmPriceBookImportBtn').onclick = async () => {
 
   if(!userCanManagePriceBooks()){
 
-    alert('Only company admins can import unit pricing.');
+    alert('You do not have permission to import unit pricing.');
 
     return;
   }
