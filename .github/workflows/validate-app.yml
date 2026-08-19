@@ -30,6 +30,9 @@ jobs:
       - name: Validate application
         run: node scripts/validate-app.mjs
 
+      - name: Validate flexible JSA workflow
+        run: node scripts/validate-flexible-jsa.mjs
+
       - name: Audit legacy role checks
         run: |
           node scripts/audit-role-checks.mjs
