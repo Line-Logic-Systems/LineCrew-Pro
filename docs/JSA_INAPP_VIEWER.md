@@ -1,1 +1,0 @@
-Temporary implementation note: uploaded company JSA attachments should open inside LineCrew Pro in a responsive viewer that shows all attached pages/photos in order on mobile and desktop.
