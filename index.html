@@ -3977,7 +3977,8 @@ function printSafetyJsa(jsa){
     field('Crew Member Signatures', jsa.crew_members) +
     (jsa.weather_conditions ? field('Morning Conditions', jsa.weather_conditions) : '') +
     (jsa.special_equipment ? field('Special Equipment / Additional Notes', jsa.special_equipment) : '') +
-    '</body></html>'
+    '  <script src="expanded-jsa.js?v=20260819"></script>
+</body></html>'
   );
   popup.document.close();
   popup.focus();
