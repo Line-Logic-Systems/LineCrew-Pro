@@ -1,0 +1,128 @@
+name: Patch JSA camera capture
+
+on:
+  push:
+    branches: [feature/jsa-camera-capture]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/jsa-camera-capture
+      - name: Add field camera capture workflow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          text = p.read_text()
+
+          old_html = '''    <label for="companyJsaUploadFiles">JSA File(s) *</label>
+    <input id="companyJsaUploadFiles" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/heic,image/heif">
+    <p class="muted">PDF, JPG, PNG or HEIC/HEIF. Up to 15 MB per file. Multiple pages/photos are allowed.</p>'''
+          new_html = '''    <label>JSA Photo(s) / File(s) *</label>
+    <button id="takeCompanyJsaPhotoBtn" type="button" class="success">📷 Take JSA Photo</button>
+    <input id="companyJsaCameraInput" class="hidden" type="file" accept="image/*" capture="environment">
+    <div id="companyJsaCameraStatus" class="muted">No camera photos attached yet.</div>
+
+    <label for="companyJsaUploadFiles">Or Choose Existing File(s)</label>
+    <input id="companyJsaUploadFiles" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/heic,image/heif">
+    <p class="muted">Take one photo per page, or choose PDF/JPG/PNG/HEIC files. Up to 15 MB per file. Multiple pages/photos are allowed.</p>'''
+          if old_html not in text:
+              raise SystemExit('JSA file input anchor not found')
+          text = text.replace(old_html, new_html, 1)
+
+          camera_js = r'''
+let pendingCompanyJsaCameraFiles = [];
+
+function companyJsaFileKey(file){
+  return [file.name, file.size, file.lastModified].join(':');
+}
+
+function getCompanyJsaUploadFiles(){
+  const chosen = [...($('companyJsaUploadFiles')?.files || [])];
+  const all = [...pendingCompanyJsaCameraFiles, ...chosen];
+  const seen = new Set();
+  return all.filter(file => {
+    const key = companyJsaFileKey(file);
+    if(seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function updateCompanyJsaCameraStatus(){
+  const cameraCount = pendingCompanyJsaCameraFiles.length;
+  const chosenCount = [...($('companyJsaUploadFiles')?.files || [])].length;
+  const total = getCompanyJsaUploadFiles().length;
+  const status = $('companyJsaCameraStatus');
+  if(!status) return;
+  if(total === 0){
+    status.textContent = 'No camera photos attached yet.';
+    return;
+  }
+  const parts = [];
+  if(cameraCount) parts.push(cameraCount + ' camera photo' + (cameraCount === 1 ? '' : 's'));
+  if(chosenCount) parts.push(chosenCount + ' chosen file' + (chosenCount === 1 ? '' : 's'));
+  status.textContent = parts.join(' + ') + ' attached. Tap Take JSA Photo again for another page.';
+}
+
+function resetCompanyJsaCameraFiles(){
+  pendingCompanyJsaCameraFiles = [];
+  if($('companyJsaCameraInput')) $('companyJsaCameraInput').value = '';
+  updateCompanyJsaCameraStatus();
+}
+
+$('takeCompanyJsaPhotoBtn').onclick = () => {
+  const input = $('companyJsaCameraInput');
+  if(!input) return;
+  input.value = '';
+  input.click();
+};
+
+$('companyJsaCameraInput').addEventListener('change', event => {
+  const files = [...(event.target.files || [])];
+  if(!files.length) return;
+  const invalid = files.find(file => !allowedJsaFile(file));
+  if(invalid){
+    alert('Unsupported or oversized photo: ' + invalid.name + '. Use a supported image up to 15 MB.');
+    event.target.value = '';
+    return;
+  }
+  pendingCompanyJsaCameraFiles.push(...files);
+  event.target.value = '';
+  updateCompanyJsaCameraStatus();
+});
+
+$('companyJsaUploadFiles').addEventListener('change', updateCompanyJsaCameraStatus);
+
+'''
+          anchor = "$('uploadCompanyJsaBtn').onclick = async () => {"
+          if anchor not in text:
+              raise SystemExit('Upload button anchor not found')
+          text = text.replace(anchor, camera_js + anchor, 1)
+
+          reset_anchor = "  $('companyJsaUploadFiles').value = '';\n"
+          if reset_anchor not in text:
+              raise SystemExit('Upload reset anchor not found')
+          text = text.replace(reset_anchor, reset_anchor + "  resetCompanyJsaCameraFiles();\n", 1)
+
+          files_anchor = "  const files = [...($('companyJsaUploadFiles').files || [])];"
+          if files_anchor not in text:
+              raise SystemExit('Save files anchor not found')
+          text = text.replace(files_anchor, "  const files = getCompanyJsaUploadFiles();", 1)
+
+          p.write_text(text)
+          PY
+      - name: Commit camera capture UI
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Add direct camera capture for uploaded JSAs"
+          git push origin HEAD:feature/jsa-camera-capture
