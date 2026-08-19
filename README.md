@@ -6,8 +6,10 @@ Commercial multi-company powerline management platform.
 - Marketing website: `https://linecrewpro.com` via GitHub Pages from `main:/docs`.
 - Operational app: `https://app.linecrewpro.com` via Vercel from the repository root on `main`.
 - Authentication, database and storage: Supabase.
+- Production Supabase project reference: `ldgkyxuozbozgkvwzadg`.
 - Company data is multi-tenant and must remain scoped by authenticated `company_id` in database policies/RPCs and server-side functions.
-- The in-app LineCrew Assistant is Admin-only and its server function must independently verify the authenticated profile role.
+- The in-app LineCrew Assistant is available to Owner and Admin; Superintendent access is capability-controlled. Its server function independently verifies authenticated role, permissions and company scope.
+- Independent disaster backups are packaged by GitHub Actions and copied to the private Azure Blob container `linecrew-pro-backups` in storage account `linecrewprobackup`.
 
 ## Release rules
 
@@ -18,13 +20,32 @@ Commercial multi-company powerline management platform.
 5. Production application changes merge to `main`, which triggers the Vercel production deployment.
 6. Marketing-site changes in `/docs` also live on `main`; GitHub Pages serves only `/docs`.
 7. Keep `linecrewpro.com` and `app.linecrewpro.com` HTTPS-only.
+8. Before destructive production changes, verify a recent successful `Independent Disaster Backup` and confirm its Azure copy exists.
 
 ## Security baseline
 
-The Vercel app uses `vercel.json` to add anti-clickjacking, MIME-sniffing, referrer, indexing and HSTS response headers. The production-readiness CI gate also checks that the public app shell does not expose known server-side secret patterns and that the Admin-only AI function still enforces authentication, Admin role and company scoping.
+The Vercel app uses `vercel.json` to add anti-clickjacking, MIME-sniffing, referrer, indexing and HSTS response headers. The production-readiness CI gate checks that the public app shell does not expose known server-side secret patterns and that the company assistant enforces authentication, role/capability authorization and company scoping.
+
+Role hierarchy is Owner > Admin > Superintendent > General Foreman > Foreman. Owner protects company governance and Admin management. Admin has broad operational administration. Superintendent permissions are configurable. General Foreman and Foreman remain field/production roles with narrower access.
 
 ## Supabase migrations
 
 Database changes are stored in `supabase/migrations` and must be applied to Supabase before merging the matching frontend pull request into `main`.
 
-`20260815_secure_price_book_activation.sql` makes Price Book activation an admin-only, company-scoped transaction and prevents multiple active versions of the same company/contract/Price Book family.
+Key current role/security migrations include:
+- `20260818_owner_superintendent_roles.sql`
+- `20260818_owner_superintendent_team_access.sql`
+- `202608190100_owner_legacy_compatibility.sql`
+- `202608190200_superintendent_legacy_compatibility.sql`
+- `202608190300_capability_whitelist.sql`
+- `202608190400_revoke_anon_security_definer.sql`
+
+## Disaster recovery
+
+- Workflow: `.github/workflows/independent-backup.yml`
+- Backup script: `scripts/backup-supabase.mjs`
+- Recovery runbook: `docs/DISASTER_RECOVERY.md`
+- Azure storage account: `linecrewprobackup`
+- Azure container: `linecrew-pro-backups`
+
+The backup contains the Git repository bundle/history, exported application tables, Supabase Storage objects and a manifest. The workflow also retains a GitHub artifact and copies the packaged backup to Azure.
