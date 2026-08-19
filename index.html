@@ -7977,8 +7977,7 @@ function openPriceBook(
     .add('hidden');
 
   const canManagePriceBook =
-    String(currentProfile?.role || '').toLowerCase() ===
-      'admin';
+    userCanManagePriceBooks();
 
   $('addPriceBookItemBtn')
     .classList
