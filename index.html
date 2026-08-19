@@ -11385,8 +11385,8 @@ function renderProductionPagination(totalReports){
 }
 
 function stormExportReports(){
-  if(!['admin', 'gf'].includes(String(currentProfile?.role || '').toLowerCase())){
-    alert('Only an Admin or General Foreman can export storm reporting.');
+  if(!userCanUseReporting() || !userCanExport()){
+    alert('You do not have permission to export storm reporting.');
     return [];
   }
   const reports = currentProductionExportRows.filter(report => report.storm_mode === true);
@@ -11572,8 +11572,8 @@ function exportStormPayrollCsv(){
 }
 
 function exportFilteredProductionCsv(){
-  if(!['admin', 'gf'].includes(String(currentProfile?.role || '').toLowerCase())){
-    alert('Only an Admin or General Foreman can export company production reporting.');
+  if(!userCanUseReporting() || !userCanExport()){
+    alert('You do not have permission to export company production reporting.');
     return;
   }
   if(currentProductionExportRows.length === 0){
@@ -11700,11 +11700,10 @@ async function loadProductionReports(){
   );
 
   currentDailyAuthorizationSummaries = new Map();
-  const canReviewProduction = ['admin', 'gf'].includes(
-    String(currentProfile?.role || '').toLowerCase()
-  );
+  const canReviewProduction = userCanReviewProduction();
+  const canViewProductionReporting = userCanUseReporting();
 
-  if(canReviewProduction){
+  if(canReviewProduction || canViewProductionReporting){
     const { data:authorizationSummaries, error:authorizationSummaryError } =
       await sb.rpc('get_daily_report_authorization_summaries');
 
@@ -11722,21 +11721,21 @@ async function loadProductionReports(){
   }
 
   document.querySelectorAll('.production-reporting-control').forEach(control =>
-    control.classList.toggle('hidden', !canReviewProduction)
+    control.classList.toggle('hidden', !canViewProductionReporting)
   );
-  populateProductionReportingFilters(reports || [], canReviewProduction);
+  populateProductionReportingFilters(reports || [], canViewProductionReporting);
 
   const search = $('productionSearch').value.trim().toLowerCase();
   const statusFilter = $('productionStatusFilter').value;
   const dateFrom = $('productionDateFrom').value;
   const dateTo = $('productionDateTo').value;
-  const jobFilter = canReviewProduction ? $('productionJobFilter').value : '';
-  const foremanFilter = canReviewProduction ? $('productionForemanFilter').value : '';
-  const crewFilter = canReviewProduction ? $('productionCrewFilter').value : '';
-  const exceptionFilter = canReviewProduction ? $('productionExceptionFilter').value : '';
-  const completionFilter = canReviewProduction ? $('productionCompletionFilter').value : '';
-  const workModeFilter = canReviewProduction ? $('productionWorkModeFilter').value : '';
-  const stormEventFilter = canReviewProduction ? $('productionStormEventFilter').value : '';
+  const jobFilter = canViewProductionReporting ? $('productionJobFilter').value : '';
+  const foremanFilter = canViewProductionReporting ? $('productionForemanFilter').value : '';
+  const crewFilter = canViewProductionReporting ? $('productionCrewFilter').value : '';
+  const exceptionFilter = canViewProductionReporting ? $('productionExceptionFilter').value : '';
+  const completionFilter = canViewProductionReporting ? $('productionCompletionFilter').value : '';
+  const workModeFilter = canViewProductionReporting ? $('productionWorkModeFilter').value : '';
+  const stormEventFilter = canViewProductionReporting ? $('productionStormEventFilter').value : '';
   const filteredReports = (reports || []).filter(report => {
     const archived = report.archived === true;
     if(statusFilter === 'archived'){
@@ -11837,8 +11836,8 @@ async function loadProductionReports(){
         (pageStart + pagedReports.length) + ' of ' +
         filteredReports.length + ' matching reports';
 
-  renderProductionReportingSummary(filteredReports, canReviewProduction);
-  renderStormEventDashboard(filteredReports, canReviewProduction);
+  renderProductionReportingSummary(filteredReports, canViewProductionReporting);
+  renderStormEventDashboard(filteredReports, canViewProductionReporting);
   renderProductionPagination(filteredReports.length);
 
 
@@ -12231,7 +12230,7 @@ async function toggleDailyReportAttachments(report, card, button){
 
       const canDelete =
         attachment.uploaded_by === currentProfile?.id ||
-        ['admin','gf'].includes(String(currentProfile?.role || '').toLowerCase());
+        userCanReviewProduction();
       if(canDelete){
         const deleteButton = document.createElement('button');
         deleteButton.className = 'danger small';
