@@ -1330,6 +1330,18 @@ button:disabled{
       </button>
     </div>
 
+    <div id="jsaMethodSettingsCard" class="job-card hidden">
+      <h3>JSA Method</h3>
+      <p class="muted">Use the LineCrew Pro digital JSA, upload your company's existing paper JSA, or allow crews to use either method. A JSA is not required to submit production.</p>
+      <label for="companyJsaMethod">Company JSA Option</label>
+      <select id="companyJsaMethod">
+        <option value="digital">LineCrew Pro Digital JSA</option>
+        <option value="upload">Upload Company JSA</option>
+        <option value="both">Allow Both</option>
+      </select>
+      <button id="saveCompanyJsaMethod" class="success small">Save JSA Option</button>
+    </div>
+
     <div class="job-card">
       <h3>Redline Approval</h3>
       <label class="checkbox-row" for="requireGfRedlineApproval">
@@ -1671,7 +1683,40 @@ button:disabled{
         <h2>Safety / JSA</h2>
         <p class="muted">Morning job safety briefings completed before work begins.</p>
       </div>
-      <button id="createJsaBtn" class="success">+ Complete Morning JSA</button>
+      <div class="button-row">
+        <button id="createJsaBtn" class="success">+ Complete Digital JSA</button>
+        <button id="uploadCompanyJsaBtn" class="secondary">+ Upload Company JSA</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="companyJsaUploadForm" class="card hidden">
+    <h2>Upload Company JSA</h2>
+    <p class="muted">Use your existing paper/company JSA. Upload a PDF or one or more photos. This does not replace or require a JSA for production.</p>
+
+    <label for="companyJsaUploadJob">Job *</label>
+    <select id="companyJsaUploadJob"><option value="">Select active job</option></select>
+
+    <label for="companyJsaUploadDate">Work Date *</label>
+    <input id="companyJsaUploadDate" type="date">
+
+    <label for="companyJsaUploadForeman">Foreman</label>
+    <input id="companyJsaUploadForeman" readonly>
+
+    <label for="companyJsaUploadCrew">Crew *</label>
+    <input id="companyJsaUploadCrew" placeholder="Example: Crew 1">
+
+    <label for="companyJsaUploadFiles">JSA File(s) *</label>
+    <input id="companyJsaUploadFiles" type="file" multiple accept="application/pdf,image/jpeg,image/png,image/heic,image/heif">
+    <p class="muted">PDF, JPG, PNG or HEIC/HEIF. Up to 15 MB per file. Multiple pages/photos are allowed.</p>
+
+    <label for="companyJsaUploadNotes">Notes</label>
+    <textarea id="companyJsaUploadNotes" rows="2" placeholder="Optional notes about this JSA"></textarea>
+
+    <div id="companyJsaUploadStatus" class="muted"></div>
+    <div class="button-row">
+      <button id="saveCompanyJsaUploadBtn" class="success">Save Uploaded JSA</button>
+      <button id="cancelCompanyJsaUploadBtn" class="secondary">Cancel</button>
     </div>
   </div>
 
@@ -1809,6 +1854,15 @@ button:disabled{
   <div id="safetyJsaEmpty" class="card center hidden">
     <h3>No JSAs Yet</h3>
     <p class="muted">Morning safety briefings will appear here.</p>
+  </div>
+  <div id="uploadedCompanyJsaSection" class="card hidden">
+    <div class="section-header">
+      <div>
+        <h3>Uploaded Company JSAs</h3>
+        <p class="muted">Paper/company JSA forms stored with job, date, crew and Foreman information.</p>
+      </div>
+    </div>
+    <div id="uploadedCompanyJsaList"></div>
   </div>
   <div id="safetyJsaList"></div>
 </section>
@@ -5895,7 +5949,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['jsa','job safety','morning safety','safety briefing','crew signature'],
-    answer:'Morning JSA is separate from the Daily Report. The Foreman opens Safety / Morning JSA before work, selects the job and date, completes crew, weather, work plan, hazards, controls, PPE, emergency plan, equipment and notes, records crew signatures or acknowledgments, checks the Foreman acknowledgment and saves. Follow the contractor safety program and onsite competent-person direction.'
+    answer:'Safety / JSA supports the LineCrew Pro digital JSA, uploading an existing company/paper JSA, or both depending on Company Settings. Uploaded JSAs can contain a PDF or multiple photos and are stored with job, date, crew and Foreman information. A JSA is not required by LineCrew Pro before a Daily Report can be created or submitted; follow the contractor safety program and applicable requirements.'
   },
   {
     terms:['storm mode','storm event','storm crew','storm report'],
@@ -13575,6 +13629,211 @@ if(reportId){
   await window.openDailyUnitEditor(savedReport);
 
 };  
+/* FLEXIBLE JSA */
+
+function applyFlexibleJsaUi(){
+  const method = String(currentCompany?.jsa_method || 'both').toLowerCase();
+  const canManage = userIsCompanyAdmin();
+  $('jsaMethodSettingsCard').classList.toggle('hidden', !canManage);
+  $('companyJsaMethod').value = ['digital','upload','both'].includes(method) ? method : 'both';
+  $('createJsaBtn').classList.toggle('hidden', method === 'upload');
+  $('uploadCompanyJsaBtn').classList.toggle('hidden', method === 'digital');
+}
+
+$('saveCompanyJsaMethod').onclick = async () => {
+  if(!userIsCompanyAdmin()) return;
+  const method = $('companyJsaMethod').value;
+  const button = $('saveCompanyJsaMethod');
+  button.disabled = true;
+  const { data, error } = await sb.rpc('set_company_jsa_method', { p_method:method });
+  button.disabled = false;
+  if(error) return alert('Unable to save JSA option: ' + error.message);
+  currentCompany.jsa_method = data || method;
+  applyFlexibleJsaUi();
+  alert('Company JSA option saved.');
+};
+
+async function populateCompanyJsaUploadJobs(){
+  const select = $('companyJsaUploadJob');
+  select.innerHTML = '<option value="">Select active job</option>';
+  const { data, error } = await sb.from('jobs')
+    .select('id, job_number, job_name')
+    .eq('company_id', currentProfile.company_id)
+    .eq('active', true)
+    .order('job_number', { ascending:true });
+  if(error){ alert('Unable to load jobs: ' + error.message); return false; }
+  (data || []).forEach(job => {
+    const option = document.createElement('option');
+    option.value = job.id;
+    option.textContent = (job.job_number || 'Job') + ' — ' + (job.job_name || 'Unnamed');
+    select.appendChild(option);
+  });
+  return true;
+}
+
+$('uploadCompanyJsaBtn').onclick = async () => {
+  const method = String(currentCompany?.jsa_method || 'both').toLowerCase();
+  if(method === 'digital') return alert('Uploaded company JSAs are disabled in Company Settings.');
+  $('safetyJsaForm').classList.add('hidden');
+  $('companyJsaUploadForm').classList.remove('hidden');
+  $('companyJsaUploadDate').value = new Date().toISOString().slice(0,10);
+  $('companyJsaUploadForeman').value = currentProfile?.full_name || '';
+  $('companyJsaUploadCrew').value = '';
+  $('companyJsaUploadFiles').value = '';
+  $('companyJsaUploadNotes').value = '';
+  $('companyJsaUploadStatus').textContent = '';
+  await populateCompanyJsaUploadJobs();
+  $('companyJsaUploadForm').scrollIntoView({ behavior:'smooth', block:'start' });
+};
+
+$('cancelCompanyJsaUploadBtn').onclick = () => {
+  $('companyJsaUploadForm').classList.add('hidden');
+};
+
+function safeJsaFilename(name){
+  return String(name || 'jsa-file')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(-140) || 'jsa-file';
+}
+
+function allowedJsaFile(file){
+  return ['application/pdf','image/jpeg','image/png','image/heic','image/heif'].includes(String(file.type || '').toLowerCase()) &&
+    file.size > 0 && file.size <= 15728640;
+}
+
+async function cleanupPartialJsaUpload(jsaId, paths){
+  if(paths.length){ await sb.storage.from('jsa-uploads').remove(paths); }
+  await sb.rpc('delete_uploaded_company_jsa', { p_jsa_id:jsaId });
+}
+
+$('saveCompanyJsaUploadBtn').onclick = async () => {
+  const jobId = $('companyJsaUploadJob').value;
+  const workDate = $('companyJsaUploadDate').value;
+  const crew = $('companyJsaUploadCrew').value.trim();
+  const files = [...($('companyJsaUploadFiles').files || [])];
+  const notes = $('companyJsaUploadNotes').value.trim();
+  if(!jobId || !workDate || !crew) return alert('Job, work date and crew are required.');
+  if(files.length === 0) return alert('Choose at least one PDF or JSA photo.');
+  const invalid = files.find(file => !allowedJsaFile(file));
+  if(invalid) return alert('Unsupported or oversized file: ' + invalid.name + '. Use PDF/JPG/PNG/HEIC up to 15 MB each.');
+
+  const button = $('saveCompanyJsaUploadBtn');
+  button.disabled = true;
+  button.textContent = 'Creating JSA...';
+  $('companyJsaUploadStatus').textContent = 'Creating JSA record...';
+  const createResult = await sb.rpc('create_uploaded_company_jsa', {
+    p_job_id:jobId, p_work_date:workDate, p_crew_name:crew, p_notes:notes || null
+  });
+  if(createResult.error){
+    button.disabled = false; button.textContent = 'Save Uploaded JSA';
+    $('companyJsaUploadStatus').textContent = '';
+    return alert('Unable to create uploaded JSA: ' + createResult.error.message);
+  }
+
+  const jsaId = createResult.data;
+  const uploadedPaths = [];
+  for(let index=0; index<files.length; index+=1){
+    const file = files[index];
+    const unique = (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + index);
+    const storagePath = currentProfile.company_id + '/' + jsaId + '/' + unique + '-' + safeJsaFilename(file.name);
+    $('companyJsaUploadStatus').textContent = 'Uploading file ' + (index+1) + ' of ' + files.length + '...';
+    button.textContent = 'Uploading ' + (index+1) + '/' + files.length + '...';
+    const uploadResult = await sb.storage.from('jsa-uploads').upload(storagePath, file, { upsert:false, contentType:file.type });
+    if(uploadResult.error){
+      await cleanupPartialJsaUpload(jsaId, uploadedPaths);
+      button.disabled = false; button.textContent = 'Save Uploaded JSA';
+      $('companyJsaUploadStatus').textContent = '';
+      return alert('JSA upload failed: ' + uploadResult.error.message);
+    }
+    uploadedPaths.push(storagePath);
+    const registerResult = await sb.rpc('register_jsa_upload_attachment', {
+      p_jsa_id:jsaId, p_storage_path:storagePath, p_original_filename:file.name,
+      p_mime_type:file.type, p_file_size_bytes:file.size, p_page_order:index+1
+    });
+    if(registerResult.error){
+      await cleanupPartialJsaUpload(jsaId, uploadedPaths);
+      button.disabled = false; button.textContent = 'Save Uploaded JSA';
+      $('companyJsaUploadStatus').textContent = '';
+      return alert('JSA file registration failed: ' + registerResult.error.message);
+    }
+  }
+
+  button.disabled = false; button.textContent = 'Save Uploaded JSA';
+  $('companyJsaUploadStatus').textContent = '';
+  $('companyJsaUploadForm').classList.add('hidden');
+  await loadUploadedCompanyJsas();
+  if(typeof loadSafetyJsas === 'function') await loadSafetyJsas();
+  alert('Company JSA uploaded successfully.');
+};
+
+async function openUploadedJsaFiles(jsa){
+  const { data, error } = await sb.rpc('get_jsa_upload_attachments', { p_jsa_id:jsa.id });
+  if(error) return alert('Unable to load JSA files: ' + error.message);
+  if(!data?.length) return alert('No files are attached to this uploaded JSA.');
+  for(const attachment of data){
+    const signed = await sb.storage.from('jsa-uploads').createSignedUrl(attachment.storage_path, 300);
+    if(signed.error){ alert('Unable to open ' + attachment.original_filename + ': ' + signed.error.message); continue; }
+    window.open(signed.data.signedUrl, '_blank', 'noopener');
+  }
+}
+
+async function deleteUploadedCompanyJsa(jsa){
+  if(!confirm('Delete this uploaded company JSA and its files? This cannot be undone.')) return;
+  const filesResult = await sb.rpc('get_jsa_upload_attachments', { p_jsa_id:jsa.id });
+  if(filesResult.error) return alert('Unable to load JSA files for deletion: ' + filesResult.error.message);
+  const paths = (filesResult.data || []).map(file => file.storage_path);
+  if(paths.length){
+    const removeResult = await sb.storage.from('jsa-uploads').remove(paths);
+    if(removeResult.error) return alert('Unable to delete JSA files: ' + removeResult.error.message);
+  }
+  const result = await sb.rpc('delete_uploaded_company_jsa', { p_jsa_id:jsa.id });
+  if(result.error) return alert('Unable to delete uploaded JSA: ' + result.error.message);
+  await loadUploadedCompanyJsas();
+  if(typeof loadSafetyJsas === 'function') await loadSafetyJsas();
+}
+
+async function loadUploadedCompanyJsas(){
+  const section = $('uploadedCompanyJsaSection');
+  const list = $('uploadedCompanyJsaList');
+  if(!currentProfile || !userCanSeeSafetyRecords()){ section.classList.add('hidden'); return; }
+  const { data, error } = await sb.rpc('get_uploaded_company_jsas');
+  if(error){
+    section.classList.add('hidden');
+    console.warn('Unable to load uploaded company JSAs:', error.message);
+    return;
+  }
+  const rows = data || [];
+  section.classList.toggle('hidden', rows.length === 0);
+  list.replaceChildren();
+  rows.forEach(jsa => {
+    const card = document.createElement('div');
+    card.className = 'job-card';
+    card.innerHTML = '<div class="section-header"><div><strong>Uploaded Company JSA</strong>' +
+      '<div class="muted">' + escapeHtml(jsa.work_date || 'No date') + ' • ' +
+      escapeHtml([jsa.job_number, jsa.job_name].filter(Boolean).join(' — ') || 'Job') + '</div></div>' +
+      '<span class="status active">' + Number(jsa.attachment_count || 0) + ' file' + (Number(jsa.attachment_count || 0)===1?'':'s') + '</span></div>' +
+      '<div class="job-info">Foreman: <strong>' + escapeHtml(jsa.creator_name || 'Unknown') + '</strong><br>' +
+      'Crew: <strong>' + escapeHtml(jsa.crew_name || 'Not recorded') + '</strong>' +
+      (jsa.upload_notes ? '<br>Notes: ' + escapeHtml(jsa.upload_notes) : '') + '</div>';
+    const actions = document.createElement('div'); actions.className='button-row';
+    const open = document.createElement('button'); open.className='secondary small'; open.textContent='Open JSA File(s)'; open.onclick=()=>openUploadedJsaFiles(jsa); actions.appendChild(open);
+    const canDelete = jsa.created_by === currentProfile.id || ['owner','admin','gf'].includes(currentUserRole()) || (currentUserRole()==='superintendent' && userHasCapability('safety_records'));
+    if(canDelete){ const del=document.createElement('button'); del.className='danger small'; del.textContent='Delete Uploaded JSA'; del.onclick=()=>deleteUploadedCompanyJsa(jsa); actions.appendChild(del); }
+    card.appendChild(actions); list.appendChild(card);
+  });
+}
+
+const originalFlexibleJsaLoadApp = loadApp;
+loadApp = async function(...args){
+  const result = await originalFlexibleJsaLoadApp.apply(this,args);
+  if(currentProfile && currentCompany){ applyFlexibleJsaUi(); }
+  return result;
+};
+
+$('refreshSafetyBtn').addEventListener('click', () => { setTimeout(loadUploadedCompanyJsas, 0); });
+$('safetyTile').addEventListener('click', () => { setTimeout(() => { applyFlexibleJsaUi(); loadUploadedCompanyJsas(); }, 0); });
+
 /* START */
 
 loadApp();
