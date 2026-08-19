@@ -10,7 +10,7 @@ security definer
 set search_path = public
 as $$
   select case
-    when capability is null or capability <> any(array[
+    when capability is null or not (capability = any(array[
       'company_settings',
       'team_management',
       'role_management',
@@ -25,7 +25,7 @@ as $$
       'actual_pricing',
       'exports',
       'ai_assistant'
-    ]::text[]) then false
+    ]::text[])) then false
     else coalesce((
       select case
         when lower(p.role) in ('owner','admin') then true
