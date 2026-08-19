@@ -4390,9 +4390,7 @@ async function loadJobs(){
 
   currentJobsCatalog = jobs;
 
-  const canViewJobPackages = ['admin', 'gf'].includes(
-    String(currentProfile.role || '').toLowerCase()
-  );
+  const canViewJobPackages = userCanUseReporting() || userCanManageJobPackages();
 
   if(canViewJobPackages){
     const {
@@ -4660,7 +4658,7 @@ function closeJobDetail(){
   $('jobProgressDashboard').classList.remove('hidden');
   $('showCreateJobBtn').classList.toggle(
     'hidden',
-    !['admin', 'gf'].includes(String(currentProfile?.role || '').toLowerCase())
+    !userCanManageJobs()
   );
   $('jobProgressDashboard').scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -4776,9 +4774,7 @@ function renderJob(job){
     );
 
 
-  const canManage =
-    currentProfile.role === 'admin' ||
-    currentProfile.role === 'gf';
+  const canManage = userCanManageJobs();
 
   if(canManage){
     renderJobLeaderAssignments(
@@ -4829,32 +4825,23 @@ function renderJob(job){
   }
 
 
-  if(currentProfile.role === 'admin'){
-
+  if(userCanManageJobPackages()){
     const packageButton = document.createElement('button');
     packageButton.className = 'small success';
     packageButton.textContent = '+ Add Utility Package';
     packageButton.onclick = ()=> showJobPackageForm(job);
     actions.appendChild(packageButton);
-
-    const deleteButton =
-      document.createElement('button');
-
-    deleteButton.className =
-      'small danger';
-
-    deleteButton.textContent =
-      'Delete Job';
-
-    deleteButton.onclick =
-      ()=> deleteJob(job);
-
-    actions.appendChild(
-      deleteButton
-    );
   }
 
-  if(['admin', 'gf'].includes(String(currentProfile.role || '').toLowerCase())){
+  if(userCanManageJobs()){
+    const deleteButton = document.createElement('button');
+    deleteButton.className = 'small danger';
+    deleteButton.textContent = 'Delete Job';
+    deleteButton.onclick = ()=> deleteJob(job);
+    actions.appendChild(deleteButton);
+  }
+
+  if(userCanUseReporting() || userCanManageJobPackages()){
     renderJobPackages(job, card.querySelector(`#job-packages-${job.id}`));
   }
 }
@@ -4940,7 +4927,7 @@ function renderJobLeaderAssignments(job, container){
 }
 
 async function changeJobLeaderAssignment(job, memberId, assigned){
-  if(!['admin', 'gf'].includes(String(currentProfile.role || '').toLowerCase())){
+  if(!userCanManageJobs()){
     return;
   }
 
@@ -5012,7 +4999,7 @@ function renderJobPackages(job, container){
     openButton.textContent = 'Manage Work Points';
     openButton.onclick = ()=> openJobPackageDetails(jobPackage);
     row.appendChild(openButton);
-    if(userIsCompanyAdmin()){
+    if(userCanManageJobPackages()){
       const deleteButton = document.createElement('button');
       deleteButton.className = 'danger small';
       deleteButton.textContent = 'Delete Test Package';
@@ -5071,14 +5058,14 @@ function refreshOpenJobPackageControls(){
     'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +
     ' · Status: ' + status.toUpperCase() + source;
 
-  const isAdmin = userIsCompanyAdmin();
+  const canManagePackage = userCanManageJobPackages();
   const isClosed = status === 'closed';
-  $('jobPackageAdminTools').classList.toggle('hidden', !isAdmin || isClosed);
-  $('jobPackageImportTools').classList.toggle('hidden', !isAdmin || isClosed);
+  $('jobPackageAdminTools').classList.toggle('hidden', !canManagePackage || isClosed);
+  $('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || isClosed);
 
   const statusButton = $('jobPackageStatusActionBtn');
-  statusButton.classList.toggle('hidden', !isAdmin);
-  if(!isAdmin){
+  statusButton.classList.toggle('hidden', !canManagePackage);
+  if(!canManagePackage){
     return;
   }
 
@@ -5096,7 +5083,7 @@ function refreshOpenJobPackageControls(){
 
 
 async function changeJobPackageStatus(){
-  if(!currentOpenJobPackage || !userIsCompanyAdmin()){
+  if(!currentOpenJobPackage || !userCanManageJobPackages()){
     return;
   }
 
@@ -5155,7 +5142,7 @@ async function loadJobPackageWorkPoints(){
 
 function renderJobPackageWorkPoints(lines){
   const pointGroups = new Map();
-  const packageIsEditable = userIsCompanyAdmin() &&
+  const packageIsEditable = userCanManageJobPackages() &&
     String(currentOpenJobPackage?.status || 'draft').toLowerCase() !== 'closed';
 
   lines.forEach(line => {
