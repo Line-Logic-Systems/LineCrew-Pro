@@ -1,0 +1,42 @@
+name: Inject Expanded JSA
+
+on:
+  push:
+    branches:
+      - feature/expanded-digital-jsa
+
+permissions:
+  contents: write
+
+jobs:
+  inject:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/expanded-digital-jsa
+          fetch-depth: 0
+      - name: Inject expanded JSA script tag
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          text = p.read_text()
+          tag = '<script src="expanded-jsa.js?v=20260819"></script>'
+          if tag not in text:
+              if '</body>' not in text:
+                  raise SystemExit('index.html is missing </body>')
+              text = text.replace('</body>', f'  {tag}\n</body>', 1)
+              p.write_text(text)
+          PY
+      - name: Commit injected tag when needed
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "Expanded JSA script tag already present."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Load expanded digital JSA UI"
+          git push origin HEAD:feature/expanded-digital-jsa
