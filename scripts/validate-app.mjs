@@ -46,13 +46,23 @@ const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== i
 assert(duplicateIds.length === 0, 'Duplicate HTML ids: ' + duplicateIds.join(', '));
 
 const scriptStart = html.indexOf('/* LINECREW PRO SUPABASE */');
-const scriptEnd = html.lastIndexOf('</script>');
+const scriptEnd = html.indexOf('</script>', scriptStart);
 if (scriptStart >= 0 && scriptEnd > scriptStart) {
   const applicationCode = html.slice(scriptStart, scriptEnd);
   try {
     new Function(applicationCode);
   } catch (error) {
     failures.push('Application JavaScript syntax error: ' + error.message);
+  }
+}
+
+// Extension scripts are validated independently so additional script tags do not
+// become part of the main inline application parse window.
+if (fs.existsSync('expanded-jsa.js')) {
+  try {
+    new Function(fs.readFileSync('expanded-jsa.js', 'utf8'));
+  } catch (error) {
+    failures.push('Expanded JSA JavaScript syntax error: ' + error.message);
   }
 }
 
