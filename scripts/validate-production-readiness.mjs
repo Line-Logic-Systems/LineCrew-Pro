@@ -35,7 +35,11 @@ for (const [label, pattern] of publicSecretPatterns) {
 }
 
 assert(assistant.includes('client.auth.getUser()'), 'AI assistant must authenticate the caller.');
-assert(assistant.includes('String(profile.role).toLowerCase() !== "admin"'), 'AI assistant must enforce Admin-only access server-side.');
+assert(assistant.includes('.select("company_id, role, role_permissions")'), 'AI assistant must load role and permission overrides server-side.');
+assert(assistant.includes('role === "owner"'), 'Owner must be authorized for the company assistant.');
+assert(assistant.includes('role === "admin"'), 'Admin must be authorized for the company assistant.');
+assert(assistant.includes('role === "superintendent"'), 'Superintendent authorization must be evaluated server-side.');
+assert(assistant.includes('permissions.ai_assistant !== false'), 'Superintendent AI access must honor the ai_assistant permission override.');
 assert(assistant.includes('.eq("company_id", companyId)'), 'AI assistant company data queries must be tenant-scoped.');
 assert(!assistant.includes('Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")'), 'AI assistant should not use a service-role key for user-scoped reads.');
 
@@ -60,6 +64,6 @@ if (failures.length) {
 console.log('Production readiness validation passed.');
 console.log('- Vercel security headers present');
 console.log('- Public app shell contains no known server-side secret patterns');
-console.log('- Admin-only AI server authorization present');
+console.log('- Owner/Admin/permitted-Superintendent AI authorization present');
 console.log('- AI company queries remain tenant-scoped');
 console.log('- Owner/Admin/Superintendent hierarchy protections present');
