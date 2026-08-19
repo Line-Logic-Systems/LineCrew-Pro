@@ -7,7 +7,7 @@ alter table public.profiles
   add column if not exists role_permissions jsonb not null default '{}'::jsonb;
 
 comment on column public.profiles.role_permissions is
-  'Per-user role overrides. Intended for superintendent access controls; keys are capability names and values are booleans.';
+  'Per-user role overrides for Superintendent capabilities. Missing keys default to allowed; explicit false denies access.';
 
 -- Replace the legacy three-role constraint with the full company hierarchy.
 alter table public.profiles
@@ -95,6 +95,7 @@ grant execute on function public.linecrew_claim_initial_owner() to authenticated
 -- Central role-management RPC.
 -- Owner may assign/remove Admins and manage all lower roles.
 -- Admin may manage Superintendent/GF/Foreman but can never create, demote, or edit an Owner or Admin.
+-- A Superintendent with role_management enabled may manage GF/Foreman only.
 create or replace function public.linecrew_set_member_role(
   target_user_id uuid,
   new_role text
@@ -115,13 +116,25 @@ begin
   end if;
 
   select * into actor from public.profiles where id = auth.uid();
-  if actor.id is null or lower(actor.role) not in ('owner','admin') then
-    raise exception 'Owner or Admin access required';
+  if actor.id is null or lower(actor.role) not in ('owner','admin','superintendent') then
+    raise exception 'Company management access required';
+  end if;
+
+  if lower(actor.role) = 'superintendent'
+     and coalesce((actor.role_permissions ->> 'role_management')::boolean, true) is not true then
+    raise exception 'Role management is disabled for this Superintendent';
   end if;
 
   select * into target from public.profiles where id = target_user_id;
   if target.id is null or target.company_id <> actor.company_id then
     raise exception 'Team member not found';
+  end if;
+
+  if lower(actor.role) = 'superintendent' then
+    if lower(target.role) in ('owner','admin','superintendent')
+       or requested_role in ('owner','admin','superintendent') then
+      raise exception 'A Superintendent can manage General Foreman and Foreman roles only';
+    end if;
   end if;
 
   if lower(actor.role) = 'admin' then
@@ -177,6 +190,8 @@ revoke all on function public.set_company_member_role(uuid,text) from anon;
 grant execute on function public.set_company_member_role(uuid,text) to authenticated;
 
 -- Owner/Admin-controlled Superintendent overrides.
+-- Only known boolean capabilities are accepted so malformed JSON cannot become
+-- an accidental authorization path or break boolean casts in capability checks.
 create or replace function public.linecrew_set_superintendent_permissions(
   target_user_id uuid,
   permissions jsonb
@@ -189,6 +204,23 @@ as $$
 declare
   actor public.profiles%rowtype;
   target public.profiles%rowtype;
+  item record;
+  allowed_keys text[] := array[
+    'company_settings',
+    'team_management',
+    'role_management',
+    'customers_contracts',
+    'price_books',
+    'jobs',
+    'job_packages',
+    'production_review',
+    'reporting',
+    'storm_mode',
+    'safety_records',
+    'actual_pricing',
+    'exports',
+    'ai_assistant'
+  ];
 begin
   select * into actor from public.profiles where id = auth.uid();
   if actor.id is null or lower(actor.role) not in ('owner','admin') then
@@ -203,8 +235,23 @@ begin
     raise exception 'Permission overrides apply only to Superintendents';
   end if;
 
+  permissions := coalesce(permissions, '{}'::jsonb);
+  if jsonb_typeof(permissions) <> 'object' then
+    raise exception 'Superintendent permissions must be a JSON object';
+  end if;
+
+  for item in select key, value from jsonb_each(permissions)
+  loop
+    if not (item.key = any(allowed_keys)) then
+      raise exception 'Unsupported Superintendent capability: %', item.key;
+    end if;
+    if jsonb_typeof(item.value) <> 'boolean' then
+      raise exception 'Superintendent capability % must be true or false', item.key;
+    end if;
+  end loop;
+
   update public.profiles
-  set role_permissions = coalesce(permissions, '{}'::jsonb)
+  set role_permissions = permissions
   where id = target_user_id and company_id = actor.company_id;
 end;
 $$;
