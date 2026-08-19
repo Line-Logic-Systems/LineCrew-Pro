@@ -1,13 +1,15 @@
 name: Patch JSA in-app viewer
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [feature/jsa-inapp-viewer]
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
