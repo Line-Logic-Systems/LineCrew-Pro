@@ -3003,6 +3003,7 @@ function userCanManageRoles(){ return userHasCapability('role_management'); }
 function userCanManageStormMode(){ return userHasCapability('storm_mode'); }
 function userCanManageJobs(){ return userHasCapability('jobs') || currentUserRole() === 'gf'; }
 function userCanReviewProduction(){ return userHasCapability('production_review') || currentUserRole() === 'gf'; }
+function userCanManageProductionRecords(){ return userHasCapability('production_review'); }
 function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
 function userCanUseAssistant(){ return userHasCapability('ai_assistant'); }
 function userCanManageCompanySettings(){ return userHasCapability('company_settings'); }
@@ -12512,9 +12513,7 @@ function dailyReportValueSummaryMarkup(summary){
 }
 
 function dailyReportAuthorizationSummaryMarkup(report, summary){
-  if(!summary || !['admin', 'gf'].includes(
-    String(currentProfile?.role || '').toLowerCase()
-  )) return '';
+  if(!summary || (!userCanReviewProduction() && !userCanUseReporting())) return '';
 
   const status = String(report.status || 'draft').toLowerCase();
   const redlines = Number(summary.redline_count || 0);
@@ -13101,9 +13100,7 @@ window.openDailyUnitEditor = openDailyUnitEditor;
 
  if(
   String(report.status || '').toLowerCase() === 'submitted' &&
-  ['admin','gf'].includes(
-    String(currentProfile.role || '').toLowerCase()
-  )
+  userCanReviewProduction()
 ){
 
   const approveBtn =
@@ -13135,11 +13132,11 @@ window.openDailyUnitEditor = openDailyUnitEditor;
     const requiresAdminOverride =
       redlineCount > 0 &&
       currentCompany?.require_gf_redline_approval === true &&
-      String(currentProfile?.role || '').toLowerCase() === 'admin';
+      currentUserRole() !== 'gf';
 
     const notes = prompt(
       requiresAdminOverride
-        ? 'This company requires GF approval for redlines. Enter the Admin override reason:'
+        ? 'This company requires GF approval for redlines. Enter the leadership override reason:'
         : 'Optional approval notes:',
       ''
     );
@@ -13149,7 +13146,7 @@ window.openDailyUnitEditor = openDailyUnitEditor;
     }
 
     if(requiresAdminOverride && !notes.trim()){
-      alert('An Admin override reason is required for a redline report.');
+      alert('An override reason is required for a redline report.');
       return;
     }
 
@@ -13163,7 +13160,7 @@ window.openDailyUnitEditor = openDailyUnitEditor;
         (pendingCount === 1 ? 'y' : 'ies') +
         ' pending a utility packet\n\n' +
         (requiresAdminOverride
-          ? 'Your Admin override reason will be recorded. Continue?'
+          ? 'Your override reason will be recorded. Continue?'
           : 'Approving confirms that you reviewed these exceptions. Continue?');
     }
 
@@ -13270,7 +13267,7 @@ window.openDailyUnitEditor = openDailyUnitEditor;
 
 }
 
-if(String(currentProfile?.role || '').toLowerCase() === 'admin'){
+if(userCanManageProductionRecords()){
   const reportStatus = String(report.status || 'draft').toLowerCase();
 
   if(reportStatus === 'draft' && report.archived !== true){
