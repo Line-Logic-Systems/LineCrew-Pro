@@ -52,6 +52,35 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
+-- Enforce the company-selected method only when a JSA is created or its source changes.
+-- Existing records remain readable/editable after a company changes its preference.
+create or replace function public.linecrew_validate_jsa_source()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_method text;
+begin
+  select c.jsa_method into v_method
+  from public.companies c
+  where c.id = new.company_id;
+
+  if new.jsa_source = 'digital' and v_method not in ('digital','both') then
+    raise exception using errcode='42501', message='Digital JSAs are disabled in Company Settings.';
+  end if;
+  if new.jsa_source = 'upload' and v_method not in ('upload','both') then
+    raise exception using errcode='42501', message='Uploaded company JSAs are disabled in Company Settings.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists linecrew_validate_jsa_source_trigger on public.daily_report_jsas;
+create trigger linecrew_validate_jsa_source_trigger
+before insert or update of jsa_source, company_id on public.daily_report_jsas
+for each row execute function public.linecrew_validate_jsa_source();
+
 create or replace function public.set_company_jsa_method(p_method text)
 returns text
 language plpgsql
@@ -184,6 +213,134 @@ end;
 $$;
 revoke all on function public.register_jsa_upload_attachment(uuid,text,text,text,bigint,integer) from public, anon;
 grant execute on function public.register_jsa_upload_attachment(uuid,text,text,text,bigint,integer) to authenticated;
+
+create or replace function public.get_uploaded_company_jsas()
+returns table(
+  id uuid,
+  job_id uuid,
+  work_date date,
+  crew_name text,
+  upload_notes text,
+  created_by uuid,
+  created_at timestamptz,
+  job_number text,
+  job_name text,
+  creator_name text,
+  attachment_count bigint
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_company_id uuid;
+  v_role text;
+begin
+  select p.company_id, lower(coalesce(p.role,'')) into v_company_id,v_role
+  from public.profiles p where p.id=auth.uid() and p.active is true;
+  if v_company_id is null then
+    raise exception using errcode='42501', message='An active company profile is required.';
+  end if;
+  if v_role='superintendent' and not public.linecrew_has_capability('safety_records') then
+    raise exception using errcode='42501', message='Safety Records permission is disabled for this Superintendent.';
+  end if;
+
+  return query
+  select j.id,j.job_id,j.work_date,j.crew_name,j.upload_notes,j.created_by,j.created_at,
+         jobs.job_number,jobs.job_name,p.full_name,
+         count(a.id)::bigint
+  from public.daily_report_jsas j
+  join public.jobs jobs on jobs.id=j.job_id and jobs.company_id=j.company_id
+  left join public.profiles p on p.id=j.created_by and p.company_id=j.company_id
+  left join public.jsa_upload_attachments a on a.jsa_id=j.id and a.company_id=j.company_id
+  where j.company_id=v_company_id and j.jsa_source='upload'
+    and (v_role <> 'foreman' or j.created_by=auth.uid())
+  group by j.id,j.job_id,j.work_date,j.crew_name,j.upload_notes,j.created_by,j.created_at,
+           jobs.job_number,jobs.job_name,p.full_name
+  order by j.work_date desc,j.created_at desc;
+end;
+$$;
+revoke all on function public.get_uploaded_company_jsas() from public, anon;
+grant execute on function public.get_uploaded_company_jsas() to authenticated;
+
+create or replace function public.get_jsa_upload_attachments(p_jsa_id uuid)
+returns table(
+  id uuid,
+  storage_path text,
+  original_filename text,
+  mime_type text,
+  file_size_bytes bigint,
+  page_order integer,
+  created_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_company_id uuid;
+  v_role text;
+  v_creator uuid;
+begin
+  select p.company_id, lower(coalesce(p.role,'')) into v_company_id,v_role
+  from public.profiles p where p.id=auth.uid() and p.active is true;
+  select j.created_by into v_creator from public.daily_report_jsas j
+  where j.id=p_jsa_id and j.company_id=v_company_id and j.jsa_source='upload';
+  if v_creator is null then
+    raise exception using errcode='P0002', message='Uploaded JSA not found.';
+  end if;
+  if v_role='foreman' and v_creator<>auth.uid() then
+    raise exception using errcode='42501', message='Foremen can view only their own uploaded JSAs.';
+  end if;
+  if v_role='superintendent' and not public.linecrew_has_capability('safety_records') then
+    raise exception using errcode='42501', message='Safety Records permission is disabled for this Superintendent.';
+  end if;
+
+  return query
+  select a.id,a.storage_path,a.original_filename,a.mime_type,a.file_size_bytes,a.page_order,a.created_at
+  from public.jsa_upload_attachments a
+  where a.company_id=v_company_id and a.jsa_id=p_jsa_id
+  order by a.page_order,a.created_at;
+end;
+$$;
+revoke all on function public.get_jsa_upload_attachments(uuid) from public, anon;
+grant execute on function public.get_jsa_upload_attachments(uuid) to authenticated;
+
+create or replace function public.delete_uploaded_company_jsa(p_jsa_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_company_id uuid;
+  v_role text;
+  v_creator uuid;
+begin
+  select p.company_id, lower(coalesce(p.role,'')) into v_company_id,v_role
+  from public.profiles p where p.id=auth.uid() and p.active is true;
+  select j.created_by into v_creator from public.daily_report_jsas j
+  where j.id=p_jsa_id and j.company_id=v_company_id and j.jsa_source='upload';
+  if v_creator is null then
+    raise exception using errcode='P0002', message='Uploaded JSA not found.';
+  end if;
+  if v_creator<>auth.uid() and v_role not in ('owner','admin','gf') and
+     not (v_role='superintendent' and public.linecrew_has_capability('safety_records')) then
+    raise exception using errcode='42501', message='You cannot delete this uploaded JSA.';
+  end if;
+  delete from public.daily_report_jsas where id=p_jsa_id and company_id=v_company_id;
+end;
+$$;
+revoke all on function public.delete_uploaded_company_jsa(uuid) from public, anon;
+grant execute on function public.delete_uploaded_company_jsa(uuid) to authenticated;
+
+-- Table metadata is read-only to authenticated company members; writes go through RPCs.
+drop policy if exists "jsa attachment company read" on public.jsa_upload_attachments;
+create policy "jsa attachment company read" on public.jsa_upload_attachments
+for select to authenticated
+using (
+  company_id = (select p.company_id from public.profiles p where p.id=auth.uid() and p.active is true)
+);
 
 -- Storage access is company-scoped. Object names must begin with company UUID.
 drop policy if exists "jsa uploads company read" on storage.objects;
