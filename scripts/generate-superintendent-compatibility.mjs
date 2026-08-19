@@ -11,10 +11,10 @@ function capabilityFor(source,fn){
   const f=fn.toLowerCase();
   if(/storm/.test(f)) return 'storm_mode';
   if(/jsa|safety/.test(f)) return 'safety_records';
+  if(/daily_report_(?:value|authorization)_summaries|review_queue|job_progress|reporting|export/.test(f)) return 'reporting';
   if(/price_book/.test(f)) return 'price_books';
   if(/field_value/.test(f)) return 'actual_pricing';
   if(/job_package|work_point|authorized_unit/.test(f)) return 'job_packages';
-  if(/job_progress|reporting|export/.test(f)) return 'reporting';
   if(/job_leader|contract_job|set_job|create_job|delete_job/.test(f)) return 'jobs';
   if(/company_settings/.test(f)) return 'company_settings';
   if(/join_code/.test(f)) return 'team_management';
@@ -40,6 +40,21 @@ function transformRoles(sql){
   sql=sql.replace(/\bv_caller_role\s*<>\s*'admin'/gi,"v_caller_role not in ('admin','owner','superintendent')");
   sql=sql.replace(/\bv_role\s*=\s*'admin'/gi,"v_role in ('admin','owner','superintendent')");
   sql=sql.replace(/\bv_caller_role\s*=\s*'admin'/gi,"v_caller_role in ('admin','owner','superintendent')");
+
+  // Actual contract pricing is independently switchable for Superintendents.
+  // Even inside reporting/review RPCs, a Superintendent sees actual values only
+  // when the actual_pricing capability remains enabled.
+  sql=sql.replace(
+    /v_can_see_actual\s*:=\s*v_role\s+in\s*\(([^;]*'superintendent'[^;]*)\);/gi,
+    (full,list) => {
+      const withoutSuper = list
+        .split(',')
+        .map(v=>v.trim())
+        .filter(v=>!/superintendent/i.test(v))
+        .join(', ');
+      return `v_can_see_actual := v_role in (${withoutSuper}) or\n    (v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing'));`;
+    }
+  );
   return sql;
 }
 
@@ -70,6 +85,7 @@ for(const name of fs.readdirSync(dir).sort()){
 let out='-- Generated capability-aware Superintendent compatibility layer.\n';
 out+='-- Applies after Owner/Superintendent foundation migrations.\n';
 out+='-- Existing Admin/Owner/GF/Foreman behavior is preserved; Superintendent access is gated by the named capability.\n';
+out+='-- Actual pricing remains separately controlled by actual_pricing.\n';
 out+='-- SQL-language helper functions without a PL/pgSQL BEGIN block are intentionally left unchanged.\n\nbegin;\n\n';
 let generated=0;
 for(const block of latest.values()){
