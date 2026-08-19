@@ -16,6 +16,31 @@ assert(html.includes('id="priceBooksPage"'), 'Missing Price Books page.');
 assert(html.includes('id="teamPage"'), 'Missing Team page.');
 assert(html.includes('id="safetyPage"'), 'Missing Safety/JSA page.');
 
+// Weekend pilot critical-role markers. These do not replace server-side policy tests;
+// they prevent accidental removal of required UI wiring during rapid changes.
+for (const marker of [
+  "owner:'Owner'",
+  "admin:'Admin'",
+  "superintendent:'Superintendent'",
+  "gf:'General Foreman'",
+  "foreman:'Foreman'",
+  'linecrew_set_member_role',
+  'linecrew_set_superintendent_permissions',
+  'linecrew_claim_initial_owner'
+]) {
+  assert(html.includes(marker), `Missing critical role/team marker: ${marker}`);
+}
+
+// Flexible JSA/mobile capture and the in-app multi-page viewer are core pilot flows.
+for (const marker of [
+  'jsa-attachment-viewer',
+  'openUploadedJsaFiles',
+  'Upload Company JSA',
+  'Take JSA Photo'
+]) {
+  assert(html.includes(marker), `Missing critical JSA/mobile marker: ${marker}`);
+}
+
 const ids = [...html.matchAll(/\sid=["']([^"']+)["']/g)].map(match => match[1]);
 const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 assert(duplicateIds.length === 0, 'Duplicate HTML ids: ' + duplicateIds.join(', '));
@@ -49,5 +74,7 @@ if (failures.length) {
 console.log('LineCrew Pro validation passed.');
 console.log('- JavaScript syntax is valid');
 console.log('- Required application pages are present');
+console.log('- Owner/Admin/Superintendent/GF/Foreman team wiring is present');
+console.log('- Flexible JSA camera/viewer wiring is present');
 console.log('- HTML ids are unique');
 console.log('- No known server-side secret patterns are exposed');
