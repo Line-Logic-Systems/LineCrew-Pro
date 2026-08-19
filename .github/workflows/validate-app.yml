@@ -29,3 +29,8 @@ jobs:
 
       - name: Validate application
         run: node scripts/validate-app.mjs
+
+      - name: Audit legacy role checks
+        run: |
+          node scripts/audit-role-checks.mjs
+          cat docs/ROLE_AUDIT.md
