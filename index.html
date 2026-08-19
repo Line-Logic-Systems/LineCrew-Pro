@@ -1244,7 +1244,7 @@ button:disabled{
     <div class="metric" id="teamTile">
       <strong>Team</strong>
       <span class="muted">
-        Foremen, GFs and Admins
+        Owners, Admins, Superintendents, GFs and Foremen
       </span>
     </div>
 
@@ -1280,7 +1280,7 @@ button:disabled{
   <details id="adminNotice" class="card collapsible-card hidden">
     <summary>
       <span>
-        <strong>Admin Controls</strong><br>
+        <strong>Company Controls</strong><br>
         <span class="muted">Company settings, pricing and permissions</span>
       </span>
       <span class="role">Open</span>
@@ -2870,7 +2870,7 @@ button:disabled{
     <div class="section-header">
       <div>
         <h2>LineCrew Assistant</h2>
-        <p class="muted">Admin help for setup, pricing, jobs and production.</p>
+        <p class="muted">Leadership help for setup, pricing, jobs and production.</p>
       </div>
       <button id="closeAssistant" class="secondary small">Close</button>
     </div>
@@ -2968,14 +2968,51 @@ const APP_PAGE_IDS = new Set([
   'priceBooksPage'
 ]);
 
-function userIsCompanyAdmin(){
-  return String(currentProfile?.role || '').toLowerCase() === 'admin';
-}
+const SUPERINTENDENT_CAPABILITIES = [
+  ['company_settings','Company Settings'],
+  ['team_management','Team Access'],
+  ['role_management','Role Management'],
+  ['customers_contracts','Customers & Contracts'],
+  ['price_books','Price Books'],
+  ['jobs','Jobs'],
+  ['job_packages','Utility Job Packages'],
+  ['production_review','Production Review'],
+  ['reporting','Reporting'],
+  ['storm_mode','Storm Mode'],
+  ['safety_records','Safety Records'],
+  ['actual_pricing','Actual Contract Pricing'],
+  ['exports','Exports'],
+  ['ai_assistant','AI Assistant']
+];
 
+function currentUserRole(){
+  return String(currentProfile?.role || 'foreman').toLowerCase();
+}
+function userIsOwner(){ return currentUserRole() === 'owner'; }
+function userIsCompanyAdmin(){ return ['owner','admin'].includes(currentUserRole()); }
+function userHasCapability(capability){
+  const role = currentUserRole();
+  if(role === 'owner' || role === 'admin') return true;
+  if(role === 'superintendent'){
+    return currentProfile?.role_permissions?.[capability] !== false;
+  }
+  return false;
+}
+function userCanManageTeam(){ return userHasCapability('team_management'); }
+function userCanManageRoles(){ return userHasCapability('role_management'); }
+function userCanManageStormMode(){ return userHasCapability('storm_mode'); }
+function userCanManageJobs(){ return userHasCapability('jobs') || currentUserRole() === 'gf'; }
+function userCanReviewProduction(){ return userHasCapability('production_review') || currentUserRole() === 'gf'; }
+function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
+function userCanUseAssistant(){ return userHasCapability('ai_assistant'); }
 function userCanSeeActualContractPrices(){
-  return ['admin', 'gf'].includes(
-    String(currentProfile?.role || '').toLowerCase()
-  );
+  return ['owner','admin','gf'].includes(currentUserRole()) ||
+    (currentUserRole() === 'superintendent' && userHasCapability('actual_pricing'));
+}
+function userHasAnyCompanyControls(){
+  return userIsCompanyAdmin() || (currentUserRole() === 'superintendent' && [
+    'company_settings','storm_mode','team_management','customers_contracts','price_books','jobs'
+  ].some(userHasCapability));
 }
 
 function applyStormModeUi(){
@@ -3006,7 +3043,7 @@ async function loadStormModeAssignments(){
     currentStormModeAssigned = assignedData === true;
   }
 
-  if(userIsCompanyAdmin()){
+  if(userCanManageStormMode()){
     const { data:members, error:membersError } = await sb.rpc(
       'get_storm_mode_assignments'
     );
@@ -3033,7 +3070,7 @@ function renderStormCrewAssignments(){
 
   list.replaceChildren();
 
-  if(!userIsCompanyAdmin()){
+  if(!userCanManageStormMode()){
     status.textContent = '';
     return;
   }
@@ -3115,9 +3152,7 @@ async function displayAppPage(page, state = {}){
   }
 
   if(page === 'jobsPage'){
-    const canManageJobs =
-      currentProfile?.role === 'admin' ||
-      currentProfile?.role === 'gf';
+    const canManageJobs = userCanManageJobs();
 
     $('showCreateJobBtn')
       .classList
@@ -3314,21 +3349,9 @@ async function loadApp(){
       : profile.role;
 
 
-  if(profile.role === 'admin'){
-
-    $('assistantLauncher').classList.remove('hidden');
-    $('adminNotice')
-      .classList
-      .remove('hidden');
-
-  }else{
-
-    $('assistantLauncher').classList.add('hidden');
-    $('assistantPanel').classList.add('hidden');
-    $('adminNotice')
-      .classList
-      .add('hidden');
-  }
+  $('assistantLauncher').classList.toggle('hidden', !userCanUseAssistant());
+  if(!userCanUseAssistant()) $('assistantPanel').classList.add('hidden');
+  $('adminNotice').classList.toggle('hidden', !userHasAnyCompanyControls());
 
   await Promise.all([
     loadDashboardReviewAlert(),
@@ -3896,7 +3919,7 @@ $('refreshTeamBtn').onclick = async () => {
 };
 
 $('copyJoinCodeBtn').onclick = async () => {
-  if(!userIsCompanyAdmin() || !currentCompany?.join_code){
+  if(!userCanManageTeam() || !currentCompany?.join_code){
     return;
   }
 
@@ -3909,7 +3932,7 @@ $('copyJoinCodeBtn').onclick = async () => {
 };
 
 $('rotateJoinCodeBtn').onclick = async () => {
-  if(!userIsCompanyAdmin()){
+  if(!userCanManageTeam()){
     return;
   }
 
@@ -3947,218 +3970,154 @@ $('rotateJoinCodeBtn').onclick = async () => {
 };
 
 function formatTeamRole(role){
-  const roleLabels = {
-    admin:'Admin',
-    gf:'General Foreman',
-    foreman:'Foreman'
-  };
-
+  const roleLabels = { owner:'Owner', admin:'Admin', superintendent:'Superintendent', gf:'General Foreman', foreman:'Foreman' };
   return roleLabels[String(role || '').toLowerCase()] || 'Foreman';
+}
+
+function roleOptionsForMember(member){
+  const actor = currentUserRole();
+  const target = String(member.role || 'foreman').toLowerCase();
+  if(actor === 'owner') return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin'],['owner','Owner']];
+  if(actor === 'admin'){
+    if(['owner','admin'].includes(target)) return [];
+    return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent']];
+  }
+  if(actor === 'superintendent' && userCanManageRoles()){
+    if(!['foreman','gf'].includes(target)) return [];
+    return [['foreman','Foreman'],['gf','General Foreman']];
+  }
+  return [];
+}
+
+function canChangeMemberAccess(member){
+  if(member.id === currentProfile.id || !userCanManageTeam()) return false;
+  const actor = currentUserRole();
+  const target = String(member.role || 'foreman').toLowerCase();
+  if(actor === 'owner') return true;
+  if(actor === 'admin') return !['owner','admin'].includes(target);
+  if(actor === 'superintendent') return ['foreman','gf'].includes(target);
+  return false;
+}
+
+function renderSuperintendentPermissions(member, card){
+  if(String(member.role || '').toLowerCase() !== 'superintendent' || !userIsCompanyAdmin()) return;
+  const details = document.createElement('details');
+  details.className = 'job-card';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Superintendent Permissions';
+  details.appendChild(summary);
+  const intro = document.createElement('p');
+  intro.className = 'muted';
+  intro.textContent = 'Checked permissions are available to this Superintendent. Owner/Admin can change them at any time.';
+  details.appendChild(intro);
+  const checks = new Map();
+  SUPERINTENDENT_CAPABILITIES.forEach(([key,labelText]) => {
+    const label = document.createElement('label');
+    label.className = 'checkbox-row';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = member.role_permissions?.[key] !== false;
+    checks.set(key,input);
+    label.append(input, document.createTextNode(labelText));
+    details.appendChild(label);
+  });
+  const save = document.createElement('button');
+  save.className = 'success small';
+  save.textContent = 'Save Superintendent Permissions';
+  save.onclick = async () => {
+    const permissions = {};
+    checks.forEach((input,key) => { permissions[key] = input.checked; });
+    save.disabled = true;
+    const { error } = await sb.rpc('linecrew_set_superintendent_permissions', { target_user_id:member.id, permissions });
+    save.disabled = false;
+    if(error) return alert('Unable to save Superintendent permissions: ' + error.message);
+    alert('Superintendent permissions saved.');
+    await loadTeamMembers();
+  };
+  details.appendChild(save);
+  card.appendChild(details);
+}
+
+async function claimInitialOwner(){
+  if(currentUserRole() !== 'admin') return;
+  if(!confirm('Make your account the Owner for this company? The Owner controls Admin access and company governance.')) return;
+  const { error } = await sb.rpc('linecrew_claim_initial_owner');
+  if(error) return alert('Unable to assign Owner: ' + error.message);
+  alert('You are now the company Owner.');
+  await loadApp();
 }
 
 async function loadTeamMembers(){
   $('teamLoading').classList.remove('hidden');
   $('teamList').replaceChildren();
-
-  const isAdmin = userIsCompanyAdmin();
-  $('teamAdminTools').classList.toggle('hidden', !isAdmin);
-  $('teamJoinCode').textContent = isAdmin
-    ? (currentCompany?.join_code || 'No code available')
-    : '';
-
-  const { data:members, error } = await sb
-    .from('profiles')
-    .select('id, full_name, role, company_id, active')
-    .eq('company_id', currentProfile.company_id)
-    .order('full_name', { ascending:true });
-
+  const canManageTeam = userCanManageTeam();
+  $('teamAdminTools').classList.toggle('hidden', !canManageTeam);
+  $('teamJoinCode').textContent = canManageTeam ? (currentCompany?.join_code || 'No code available') : '';
+  const { data:members, error } = await sb.from('profiles')
+    .select('id, full_name, role, role_permissions, company_id, active')
+    .eq('company_id', currentProfile.company_id).order('full_name', { ascending:true });
   $('teamLoading').classList.add('hidden');
+  if(error) return alert('Unable to load team members: ' + error.message);
+  if(!members?.length){ $('teamList').innerHTML = '<p class="muted">No team members found.</p>'; return; }
 
-  if(error){
-    alert('Unable to load team members: ' + error.message);
-    return;
+  const hasOwner = members.some(member => String(member.role || '').toLowerCase() === 'owner');
+  if(!hasOwner && currentUserRole() === 'admin'){
+    const notice = document.createElement('div');
+    notice.className = 'job-card';
+    notice.innerHTML = '<strong>Company Owner not assigned</strong><p class="muted">Claim the Owner role to manage Admins and protect company governance.</p>';
+    const button = document.createElement('button');
+    button.className = 'success small';
+    button.textContent = 'Make Me Company Owner';
+    button.onclick = claimInitialOwner;
+    notice.appendChild(button);
+    $('teamList').appendChild(notice);
   }
-
-  if(!members?.length){
-    const emptyMessage = document.createElement('p');
-    emptyMessage.className = 'muted';
-    emptyMessage.textContent = 'No team members found.';
-    $('teamList').appendChild(emptyMessage);
-    return;
-  }
-
-  const adminCount = members.filter(
-    member => String(member.role || '').toLowerCase() === 'admin'
-  ).length;
 
   const fragment = document.createDocumentFragment();
-
   members.forEach(member => {
     const card = document.createElement('div');
-    card.className =
-      'job-card' + (member.active === false ? ' inactive' : '');
-
+    card.className = 'job-card' + (member.active === false ? ' inactive' : '');
     const name = document.createElement('strong');
     name.textContent = member.full_name || 'Unnamed Team Member';
     card.appendChild(name);
-
-    if(member.id === currentProfile.id){
-      const you = document.createElement('span');
-      you.className = 'muted';
-      you.textContent = ' (You)';
-      card.appendChild(you);
+    if(member.id === currentProfile.id){ const you=document.createElement('span'); you.className='muted'; you.textContent=' (You)'; card.appendChild(you); }
+    const roleLine=document.createElement('div'); roleLine.className='job-info'; roleLine.textContent='Role: '+formatTeamRole(member.role)+' • Access: '+(member.active===false?'Suspended':'Active'); card.appendChild(roleLine);
+    const options = userCanManageRoles() ? roleOptionsForMember(member) : [];
+    if(options.length){
+      const controls=document.createElement('div'); controls.className='import-actions';
+      const roleSelect=document.createElement('select'); roleSelect.className='team-role-select';
+      options.forEach(([value,label]) => { const option=document.createElement('option'); option.value=value; option.textContent=label; roleSelect.appendChild(option); });
+      roleSelect.value=String(member.role||'foreman').toLowerCase();
+      const save=document.createElement('button'); save.className='secondary small'; save.textContent='Save Role'; save.onclick=()=>updateTeamMemberRole(member,roleSelect.value);
+      controls.append(roleSelect,save); card.appendChild(controls);
     }
-
-    const roleLine = document.createElement('div');
-    roleLine.className = 'job-info';
-    roleLine.textContent =
-      'Role: ' + formatTeamRole(member.role) +
-      ' • Access: ' + (member.active === false ? 'Suspended' : 'Active');
-    card.appendChild(roleLine);
-
-    if(isAdmin){
-      const controls = document.createElement('div');
-      controls.className = 'import-actions';
-
-      const roleSelect = document.createElement('select');
-      roleSelect.className = 'team-role-select';
-
-      [
-        ['foreman', 'Foreman'],
-        ['gf', 'General Foreman'],
-        ['admin', 'Admin']
-      ].forEach(([value, label]) => {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = label;
-        roleSelect.appendChild(option);
-      });
-
-      const memberRole = String(member.role || 'foreman').toLowerCase();
-      roleSelect.value = memberRole === 'employee' ? 'foreman' : memberRole;
-
-      const saveButton = document.createElement('button');
-      saveButton.className = 'secondary small';
-      saveButton.textContent = 'Save Role';
-      saveButton.onclick = () => updateTeamMemberRole(
-        member,
-        roleSelect.value,
-        adminCount
-      );
-
-      controls.appendChild(roleSelect);
-      controls.appendChild(saveButton);
-
-      if(member.id !== currentProfile.id){
-        const accessButton = document.createElement('button');
-        accessButton.className =
-          (member.active === false ? 'success' : 'warning') + ' small';
-        accessButton.textContent =
-          member.active === false ? 'Restore Access' : 'Suspend Access';
-        accessButton.onclick = () => changeTeamMemberAccess(member);
-        controls.appendChild(accessButton);
-      }
-
-      card.appendChild(controls);
+    if(canChangeMemberAccess(member)){
+      const access=document.createElement('button'); access.className=(member.active===false?'success':'warning')+' small'; access.textContent=member.active===false?'Restore Access':'Suspend Access'; access.onclick=()=>changeTeamMemberAccess(member); card.appendChild(access);
     }
-
+    renderSuperintendentPermissions(member,card);
     fragment.appendChild(card);
   });
-
-  $('teamList').replaceChildren(fragment);
+  $('teamList').appendChild(fragment);
 }
 
-async function updateTeamMemberRole(member, nextRole, adminCount){
-  if(!userIsCompanyAdmin()){
-    return;
-  }
-
-  const storedRole = String(member.role || 'foreman').toLowerCase();
-  const currentRole = storedRole === 'employee' ? 'foreman' : storedRole;
-
-  if(currentRole === nextRole){
-    alert('This team member already has that role.');
-    return;
-  }
-
-  if(currentRole === 'admin' && nextRole !== 'admin' && adminCount <= 1){
-    alert('Assign another Admin before changing the last Admin’s role.');
-    return;
-  }
-
-  const confirmed = confirm(
-    'Change ' + (member.full_name || 'this team member') +
-    ' from ' + formatTeamRole(currentRole) +
-    ' to ' + formatTeamRole(nextRole) + '?'
-  );
-
-  if(!confirmed){
-    return;
-  }
-
-  const { error } = await sb.rpc(
-    'set_company_member_role',
-    {
-      p_member_id:member.id,
-      p_role:nextRole
-    }
-  );
-
-  if(error){
-    alert('Unable to update the team member’s role: ' + error.message);
-    await loadTeamMembers();
-    return;
-  }
-
-  if(member.id === currentProfile.id){
-    currentProfile.role = nextRole;
-    $('userRole').textContent = nextRole;
-    $('adminNotice').classList.toggle('hidden', !userIsCompanyAdmin());
-  }
-
-  await loadTeamMembers();
+async function updateTeamMemberRole(member,nextRole){
+  if(!userCanManageRoles()) return;
+  const currentRole=String(member.role||'foreman').toLowerCase();
+  if(currentRole===nextRole) return alert('This team member already has that role.');
+  if(!confirm('Change '+(member.full_name||'this team member')+' from '+formatTeamRole(currentRole)+' to '+formatTeamRole(nextRole)+'?')) return;
+  const { error } = await sb.rpc('linecrew_set_member_role',{ target_user_id:member.id,new_role:nextRole });
+  if(error){ alert('Unable to update the team member’s role: '+error.message); await loadTeamMembers(); return; }
+  if(member.id===currentProfile.id) await loadApp(); else await loadTeamMembers();
 }
 
 async function changeTeamMemberAccess(member){
-  if(!userIsCompanyAdmin() || member.id === currentProfile.id){
-    return;
-  }
-
-  const restoreAccess = member.active === false;
-  const memberName = member.full_name || 'this team member';
-
-  const confirmed = confirm(
-    (restoreAccess ? 'Restore access for ' : 'Suspend access for ') +
-    memberName + '?\n\n' +
-    (restoreAccess
-      ? 'They will be able to sign in and access this company again.'
-      : 'They will be signed out and blocked from company data. Their historical records will remain.')
-  );
-
-  if(!confirmed){
-    return;
-  }
-
-  const { error } = await sb.rpc(
-    'set_company_member_active',
-    {
-      p_member_id:member.id,
-      p_active:restoreAccess
-    }
-  );
-
-  if(error){
-    alert('Unable to change team access: ' + error.message);
-    await loadTeamMembers();
-    return;
-  }
-
-  alert(
-    restoreAccess
-      ? 'Team member access restored.'
-      : 'Team member access suspended.'
-  );
-
+  if(!canChangeMemberAccess(member)) return;
+  const restoreAccess=member.active===false;
+  const memberName=member.full_name||'this team member';
+  if(!confirm((restoreAccess?'Restore access for ':'Suspend access for ')+memberName+'?')) return;
+  const { error } = await sb.rpc('set_company_member_active',{ p_member_id:member.id,p_active:restoreAccess });
+  if(error){ alert('Unable to change team access: '+error.message); await loadTeamMembers(); return; }
+  alert(restoreAccess?'Team member access restored.':'Team member access suspended.');
   await loadTeamMembers();
 }
 
@@ -4173,9 +4132,7 @@ $('jobsTile').onclick = async()=>{
   }
 
 
-  const canManageJobs =
-    currentProfile.role === 'admin' ||
-    currentProfile.role === 'gf';
+  const canManageJobs = userCanManageJobs();
 
 
   if(canManageJobs){
@@ -6237,9 +6194,7 @@ async function loadCompanyOnboarding(){
 
 async function loadDashboardReviewAlert(){
   const alertCard = $('dashboardReviewAlert');
-  const canReview = ['admin','gf'].includes(
-    String(currentProfile?.role || '').toLowerCase()
-  );
+  const canReview = userCanReviewProduction();
 
   if(!canReview){
     alertCard.classList.add('hidden');
