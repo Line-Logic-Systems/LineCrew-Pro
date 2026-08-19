@@ -79,6 +79,94 @@ main{
   margin-top:0;
 }
 
+.jsa-attachment-viewer{
+  position:fixed;
+  inset:0;
+  z-index:100;
+  background:rgba(6,20,34,.78);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+}
+
+.jsa-attachment-viewer.hidden{
+  display:none!important;
+}
+
+.jsa-attachment-viewer-card{
+  width:min(1000px,100%);
+  max-height:94vh;
+  overflow:auto;
+  background:white;
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 18px 60px rgba(0,0,0,.35);
+}
+
+.jsa-attachment-viewer-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  position:sticky;
+  top:-16px;
+  background:white;
+  padding:4px 0 12px;
+  z-index:2;
+}
+
+.jsa-attachment-viewer-header button{
+  width:auto;
+  margin:0;
+}
+
+.jsa-attachment-grid{
+  display:grid;
+  gap:16px;
+}
+
+.jsa-attachment-page{
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:10px;
+  background:#f8fafc;
+}
+
+.jsa-attachment-page img{
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:78vh;
+  object-fit:contain;
+  border-radius:10px;
+  background:white;
+}
+
+.jsa-attachment-page iframe{
+  width:100%;
+  min-height:72vh;
+  border:0;
+  border-radius:10px;
+  background:white;
+}
+
+.jsa-attachment-page-title{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  margin-bottom:8px;
+  font-weight:800;
+}
+
+@media(max-width:600px){
+  .jsa-attachment-viewer{padding:0;}
+  .jsa-attachment-viewer-card{border-radius:0;max-height:100vh;min-height:100vh;padding:12px;}
+  .jsa-attachment-viewer-header{top:-12px;}
+  .jsa-attachment-page iframe{min-height:68vh;}
+}
+
 .card{
   background:var(--card);
   border-radius:20px;
@@ -1860,6 +1948,19 @@ button:disabled{
     <h3>No JSAs Yet</h3>
     <p class="muted">Morning safety briefings will appear here.</p>
   </div>
+  <div id="jsaAttachmentViewer" class="jsa-attachment-viewer hidden" role="dialog" aria-modal="true" aria-labelledby="jsaAttachmentViewerTitle">
+    <div class="jsa-attachment-viewer-card">
+      <div class="jsa-attachment-viewer-header">
+        <div>
+          <h2 id="jsaAttachmentViewerTitle" style="margin:0">JSA Attachments</h2>
+          <div id="jsaAttachmentViewerMeta" class="muted"></div>
+        </div>
+        <button id="closeJsaAttachmentViewer" type="button" class="secondary small">Close</button>
+      </div>
+      <div id="jsaAttachmentViewerContent" class="jsa-attachment-grid"></div>
+    </div>
+  </div>
+
   <div id="uploadedCompanyJsaSection" class="card hidden">
     <div class="section-header">
       <div>
@@ -13837,14 +13938,79 @@ $('saveCompanyJsaUploadBtn').onclick = async () => {
   alert('Company JSA uploaded successfully.');
 };
 
+function closeJsaAttachmentViewer(){
+  $('jsaAttachmentViewer').classList.add('hidden');
+  $('jsaAttachmentViewerContent').replaceChildren();
+}
+
+$('closeJsaAttachmentViewer').onclick = closeJsaAttachmentViewer;
+$('jsaAttachmentViewer').addEventListener('click', event => {
+  if(event.target === $('jsaAttachmentViewer')) closeJsaAttachmentViewer();
+});
+document.addEventListener('keydown', event => {
+  if(event.key === 'Escape' && !$('jsaAttachmentViewer').classList.contains('hidden')) closeJsaAttachmentViewer();
+});
+
 async function openUploadedJsaFiles(jsa){
   const { data, error } = await sb.rpc('get_jsa_upload_attachments', { p_jsa_id:jsa.id });
   if(error) return alert('Unable to load JSA files: ' + error.message);
-  if(!data?.length) return alert('No files are attached to this uploaded JSA.');
-  for(const attachment of data){
+  const attachments = [...(data || [])].sort((a,b) => (a.page_order || 0) - (b.page_order || 0));
+  if(!attachments.length) return alert('No files are attached to this uploaded JSA.');
+
+  const viewer = $('jsaAttachmentViewer');
+  const content = $('jsaAttachmentViewerContent');
+  $('jsaAttachmentViewerTitle').textContent = 'Company JSA';
+  $('jsaAttachmentViewerMeta').textContent = (jsa.work_date ? jsa.work_date + ' • ' : '') + attachments.length + ' attachment' + (attachments.length === 1 ? '' : 's');
+  content.replaceChildren();
+  viewer.classList.remove('hidden');
+
+  for(let i=0;i<attachments.length;i++){
+    const attachment = attachments[i];
     const signed = await sb.storage.from('jsa-uploads').createSignedUrl(attachment.storage_path, 300);
-    if(signed.error){ alert('Unable to open ' + attachment.original_filename + ': ' + signed.error.message); continue; }
-    window.open(signed.data.signedUrl, '_blank', 'noopener');
+    const page = document.createElement('div');
+    page.className = 'jsa-attachment-page';
+
+    const title = document.createElement('div');
+    title.className = 'jsa-attachment-page-title';
+    const label = document.createElement('span');
+    label.textContent = 'Page ' + (i + 1) + ' of ' + attachments.length;
+    const name = document.createElement('span');
+    name.className = 'muted';
+    name.textContent = attachment.original_filename || '';
+    title.append(label, name);
+    page.appendChild(title);
+
+    if(signed.error){
+      const err = document.createElement('div');
+      err.className = 'muted';
+      err.textContent = 'Unable to load this attachment: ' + signed.error.message;
+      page.appendChild(err);
+      content.appendChild(page);
+      continue;
+    }
+
+    const url = signed.data.signedUrl;
+    const mime = String(attachment.mime_type || '').toLowerCase();
+    if(mime.startsWith('image/')){
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = 'JSA page ' + (i + 1);
+      img.loading = 'eager';
+      page.appendChild(img);
+    }else if(mime === 'application/pdf'){
+      const frame = document.createElement('iframe');
+      frame.src = url;
+      frame.title = 'JSA PDF ' + (i + 1);
+      page.appendChild(frame);
+    }else{
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'Open attachment';
+      page.appendChild(link);
+    }
+    content.appendChild(page);
   }
 }
 
