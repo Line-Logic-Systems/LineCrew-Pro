@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: validate-linecrew-${{ github.ref }}
@@ -26,20 +26,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Apply JSA camera patch on feature branch
-        if: github.event_name == 'pull_request' && github.head_ref == 'feature/jsa-camera-capture'
-        run: |
-          git fetch origin "${{ github.head_ref }}"
-          git checkout "${{ github.head_ref }}"
-          node scripts/add-jsa-camera.mjs
-          if ! git diff --quiet -- index.html; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add index.html
-            git commit -m "Add direct camera capture for uploaded JSAs"
-            git push origin HEAD:"${{ github.head_ref }}"
-          fi
 
       - name: Validate application
         run: node scripts/validate-app.mjs
