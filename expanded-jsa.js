@@ -411,7 +411,7 @@
     btn.disabled = true;
     btn.textContent = 'Saving...';
     try {
-      const { data, error } = await supabaseClient.rpc('create_standalone_jsa_v2', {
+      const { data, error } = await sb.rpc('create_standalone_jsa_v2', {
         p_job_id: value('safetyJsaJob'),
         p_work_date: value('safetyJsaDate'),
         p_crew_name: value('safetyJsaCrew'),
