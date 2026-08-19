@@ -51,8 +51,12 @@ assert(roleMigration.includes('linecrew_claim_initial_owner'), 'Role migration m
 assert(roleMigration.includes('linecrew_set_member_role'), 'Role migration must centralize role changes.');
 assert(roleMigration.includes('Only an Owner can manage Owner or Admin roles'), 'Admins must not be able to manage Owners or peer Admins.');
 assert(roleMigration.includes('Assign another Owner before removing the last Owner'), 'The last Owner must be protected from removal.');
+assert(roleMigration.includes('A Superintendent can manage General Foreman and Foreman roles only'), 'Superintendent delegated role management must stop above GF/Foreman.');
+assert(roleMigration.includes("role_permissions ->> 'role_management'"), 'Superintendent role-management capability must be enforced server-side.');
 assert(roleMigration.includes('set_company_member_role'), 'The legacy Team-screen RPC must be routed through the new role hierarchy.');
 assert(roleMigration.includes('linecrew_set_superintendent_permissions'), 'Superintendent permission overrides must be server-enforced.');
+assert(roleMigration.includes("'ai_assistant'"), 'AI assistant must be a controlled Superintendent capability.');
+assert(roleMigration.includes("jsonb_typeof(item.value) <> 'boolean'"), 'Superintendent overrides must accept boolean values only.');
 assert(roleMigration.includes('company_id = actor.company_id'), 'Role mutations must remain company-scoped.');
 
 if (failures.length) {
@@ -67,3 +71,4 @@ console.log('- Public app shell contains no known server-side secret patterns');
 console.log('- Owner/Admin/permitted-Superintendent AI authorization present');
 console.log('- AI company queries remain tenant-scoped');
 console.log('- Owner/Admin/Superintendent hierarchy protections present');
+console.log('- Superintendent permission values and delegated role-management limits validated');
