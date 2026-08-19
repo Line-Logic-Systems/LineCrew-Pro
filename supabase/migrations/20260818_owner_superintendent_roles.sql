@@ -1,7 +1,6 @@
 -- LineCrew Pro: Owner + configurable Superintendent role foundation
 -- Apply in Supabase before enabling the matching frontend controls.
--- Owner is company-level full access. Superintendent starts with broad operational
--- access, but Admin/Owner may disable individual capabilities per user.
+-- Existing role codes are: foreman, gf, admin. New codes: superintendent, owner.
 
 alter table public.profiles
   add column if not exists role_permissions jsonb not null default '{}'::jsonb;
@@ -16,7 +15,7 @@ set search_path = public
 as $$
 begin
   new.role := lower(trim(new.role));
-  if new.role not in ('foreman','general_foreman','superintendent','admin','owner') then
+  if new.role not in ('foreman','gf','superintendent','admin','owner') then
     raise exception 'Unsupported LineCrew Pro role: %', new.role;
   end if;
   if new.role <> 'superintendent' then
@@ -84,9 +83,8 @@ $$;
 revoke all on function public.linecrew_claim_initial_owner() from public;
 grant execute on function public.linecrew_claim_initial_owner() to authenticated;
 
--- Central role-management RPC.
 -- Owner may assign/remove Admins and manage all lower roles.
--- Admin may manage Superintendent/GF/Foreman but can never create, demote, or edit an Owner.
+-- Admin may manage Superintendent/GF/Foreman but can never create, demote, or edit an Owner or another Admin.
 create or replace function public.linecrew_set_member_role(
   target_user_id uuid,
   new_role text
@@ -102,7 +100,7 @@ declare
   requested_role text := lower(trim(new_role));
   remaining_owners integer;
 begin
-  if requested_role not in ('foreman','general_foreman','superintendent','admin','owner') then
+  if requested_role not in ('foreman','gf','superintendent','admin','owner') then
     raise exception 'Unsupported role';
   end if;
 
