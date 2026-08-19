@@ -1,0 +1,26 @@
+name: Apply Flexible JSA UI
+on:
+  push:
+    branches: [feature/flexible-jsa-upload]
+    paths:
+      - scripts/apply-flexible-jsa-ui.mjs
+      - .github/workflows/apply-flexible-jsa-ui.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/flexible-jsa-upload
+      - run: node scripts/apply-flexible-jsa-ui.mjs
+      - run: node scripts/validate-app.mjs
+      - name: Commit patched app
+        run: |
+          if git diff --quiet -- index.html; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Add flexible JSA upload controls"
+          git push origin HEAD:feature/flexible-jsa-upload
