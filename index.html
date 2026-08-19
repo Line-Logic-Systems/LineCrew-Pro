@@ -3005,6 +3005,12 @@ function userCanManageJobs(){ return userHasCapability('jobs') || currentUserRol
 function userCanReviewProduction(){ return userHasCapability('production_review') || currentUserRole() === 'gf'; }
 function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
 function userCanUseAssistant(){ return userHasCapability('ai_assistant'); }
+function userCanManageCompanySettings(){ return userHasCapability('company_settings'); }
+function userCanManageCustomersContracts(){ return userHasCapability('customers_contracts'); }
+function userCanManagePriceBooks(){ return userHasCapability('price_books'); }
+function userCanManageJobPackages(){ return userHasCapability('job_packages'); }
+function userCanExport(){ return userHasCapability('exports') || currentUserRole() === 'gf'; }
+function userCanSeeSafetyRecords(){ return userHasCapability('safety_records') || ['gf','foreman'].includes(currentUserRole()); }
 function userCanSeeActualContractPrices(){
   return ['owner','admin','gf'].includes(currentUserRole()) ||
     (currentUserRole() === 'superintendent' && userHasCapability('actual_pricing'));
@@ -6095,7 +6101,7 @@ function onboardingStatusRow(label, complete, actionLabel, action){
 
 async function loadCompanyOnboarding(){
   const card = $('companyOnboarding');
-  if(!userIsCompanyAdmin()){
+  if(!userHasAnyCompanyControls()){
     card.classList.add('hidden');
     return;
   }
@@ -6276,7 +6282,7 @@ function applyCompanyBranding(company){
 }
 
 $('saveCompanySettings').onclick = async () => {
-  if(!userIsCompanyAdmin()) return;
+  if(!userCanManageCompanySettings()) return;
 
   const name = $('companyDisplayName').value.trim();
   if(!name){
@@ -6315,7 +6321,7 @@ $('saveCompanySettings').onclick = async () => {
 };
 
 $('saveRedlineApprovalSetting').onclick = async () => {
-  if(!userIsCompanyAdmin()) return;
+  if(!userCanReviewProduction()) return;
 
   const required = $('requireGfRedlineApproval').checked;
   const button = $('saveRedlineApprovalSetting');
@@ -6344,7 +6350,7 @@ $('saveRedlineApprovalSetting').onclick = async () => {
 };
 
 $('saveStormModeSetting').onclick = async () => {
-  if(!userIsCompanyAdmin()) return;
+  if(!userCanManageStormMode()) return;
   const enabled = $('stormModeEnabled').checked;
   const eventName = $('stormEventName').value.trim();
   const selectedUserIds = selectedStormCrewIds();
@@ -6477,7 +6483,7 @@ $('refreshPriceBooksBtn').onclick = async () => {
 
 $('addCustomerBtn').onclick = () => {
 
-  if(!userIsCompanyAdmin()){
+  if(!userCanManageCustomersContracts()){
     return;
   }
 
@@ -6505,8 +6511,8 @@ $('cancelCustomerBtn').onclick = () => {
 
 $('saveCustomerBtn').onclick = async () => {
 
-  if(!userIsCompanyAdmin()){
-    alert('Only company admins can manage customers and utilities.');
+  if(!userCanManageCustomersContracts()){
+    alert('You do not have permission to manage customers and utilities.');
     return;
   }
 
@@ -6642,7 +6648,7 @@ async function loadCustomers(){
   currentCustomerCatalog = customers || [];
   $('addCustomerBtn').classList.toggle(
     'hidden',
-    !userIsCompanyAdmin()
+    !userCanManageCustomersContracts()
   );
 
 
@@ -6705,7 +6711,7 @@ async function loadCustomers(){
       </div>
     `;
 
-    if(userIsCompanyAdmin()){
+    if(userCanManageCustomersContracts()){
       const actions = document.createElement('div');
       actions.className = 'import-actions';
 
@@ -6770,7 +6776,7 @@ function downloadCompanyCatalogCsv(headers, rows, filename){
 }
 
 $('exportCustomersBtn').onclick = () => {
-  if(!userIsCompanyAdmin()) return;
+  if(!userCanManageCustomersContracts() || !userCanExport()) return;
   if(currentCustomerCatalog.length === 0){
     alert('There are no customers or utilities to export.');
     return;
@@ -6792,7 +6798,7 @@ $('exportCustomersBtn').onclick = () => {
 
 function editCustomer(customer){
 
-  if(!userIsCompanyAdmin()){
+  if(!userCanManageCustomersContracts()){
     return;
   }
 
@@ -6814,7 +6820,7 @@ function editCustomer(customer){
 
 async function changeCustomerStatus(customer){
 
-  if(!userIsCompanyAdmin()){
+  if(!userCanManageCustomersContracts()){
     return;
   }
 
@@ -6873,7 +6879,7 @@ async function changeCustomerStatus(customer){
 
 $('addContractBtn').onclick = async () => {
 
-  if(!userIsCompanyAdmin()){
+  if(!userCanManageCustomersContracts()){
     return;
   }
 
@@ -6940,8 +6946,8 @@ $('cancelContractBtn').onclick = () => {
 
 $('saveContractBtn').onclick = async () => {
 
-  if(!userIsCompanyAdmin()){
-    alert('Only company admins can manage contracts.');
+  if(!userCanManageCustomersContracts()){
+    alert('You do not have permission to manage contracts.');
     return;
   }
 
@@ -7113,7 +7119,7 @@ async function loadContracts(){
 
   currentContractFieldSettings = new Map();
 
-  if(userIsCompanyAdmin()){
+  if(userCanManageCustomersContracts()){
     const { data:settings, error:settingsError } = await sb.rpc(
       'get_contract_field_settings'
     );
@@ -7134,7 +7140,7 @@ async function loadContracts(){
   currentContractCatalog = contracts || [];
   $('addContractBtn').classList.toggle(
     'hidden',
-    !userIsCompanyAdmin()
+    !userCanManageCustomersContracts()
   );
 
   if(!contracts || contracts.length === 0){
@@ -7181,7 +7187,7 @@ async function loadContracts(){
         ${contract.start_date ? `Start: ${escapeHtml(contract.start_date)}<br>` : ''}
         ${contract.end_date ? `End: ${escapeHtml(contract.end_date)}<br>` : ''}
         ${contract.notes ? `Notes: ${escapeHtml(contract.notes)}<br>` : ''}
-        ${userIsCompanyAdmin() ? `Foreman Field Value: <strong>${
+        ${userCanManageCustomersContracts() ? `Foreman Field Value: <strong>${
           currentContractFieldSettings.has(contract.id)
             ? escapeHtml(currentContractFieldSettings.get(contract.id)) + '%'
             : 'Actual price (no adjustment)'
@@ -7189,7 +7195,7 @@ async function loadContracts(){
       </div>
     `;
 
-    if(userIsCompanyAdmin()){
+    if(userCanManageCustomersContracts()){
       const actions = document.createElement('div');
       actions.className = 'import-actions';
 
@@ -7241,7 +7247,7 @@ $('contractLibrarySearch').addEventListener('input', applyContractFilters);
 $('contractLibraryStatus').addEventListener('change', applyContractFilters);
 
 $('exportContractsBtn').onclick = () => {
-  if(!userIsCompanyAdmin()) return;
+  if(!userCanManageCustomersContracts() || !userCanExport()) return;
   if(currentContractCatalog.length === 0){
     alert('There are no contracts to export.');
     return;
@@ -7287,7 +7293,7 @@ function populateContractCustomers(selectedCustomerId = ''){
 
 function editContract(contract){
 
-  if(!userIsCompanyAdmin()){
+  if(!userCanManageCustomersContracts()){
     return;
   }
 
@@ -7308,7 +7314,7 @@ function editContract(contract){
 
 async function changeContractStatus(contract){
 
-  if(!userIsCompanyAdmin()){
+  if(!userCanManageCustomersContracts()){
     return;
   }
 
@@ -8921,7 +8927,7 @@ async function fetchPriceBookItemsForCurrentUser(priceBookId){
 }
 
 function userCanManagePriceBooks(){
-  return userIsCompanyAdmin();
+  return userHasCapability('price_books');
 }
 
 function resetPriceBookImport(){
