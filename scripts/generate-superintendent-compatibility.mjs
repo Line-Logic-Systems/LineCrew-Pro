@@ -45,7 +45,7 @@ function transformRoles(sql){
 
 function injectCapability(sql,cap){
   const marker=/\bbegin\s*\n/i;
-  if(!marker.test(sql)) throw new Error('No BEGIN found');
+  if(!marker.test(sql)) return null;
   const gate=`begin\n  if exists (\n    select 1 from public.profiles p\n    where p.id = auth.uid()\n      and lower(coalesce(p.role,'')) = 'superintendent'\n  ) and not public.linecrew_has_capability('${cap}') then\n    raise exception using\n      errcode = '42501',\n      message = 'This Superintendent does not have ${cap.replaceAll('_',' ')} permission.';\n  end if;\n`;
   return sql.replace(marker,gate);
 }
@@ -60,6 +60,7 @@ for(const name of fs.readdirSync(dir).sort()){
     const fn=String(match[1]||'').toLowerCase();
     if(excluded.has(fn) || fn.startsWith('public.linecrew_')) continue;
     if(!/admin/i.test(match[0])) continue;
+    if(!/\bbegin\s*\n/i.test(match[0])) continue;
     const cap=capabilityFor(name,fn);
     if(!cap) continue;
     latest.set(fn,{source:name,fn,cap,sql:match[0]});
@@ -68,13 +69,17 @@ for(const name of fs.readdirSync(dir).sort()){
 
 let out='-- Generated capability-aware Superintendent compatibility layer.\n';
 out+='-- Applies after Owner/Superintendent foundation migrations.\n';
-out+='-- Existing Admin/Owner/GF/Foreman behavior is preserved; Superintendent access is gated by the named capability.\n\nbegin;\n\n';
+out+='-- Existing Admin/Owner/GF/Foreman behavior is preserved; Superintendent access is gated by the named capability.\n';
+out+='-- SQL-language helper functions without a PL/pgSQL BEGIN block are intentionally left unchanged.\n\nbegin;\n\n';
+let generated=0;
 for(const block of latest.values()){
   let sql=transformRoles(block.sql);
   sql=injectCapability(sql,block.cap);
+  if(!sql) continue;
   out+=`-- Source: ${block.source}\n-- Superintendent capability: ${block.cap}\n${sql}\n\n`;
+  generated += 1;
 }
 out+='commit;\n';
 fs.writeFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql',out);
-console.log(`Generated Superintendent compatibility for ${latest.size} functions.`);
+console.log(`Generated Superintendent compatibility for ${generated} functions.`);
 for(const b of latest.values()) console.log('-',b.fn,b.cap,'<-',b.source);
