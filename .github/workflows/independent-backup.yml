@@ -42,3 +42,17 @@ jobs:
           path: linecrew-pro-backup.tgz
           retention-days: 30
           if-no-files-found: error
+      - name: Copy backup to Azure Blob Storage
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_BACKUP_CONNECTION_STRING }}
+        run: |
+          test -n "$AZURE_STORAGE_CONNECTION_STRING"
+          BLOB_NAME="linecrew-pro-backup-${GITHUB_RUN_NUMBER}-$(date -u +%Y%m%dT%H%M%SZ).tgz"
+          az storage blob upload \
+            --connection-string "$AZURE_STORAGE_CONNECTION_STRING" \
+            --container-name linecrew-pro-backups \
+            --name "$BLOB_NAME" \
+            --file linecrew-pro-backup.tgz \
+            --overwrite false \
+            --only-show-errors
+          echo "Azure backup uploaded as $BLOB_NAME"
