@@ -4,7 +4,7 @@
   const byId=id=>document.getElementById(id);
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=v=>Number(v||0)||0;
-  const sb=()=>typeof window.sb!=='undefined'?window.sb:(typeof sb!=='undefined'?sb:null);
+  const getSb=()=>{try{return typeof sb!=='undefined'?sb:(window.sb||window.supabaseClient||null);}catch(_){return window.sb||window.supabaseClient||null;}};
   const profile=()=>typeof currentProfile!=='undefined'?currentProfile:window.currentProfile;
   let rows=[];
   let employees=new Map();
@@ -14,10 +14,11 @@
 
   async function refs(){
     const companyId=profile()?.company_id;
-    if(!companyId||!sb()) return;
+    const client=getSb();
+    if(!companyId||!client) return;
     const [{data:e,error:ee},{data:j,error:je}]=await Promise.all([
-      sb().from('timekeeping_employees').select('id,employee_number,full_name,classification,default_crew_name,active').eq('company_id',companyId),
-      sb().from('jobs').select('id,job_number,job_name').eq('company_id',companyId)
+      client.from('timekeeping_employees').select('id,employee_number,full_name,classification,default_crew_name,active').eq('company_id',companyId),
+      client.from('jobs').select('id,job_number,job_name').eq('company_id',companyId)
     ]);
     if(ee) throw ee;
     if(je) throw je;
@@ -44,7 +45,8 @@
 
   async function run(){
     const box=byId('tkReportList');
-    if(!box||!sb()) return;
+    const client=getSb();
+    if(!box||!client) return;
     const btn=byId('tkRunReportBtn');
     const done=window.LineCrewUI?.loadingButton?.(btn,'Running…')||(()=>{});
     try{
@@ -54,7 +56,7 @@
       if(!from||!through) return;
       const emp=byId('tkEmployeeFilter')?.value||null;
       const job=byId('tkJobFilter')?.value||null;
-      const {data,error}=await sb().rpc('timekeeping_report_rows',{p_from:from,p_through:through,p_employee:emp,p_job:job});
+      const {data,error}=await client.rpc('timekeeping_report_rows',{p_from:from,p_through:through,p_employee:emp,p_job:job});
       if(error) throw error;
       rows=data||[];
       populateCrewFilter();
