@@ -1,0 +1,1 @@
+JSA crew members and the JSA Leader / Person in Charge now sign with a canvas signature pad using finger, mouse, or stylus. The existing printed-name fields remain readable text. Signature images are stored in the existing JSA details JSON payload so no separate signature-storage table is required.
