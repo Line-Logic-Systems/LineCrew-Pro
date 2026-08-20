@@ -21,17 +21,74 @@
     const status=document.createElement('span');status.className='lc-signature-status';status.textContent='Sign above with finger, mouse, or stylus';
     const clear=document.createElement('button');clear.type='button';clear.className='secondary small';clear.textContent='Clear Signature';
     actions.append(status,clear);wrap.append(canvas,actions);input.insertAdjacentElement('afterend',wrap);
-    let drawing=false,last=null,signed=false;
+    let drawing=false,last=null,signed=!!input.value;
     const ctx=canvas.getContext('2d');
-    function resize(){const r=canvas.getBoundingClientRect();const ratio=Math.max(1,window.devicePixelRatio||1);const prev=input.value;canvas.width=Math.round(r.width*ratio);canvas.height=Math.round(120*ratio);ctx.setTransform(ratio,0,0,ratio,0,0);ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#102235';if(prev&&prev.startsWith('data:image/')){const img=new Image();img.onload=()=>ctx.drawImage(img,0,0,r.width,120);img.src=prev;}}
-    function pos(e){const r=canvas.getBoundingClientRect();const p=e.touches?.[0]||e.changedTouches?.[0]||e;return{x:p.clientX-r.left,y:p.clientY-r.top}}
-    function start(e){e.preventDefault();drawing=true;last=pos(e);canvas.setPointerCapture?.(e.pointerId)}
-    function move(e){if(!drawing)return;e.preventDefault();const p=pos(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;signed=true;status.textContent='Signature captured';status.classList.add('signed');}
-    function end(e){if(!drawing)return;e?.preventDefault?.();drawing=false;if(signed){input.value=canvas.toDataURL('image/png');input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));}}
-    canvas.addEventListener('pointerdown',start);canvas.addEventListener('pointermove',move);canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
-    canvas.addEventListener('touchstart',start,{passive:false});canvas.addEventListener('touchmove',move,{passive:false});canvas.addEventListener('touchend',end,{passive:false});
-    clear.onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);signed=false;input.value='';status.textContent='Sign above with finger, mouse, or stylus';status.classList.remove('signed');input.dispatchEvent(new Event('change',{bubbles:true}));};
-    requestAnimationFrame(resize);window.addEventListener('resize',()=>setTimeout(resize,120));
+
+    function paintStored(){
+      const r=canvas.getBoundingClientRect();
+      const stored=input.value;
+      if(stored&&stored.startsWith('data:image/')){
+        const img=new Image();
+        img.onload=()=>ctx.drawImage(img,0,0,r.width,120);
+        img.src=stored;
+        signed=true;
+        status.textContent='Signature captured';
+        status.classList.add('signed');
+      }
+    }
+
+    function resize(){
+      const r=canvas.getBoundingClientRect();
+      const ratio=Math.max(1,window.devicePixelRatio||1);
+      const snapshot=signed ? canvas.toDataURL('image/png') : input.value;
+      canvas.width=Math.max(1,Math.round(r.width*ratio));
+      canvas.height=Math.round(120*ratio);
+      ctx.setTransform(ratio,0,0,ratio,0,0);
+      ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#102235';
+      if(snapshot&&snapshot.startsWith('data:image/')){
+        const img=new Image();
+        img.onload=()=>ctx.drawImage(img,0,0,r.width,120);
+        img.src=snapshot;
+      }
+    }
+    function pos(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+    function start(e){
+      if(e.button!==undefined&&e.button!==0)return;
+      e.preventDefault();
+      drawing=true;
+      last=pos(e);
+      canvas.setPointerCapture?.(e.pointerId);
+      ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(last.x+.01,last.y+.01);ctx.stroke();
+      signed=true;
+      status.textContent='Signature captured';status.classList.add('signed');
+    }
+    function move(e){if(!drawing)return;e.preventDefault();const p=pos(e);ctx.beginPath();ctx.moveTo(last.x,last.y);ctx.lineTo(p.x,p.y);ctx.stroke();last=p;signed=true;}
+    function end(e){
+      if(!drawing)return;
+      e.preventDefault();
+      drawing=false;
+      canvas.releasePointerCapture?.(e.pointerId);
+      if(signed){
+        input.value=canvas.toDataURL('image/png');
+        // Do not dispatch synthetic input/change events here. The JSA save flow
+        // reads the hidden value directly, and synthetic change events caused the
+        // signature UI to be reprocessed immediately after pointer release.
+        status.textContent='Signature captured';status.classList.add('signed');
+      }
+    }
+    canvas.addEventListener('pointerdown',start);
+    canvas.addEventListener('pointermove',move);
+    canvas.addEventListener('pointerup',end);
+    canvas.addEventListener('pointercancel',end);
+    canvas.addEventListener('pointerleave',e=>{if(drawing&&e.buttons===0)end(e)});
+
+    clear.onclick=()=>{
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      signed=false;input.value='';
+      status.textContent='Sign above with finger, mouse, or stylus';status.classList.remove('signed');
+    };
+    requestAnimationFrame(()=>{resize();paintStored();});
+    window.addEventListener('resize',()=>setTimeout(resize,120));
   }
 
   function upgrade(){
