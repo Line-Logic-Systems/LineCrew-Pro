@@ -72,4 +72,9 @@
   script.src = 'expanded-jsa-core.js?v=20260820';
   script.defer = false;
   document.head.appendChild(script);
+
+  const timekeepingScript = document.createElement('script');
+  timekeepingScript.src = 'timekeeping.js?v=20260820';
+  timekeepingScript.defer = false;
+  document.head.appendChild(timekeepingScript);
 })();
