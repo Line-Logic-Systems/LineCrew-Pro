@@ -10,6 +10,31 @@
   const checked = (name) => [...document.querySelectorAll(`[name="${name}"]:checked`)].map((el) => el.value);
   const yn = (id) => value(id);
 
+  // Simple subscriber help entry point. No training completion dashboard or manager tracking.
+  function addTrainingTile(){
+    const dashboard = byId('dashboardPage');
+    if(!dashboard || byId('trainingTile')) return;
+    const grid = dashboard.querySelector('.grid');
+    if(!grid) return;
+    const tile = document.createElement('div');
+    tile.className = 'metric';
+    tile.id = 'trainingTile';
+    tile.setAttribute('role','link');
+    tile.setAttribute('tabindex','0');
+    tile.innerHTML = '<strong>Training</strong><span class="muted">How-to videos for your LineCrew Pro role</span>';
+    const openTraining = () => { window.location.href = '/training/'; };
+    tile.addEventListener('click', openTraining);
+    tile.addEventListener('keydown', (event) => {
+      if(event.key === 'Enter' || event.key === ' '){
+        event.preventDefault();
+        openTraining();
+      }
+    });
+    grid.appendChild(tile);
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addTrainingTile);
+  else addTrainingTile();
+
   const form = byId('safetyJsaForm');
   if (!form) return;
 
