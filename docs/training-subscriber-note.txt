@@ -1,1 +1,2 @@
-x
+Subscriber-only training center: https://app.linecrewpro.com/training/
+Public website training page must not expose private video URLs.
