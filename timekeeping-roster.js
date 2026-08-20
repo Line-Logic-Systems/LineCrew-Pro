@@ -172,15 +172,19 @@
   }
 
   function assignedOptions(selected=''){
-    const list=assigned.length ? assigned : [];
-    return '<option value="">Select employee</option>'+list.map(e=>`<option value="${esc(e.id)}" ${e.id===selected?'selected':''}>${esc(e.full_name)}${e.classification?' — '+esc(e.classification):''}</option>`).join('');
+    const active = roster.filter(e=>e.active);
+    return '<option value="">Select employee</option>'+active.map(e=>{
+      const mine=e.assigned_foreman_id===userId();
+      const borrowed=!!e.assigned_foreman_id && !mine;
+      const suffix=borrowed ? ' — Other crew' : '';
+      return `<option value="${esc(e.id)}" ${e.id===selected?'selected':''}>${esc(e.full_name)}${e.classification?' — '+esc(e.classification):''}${suffix}</option>`;
+    }).join('');
   }
 
   function restrictDailySelectors(){
-    if(role()!=='foreman' || !assigned.length)return;
+    if(role()!=='foreman')return;
     document.querySelectorAll('#dailyCrewTimeRows .tk-employee').forEach(select=>{
       const selected=select.value;
-      if(selected && !assigned.some(e=>e.id===selected)) return;
       const html=assignedOptions(selected);
       if(select.innerHTML!==html){select.innerHTML=html;select.value=selected;}
     });
@@ -195,7 +199,7 @@
     const key=form.dataset.reportId||`new:${byId('dailyJobId')?.value||''}:${byId('dailyWorkDate')?.value||''}`;
     if(lastAutoLoadKey===key){restrictDailySelectors();return;}
     await loadRoster();
-    if(!assigned.length){lastAutoLoadKey=key;return;}
+    if(!assigned.length){lastAutoLoadKey=key;restrictDailySelectors();return;}
     await new Promise(resolve=>setTimeout(resolve,220));
     if(rowsBox.querySelector('.tk-crew-row')){lastAutoLoadKey=key;restrictDailySelectors();return;}
     assigned.forEach(employee=>{
