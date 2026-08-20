@@ -12,6 +12,8 @@
     if(byId('lcSigStyles'))return;
     const s=document.createElement('style');s.id='lcSigStyles';s.textContent=`
       .lc-signature-wrap{border:1px solid #cfdbe5;border-radius:12px;background:#fff;overflow:hidden;margin:6px 0 12px}
+      .lc-signature-host-label{display:block!important;min-width:0}
+      .lc-signature-host-label>.lc-signature-wrap{width:100%;margin:6px 0 0}
       .lc-signature-svg{display:block;width:100%;height:120px;touch-action:none;background:repeating-linear-gradient(0deg,#fff,#fff 31px,#edf2f6 32px);cursor:crosshair;user-select:none;-webkit-user-select:none}
       .lc-signature-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 9px;background:#f7fafc;border-top:1px solid #e3eaf0;font-size:12px;color:#667788}
       .lc-signature-actions button{width:auto!important;margin:0!important;padding:6px 10px!important}
@@ -47,15 +49,17 @@
   }
 
   function installPad(input,label){
-    if(!input||input.dataset.signaturePadInstalled==='mouseup-safe')return;
+    if(!input||input.dataset.signaturePadInstalled==='layout-safe')return;
     const labelEl=input.closest('label');
-    const oldWrap=labelEl?.nextElementSibling;
-    if(oldWrap?.classList?.contains('lc-signature-wrap'))oldWrap.remove();
+    const oldSibling=labelEl?.nextElementSibling;
+    if(oldSibling?.classList?.contains('lc-signature-wrap'))oldSibling.remove();
+    const oldInner=labelEl?.querySelector(':scope > .lc-signature-wrap');
+    if(oldInner)oldInner.remove();
 
     const key=keyFor(input);
     let strokes=cache.get(key)||decodeExisting(input.value)||[];
     cache.set(key,strokes);
-    input.dataset.signaturePadInstalled='mouseup-safe';input.type='hidden';
+    input.dataset.signaturePadInstalled='layout-safe';input.type='hidden';
 
     const wrap=document.createElement('div');wrap.className='lc-signature-wrap';
     const svg=document.createElementNS(NS,'svg');svg.classList.add('lc-signature-svg');svg.setAttribute('viewBox','0 0 1000 200');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-label',label||'Signature pad');
@@ -63,7 +67,12 @@
     const status=document.createElement('span');status.className='lc-signature-status';
     const clear=document.createElement('button');clear.type='button';clear.className='secondary small';clear.textContent='Clear Signature';
     actions.append(status,clear);wrap.append(svg,actions);
-    if(labelEl)labelEl.insertAdjacentElement('afterend',wrap);else input.insertAdjacentElement('afterend',wrap);
+
+    // Mount the pad inside the existing Signature label/grid cell so it stays
+    // directly under "Signature" in the right-hand column. Release suppression
+    // below keeps label/default mouse behavior from disturbing the captured ink.
+    if(labelEl){labelEl.classList.add('lc-signature-host-label');labelEl.appendChild(wrap)}
+    else input.insertAdjacentElement('afterend',wrap);
 
     const setStatus=()=>{const signed=strokes.some(s=>s.length>1);status.textContent=signed?'Signature captured':'Sign above with finger, mouse, or stylus';status.classList.toggle('signed',signed)};
     const persist=()=>{cache.set(key,strokes);input.value=strokes.some(s=>s.length>1)?svgData(strokes):'';setStatus()};
