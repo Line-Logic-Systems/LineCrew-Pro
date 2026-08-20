@@ -47,8 +47,6 @@
     });
   }
 
-  // The existing password button owns the update call. Clear the guard only after
-  // that flow succeeds and the app hides the recovery card.
   const saveButton = document.getElementById('saveRecoveryPassword');
   if (saveButton) {
     saveButton.addEventListener('click', () => {
@@ -61,26 +59,24 @@
     });
   }
 
-  // Keep the dashboard copy aligned with the live Production workflow.
   const productionTile = document.getElementById('productionTile');
   const productionDescription = productionTile?.querySelector('.muted');
   if (productionDescription) {
     productionDescription.textContent = 'Daily production reporting and review';
   }
 
-  const script = document.createElement('script');
-  script.src = 'expanded-jsa-core.js?v=20260820';
-  script.defer = false;
-  document.head.appendChild(script);
-
-  const timekeepingScript = document.createElement('script');
-  timekeepingScript.src = 'timekeeping.js?v=20260820';
-  timekeepingScript.defer = false;
-  timekeepingScript.onload = () => {
-    const rosterScript = document.createElement('script');
-    rosterScript.src = 'timekeeping-roster.js?v=20260820b';
-    rosterScript.defer = false;
-    document.head.appendChild(rosterScript);
+  const load = (src, onload) => {
+    const script = document.createElement('script');
+    script.src = src;
+    script.defer = false;
+    if (onload) script.onload = onload;
+    document.head.appendChild(script);
   };
-  document.head.appendChild(timekeepingScript);
+
+  load('app-polish.js?v=20260820');
+  load('expanded-jsa-core.js?v=20260820', () => load('jsa-signatures.js?v=20260820'));
+  load('timekeeping.js?v=20260820', () => {
+    load('timekeeping-roster.js?v=20260820b');
+    load('timekeeping-report-v2.js?v=20260820');
+  });
 })();
