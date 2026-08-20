@@ -6,7 +6,7 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const profile=()=>typeof currentProfile!=='undefined'?currentProfile:window.currentProfile;
   const role=()=>String(profile()?.role||'').toLowerCase();
-  const sb=()=>typeof window.sb!=='undefined'?window.sb:(typeof sb!=='undefined'?sb:null);
+  const getSb=()=>{try{return typeof sb!=='undefined'?sb:(window.sb||window.supabaseClient||null);}catch(_){return window.sb||window.supabaseClient||null;}};
   const toast=(m,t='info')=>window.LineCrewUI?.toast?.(m,t)||console.log(m);
   let periodState={status:'open'};
   let exceptions=[];
@@ -97,8 +97,8 @@
   function currentRange(){return [byId('tkFromDate')?.value||'',byId('tkThroughDate')?.value||''];}
 
   async function refreshPeriod(){
-    const [from,through]=currentRange();if(!from||!through||!sb())return;
-    const {data,error}=await sb().rpc('timekeeping_period_state',{p_start:from,p_end:through});
+    const [from,through]=currentRange();const client=getSb();if(!from||!through||!client)return;
+    const {data,error}=await client.rpc('timekeeping_period_state',{p_start:from,p_end:through});
     if(error){toast('Could not load pay-period status: '+error.message,'error');return;}
     periodState=(data&&data[0])||{period_start:from,period_end:through,status:'open'};
     renderPeriodState();
@@ -128,7 +128,8 @@
     const button=byId({approve:'tkApprovePeriodBtn',reopen:'tkReopenPeriodBtn',lock:'tkLockPeriodBtn',unlock:'tkUnlockPeriodBtn'}[action]);
     const done=window.LineCrewUI?.loadingButton?.(button,action==='approve'?'Approving…':action==='lock'?'Locking…':'Working…')||(()=>{});
     try{
-      const {data,error}=await sb().rpc('timekeeping_set_period_status',{p_start:from,p_end:through,p_action:action});
+      const client=getSb();if(!client)throw new Error('Database connection is not ready.');
+      const {data,error}=await client.rpc('timekeeping_set_period_status',{p_start:from,p_end:through,p_action:action});
       if(error)throw error;periodState=(data&&data[0])||periodState;renderPeriodState();toast(`Pay period ${action==='approve'?'approved':action==='lock'?'locked':action==='unlock'?'unlocked':'reopened'}.`,'success');
     }catch(error){toast(error.message||'Could not update pay period.','error');}finally{done();}
   }
