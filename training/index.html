@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b2d4d">
+  <title>LineCrew Pro Training Center</title>
+  <link rel="stylesheet" href="./training-center.css">
+  <style>
+    :root{font-family:Arial,Helvetica,sans-serif;color:#102235;background:#f3f6f9}
+    body{margin:0;background:#f3f6f9}
+    .topbar{background:#0b2d4d;color:white;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .topbar strong{font-size:24px}.topbar a{color:white;text-decoration:none;font-weight:700;border:1px solid rgba(255,255,255,.4);padding:9px 12px;border-radius:10px}
+    #signedOut{max-width:720px;margin:60px auto;padding:28px;background:white;border-radius:18px;border:1px solid #dce5ed;text-align:center}
+    #signedOut a{display:inline-block;background:#1677d2;color:white;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:10px}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <header class="topbar">
+    <strong>LineCrew Pro Training</strong>
+    <a href="/">Back to App</a>
+  </header>
+  <main>
+    <div id="signedOut" hidden>
+      <h2>Subscriber Training</h2>
+      <p>Sign in to your LineCrew Pro company account to access training.</p>
+      <a href="/">Go to LineCrew Pro Login</a>
+    </div>
+    <div id="trainingRoot"></div>
+  </main>
+
+  <script>
+    const SUPABASE_URL='https://ldgkyxuozbozgkvwzadg.supabase.co';
+    const SUPABASE_KEY='sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
+    window.supabaseClient=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  </script>
+  <script src="./training-center.js"></script>
+  <script>
+    (async()=>{
+      const {data:{session}}=await window.supabaseClient.auth.getSession();
+      if(!session){
+        document.getElementById('trainingRoot').hidden=true;
+        document.getElementById('signedOut').hidden=false;
+        return;
+      }
+      await window.LineCrewTrainingCenter.render(document.getElementById('trainingRoot'));
+    })();
+  </script>
+</body>
+</html>
