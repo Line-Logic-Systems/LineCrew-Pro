@@ -1,0 +1,162 @@
+// LineCrew Pro subscriber-only Training Center
+// Expected global: window.supabaseClient
+
+(function () {
+  const ROLE_RANK = { foreman: 1, gf: 2, superintendent: 3, admin: 4, owner: 5 };
+
+  const CATEGORIES = [
+    ['welcome', 'Welcome & Overview'],
+    ['foreman', 'Foreman Training'],
+    ['gf', 'General Foreman Training'],
+    ['superintendent', 'Superintendent Training'],
+    ['admin', 'Admin Training'],
+    ['owner', 'Owner Training']
+  ];
+
+  async function getAccess() {
+    const sb = window.supabaseClient;
+    if (!sb) throw new Error('Supabase client is not available.');
+    const { data, error } = await sb.rpc('current_training_access');
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row || !row.can_train) throw new Error('Training is available to active LineCrew Pro subscribers.');
+    return row;
+  }
+
+  async function loadVideos() {
+    const sb = window.supabaseClient;
+    const { data, error } = await sb
+      .from('training_videos')
+      .select('id,slug,title,description,category,sort_order,storage_path,duration_seconds,minimum_role')
+      .eq('active', true)
+      .order('category')
+      .order('sort_order');
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function loadProgress() {
+    const sb = window.supabaseClient;
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return new Map();
+    const { data } = await sb
+      .from('training_progress')
+      .select('video_id,completed_at,last_position_seconds')
+      .eq('user_id', user.id);
+    return new Map((data || []).map(x => [x.video_id, x]));
+  }
+
+  async function signedVideoUrl(path) {
+    const sb = window.supabaseClient;
+    const { data, error } = await sb.storage.from('training-videos').createSignedUrl(path, 60 * 15);
+    if (error) throw error;
+    return data.signedUrl;
+  }
+
+  async function saveProgress(videoId, seconds, completed) {
+    const sb = window.supabaseClient;
+    const access = await getAccess();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+    const now = new Date().toISOString();
+    await sb.from('training_progress').upsert({
+      company_id: access.company_id,
+      user_id: user.id,
+      video_id: videoId,
+      started_at: now,
+      completed_at: completed ? now : null,
+      last_position_seconds: Math.max(0, Math.floor(seconds || 0)),
+      updated_at: now
+    }, { onConflict: 'user_id,video_id' });
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  }
+
+  function durationLabel(seconds) {
+    if (!seconds) return '';
+    const m = Math.max(1, Math.round(seconds / 60));
+    return `${m} min`;
+  }
+
+  async function render(root) {
+    root.innerHTML = '<div class="training-loading">Loading Training Center…</div>';
+    try {
+      const access = await getAccess();
+      const [videos, progress] = await Promise.all([loadVideos(), loadProgress()]);
+      const role = String(access.role || '').toLowerCase();
+      const roleRank = ROLE_RANK[role] || 0;
+      const groups = CATEGORIES.map(([key, label]) => ({ key, label, videos: videos.filter(v => v.category === key && roleRank >= (ROLE_RANK[v.minimum_role] || 1)) }))
+        .filter(g => g.videos.length);
+
+      root.innerHTML = `
+        <section class="training-center-shell">
+          <div class="training-center-hero">
+            <div>
+              <div class="training-eyebrow">Subscriber Training</div>
+              <h2>LineCrew Pro Training Center</h2>
+              <p>Role-based training for your company. Your access follows your LineCrew Pro role and subscription.</p>
+            </div>
+            <div class="training-access-pill">${escapeHtml(role.replace('gf','General Foreman'))}</div>
+          </div>
+          <div class="training-groups">
+            ${groups.map(g => `
+              <section class="training-group">
+                <h3>${escapeHtml(g.label)}</h3>
+                <div class="training-grid">
+                  ${g.videos.map(v => {
+                    const p = progress.get(v.id);
+                    const done = !!p?.completed_at;
+                    return `
+                    <button class="training-card" data-training-video="${escapeHtml(v.id)}" data-path="${escapeHtml(v.storage_path)}" data-title="${escapeHtml(v.title)}">
+                      <span class="training-play">▶</span>
+                      <span class="training-card-copy">
+                        <strong>${escapeHtml(v.title)}</strong>
+                        <small>${escapeHtml(v.description || '')}</small>
+                        <em>${durationLabel(v.duration_seconds)}${done ? ' • Completed' : ''}</em>
+                      </span>
+                    </button>`;
+                  }).join('')}
+                </div>
+              </section>`).join('')}
+          </div>
+          <div class="training-player-wrap" hidden>
+            <button class="training-close" type="button">Close</button>
+            <h3 class="training-player-title"></h3>
+            <video class="training-player" controls playsinline preload="metadata"></video>
+          </div>
+        </section>`;
+
+      const wrap = root.querySelector('.training-player-wrap');
+      const player = root.querySelector('.training-player');
+      const title = root.querySelector('.training-player-title');
+      let currentVideoId = null;
+
+      root.querySelectorAll('[data-training-video]').forEach(btn => btn.addEventListener('click', async () => {
+        currentVideoId = btn.dataset.trainingVideo;
+        title.textContent = btn.dataset.title || 'Training Video';
+        player.src = await signedVideoUrl(btn.dataset.path);
+        wrap.hidden = false;
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        player.play().catch(() => {});
+      }));
+
+      player.addEventListener('timeupdate', () => {
+        if (!currentVideoId) return;
+        if (Math.floor(player.currentTime) % 15 === 0) saveProgress(currentVideoId, player.currentTime, false).catch(() => {});
+      });
+      player.addEventListener('ended', () => currentVideoId && saveProgress(currentVideoId, player.duration || player.currentTime, true));
+      root.querySelector('.training-close').addEventListener('click', () => {
+        player.pause();
+        player.removeAttribute('src');
+        player.load();
+        wrap.hidden = true;
+      });
+    } catch (err) {
+      root.innerHTML = `<div class="training-denied"><h3>Training Center</h3><p>${escapeHtml(err.message || 'Training is not available for this account.')}</p></div>`;
+    }
+  }
+
+  window.LineCrewTrainingCenter = { render };
+})();
