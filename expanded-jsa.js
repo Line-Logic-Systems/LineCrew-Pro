@@ -61,6 +61,13 @@
     });
   }
 
+  // Keep the dashboard copy aligned with the live Production workflow.
+  const productionTile = document.getElementById('productionTile');
+  const productionDescription = productionTile?.querySelector('.muted');
+  if (productionDescription) {
+    productionDescription.textContent = 'Daily production reporting and review';
+  }
+
   const script = document.createElement('script');
   script.src = 'expanded-jsa-core.js?v=20260820';
   script.defer = false;
