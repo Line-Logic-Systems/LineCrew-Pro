@@ -1,4 +1,4 @@
-/* LineCrew Pro - handwritten JSA signatures (window-capture SVG implementation) */
+/* LineCrew Pro - handwritten JSA signatures (SVG implementation) */
 (() => {
   'use strict';
   const byId=id=>document.getElementById(id);
@@ -6,7 +6,7 @@
   const NS='http://www.w3.org/2000/svg';
   const cache=window.__lineCrewSignatureStrokes||(window.__lineCrewSignatureStrokes=new Map());
   let active=null;
-  let suppressClickUntil=0;
+  let suppressReleaseUntil=0;
 
   function addStyles(){
     if(byId('lcSigStyles'))return;
@@ -47,7 +47,7 @@
   }
 
   function installPad(input,label){
-    if(!input||input.dataset.signaturePadInstalled==='window-capture')return;
+    if(!input||input.dataset.signaturePadInstalled==='mouseup-safe')return;
     const labelEl=input.closest('label');
     const oldWrap=labelEl?.nextElementSibling;
     if(oldWrap?.classList?.contains('lc-signature-wrap'))oldWrap.remove();
@@ -55,7 +55,7 @@
     const key=keyFor(input);
     let strokes=cache.get(key)||decodeExisting(input.value)||[];
     cache.set(key,strokes);
-    input.dataset.signaturePadInstalled='window-capture';input.type='hidden';
+    input.dataset.signaturePadInstalled='mouseup-safe';input.type='hidden';
 
     const wrap=document.createElement('div');wrap.className='lc-signature-wrap';
     const svg=document.createElementNS(NS,'svg');svg.classList.add('lc-signature-svg');svg.setAttribute('viewBox','0 0 1000 200');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-label',label||'Signature pad');
@@ -76,20 +76,16 @@
       const current=[point(e)];
       strokes=[...strokes,current];cache.set(key,strokes);
       const line=addStroke(svg,current);
-      active={pointerId:e.pointerId,svg,wrap,input,key,getStrokes:()=>strokes,setStrokes:v=>{strokes=v},current,line,point,persist,status};
-      svg.setPointerCapture?.(e.pointerId);
+      active={pointerId:e.pointerId,svg,input,current,line,point,persist};
       status.textContent='Signing…';status.classList.add('signed');
     });
 
     clear.onclick=e=>{
       e.preventDefault();e.stopPropagation();
-      strokes=[];cache.set(key,strokes);input.value='';
-      while(svg.firstChild)svg.removeChild(svg.firstChild);setStatus();
+      strokes=[];cache.set(key,strokes);input.value='';while(svg.firstChild)svg.removeChild(svg.firstChild);setStatus();
     };
   }
 
-  // Capture move/release at WINDOW level so no other app handler can rebuild the JSA
-  // before the signature is finalized. Window capture runs before document/form/target handlers.
   window.addEventListener('pointermove',e=>{
     if(!active||e.pointerId!==active.pointerId)return;
     e.preventDefault();e.stopImmediatePropagation();
@@ -101,18 +97,23 @@
     if(!active||e.pointerId!==active.pointerId)return;
     e.preventDefault();e.stopImmediatePropagation();
     if(active.current.length===1){active.current.push([active.current[0][0]+1,active.current[0][1]+1]);active.line.setAttribute('points',active.current.map(p=>`${p[0]},${p[1]}`).join(' '))}
-    active.svg.releasePointerCapture?.(e.pointerId);
     active.persist();
-    // Keep the exact existing SVG/polyline mounted. Do not replace or redraw it.
-    suppressClickUntil=Date.now()+500;
+    suppressReleaseUntil=Date.now()+800;
     active=null;
   }
   window.addEventListener('pointerup',finishActive,true);
   window.addEventListener('pointercancel',finishActive,true);
-  window.addEventListener('mouseup',e=>{if(active){e.preventDefault();e.stopImmediatePropagation()}},true);
+
+  // Browsers fire a compatibility mouseup/click after pointerup. The prior code
+  // cleared `active` during pointerup, so mouseup was allowed through to the app.
+  // Suppress the whole compatibility release sequence for a short period.
+  window.addEventListener('mouseup',e=>{
+    if(!active&&Date.now()>suppressReleaseUntil)return;
+    e.preventDefault();e.stopImmediatePropagation();
+  },true);
   window.addEventListener('click',e=>{
-    if(Date.now()>suppressClickUntil)return;
-    if(e.target?.closest?.('.lc-signature-wrap')){e.preventDefault();e.stopImmediatePropagation()}
+    if(Date.now()>suppressReleaseUntil)return;
+    e.preventDefault();e.stopImmediatePropagation();
   },true);
 
   function upgrade(){
