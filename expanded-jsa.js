@@ -76,5 +76,11 @@
   const timekeepingScript = document.createElement('script');
   timekeepingScript.src = 'timekeeping.js?v=20260820';
   timekeepingScript.defer = false;
+  timekeepingScript.onload = () => {
+    const rosterScript = document.createElement('script');
+    rosterScript.src = 'timekeeping-roster.js?v=20260820b';
+    rosterScript.defer = false;
+    document.head.appendChild(rosterScript);
+  };
   document.head.appendChild(timekeepingScript);
 })();
