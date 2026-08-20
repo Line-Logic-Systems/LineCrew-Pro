@@ -3,7 +3,6 @@
   'use strict';
   const byId=id=>document.getElementById(id);
   const role=()=>String(window.currentProfile?.role || (typeof currentProfile!=='undefined' ? currentProfile?.role : '') || '').toLowerCase();
-  const labels={owner:'Owner',admin:'Admin',superintendent:'Superintendent',gf:'General Foreman',foreman:'Foreman'};
   const plans={
     foreman:{
       title:'Foreman Workspace',
@@ -102,15 +101,13 @@
       setDescription('timekeepingTile','Crew hours, payroll and billing exports');
     }
 
-    if(typeof window.userHasCapability==='function'){
-      if(r==='superintendent'){
-        const pb=byId('priceBooksTile');
-        if(pb) pb.classList.toggle('hidden',!window.userHasCapability('price_books'));
-      }
+    if(typeof window.userHasCapability==='function' && r==='superintendent'){
+      const pb=byId('priceBooksTile');
+      if(pb) pb.classList.toggle('hidden',!window.userHasCapability('price_books'));
     }
 
     const launcher=byId('assistantLauncher');
-    if(launcher) launcher.classList.toggle('hidden',!['owner','admin'].includes(r));
+    if(launcher) launcher.classList.toggle('hidden',r!=='admin');
     dashboard.dataset.roleWorkspace=r;
   }
 
