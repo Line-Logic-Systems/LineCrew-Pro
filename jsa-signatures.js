@@ -11,13 +11,15 @@
   function addStyles(){
     if(byId('lcSigStyles'))return;
     const s=document.createElement('style');s.id='lcSigStyles';s.textContent=`
-      .lc-signature-wrap{border:1px solid #cfdbe5;border-radius:12px;background:#fff;overflow:hidden;margin:6px 0 12px}
-      .lc-signature-host-label{display:block!important;min-width:0}
-      .lc-signature-host-label>.lc-signature-wrap{width:100%;margin:6px 0 0}
+      .lc-signature-cell{display:block;min-width:0;width:100%}
+      .lc-crew-row>.lc-signature-cell{grid-column:2!important}
+      .lc-signature-cell>label{display:block!important;min-width:0}
+      .lc-signature-wrap{border:1px solid #cfdbe5;border-radius:12px;background:#fff;overflow:hidden;margin:6px 0 12px;width:100%}
       .lc-signature-svg{display:block;width:100%;height:120px;touch-action:none;background:repeating-linear-gradient(0deg,#fff,#fff 31px,#edf2f6 32px);cursor:crosshair;user-select:none;-webkit-user-select:none}
       .lc-signature-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 9px;background:#f7fafc;border-top:1px solid #e3eaf0;font-size:12px;color:#667788}
       .lc-signature-actions button{width:auto!important;margin:0!important;padding:6px 10px!important}
       .lc-signature-status.signed{color:#198754;font-weight:800}
+      @media(max-width:720px){.lc-crew-row>.lc-signature-cell{grid-column:1!important}}
     `;document.head.appendChild(s);
   }
 
@@ -49,30 +51,35 @@
   }
 
   function installPad(input,label){
-    if(!input||input.dataset.signaturePadInstalled==='layout-safe')return;
+    if(!input||input.dataset.signaturePadInstalled==='explicit-cell')return;
     const labelEl=input.closest('label');
-    const oldSibling=labelEl?.nextElementSibling;
-    if(oldSibling?.classList?.contains('lc-signature-wrap'))oldSibling.remove();
-    const oldInner=labelEl?.querySelector(':scope > .lc-signature-wrap');
+    if(!labelEl)return;
+
+    const priorCell=labelEl.closest('.lc-signature-cell');
+    const oldInner=priorCell?.querySelector(':scope > .lc-signature-wrap')||labelEl.querySelector(':scope > .lc-signature-wrap');
     if(oldInner)oldInner.remove();
 
     const key=keyFor(input);
     let strokes=cache.get(key)||decodeExisting(input.value)||[];
     cache.set(key,strokes);
-    input.dataset.signaturePadInstalled='layout-safe';input.type='hidden';
+    input.dataset.signaturePadInstalled='explicit-cell';input.type='hidden';
+
+    // Make the signature label + pad one explicit grid item. This avoids the pad
+    // becoming a third auto-placed child of .lc-crew-row (which lands under Printed Name).
+    let cell=priorCell;
+    if(!cell){
+      cell=document.createElement('div');
+      cell.className='lc-signature-cell';
+      labelEl.parentNode.insertBefore(cell,labelEl);
+      cell.appendChild(labelEl);
+    }
 
     const wrap=document.createElement('div');wrap.className='lc-signature-wrap';
     const svg=document.createElementNS(NS,'svg');svg.classList.add('lc-signature-svg');svg.setAttribute('viewBox','0 0 1000 200');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('aria-label',label||'Signature pad');
     const actions=document.createElement('div');actions.className='lc-signature-actions';
     const status=document.createElement('span');status.className='lc-signature-status';
     const clear=document.createElement('button');clear.type='button';clear.className='secondary small';clear.textContent='Clear Signature';
-    actions.append(status,clear);wrap.append(svg,actions);
-
-    // Mount the pad inside the existing Signature label/grid cell so it stays
-    // directly under "Signature" in the right-hand column. Release suppression
-    // below keeps label/default mouse behavior from disturbing the captured ink.
-    if(labelEl){labelEl.classList.add('lc-signature-host-label');labelEl.appendChild(wrap)}
-    else input.insertAdjacentElement('afterend',wrap);
+    actions.append(status,clear);wrap.append(svg,actions);cell.appendChild(wrap);
 
     const setStatus=()=>{const signed=strokes.some(s=>s.length>1);status.textContent=signed?'Signature captured':'Sign above with finger, mouse, or stylus';status.classList.toggle('signed',signed)};
     const persist=()=>{cache.set(key,strokes);input.value=strokes.some(s=>s.length>1)?svgData(strokes):'';setStatus()};
@@ -113,9 +120,6 @@
   window.addEventListener('pointerup',finishActive,true);
   window.addEventListener('pointercancel',finishActive,true);
 
-  // Browsers fire a compatibility mouseup/click after pointerup. The prior code
-  // cleared `active` during pointerup, so mouseup was allowed through to the app.
-  // Suppress the whole compatibility release sequence for a short period.
   window.addEventListener('mouseup',e=>{
     if(!active&&Date.now()>suppressReleaseUntil)return;
     e.preventDefault();e.stopImmediatePropagation();
