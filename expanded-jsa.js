@@ -74,7 +74,9 @@
   };
 
   load('app-polish.js?v=20260820');
-  load('expanded-jsa-core.js?v=20260820', () => load('jsa-signatures.js?v=20260820j'));
+  load('expanded-jsa-core.js?v=20260820', () => {
+    load('jsa-signatures.js?v=20260820j', () => load('jsa-signature-layout-fix.js?v=20260820a'));
+  });
   load('timekeeping.js?v=20260820', () => {
     load('timekeeping-roster.js?v=20260820b');
     load('timekeeping-report-v2.js?v=20260820');
