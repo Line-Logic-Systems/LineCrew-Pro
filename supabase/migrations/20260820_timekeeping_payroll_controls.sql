@@ -195,10 +195,18 @@ security definer
 set search_path = public
 as $$
 declare
-  v_company uuid := coalesce(new.company_id, old.company_id);
-  v_work_date date := coalesce(new.work_date, old.work_date);
+  v_company uuid;
+  v_work_date date;
   v_period record;
 begin
+  if tg_op='DELETE' then
+    v_company:=old.company_id;
+    v_work_date:=old.work_date;
+  else
+    v_company:=new.company_id;
+    v_work_date:=new.work_date;
+  end if;
+
   select pp.* into v_period
   from public.timekeeping_pay_periods pp
   where pp.company_id=v_company
@@ -219,7 +227,8 @@ begin
     values(v_company,v_period.period_start,v_period.period_end,'auto_reopen',auth.uid(),'Time entry changed after approval');
   end if;
 
-  return coalesce(new, old);
+  if tg_op='DELETE' then return old; end if;
+  return new;
 end;
 $$;
 
