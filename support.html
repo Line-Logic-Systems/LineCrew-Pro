@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>LineCrew Pro Support Access</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{color-scheme:light;--navy:#0b2d4d;--blue:#1976d2;--bg:#f4f7fa;--line:#d9e2ea;--danger:#b42318;--ok:#067647}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:#17212b;font-family:Arial,sans-serif}main{max-width:1050px;margin:auto;padding:24px}
+    header{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:20px}h1,h2,h3{color:var(--navy)}a{color:var(--blue)}
+    .card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0;box-shadow:0 4px 16px #1231}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.metric{border:1px solid var(--line);border-radius:10px;padding:12px}.metric strong{display:block;font-size:1.5rem}
+    label{font-weight:700;display:block;margin:10px 0 6px}input,select,textarea,button{font:inherit;border-radius:9px;border:1px solid #b7c4d0;padding:10px;width:100%}textarea{resize:vertical}
+    button{width:auto;background:var(--blue);color:#fff;border:0;font-weight:700;cursor:pointer}.secondary{background:#e9eff5;color:var(--navy)}.danger{background:var(--danger)}button:disabled{opacity:.55;cursor:wait}
+    .row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}.row>div{flex:1;min-width:180px}.muted{color:#607080}.hidden{display:none!important}.status{font-weight:700;text-transform:capitalize}.approved{color:var(--ok)}.pending{color:#9a6700}.denied,.revoked,.expired{color:var(--danger)}
+    .request{border-top:1px solid var(--line);padding:14px 0}.request:first-child{border-top:0}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.error{color:var(--danger);font-weight:700}.notice{border-left:5px solid var(--blue)}
+    @media(max-width:600px){main{padding:14px}header{align-items:flex-start;flex-direction:column}.actions button{flex:1}}
+  </style>
+</head>
+<body>
+<main>
+  <header><div><h1>LineCrew Pro Support Access</h1><p class="muted">Customer-approved, temporary and fully audited.</p></div><a href="/">Back to LineCrew Pro</a></header>
+  <div id="loading" class="card">Checking your secure access…</div>
+  <div id="error" class="card error hidden"></div>
+
+  <section id="supportView" class="hidden">
+    <div class="card notice"><h2>Platform Support Console</h2><p>This console never signs in as a customer. A company Owner or Admin must approve every request before aggregate diagnostics become available.</p></div>
+    <div class="card"><h3>Request support access</h3><div class="row"><div><label for="company">Company</label><select id="company"></select></div><div><label for="minutes">Access length</label><select id="minutes"><option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="60">60 minutes</option></select></div></div><label for="reason">Reason</label><textarea id="reason" maxlength="500" rows="3" placeholder="Example: Investigate report submission error reported by the company"></textarea><button id="requestBtn">Send approval request</button></div>
+    <div class="card"><div class="row"><div><h3>My support requests</h3></div><button id="refreshSupport" class="secondary">Refresh</button></div><div id="supportRequests"></div></div>
+    <div id="diagnosticsCard" class="card hidden"><h3>Read-only company diagnostics</h3><p id="diagnosticsExpiry" class="muted"></p><div id="diagnostics" class="grid"></div></div>
+  </section>
+
+  <section id="companyView" class="hidden">
+    <div class="card notice"><h2>Company Support Approvals</h2><p>Approving lets LineCrew Pro support view aggregate diagnostics for your company for the selected time. It does not reveal notes, files, prices, customer records or passwords, and you can revoke access immediately.</p></div>
+    <div class="card"><div class="row"><div><h3>Support requests</h3></div><button id="refreshCompany" class="secondary">Refresh</button></div><div id="companyRequests"></div></div>
+    <div class="card"><h3>Support audit history</h3><div id="auditHistory"></div></div>
+  </section>
+</main>
+<script>
+const client=supabase.createClient('https://ldgkyxuozbozgkvwzadg.supabase.co','sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF');
+const $=id=>document.getElementById(id);const esc=v=>String(v??'');
+function fail(message){$('loading').classList.add('hidden');$('error').textContent=message;$('error').classList.remove('hidden')}
+function date(value){return value?new Date(value).toLocaleString():'—'}
+function clear(node){while(node.firstChild)node.removeChild(node.firstChild)}
+function line(label,value){const d=document.createElement('div');d.className='metric';const s=document.createElement('span');s.className='muted';s.textContent=label;const b=document.createElement('strong');b.textContent=esc(value);d.append(s,b);return d}
+async function rpc(name,args={}){const {data,error}=await client.rpc(name,args);if(error)throw error;return data}
+
+async function loadSupport(){
+  const companies=await rpc('support_list_companies');clear($('company'));(companies||[]).forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=`${c.name} — ${c.active_users} active user${Number(c.active_users)===1?'':'s'}`;$('company').append(o)});
+  const requests=await rpc('support_list_my_requests');clear($('supportRequests'));if(!requests?.length){$('supportRequests').textContent='No support requests yet.';return}
+  requests.forEach(r=>{const d=document.createElement('div');d.className='request';const h=document.createElement('strong');h.textContent=r.company_name;const st=document.createElement('span');st.className=`status ${r.status}`;st.textContent=` — ${r.status}`;const p=document.createElement('p');p.textContent=r.reason;const meta=document.createElement('p');meta.className='muted';meta.textContent=`Requested ${date(r.requested_at)}${r.expires_at?` • Expires ${date(r.expires_at)}`:''}`;d.append(h,st,p,meta);if(r.status==='approved'&&new Date(r.expires_at)>new Date()){const b=document.createElement('button');b.textContent='Open read-only diagnostics';b.onclick=()=>openDiagnostics(r.id);d.append(b)}$('supportRequests').append(d)});
+}
+async function openDiagnostics(id){try{const d=await rpc('support_get_diagnostics',{p_request_id:id});clear($('diagnostics'));const labels={company_name:'Company',active_users:'Active users',suspended_users:'Suspended users',jobs:'Jobs',active_jobs:'Active jobs',customers:'Customers',contracts:'Contracts',price_books:'Price books',daily_reports:'Daily reports',draft_reports:'Draft reports',submitted_reports:'Submitted reports',latest_report_at:'Latest report',latest_job_at:'Latest job'};Object.entries(labels).forEach(([key,label])=>$('diagnostics').append(line(label,key.includes('_at')?date(d[key]):d[key])));$('diagnosticsExpiry').textContent=`Access expires ${date(d.access_expires_at)}. Aggregate diagnostics only.`;$('diagnosticsCard').classList.remove('hidden');$('diagnosticsCard').scrollIntoView({behavior:'smooth'})}catch(e){alert(e.message)} }
+
+async function loadCompany(){
+  const requests=await rpc('company_list_support_requests');clear($('companyRequests'));if(!requests?.length)$('companyRequests').textContent='No support requests.';
+  (requests||[]).forEach(r=>{const d=document.createElement('div');d.className='request';const h=document.createElement('strong');h.textContent=r.support_name;const st=document.createElement('span');st.className=`status ${r.status}`;st.textContent=` — ${r.status}`;const p=document.createElement('p');p.textContent=r.reason;const meta=document.createElement('p');meta.className='muted';meta.textContent=`Requested ${date(r.requested_at)} for ${r.requested_minutes} minutes${r.expires_at?` • Expires ${date(r.expires_at)}`:''}`;d.append(h,st,p,meta);const a=document.createElement('div');a.className='actions';if(r.status==='pending'){const yes=document.createElement('button');yes.textContent='Approve';yes.onclick=()=>decide(r.id,true);const no=document.createElement('button');no.className='danger';no.textContent='Deny';no.onclick=()=>decide(r.id,false);a.append(yes,no)}if(r.status==='approved'&&new Date(r.expires_at)>new Date()){const revoke=document.createElement('button');revoke.className='danger';revoke.textContent='Revoke now';revoke.onclick=()=>revokeAccess(r.id);a.append(revoke)}d.append(a);$('companyRequests').append(d)});
+  const audit=await rpc('company_support_audit_history');clear($('auditHistory'));if(!audit?.length)$('auditHistory').textContent='No support activity recorded.';(audit||[]).forEach(e=>{const d=document.createElement('div');d.className='request';const h=document.createElement('strong');h.textContent=e.event_type.replaceAll('_',' ');const p=document.createElement('p');p.className='muted';p.textContent=`${date(e.created_at)} • ${e.actor_name}`;d.append(h,p);$('auditHistory').append(d)});
+}
+async function decide(id,approve){if(!confirm(approve?'Approve temporary aggregate diagnostic access?':'Deny this support request?'))return;try{await rpc('company_decide_support_request',{p_request_id:id,p_approve:approve});await loadCompany()}catch(e){alert(e.message)}}
+async function revokeAccess(id){if(!confirm('Revoke support access immediately?'))return;try{await rpc('company_revoke_support_access',{p_request_id:id});await loadCompany()}catch(e){alert(e.message)}}
+$('requestBtn').onclick=async()=>{const reason=$('reason').value.trim();if(reason.length<10)return alert('Enter a clear support reason of at least 10 characters.');const b=$('requestBtn');b.disabled=true;try{await rpc('support_request_access',{p_company_id:$('company').value,p_reason:reason,p_minutes:Number($('minutes').value)});$('reason').value='';await loadSupport();alert('Approval request sent.')}catch(e){alert(e.message)}finally{b.disabled=false}};
+$('refreshSupport').onclick=loadSupport;$('refreshCompany').onclick=loadCompany;
+(async()=>{try{const {data:{user}}=await client.auth.getUser();if(!user)return fail('Sign in to LineCrew Pro before opening Support Access.');const rows=await rpc('support_console_identity');const who=rows?.[0];$('loading').classList.add('hidden');let allowed=false;if(who?.is_support){allowed=true;$('supportView').classList.remove('hidden');await loadSupport()}if(['owner','admin'].includes(who?.company_role)){allowed=true;$('companyView').classList.remove('hidden');await loadCompany()}if(!allowed)fail('Only LineCrew Pro platform support or a company Owner/Admin can open this page.')}catch(e){fail(e.message)}})();
+</script>
+</body>
+</html>
