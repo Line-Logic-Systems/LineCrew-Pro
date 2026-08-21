@@ -8,7 +8,7 @@ Commercial multi-company powerline management platform.
 - Authentication, database and storage: Supabase.
 - Production Supabase project reference: `ldgkyxuozbozgkvwzadg`.
 - Company data is multi-tenant and must remain scoped by authenticated `company_id` in database policies/RPCs and server-side functions.
-- The in-app LineCrew Assistant is available to Owner and Admin; Superintendent access is capability-controlled. Its server function independently verifies authenticated role, permissions and company scope.
+- The in-app LineCrew Assistant is Admin-only. Its server function independently verifies authenticated role, active status and company scope. Conversation history stays in the signed-in browser session and is cleared at sign-out.
 - Independent disaster backups are packaged by GitHub Actions and copied to the private Azure Blob container `linecrew-pro-backups` in storage account `linecrewprobackup`.
 
 ## Release rules
