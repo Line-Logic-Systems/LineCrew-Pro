@@ -59,7 +59,7 @@ MORNING JSA
 
 DAILY REPORTS AND UNIT ENTRY
 - Foreman opens Production > Create Daily Report, chooses the job/date, enters crew, regular and OT hours, weather/delay details and notes, then saves the draft.
-- Manage Units opens ten entry lines. For each line enter pole/location, start typing unit code or description, select the matching contract unit, choose Install or Remove and enter quantity. Choose Add More Lines when needed, then Save All Units.
+- Manage Units is pole-centered. Enter one pole/location, add every completed unit for that pole, and choose Save Pole & Add Next. The completed pole stays in a compact review list while a clean entry opens for the next pole. Choose Add 5 Unit Lines when a pole needs more than ten entries.
 - Unit search ranks unit-code matches before description matches and learns commonly selected units locally for faster entry.
 - The Foreman can add multiple units and multiple poles on one daily report, update quantities, remove incorrect draft lines, attach supporting files, then choose Done Adding Units.
 - Drafts remain editable. Submit Report sends the report to the review queue. Submitted or approved reports are controlled records and use Return Report when correction is required.

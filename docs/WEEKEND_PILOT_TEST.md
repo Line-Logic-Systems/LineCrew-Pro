@@ -83,11 +83,12 @@ As Owner/Admin:
 Before loading a packet on a second test job:
 
 1. Foreman creates a daily report.
-2. Enter several units at multiple pole/work-point locations.
-3. Save and verify entries show Pending Packet rather than failing.
-4. Later import the matching job package.
-5. Confirm existing production reconciles automatically.
-6. Confirm correct entries become Authorized and mismatches become Redline.
+2. Enter one pole/work point, add all of its units, then choose Save Pole & Add Next.
+3. Repeat for several pole/work-point locations.
+4. Verify saved entries show Pending Packet rather than failing.
+5. Later import the matching job package.
+6. Confirm existing production reconciles automatically.
+7. Confirm correct entries become Authorized and mismatches become Redline.
 
 ## 7. Daily report lifecycle
 
@@ -95,19 +96,20 @@ As Foreman:
 
 1. Create report.
 2. Enter crew/hours/weather/notes.
-3. Add more than 10 unit lines to force Add More Lines.
-4. Add multiple work points/poles.
-5. Add/edit/remove a draft unit.
-6. Attach a supporting file/photo if available.
-7. Choose Done Adding Units.
-8. Submit Report.
+3. Add more than 10 unit lines to one pole to force Add 5 Unit Lines.
+4. Choose Save Pole & Add Next, then add multiple work points/poles.
+5. Expand the compact saved-pole cards and verify each pole's units.
+6. Add/edit/remove a draft unit.
+7. Attach a supporting file/photo if available.
+8. Choose Done Adding Units.
+9. Submit Report.
 
 As GF/authorized management:
 
-9. Open review queue.
-10. Review hours, units, attachments and exception badges.
-11. Return one report with a note.
-12. Foreman corrects and resubmits.
+10. Open review queue.
+11. Review hours, units, attachments and exception badges.
+12. Return one report with a note.
+13. Foreman corrects and resubmits.
 13. Approve it.
 14. Verify approved history/audit information and printable/PDF record.
 
