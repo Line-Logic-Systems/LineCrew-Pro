@@ -3127,6 +3127,40 @@ let productionSearchTimer = null;
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
 
+let lastRecordedError = '';
+let lastRecordedErrorAt = 0;
+function currentErrorPage(){
+  return [...document.querySelectorAll('main > section')]
+    .find(section => !section.classList.contains('hidden'))?.id ||
+    window.location.pathname || 'app';
+}
+function recordTechnicalError(area,code,message){
+  if(!currentProfile?.company_id) return;
+  const safeMessage = String(message || 'Unexpected application error').slice(0,300);
+  const fingerprint = `${area}|${code}|${safeMessage}`;
+  if(fingerprint === lastRecordedError && Date.now()-lastRecordedErrorAt < 10000) return;
+  lastRecordedError = fingerprint;
+  lastRecordedErrorAt = Date.now();
+  void sb.rpc('record_app_error',{
+    p_area:String(area || 'app').slice(0,60),
+    p_error_code:String(code || 'operation_failed').slice(0,80),
+    p_page:currentErrorPage().slice(0,100),
+    p_message:safeMessage
+  });
+}
+const lineCrewNativeAlert = window.alert.bind(window);
+window.alert = message => {
+  const text = String(message || '');
+  if(/unable|failed|error/i.test(text)){
+    recordTechnicalError('user_operation','operation_failed',text);
+  }
+  lineCrewNativeAlert(message);
+};
+window.addEventListener('error',event =>
+  recordTechnicalError('browser','uncaught_error',event.message));
+window.addEventListener('unhandledrejection',event =>
+  recordTechnicalError('browser','unhandled_promise',event.reason?.message || event.reason));
+
 const APP_PAGE_IDS = new Set([
   'dashboardPage',
   'teamPage',
@@ -3487,6 +3521,25 @@ async function loadApp(){
 
   currentProfile = profile;
   currentCompany = company;
+
+  const subscriptionStatus =
+    String(company.subscription_status || 'trial').toLowerCase();
+  const trialExpired =
+    subscriptionStatus === 'trial' &&
+    company.subscription_expires_at &&
+    new Date(company.subscription_expires_at) <= new Date();
+  if(['suspended','cancelled'].includes(subscriptionStatus) || trialExpired){
+    await sb.auth.signOut();
+    currentProfile = null;
+    currentCompany = null;
+    show('authPage');
+    lineCrewNativeAlert(
+      trialExpired
+        ? 'This LineCrew Pro trial has ended. Contact LineCrew Pro Support to continue service.'
+        : 'This company’s LineCrew Pro access is not active. Contact LineCrew Pro Support.'
+    );
+    return;
+  }
 
   const supportCompanyMode =
     new URLSearchParams(window.location.search)
