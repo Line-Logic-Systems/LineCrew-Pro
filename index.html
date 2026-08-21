@@ -962,9 +962,59 @@ button:disabled{
   background:#f9fbfc;
 }
 
+.daily-pole-entry-header{
+  margin:14px 0 10px;
+  padding:14px;
+  border:2px solid #7aa9ca;
+  border-radius:12px;
+  background:#eef6fb;
+}
+
+.daily-pole-entry-header label{
+  font-size:16px;
+}
+
+.daily-pole-entry-header input{
+  margin:6px 0 0;
+}
+
+.daily-saved-pole{
+  margin:10px 0;
+  border:1px solid #cbd9e5;
+  border-radius:12px;
+  background:#fff;
+  overflow:hidden;
+}
+
+.daily-saved-pole > summary{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:13px 14px;
+  cursor:pointer;
+  list-style:none;
+  background:#f3f7fa;
+}
+
+.daily-saved-pole > summary::-webkit-details-marker{
+  display:none;
+}
+
+.daily-saved-pole-review{
+  color:#1769aa;
+  font-size:12px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.daily-saved-pole-body{
+  padding:0 12px 10px;
+}
+
 .daily-batch-grid{
   display:grid;
-  grid-template-columns:54px minmax(130px, .8fr) minmax(180px, 1.6fr) 125px 76px;
+  grid-template-columns:54px minmax(220px, 1.8fr) 145px 90px;
   gap:7px;
   align-items:start;
 }
@@ -2289,22 +2339,26 @@ button:disabled{
   </div>
 
   <p class="muted">
-    Start typing a unit code or description, select the matching contract unit,
-    then choose Install or Remove and enter the quantity. Add as many different
-    units as the crew completed today.
+    Enter one pole or work location, then add every unit completed there.
+    Save the pole to start a clean entry for the next location.
   </p>
 
   <div id="dailyUnitValueSummary" class="daily-value-summary"></div>
 
   <datalist id="dailyUnitPoleLocations"></datalist>
+  <div class="daily-pole-entry-header">
+    <label for="dailyUnitPoleLocation">Pole / Location</label>
+    <input id="dailyUnitPoleLocation" list="dailyUnitPoleLocations"
+      maxlength="200" placeholder="Example: Pole 18">
+  </div>
   <div id="dailyUnitBatchRows"></div>
 
   <div class="button-row">
     <button id="addDailyUnitRowsBtn" class="secondary">
-      + Add More Lines
+      + Add 5 Unit Lines
     </button>
     <button id="saveDailyUnitBatchBtn" class="success">
-      Save All Units
+      Save Pole &amp; Add Next
     </button>
   </div>
 
@@ -6252,7 +6306,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['create daily','enter daily','add daily','save units','manage units','submit report'],
-    answer:'Foreman workflow: Production > Create Daily Report; select job/date and enter crew, hours, weather/delay and notes; save the draft; choose Manage Units; enter pole/location, search and select the contract unit, choose Install or Remove and quantity on as many lines as needed; Save All Units; choose Done Adding Units; review attachments and details; then Submit Report.'
+    answer:'Foreman workflow: Production > Create Daily Report; select job/date and enter crew, hours, weather/delay and notes; save the draft; choose Manage Units; enter one pole/location, add every completed unit for that pole, then choose Save Pole & Add Next. Repeat for each pole, review saved poles, choose Done Adding Units, review attachments and details, then Submit Report.'
   },
   {
     terms:['adjustment','adjusted price','field value','foreman price','percentage'],
@@ -12899,6 +12953,7 @@ async function openDailyUnitEditor(report){
     (report.work_date || 'No date') + ' — ' +
     String(report.status || 'draft').toUpperCase();
   $('dailyUnitBatchRows').innerHTML = '';
+  $('dailyUnitPoleLocation').value = '';
   $('dailyUnitList').innerHTML =
     '<p class="muted">Loading saved units...</p>';
   $('dailyUnitValueSummary').innerHTML = '';
@@ -12936,7 +12991,7 @@ async function openDailyUnitEditor(report){
   renderDailyPoleLocationOptions();
   addDailyUnitBatchRows(10);
   renderDailyUnitEditor();
-  currentDailyUnitBatchRows[0]?.searchInput.focus();
+  $('dailyUnitPoleLocation').focus();
   $('dailyUnitEditor').scrollIntoView({ behavior:'smooth' });
 }
 
@@ -12953,7 +13008,37 @@ function renderDailyUnitEditor(){
   const canEdit =
     String(currentDailyUnitReport?.status || 'draft').toLowerCase() === 'draft';
 
+  const savedPoles = new Map();
   savedItems.forEach(item => {
+    const location = String(item.pole_location || 'Unspecified location').trim();
+    if(!savedPoles.has(location)) savedPoles.set(location, []);
+    savedPoles.get(location).push(item);
+  });
+
+  if(savedItems.length > 0){
+    $('dailyUnitCount').textContent =
+      savedPoles.size + ' saved pole' + (savedPoles.size === 1 ? '' : 's') +
+      ' • ' + savedItems.length + ' unit line' +
+      (savedItems.length === 1 ? '' : 's');
+  }
+
+  [...savedPoles.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric:true }))
+    .forEach(([location, poleItems]) => {
+      const poleCard = document.createElement('details');
+      poleCard.className = 'daily-saved-pole';
+      const summary = document.createElement('summary');
+      summary.innerHTML =
+        '<span><strong>' + escapeHtml(location) + '</strong><br>' +
+        '<span class="muted">' + poleItems.length + ' unit line' +
+        (poleItems.length === 1 ? '' : 's') + '</span></span>' +
+        '<span class="daily-saved-pole-review">Review / Edit</span>';
+      poleCard.appendChild(summary);
+
+      const poleBody = document.createElement('div');
+      poleBody.className = 'daily-saved-pole-body';
+
+      poleItems.forEach(item => {
     const row = document.createElement('div');
     row.className = 'daily-unit-row';
 
@@ -12973,7 +13058,6 @@ function renderDailyUnitEditor(){
     row.innerHTML = `
       <div>
         <div class="daily-unit-code">${escapeHtml(item.item_code)}</div>
-        <div class="muted">${escapeHtml(item.pole_location)}</div>
         <span class="daily-authorization ${escapeHtml(authorizationStatus)}">${authorizationLabel}</span>
       </div>
       <div class="daily-unit-description">
@@ -13012,8 +13096,12 @@ function renderDailyUnitEditor(){
       row.querySelector('.daily-unit-actions').appendChild(removeButton);
     }
 
-    $('dailyUnitList').appendChild(row);
-  });
+        poleBody.appendChild(row);
+      });
+
+      poleCard.appendChild(poleBody);
+      $('dailyUnitList').appendChild(poleCard);
+    });
 
   renderDailyUnitTotals();
 }
@@ -13036,28 +13124,18 @@ function shortDailyUnitLabel(item){
 }
 
 function addDailyUnitBatchRows(count){
-  const previousLocation = currentDailyUnitBatchRows
-    .map(row => row.locationInput.value.trim())
-    .filter(Boolean)
-    .at(-1) || '';
-
   for(let index = 0; index < count; index += 1){
-    createDailyUnitBatchRow(previousLocation);
+    createDailyUnitBatchRow();
   }
 }
 
-function createDailyUnitBatchRow(defaultLocation){
+function createDailyUnitBatchRow(){
   const rowNumber = currentDailyUnitBatchRows.length + 1;
   const element = document.createElement('div');
   element.className = 'daily-batch-entry';
   element.innerHTML = `
     <div class="daily-batch-grid">
       <div class="daily-batch-number">Line ${rowNumber}</div>
-      <div>
-        <label>Pole / Location</label>
-        <input class="daily-batch-location" list="dailyUnitPoleLocations"
-          maxlength="200" placeholder="Pole 18" value="${escapeHtml(defaultLocation)}">
-      </div>
       <div class="daily-batch-unit-field">
         <label>Unit Code or Description</label>
         <input class="daily-batch-search" autocomplete="off"
@@ -13083,7 +13161,6 @@ function createDailyUnitBatchRow(defaultLocation){
   const row = {
     element,
     selectedItem:null,
-    locationInput:element.querySelector('.daily-batch-location'),
     searchInput:element.querySelector('.daily-batch-search'),
     suggestions:element.querySelector('.daily-unit-suggestions'),
     selection:element.querySelector('.daily-batch-selection'),
@@ -13216,22 +13293,23 @@ async function saveDailyUnitBatch(){
   );
 
   if(enteredRows.length === 0){
-    alert('Enter at least one unit line before saving.');
+    alert('Enter at least one unit for this pole before saving.');
     currentDailyUnitBatchRows[0]?.searchInput.focus();
+    return;
+  }
+
+  const location = $('dailyUnitPoleLocation').value.trim();
+  if(!location){
+    alert('Enter the pole or work location before saving its units.');
+    $('dailyUnitPoleLocation').focus();
     return;
   }
 
   const grouped = new Map();
 
   for(const [index, row] of enteredRows.entries()){
-    const location = row.locationInput.value.trim();
     const quantity = Number(row.quantityInput.value || 0);
 
-    if(!location){
-      alert('Enter a pole or location on completed line ' + (index + 1) + '.');
-      row.locationInput.focus();
-      return;
-    }
     if(!row.selectedItem){
       alert('Select a matching contract unit on completed line ' + (index + 1) + '.');
       row.searchInput.focus();
@@ -13267,7 +13345,7 @@ async function saveDailyUnitBatch(){
 
   const button = $('saveDailyUnitBatchBtn');
   button.disabled = true;
-  button.textContent = 'Saving ' + grouped.size + ' unit lines...';
+  button.textContent = 'Saving ' + location + '...';
 
   for(const line of grouped.values()){
     const { error } = await sb.rpc('save_daily_report_unit_location', {
@@ -13280,7 +13358,7 @@ async function saveDailyUnitBatch(){
 
     if(error){
       button.disabled = false;
-      button.textContent = 'Save All Units';
+      button.textContent = 'Save Pole & Add Next';
       alert(
         'Some lines may have saved, but this line failed: ' +
         line.item.item_code + ' at ' + line.location + '. ' + error.message
@@ -13292,10 +13370,13 @@ async function saveDailyUnitBatch(){
   }
 
   button.disabled = false;
-  button.textContent = 'Save All Units';
+  button.textContent = 'Save Pole & Add Next';
   await openDailyUnitEditor(currentDailyUnitReport);
   await loadProductionReports();
-  alert(grouped.size + ' unit line' + (grouped.size === 1 ? '' : 's') + ' saved.');
+  alert(
+    location + ' saved with ' + grouped.size + ' unit line' +
+    (grouped.size === 1 ? '.' : 's.')
+  );
 }
 
 async function deleteDailyUnitRow(item, button){
@@ -13426,14 +13507,14 @@ async function saveDailyUnitRow(item, row, button){
   await loadProductionReports();
 }
 
-$('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(10);
+$('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(5);
 $('saveDailyUnitBatchBtn').onclick = saveDailyUnitBatch;
 
 $('closeDailyUnitEditorBtn').onclick = () => {
   const hasUnsavedLines = currentDailyUnitBatchRows.some(row =>
     row.selectedItem || row.searchInput.value.trim() ||
     row.quantityInput.value.trim()
-  );
+  ) || $('dailyUnitPoleLocation').value.trim();
 
   if(
     hasUnsavedLines &&
