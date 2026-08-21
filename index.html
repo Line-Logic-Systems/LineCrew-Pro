@@ -3141,8 +3141,7 @@ const SUPERINTENDENT_CAPABILITIES = [
   ['storm_mode','Storm Mode'],
   ['safety_records','Safety Records'],
   ['actual_pricing','Actual Contract Pricing'],
-  ['exports','Exports'],
-  ['ai_assistant','AI Assistant']
+  ['exports','Exports']
 ];
 
 function currentUserRole(){
@@ -3165,7 +3164,7 @@ function userCanManageJobs(){ return userHasCapability('jobs') || currentUserRol
 function userCanReviewProduction(){ return userHasCapability('production_review') || currentUserRole() === 'gf'; }
 function userCanManageProductionRecords(){ return userHasCapability('production_review'); }
 function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
-function userCanUseAssistant(){ return userHasCapability('ai_assistant'); }
+function userCanUseAssistant(){ return currentUserRole() === 'admin'; }
 function userCanManageCompanySettings(){ return userHasCapability('company_settings'); }
 function userCanManageCustomersContracts(){ return userHasCapability('customers_contracts'); }
 function userCanManagePriceBooks(){ return userHasCapability('price_books'); }
@@ -6099,12 +6098,18 @@ const assistantBuiltInHelp = [
   }
 ];
 
-function addAssistantMessage(role, text){
+let assistantConversation = [];
+
+function addAssistantMessage(role, text, remember = true){
   const message = document.createElement('div');
   message.className = 'assistant-message ' + role;
   message.textContent = text;
   $('assistantMessages').appendChild(message);
   message.scrollIntoView({block:'nearest'});
+  if(remember && (role === 'user' || role === 'assistant')){
+    assistantConversation.push({ role, content:String(text || '').slice(0, 1600) });
+    assistantConversation = assistantConversation.slice(-10);
+  }
 }
 
 function findBuiltInAssistantAnswer(question){
@@ -6134,7 +6139,8 @@ function setAssistantOpen(open){
   if(open && !$('assistantMessages').children.length){
     addAssistantMessage(
       'assistant',
-      'How can I help? Ask about any LineCrew Pro workflow or problem.'
+      'How can I help? Ask about any LineCrew Pro workflow or problem.',
+      false
     );
   }
   if(open) $('assistantQuestion').focus();
@@ -6153,6 +6159,7 @@ document.querySelectorAll('[data-assistant-question]').forEach(button => {
 $('sendAssistantQuestion').onclick = async () => {
   const question = $('assistantQuestion').value.trim();
   if(!question) return;
+  const history = assistantConversation.slice(-10);
   addAssistantMessage('user', question);
   $('assistantQuestion').value = '';
   const button = $('sendAssistantQuestion');
@@ -6161,7 +6168,7 @@ $('sendAssistantQuestion').onclick = async () => {
 
   try{
     const { data, error } = await sb.functions.invoke('linecrew-assistant', {
-      body:{ question, page:window.history.state?.lineCrewPage || 'dashboardPage' }
+      body:{ question, history, page:window.history.state?.lineCrewPage || 'dashboardPage' }
     });
     if(error) throw error;
     const answer = String(data?.answer || '').trim();
@@ -6204,6 +6211,7 @@ sb.auth.onAuthStateChange((event)=>{
     $('assistantPanel').classList.add('hidden');
     $('assistantMessages').innerHTML = '';
     $('assistantQuestion').value = '';
+    assistantConversation = [];
     currentProfile = null;
     currentCompany = null;
 
