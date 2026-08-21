@@ -380,6 +380,36 @@ input[type="color"]{
   box-shadow:0 8px 24px rgba(11,45,77,.22);
 }
 
+.pilot-feedback-launcher{
+  position:fixed;
+  left:20px;
+  bottom:20px;
+  width:auto;
+  z-index:30;
+  background:var(--green);
+  box-shadow:0 8px 24px rgba(11,45,77,.22);
+}
+
+.pilot-feedback-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:40;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  background:rgba(6,20,34,.6);
+}
+
+.pilot-feedback-card{
+  width:min(520px,100%);
+  max-height:calc(100vh - 32px);
+  overflow:auto;
+  margin:0;
+  border:1px solid var(--border);
+  box-shadow:0 18px 48px rgba(11,45,77,.28);
+}
+
 .assistant-panel{
   position:fixed;
   right:20px;
@@ -430,6 +460,7 @@ input[type="color"]{
 @media (max-width:600px){
   .assistant-launcher{right:12px;bottom:12px;}
   .assistant-panel{right:8px;bottom:66px;width:calc(100vw - 16px);}
+  .pilot-feedback-launcher{left:12px;bottom:12px;}
 }
 
 button{
@@ -3030,6 +3061,37 @@ button:disabled{
 
 </section>
   
+  <button id="pilotFeedbackLauncher" class="pilot-feedback-launcher hidden" aria-controls="pilotFeedbackDialog" aria-expanded="false">
+    Send Pilot Feedback
+  </button>
+
+  <section id="pilotFeedbackDialog" class="pilot-feedback-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="pilotFeedbackTitle">
+    <div class="card pilot-feedback-card">
+      <div class="section-header">
+        <div><h2 id="pilotFeedbackTitle">Pilot Feedback</h2><p class="muted">Tell LineCrew Pro what worked, what was confusing or what needs fixing.</p></div>
+        <button id="closePilotFeedback" class="secondary small">Close</button>
+      </div>
+      <label for="pilotFeedbackCategory">Type</label>
+      <select id="pilotFeedbackCategory">
+        <option value="bug">Something is not working</option>
+        <option value="idea">Feature idea</option>
+        <option value="question">Question or confusing step</option>
+        <option value="other">Other feedback</option>
+      </select>
+      <label for="pilotFeedbackRating">Overall experience</label>
+      <select id="pilotFeedbackRating">
+        <option value="5">5 — Excellent</option><option value="4">4 — Good</option>
+        <option value="3">3 — Okay</option><option value="2">2 — Difficult</option>
+        <option value="1">1 — Blocked</option>
+      </select>
+      <label for="pilotFeedbackMessage">What happened?</label>
+      <textarea id="pilotFeedbackMessage" rows="6" minlength="10" maxlength="2000" placeholder="Include what you were trying to do and what you expected to happen."></textarea>
+      <label class="checkbox-row" for="pilotFeedbackContactOk"><input id="pilotFeedbackContactOk" type="checkbox" checked> LineCrew Pro may contact me about this feedback</label>
+      <button id="sendPilotFeedback" class="success">Send Feedback</button>
+      <p id="pilotFeedbackStatus" class="muted" aria-live="polite"></p>
+    </div>
+  </section>
+
   <button id="assistantLauncher" class="assistant-launcher hidden" aria-controls="assistantPanel" aria-expanded="false">
     Ask LineCrew AI
   </button>
@@ -3147,6 +3209,52 @@ function recordTechnicalError(area,code,message){
     p_page:currentErrorPage().slice(0,100),
     p_message:safeMessage
   });
+}
+
+function updatePilotFeedbackUi(){
+  const isPilot = String(currentCompany?.subscription_status || '').toLowerCase() === 'trial';
+  $('pilotFeedbackLauncher').classList.toggle('hidden', !currentProfile || !isPilot);
+  if(!isPilot) closePilotFeedback();
+}
+
+function openPilotFeedback(){
+  if(!currentProfile || !currentCompany) return;
+  $('pilotFeedbackStatus').textContent = '';
+  $('pilotFeedbackDialog').classList.remove('hidden');
+  $('pilotFeedbackLauncher').setAttribute('aria-expanded','true');
+  $('pilotFeedbackMessage').focus();
+}
+
+function closePilotFeedback(){
+  $('pilotFeedbackDialog').classList.add('hidden');
+  $('pilotFeedbackLauncher').setAttribute('aria-expanded','false');
+}
+
+async function submitPilotFeedback(){
+  const message = $('pilotFeedbackMessage').value.trim();
+  if(message.length < 10){
+    $('pilotFeedbackStatus').textContent = 'Please enter at least 10 characters.';
+    return;
+  }
+  const button = $('sendPilotFeedback');
+  button.disabled = true;
+  $('pilotFeedbackStatus').textContent = 'Sending…';
+  const {error} = await sb.rpc('submit_pilot_feedback',{
+    p_category:$('pilotFeedbackCategory').value,
+    p_rating:Number($('pilotFeedbackRating').value),
+    p_message:message,
+    p_page:currentErrorPage(),
+    p_contact_ok:$('pilotFeedbackContactOk').checked
+  });
+  button.disabled = false;
+  if(error){
+    $('pilotFeedbackStatus').textContent = error.message;
+    recordTechnicalError('pilot_feedback','submit_failed',error.message);
+    return;
+  }
+  $('pilotFeedbackMessage').value = '';
+  $('pilotFeedbackStatus').textContent = 'Thank you. Your feedback was sent to LineCrew Pro Support.';
+  setTimeout(closePilotFeedback,1400);
 }
 const lineCrewNativeAlert = window.alert.bind(window);
 window.alert = message => {
@@ -3572,6 +3680,7 @@ async function loadApp(){
   $('companyTimezone').value =
     company?.timezone || 'America/Chicago';
   applyCompanyBranding(company);
+  updatePilotFeedbackUi();
 
   $('companyName').textContent =
     company?.name || 'LineCrew Pro';
@@ -3855,6 +3964,7 @@ async function signOut(){
 
   currentProfile = null;
   currentCompany = null;
+  updatePilotFeedbackUi();
 
   window.history.replaceState(null, '', window.location.href);
   show('authPage');
@@ -3866,6 +3976,13 @@ $('signOutBtn').onclick =
 
 $('setupSignOut').onclick =
   signOut;
+
+$('pilotFeedbackLauncher').onclick = openPilotFeedback;
+$('closePilotFeedback').onclick = closePilotFeedback;
+$('sendPilotFeedback').onclick = submitPilotFeedback;
+$('pilotFeedbackDialog').onclick = event => {
+  if(event.target === $('pilotFeedbackDialog')) closePilotFeedback();
+};
 
 
 /* SAFETY / JSA */
