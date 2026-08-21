@@ -66,6 +66,19 @@ if (fs.existsSync('expanded-jsa.js')) {
   }
 }
 
+if (fs.existsSync('role-workspace-polish.js')) {
+  const roleWorkspaceCode = fs.readFileSync('role-workspace-polish.js', 'utf8');
+  try {
+    new Function(roleWorkspaceCode);
+  } catch (error) {
+    failures.push('Role workspace JavaScript syntax error: ' + error.message);
+  }
+  assert(
+    roleWorkspaceCode.includes('tilesNeedReordering'),
+    'Role workspace must avoid continuously re-appending dashboard tiles.'
+  );
+}
+
 const forbiddenSecrets = [
   ['Supabase service-role key reference', /service[_-]?role/i],
   ['OpenAI API key reference', /OPENAI_API_KEY|sk-proj-/],
