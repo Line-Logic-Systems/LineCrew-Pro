@@ -78,7 +78,20 @@
     });
     plan.hidden.forEach(id=>byId(id)?.classList.add('hidden'));
 
-    plan.order.forEach(id=>{const el=byId(id);if(el&&!el.classList.contains('hidden')) grid.appendChild(el);});
+    const desiredTiles=plan.order
+      .map(id=>byId(id))
+      .filter(el=>el&&!el.classList.contains('hidden'));
+    const desiredIds=desiredTiles.map(el=>el.id);
+    const currentIds=Array.from(grid.children)
+      .filter(el=>desiredIds.includes(el.id))
+      .map(el=>el.id);
+    const tilesNeedReordering=
+      desiredIds.length!==currentIds.length ||
+      desiredIds.some((id,index)=>id!==currentIds[index]);
+
+    if(tilesNeedReordering){
+      desiredTiles.forEach(el=>grid.appendChild(el));
+    }
 
     if(r==='foreman'){
       setDescription('jobsTile','Open assigned jobs and work points');
