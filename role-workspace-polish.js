@@ -35,6 +35,17 @@
       hidden:[]
     }
   };
+  let observer=null;
+  let scheduled=false;
+
+  function observe(){
+    observer?.observe(document.body,{
+      subtree:true,
+      childList:true,
+      attributes:true,
+      attributeFilter:['class']
+    });
+  }
 
   function addStyles(){
     if(byId('lcRoleWorkspaceStyles')) return;
@@ -63,20 +74,22 @@
     const plan=plans[r];
     if(!dashboard||!grid||!plan) return;
 
-    addStyles();
-    let banner=byId('lcRoleWorkspace');
-    if(!banner){
-      banner=document.createElement('div');
-      banner.id='lcRoleWorkspace';
-      banner.className='lc-role-workspace';
-      grid.parentNode.insertBefore(banner,grid);
-    }
-    banner.innerHTML=`<strong>${plan.title}</strong><span>${plan.text}</span>`;
+    observer?.disconnect();
+    try{
+      addStyles();
+      let banner=byId('lcRoleWorkspace');
+      if(!banner){
+        banner=document.createElement('div');
+        banner.id='lcRoleWorkspace';
+        banner.className='lc-role-workspace';
+        grid.parentNode.insertBefore(banner,grid);
+      }
+      const bannerMarkup=`<strong>${plan.title}</strong><span>${plan.text}</span>`;
+      if(banner.innerHTML!==bannerMarkup) banner.innerHTML=bannerMarkup;
 
-    ['jobsTile','productionTile','safetyTile','priceBooksTile','teamTile','timekeepingTile','trainingTile'].forEach(id=>{
-      const el=byId(id);if(el) el.classList.remove('hidden');
-    });
-    plan.hidden.forEach(id=>byId(id)?.classList.add('hidden'));
+      ['jobsTile','productionTile','safetyTile','priceBooksTile','teamTile','timekeepingTile','trainingTile'].forEach(id=>{
+        byId(id)?.classList.toggle('hidden',plan.hidden.includes(id));
+      });
 
     const desiredTiles=plan.order
       .map(id=>byId(id))
@@ -89,9 +102,9 @@
       desiredIds.length!==currentIds.length ||
       desiredIds.some((id,index)=>id!==currentIds[index]);
 
-    if(tilesNeedReordering){
-      desiredTiles.forEach(el=>grid.appendChild(el));
-    }
+      if(tilesNeedReordering){
+        desiredTiles.forEach(el=>grid.appendChild(el));
+      }
 
     if(r==='foreman'){
       setDescription('jobsTile','Open assigned jobs and work points');
@@ -119,12 +132,25 @@
       if(pb) pb.classList.toggle('hidden',!window.userHasCapability('price_books'));
     }
 
-    const launcher=byId('assistantLauncher');
-    if(launcher) launcher.classList.toggle('hidden',r!=='admin');
-    dashboard.dataset.roleWorkspace=r;
+      const launcher=byId('assistantLauncher');
+      if(launcher) launcher.classList.toggle('hidden',r!=='admin');
+      dashboard.dataset.roleWorkspace=r;
+    }finally{
+      observe();
+    }
   }
 
-  function schedule(){setTimeout(apply,0);setTimeout(apply,120);setTimeout(apply,500);}
-  function init(){schedule();new MutationObserver(schedule).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});}
+  function schedule(){
+    if(scheduled) return;
+    scheduled=true;
+    setTimeout(()=>{scheduled=false;apply();},0);
+  }
+  function init(){
+    observer=new MutationObserver(schedule);
+    observe();
+    schedule();
+    setTimeout(schedule,120);
+    setTimeout(schedule,500);
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
