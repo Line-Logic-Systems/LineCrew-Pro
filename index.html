@@ -4235,52 +4235,7 @@ function printSafetyJsa(jsa){
     field('Crew Member Signatures', jsa.crew_members) +
     (jsa.weather_conditions ? field('Morning Conditions', jsa.weather_conditions) : '') +
     (jsa.special_equipment ? field('Special Equipment / Additional Notes', jsa.special_equipment) : '') +
-    '
-<script>
-(function () {
-  var installPrompt = null;
-  var card = document.getElementById('pwaInstallCard');
-  var button = document.getElementById('pwaInstallBtn');
-  var text = document.getElementById('pwaInstallText');
-  var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-  var isAppleMobile = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
-
-  if (!isStandalone && isAppleMobile && card && text) {
-    card.classList.remove('hidden');
-    text.textContent = 'On iPhone or iPad: tap Share, then Add to Home Screen.';
-  }
-
-  window.addEventListener('beforeinstallprompt', function (event) {
-    event.preventDefault();
-    installPrompt = event;
-    if (card) card.classList.remove('hidden');
-    if (button) button.classList.remove('hidden');
-  });
-
-  if (button) {
-    button.addEventListener('click', async function () {
-      if (!installPrompt) return;
-      installPrompt.prompt();
-      await installPrompt.userChoice;
-      installPrompt = null;
-      if (card) card.classList.add('hidden');
-    });
-  }
-
-  window.addEventListener('appinstalled', function () {
-    if (card) card.classList.add('hidden');
-  });
-
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', function () {
-      navigator.serviceWorker.register('/service-worker.js').catch(function (error) {
-        console.warn('LineCrew Pro service worker registration failed:', error);
-      });
-    });
-  }
-})();
-</script>
-</body></html>'
+    '</body></html>'
   );
   popup.document.close();
   popup.focus();
@@ -14416,5 +14371,50 @@ loadApp();
 </script>
 
   <script src="expanded-jsa.js?v=20260819"></script>
+
+<script>
+(function () {
+  var installPrompt = null;
+  var card = document.getElementById('pwaInstallCard');
+  var button = document.getElementById('pwaInstallBtn');
+  var text = document.getElementById('pwaInstallText');
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  var isAppleMobile = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+
+  if (!isStandalone && isAppleMobile && card && text) {
+    card.classList.remove('hidden');
+    text.textContent = 'On iPhone or iPad: tap Share, then Add to Home Screen.';
+  }
+
+  window.addEventListener('beforeinstallprompt', function (event) {
+    event.preventDefault();
+    installPrompt = event;
+    if (card) card.classList.remove('hidden');
+    if (button) button.classList.remove('hidden');
+  });
+
+  if (button) {
+    button.addEventListener('click', async function () {
+      if (!installPrompt) return;
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      if (card) card.classList.add('hidden');
+    });
+  }
+
+  window.addEventListener('appinstalled', function () {
+    if (card) card.classList.add('hidden');
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/service-worker.js').catch(function (error) {
+        console.warn('LineCrew Pro service worker registration failed:', error);
+      });
+    });
+  }
+})();
+</script>
 </body>
 </html>
