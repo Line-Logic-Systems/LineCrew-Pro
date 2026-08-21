@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b2d4d">
+<meta name="theme-color" content="#071d31">
+<meta name="application-name" content="LineCrew Pro">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LineCrew Pro">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/linecrew-pro-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/linecrew-pro-180.png">
 <title>LineCrew Pro</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1286,6 +1294,13 @@ button:disabled{
 
     <button id="loginBtn">Sign In</button>
     <button id="forgotPasswordBtn" class="secondary">Forgot Password</button>
+  </div>
+
+
+  <div id="pwaInstallCard" class="card hidden">
+    <h3>Install LineCrew Pro</h3>
+    <p id="pwaInstallText" class="muted">Install LineCrew Pro on this device for quick access.</p>
+    <button id="pwaInstallBtn" type="button" class="secondary hidden">Install LineCrew Pro</button>
   </div>
 
   <div id="passwordRecoveryCard" class="card hidden">
@@ -4220,7 +4235,52 @@ function printSafetyJsa(jsa){
     field('Crew Member Signatures', jsa.crew_members) +
     (jsa.weather_conditions ? field('Morning Conditions', jsa.weather_conditions) : '') +
     (jsa.special_equipment ? field('Special Equipment / Additional Notes', jsa.special_equipment) : '') +
-    '</body></html>'
+    '
+<script>
+(function () {
+  var installPrompt = null;
+  var card = document.getElementById('pwaInstallCard');
+  var button = document.getElementById('pwaInstallBtn');
+  var text = document.getElementById('pwaInstallText');
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  var isAppleMobile = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+
+  if (!isStandalone && isAppleMobile && card && text) {
+    card.classList.remove('hidden');
+    text.textContent = 'On iPhone or iPad: tap Share, then Add to Home Screen.';
+  }
+
+  window.addEventListener('beforeinstallprompt', function (event) {
+    event.preventDefault();
+    installPrompt = event;
+    if (card) card.classList.remove('hidden');
+    if (button) button.classList.remove('hidden');
+  });
+
+  if (button) {
+    button.addEventListener('click', async function () {
+      if (!installPrompt) return;
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      if (card) card.classList.add('hidden');
+    });
+  }
+
+  window.addEventListener('appinstalled', function () {
+    if (card) card.classList.add('hidden');
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/service-worker.js').catch(function (error) {
+        console.warn('LineCrew Pro service worker registration failed:', error);
+      });
+    });
+  }
+})();
+</script>
+</body></html>'
   );
   popup.document.close();
   popup.focus();
