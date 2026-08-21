@@ -202,7 +202,15 @@ Deno.serve(async (request) => {
     }
 
     const result = await response.json();
-    const answer = String(result.output_text || "").trim();
+    const outputText = Array.isArray(result.output)
+      ? result.output.flatMap((item: Record<string, unknown>) => {
+        const content = Array.isArray(item?.content) ? item.content : [];
+        return content.flatMap((part: Record<string, unknown>) =>
+          part?.type === "output_text" && typeof part?.text === "string" ? [part.text] : []
+        );
+      }).join("\n")
+      : "";
+    const answer = String(result.output_text || outputText || "").trim();
     if (!answer) throw new Error("AI service returned an empty answer.");
 
     return new Response(JSON.stringify({ answer }), {
