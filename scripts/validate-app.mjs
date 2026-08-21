@@ -77,6 +77,12 @@ if (fs.existsSync('role-workspace-polish.js')) {
     roleWorkspaceCode.includes('tilesNeedReordering'),
     'Role workspace must avoid continuously re-appending dashboard tiles.'
   );
+  assert(
+    roleWorkspaceCode.includes('observer?.disconnect()') &&
+      roleWorkspaceCode.includes('finally{') &&
+      roleWorkspaceCode.includes('observe();'),
+    'Role workspace must not observe its own dashboard mutations.'
+  );
 }
 
 const forbiddenSecrets = [
