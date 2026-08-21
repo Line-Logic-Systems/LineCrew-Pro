@@ -1,0 +1,35 @@
+name: Restore homepage video master
+
+on:
+  push:
+    branches:
+      - feature/upload-homepage-video-master
+
+permissions:
+  contents: write
+
+jobs:
+  restore-video:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rebuild verified 1080p video
+        shell: bash
+        run: |
+          cat .video-upload/part-* > /tmp/linecrew-video.b64
+          base64 --decode /tmp/linecrew-video.b64 > docs/media/linecrew-pro-sales-overview.mp4
+          echo "c7747ba2a662b5ab2abef5451fdf404a9ecc5116e758b431850da29b2aa97e0a  docs/media/linecrew-pro-sales-overview.mp4" | sha256sum --check
+          test "$(stat -c %s docs/media/linecrew-pro-sales-overview.mp4)" = "9931926"
+      - name: Commit clean master video
+        shell: bash
+        run: |
+          rm -rf .video-upload
+          rm -f .github/workflows/restore-homepage-video.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/media/linecrew-pro-sales-overview.mp4 .video-upload .github/workflows/restore-homepage-video.yml
+          git commit -m "Replace homepage video with 1080p master"
+          git push
