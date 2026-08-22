@@ -56,16 +56,17 @@
     else launcher.removeAttribute('data-leadership-assistant-ready');
   }
 
-  /* Only change the legacy hour inputs after the Daily Report form has been opened.
-     Keeping this out of the global MutationObserver prevents it from interfering with
-     the core Create Daily Report click handler. */
+  /* Foremen enter labor only in Crew Time. Hide only the two legacy hour
+     labels/inputs; never hide their parent because both inputs are direct
+     children of the Daily Report card. */
   function syncForemanCrewTimeOnly(){
     const hideLegacyHours=role()==='foreman';
     ['dailyRegularHours','dailyOvertimeHours'].forEach(id=>{
       const input=byId(id);
       if(!input) return;
-      const wrapper=input.closest('label') || input.parentElement;
-      if(wrapper) wrapper.classList.toggle('hidden',hideLegacyHours);
+      const label=document.querySelector(`label[for="${id}"]`);
+      label?.classList.toggle('hidden',hideLegacyHours);
+      input.classList.toggle('hidden',hideLegacyHours);
       input.readOnly=hideLegacyHours;
       input.setAttribute('data-calculated-from-crew-time','true');
     });
