@@ -101,7 +101,7 @@
   }
 
   async function importRoster(){
-    if(role() !== 'admin') return alert('Only an Admin can upload the company roster.');
+    if(!['admin','owner'].includes(role())) return alert('Only an Owner or Admin can upload the company roster.');
     if(!uploadRows.length) return alert('Choose a roster file first.');
     const button = byId('tkImportRosterBtn');
     button.disabled = true;
@@ -121,7 +121,7 @@
 
   function installAdminImport(){
     const card = byId('timekeepingRosterCard');
-    if(!card || role() !== 'admin' || byId('tkRosterImportBox')) return;
+    if(!card || !['admin','owner'].includes(role()) || byId('tkRosterImportBox')) return;
     const box = document.createElement('div');
     box.id='tkRosterImportBox';
     box.className='tk-import-box';
