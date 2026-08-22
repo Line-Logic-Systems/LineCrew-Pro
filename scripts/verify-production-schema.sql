@@ -27,6 +27,12 @@ select
   (select definition like '%owner%' and definition like '%superintendent%'
    from function_state where proname = 'approve_daily_report' limit 1)
     as report_approval_supports_owner_and_superintendent,
+  (select definition like '%customers_contracts%' and definition like '%superintendent%'
+   from function_state where proname = 'get_contract_field_settings' limit 1)
+    as contract_field_settings_support_owner_and_superintendent,
+  (select definition like '%safety_records%' and definition like '%p.active is true%'
+   from function_state where proname = 'get_daily_report_jsa' limit 1)
+    as daily_report_jsa_matches_role_policy,
   (select count(*) = 0 from function_state where definition like '%actual_contract_pricing%')
     as obsolete_pricing_capability_removed,
   not has_function_privilege('authenticated', 'public.admin_update_user(uuid,text,boolean)', 'execute')
