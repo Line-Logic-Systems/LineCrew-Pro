@@ -11,7 +11,10 @@ const mustExist = [
   'supabase/migrations/20260818_owner_superintendent_roles.sql',
   'supabase/migrations/20260818_owner_superintendent_team_access.sql',
   'supabase/migrations/202608190100_owner_legacy_compatibility.sql',
-  'supabase/migrations/202608190200_superintendent_legacy_compatibility.sql'
+  'supabase/migrations/202608190200_superintendent_legacy_compatibility.sql',
+  'supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql',
+  'scripts/generate-production-drift-repair.mjs',
+  'scripts/verify-production-schema.sql'
 ];
 for (const file of mustExist) assert(fs.existsSync(file), `Missing ${file}`);
 
@@ -22,6 +25,8 @@ const roleMigration = fs.readFileSync('supabase/migrations/20260818_owner_superi
 const accessMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_team_access.sql', 'utf8');
 const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', 'utf8');
 const superintendentCompat = fs.readFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
+const driftRepair = fs.readFileSync('supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql', 'utf8');
+const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
@@ -73,6 +78,24 @@ for (const cap of ['jobs','job_packages','production_review','reporting','storm_
   assert(superintendentCompat.includes(`'${cap}'`), `Superintendent compatibility is missing ${cap}.`);
 }
 assert(superintendentCompat.includes("v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing')"), 'Actual pricing visibility must remain independently gated for Superintendents.');
+assert(!ownerCompat.includes('create or replace function public.get_daily_report_unit_locations'), 'Owner legacy migration must not replace the evolved unit-location TABLE return type.');
+assert(!superintendentCompat.includes('create or replace function public.get_daily_report_unit_locations'), 'Superintendent legacy migration must not replace the evolved unit-location TABLE return type.');
+assert(!superintendentCompat.includes('actual_contract_pricing'), 'Legacy compatibility must use the canonical actual_pricing capability key.');
+
+for (const marker of [
+  'drop function if exists public.get_daily_report_unit_locations(uuid)',
+  'authorization_status text',
+  "linecrew_has_capability('actual_pricing')",
+  'create or replace function public.update_my_profile_name',
+  'revoke all on function public.admin_update_user(uuid,text,boolean)',
+  'revoke all on function public.review_daily_report(uuid,boolean,text)',
+  'drop policy if exists profiles_admin_update',
+  'linecrew_owner_contracts_manage',
+  'linecrew_owner_daily_reports_select',
+  "notify pgrst, 'reload schema'"
+]) assert(driftRepair.includes(marker), `Production drift repair is missing: ${marker}`);
+assert(!driftRepair.includes('actual_contract_pricing'), 'Production drift repair must not use the obsolete actual_contract_pricing key.');
+assert(expandedJsa.includes("load('app-polish.js?v=20260822a')"), 'app-polish.js must use the current cache-busting version.');
 
 for (const marker of [
   "['owner','admin'].includes(currentUserRole())",
@@ -100,7 +123,8 @@ console.log('- Vercel security headers and secret checks passed');
 console.log('- Active Owner/Admin-only AI authorization present');
 console.log('- Owner/Admin/Superintendent hierarchy protections present');
 console.log('- Suspended leadership profiles cannot use role/capability management');
-console.log('- Legacy Owner compatibility present');
-console.log('- Capability-aware Superintendent legacy RPC compatibility present');
+console.log('- Tracked Owner compatibility migration present');
+console.log('- Tracked capability-aware Superintendent compatibility migration present');
+console.log('- Forward production drift repair and post-deploy verification present');
 console.log('- Actual pricing remains independently gated');
 console.log('- Team, job, package, reporting, storm and assistant UI capability wiring present');

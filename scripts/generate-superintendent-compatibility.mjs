@@ -3,6 +3,9 @@ import path from 'node:path';
 
 const dir='supabase/migrations';
 const excluded=new Set([
+  // The current 22-column TABLE return shape is maintained by a forward
+  // migration. Never regenerate an older shape into this legacy layer.
+  'public.get_daily_report_unit_locations',
   'public.set_company_member_role',
   'public.set_company_member_active'
 ]);
@@ -29,6 +32,15 @@ function capabilityFor(source,fn){
 }
 
 function transformRoles(sql){
+  // `actual_pricing` is the canonical capability key accepted by the
+  // whitelist. Older trial migrations used `actual_contract_pricing`, which
+  // made an explicit false override ineffective.
+  sql=sql.replaceAll("actual_contract_pricing", "actual_pricing");
+  const actualPricingGate = '__LINECREW_ACTUAL_PRICING_GATE__';
+  sql=sql.replace(
+    /v_can_see_actual\s*:=\s*v_role\s+in\s*\([^;]+?actual_pricing[^;]+?;/gi,
+    actualPricingGate,
+  );
   sql=sql.replace(/\b(in|not in)\s*\(([^)]*'admin'[^)]*)\)/gi,(full,op,list)=>{
     let next=list.trim();
     if(!/'owner'/i.test(next)) next += ", 'owner'";
@@ -45,7 +57,7 @@ function transformRoles(sql){
   // Even inside reporting/review RPCs, a Superintendent sees actual values only
   // when the actual_pricing capability remains enabled.
   sql=sql.replace(
-    /v_can_see_actual\s*:=\s*v_role\s+in\s*\(([^;]*'superintendent'[^;]*)\);/gi,
+    /v_can_see_actual\s*:=\s*v_role\s+in\s*\(([^)]*'superintendent'[^)]*)\);/gi,
     (full,list) => {
       const withoutSuper = list
         .split(',')
@@ -54,6 +66,10 @@ function transformRoles(sql){
         .join(', ');
       return `v_can_see_actual := v_role in (${withoutSuper}) or\n    (v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing'));`;
     }
+  );
+  sql=sql.replaceAll(
+    actualPricingGate,
+    "v_can_see_actual := v_role in ('admin', 'owner', 'gf') or\n    (v_role = 'superintendent' and public.linecrew_has_capability('actual_pricing'));",
   );
   return sql;
 }

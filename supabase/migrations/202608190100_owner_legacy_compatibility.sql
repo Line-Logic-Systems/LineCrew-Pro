@@ -1318,15 +1318,12 @@ begin
 end;
 $$;
 
--- Source: 20260816_daily_report_review_queue.sql
-create or replace function public.approve_daily_report(
-  p_report_id uuid,
-  p_review_notes text default null
-)
+-- Source: 20260822022348_preserve_daily_report_correction_history_on_approval.sql
+create or replace function public.approve_daily_report(p_report_id uuid, p_review_notes text default null::text)
 returns void
 language plpgsql
 security definer
-set search_path = ''
+set search_path to ''
 as $$
 declare
   v_company_id uuid;
@@ -1336,6 +1333,8 @@ declare
   v_report_status text;
   v_require_gf boolean;
   v_redline_count bigint;
+  v_existing_notes text;
+  v_new_note text;
 begin
   select profile.company_id, lower(coalesce(profile.role, '')), profile.active
   into v_company_id, v_role, v_active
@@ -1348,8 +1347,8 @@ begin
       message = 'Only an active company Admin or General Foreman can approve reports.';
   end if;
 
-  select report.company_id, lower(coalesce(report.status, 'draft'))
-  into v_report_company_id, v_report_status
+  select report.company_id, lower(coalesce(report.status, 'draft')), report.review_notes
+  into v_report_company_id, v_report_status, v_existing_notes
   from public.daily_reports report
   where report.id = p_report_id;
 
@@ -1373,8 +1372,10 @@ begin
   from public.get_daily_report_unit_locations(p_report_id) location
   where location.authorization_status = 'redline';
 
+  v_new_note := nullif(btrim(coalesce(p_review_notes, '')), '');
+
   if coalesce(v_require_gf, false) and v_redline_count > 0 and v_role in ('admin','owner') and
-     nullif(btrim(coalesce(p_review_notes, '')), '') is null then
+     v_new_note is null then
     raise exception using errcode = '22023',
       message = 'Enter an Admin override reason because this company requires GF approval for redlines.';
   end if;
@@ -1382,152 +1383,22 @@ begin
   update public.daily_reports report
   set
     status = 'approved',
-    review_notes = nullif(btrim(coalesce(p_review_notes, '')), ''),
+    review_notes = case
+      when v_new_note is null then v_existing_notes
+      when nullif(btrim(coalesce(v_existing_notes,'')), '') is null then v_new_note
+      else btrim(v_existing_notes) || E'\n\nGF APPROVAL:\n' || v_new_note
+    end,
     redline_override_by = case
       when coalesce(v_require_gf, false) and v_redline_count > 0 and v_role in ('admin','owner')
         then auth.uid() else null end,
     redline_override_reason = case
       when coalesce(v_require_gf, false) and v_redline_count > 0 and v_role in ('admin','owner')
-        then btrim(p_review_notes) else null end,
+        then v_new_note else null end,
     redline_override_at = case
       when coalesce(v_require_gf, false) and v_redline_count > 0 and v_role in ('admin','owner')
         then now() else null end
   where report.id = p_report_id
     and report.company_id = v_company_id;
-end;
-$$;
-
--- Source: 20260816_daily_unit_pole_locations.sql
-create or replace function public.get_daily_report_unit_locations(
-  p_report_id uuid
-)
-returns table (
-  location_line_id uuid,
-  price_book_item_id uuid,
-  item_code text,
-  item_name text,
-  description text,
-  unit_of_measure text,
-  category text,
-  pole_location text,
-  install_price numeric,
-  retirement_price numeric,
-  actual_install_price numeric,
-  actual_retirement_price numeric,
-  adjusted_install_price numeric,
-  adjusted_retirement_price numeric,
-  has_adjustment boolean,
-  install_quantity numeric,
-  retirement_quantity numeric,
-  actual_line_value numeric,
-  adjusted_line_value numeric,
-  visible_line_value numeric
-)
-language plpgsql
-stable
-security definer
-set search_path = ''
-as $$
-declare
-  v_company_id uuid;
-  v_role text;
-  v_profile_active boolean;
-  v_report_company_id uuid;
-  v_report_creator uuid;
-  v_can_see_actual boolean;
-begin
-  select profile.company_id, lower(coalesce(profile.role, '')), profile.active
-  into v_company_id, v_role, v_profile_active
-  from public.profiles profile
-  where profile.id = auth.uid();
-
-  if v_company_id is null or v_profile_active is not true or
-     v_role not in ('foreman', 'gf', 'admin', 'owner') then
-    raise exception using
-      errcode = '42501',
-      message = 'An active Foreman, General Foreman or Admin profile is required.';
-  end if;
-
-  select report.company_id, report.created_by
-  into v_report_company_id, v_report_creator
-  from public.daily_reports report
-  where report.id = p_report_id;
-
-  if v_report_company_id is null or v_report_company_id <> v_company_id then
-    raise exception using
-      errcode = 'P0002',
-      message = 'Daily report was not found in your company.';
-  end if;
-
-  if v_role = 'foreman' and v_report_creator is distinct from auth.uid() then
-    raise exception using
-      errcode = '42501',
-      message = 'Foremen can view unit production only on their own reports.';
-  end if;
-
-  v_can_see_actual := v_role in ('admin', 'gf', 'owner');
-
-  return query
-  select
-    location_line.id,
-    aggregate_line.price_book_item_id,
-    aggregate_line.item_code,
-    aggregate_line.item_name,
-    aggregate_line.description,
-    aggregate_line.unit_of_measure,
-    aggregate_line.category,
-    location_line.pole_location,
-    case when v_can_see_actual
-      then aggregate_line.actual_install_price
-      else aggregate_line.adjusted_install_price
-    end,
-    case when v_can_see_actual
-      then aggregate_line.actual_retirement_price
-      else aggregate_line.adjusted_retirement_price
-    end,
-    case when v_can_see_actual
-      then aggregate_line.actual_install_price
-      else null
-    end,
-    case when v_can_see_actual
-      then aggregate_line.actual_retirement_price
-      else null
-    end,
-    aggregate_line.adjusted_install_price,
-    aggregate_line.adjusted_retirement_price,
-    aggregate_line.has_adjustment,
-    location_line.install_quantity,
-    location_line.retirement_quantity,
-    case when v_can_see_actual then round(
-      location_line.install_quantity * aggregate_line.actual_install_price +
-      location_line.retirement_quantity * aggregate_line.actual_retirement_price,
-      2
-    ) else null end,
-    round(
-      location_line.install_quantity * aggregate_line.adjusted_install_price +
-      location_line.retirement_quantity * aggregate_line.adjusted_retirement_price,
-      2
-    ),
-    case when v_can_see_actual then round(
-      location_line.install_quantity * aggregate_line.actual_install_price +
-      location_line.retirement_quantity * aggregate_line.actual_retirement_price,
-      2
-    ) else round(
-      location_line.install_quantity * aggregate_line.adjusted_install_price +
-      location_line.retirement_quantity * aggregate_line.adjusted_retirement_price,
-      2
-    ) end
-  from public.daily_production_unit_locations location_line
-  join public.daily_production_units aggregate_line
-    on aggregate_line.id = location_line.daily_production_unit_id
-   and aggregate_line.company_id = location_line.company_id
-   and aggregate_line.daily_report_id = location_line.daily_report_id
-   and aggregate_line.price_book_item_id = location_line.price_book_item_id
-  where location_line.daily_report_id = p_report_id
-    and location_line.company_id = v_company_id
-  order by
-    location_line.pole_location_key,
-    aggregate_line.item_code;
 end;
 $$;
 
@@ -3738,6 +3609,90 @@ begin
   on conflict (company_id, user_id) do nothing;
 
   return v_valid_count;
+end;
+$$;
+
+-- Source: 20260820_timekeeping_roster_assignments.sql
+create or replace function public.admin_import_timekeeping_roster(p_rows jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_company_id uuid;
+  v_role text;
+  v_row jsonb;
+  v_employee_number text;
+  v_full_name text;
+  v_classification text;
+  v_default_crew text;
+  v_existing_id uuid;
+  v_inserted integer := 0;
+  v_updated integer := 0;
+begin
+  select p.company_id, lower(coalesce(p.role, ''))
+    into v_company_id, v_role
+  from public.profiles p
+  where p.id = auth.uid();
+
+  if v_company_id is null or v_role not in ('admin','owner') then
+    raise exception using errcode='42501', message='Only a company Admin can import the employee roster.';
+  end if;
+
+  if jsonb_typeof(p_rows) <> 'array' then
+    raise exception using errcode='22023', message='Roster rows must be an array.';
+  end if;
+
+  for v_row in select value from jsonb_array_elements(p_rows)
+  loop
+    v_employee_number := nullif(btrim(coalesce(v_row->>'employee_number','')), '');
+    v_full_name := nullif(btrim(coalesce(v_row->>'full_name','')), '');
+    v_classification := nullif(btrim(coalesce(v_row->>'classification','')), '');
+    v_default_crew := nullif(btrim(coalesce(v_row->>'default_crew_name','')), '');
+
+    if v_full_name is null then
+      continue;
+    end if;
+
+    v_existing_id := null;
+    if v_employee_number is not null then
+      select e.id into v_existing_id
+      from public.timekeeping_employees e
+      where e.company_id = v_company_id
+        and lower(coalesce(e.employee_number,'')) = lower(v_employee_number)
+      limit 1;
+    end if;
+
+    if v_existing_id is null then
+      select e.id into v_existing_id
+      from public.timekeeping_employees e
+      where e.company_id = v_company_id
+        and lower(e.full_name) = lower(v_full_name)
+      limit 1;
+    end if;
+
+    if v_existing_id is null then
+      insert into public.timekeeping_employees(
+        company_id, employee_number, full_name, classification, default_crew_name, active, created_by
+      ) values (
+        v_company_id, v_employee_number, v_full_name, v_classification, v_default_crew, true, auth.uid()
+      );
+      v_inserted := v_inserted + 1;
+    else
+      update public.timekeeping_employees
+      set employee_number = coalesce(v_employee_number, employee_number),
+          full_name = v_full_name,
+          classification = coalesce(v_classification, classification),
+          default_crew_name = coalesce(v_default_crew, default_crew_name),
+          active = true,
+          updated_at = now()
+      where id = v_existing_id;
+      v_updated := v_updated + 1;
+    end if;
+  end loop;
+
+  return jsonb_build_object('inserted', v_inserted, 'updated', v_updated);
 end;
 $$;
 

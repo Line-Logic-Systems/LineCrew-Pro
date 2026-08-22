@@ -3,6 +3,10 @@ import path from 'node:path';
 
 const dir = 'supabase/migrations';
 const excludedFunctions = new Set([
+  // This function's TABLE return shape evolved after the legacy compatibility
+  // layer was introduced. Replacing it here can abort with PostgreSQL 42P13.
+  // Forward migrations own its current definition and role checks.
+  'public.get_daily_report_unit_locations',
   'public.set_company_member_role',
   'public.set_company_member_active'
 ]);
