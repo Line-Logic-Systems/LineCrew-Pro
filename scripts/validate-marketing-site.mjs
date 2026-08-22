@@ -1,0 +1,86 @@
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { extname, join } from 'node:path';
+
+const root = new URL('..', import.meta.url).pathname;
+const docsDir = join(root, 'docs');
+const htmlFiles = readdirSync(docsDir).filter((file) => extname(file) === '.html').sort();
+const failures = [];
+
+const requiredCanonical = new Set([
+  'index.html',
+  'features.html',
+  'pricing.html',
+  'training.html',
+  'demo.html',
+  'privacy.html',
+  'terms.html',
+  'subscriber.html',
+]);
+
+const fail = (file, message) => failures.push(`${file}: ${message}`);
+
+for (const file of htmlFiles) {
+  const html = readFileSync(join(docsDir, file), 'utf8');
+
+  if (!html.includes('styles.css?v=site5')) fail(file, 'must use the current site stylesheet version');
+  if (!html.includes('accessibility.css?v=site5')) fail(file, 'must load the accessibility stylesheet');
+  if (!html.includes('class="skip-link"')) fail(file, 'must include a keyboard skip link');
+  if (!html.includes('<main id="main-content">')) fail(file, 'must identify the main content target');
+
+  if (requiredCanonical.has(file) && !html.includes('<link rel="canonical"')) {
+    fail(file, 'must include a canonical URL');
+  }
+
+  if (requiredCanonical.has(file)) {
+    for (const marker of ['property="og:image"', 'name="twitter:card"', 'name="twitter:image"']) {
+      if (!html.includes(marker)) fail(file, `missing social metadata: ${marker}`);
+    }
+  }
+
+  const h1Count = (html.match(/<h1(?:\s[^>]*)?>/g) || []).length;
+  if (h1Count !== 1) fail(file, `expected exactly one h1, found ${h1Count}`);
+
+  if (/raw\.githubusercontent\.com|github\.com\/.+\/blob\/|localhost|127\.0\.0\.1/i.test(html)) {
+    fail(file, 'contains a source-control, local, or preview URL');
+  }
+
+  for (const match of html.matchAll(/href="([^"]+)"/g)) {
+    const href = match[1];
+    if (/^(?:https?:|mailto:|tel:|#)/.test(href)) continue;
+    const target = href.split('#')[0].split('?')[0];
+    if (!target) continue;
+    if (!existsSync(join(docsDir, target))) fail(file, `local link target does not exist: ${target}`);
+  }
+}
+
+const signup = readFileSync(join(docsDir, 'signup.html'), 'utf8');
+for (const field of ['company-name', 'admin-email', 'primary-contact', 'phone', 'active-crews', 'state']) {
+  if (!signup.includes(`for="${field}"`)) fail('signup.html', `label is not connected to ${field}`);
+  if (!signup.includes(`id="${field}"`)) fail('signup.html', `field is missing id ${field}`);
+}
+if (!signup.includes('name="robots" content="noindex,follow"')) {
+  fail('signup.html', 'inactive checkout preview must remain noindex');
+}
+if (!signup.includes('Checkout is not active yet.')) {
+  fail('signup.html', 'must explain the disabled checkout beside the control');
+}
+
+const sitemap = readFileSync(join(docsDir, 'sitemap.xml'), 'utf8');
+for (const page of requiredCanonical) {
+  const url = page === 'index.html' ? 'https://linecrewpro.com/' : `https://linecrewpro.com/${page}`;
+  if (!sitemap.includes(`<loc>${url}</loc>`)) fail('sitemap.xml', `missing ${url}`);
+}
+if (sitemap.includes('/signup.html')) fail('sitemap.xml', 'must not include the noindex signup preview');
+
+const vercelIgnore = readFileSync(join(root, '.vercelignore'), 'utf8');
+for (const ignored of ['docs/', 'supabase/', 'scripts/', '.github/']) {
+  if (!vercelIgnore.split(/\r?\n/).includes(ignored)) fail('.vercelignore', `missing ${ignored}`);
+}
+
+if (failures.length) {
+  console.error(`Marketing validation failed (${failures.length}):`);
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+
+console.log(`Marketing validation passed for ${htmlFiles.length} HTML pages.`);
