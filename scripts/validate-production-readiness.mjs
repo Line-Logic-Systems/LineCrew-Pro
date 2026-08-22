@@ -13,6 +13,7 @@ const mustExist = [
   'supabase/migrations/202608190100_owner_legacy_compatibility.sql',
   'supabase/migrations/202608190200_superintendent_legacy_compatibility.sql',
   'supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql',
+  'supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
 ];
@@ -26,6 +27,7 @@ const accessMigration = fs.readFileSync('supabase/migrations/20260818_owner_supe
 const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', 'utf8');
 const superintendentCompat = fs.readFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
 const driftRepair = fs.readFileSync('supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql', 'utf8');
+const rpcAccessRepair = fs.readFileSync('supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
@@ -95,6 +97,15 @@ for (const marker of [
   "notify pgrst, 'reload schema'"
 ]) assert(driftRepair.includes(marker), `Production drift repair is missing: ${marker}`);
 assert(!driftRepair.includes('actual_contract_pricing'), 'Production drift repair must not use the obsolete actual_contract_pricing key.');
+for (const marker of [
+  'create or replace function public.get_contract_field_settings()',
+  "linecrew_has_capability('customers_contracts')",
+  'create or replace function public.get_daily_report_jsa',
+  "linecrew_has_capability('safety_records')",
+  'p.active is true',
+  'revoke all on function public.get_contract_field_settings() from public, anon, authenticated',
+  'revoke all on function public.get_daily_report_jsa(uuid) from public, anon, authenticated'
+]) assert(rpcAccessRepair.includes(marker), `Post-fix RPC access repair is missing: ${marker}`);
 assert(expandedJsa.includes("load('app-polish.js?v=20260822a')"), 'app-polish.js must use the current cache-busting version.');
 
 for (const marker of [
@@ -126,5 +137,6 @@ console.log('- Suspended leadership profiles cannot use role/capability manageme
 console.log('- Tracked Owner compatibility migration present');
 console.log('- Tracked capability-aware Superintendent compatibility migration present');
 console.log('- Forward production drift repair and post-deploy verification present');
+console.log('- Contracts and JSA RPC access gaps are tracked and capability-gated');
 console.log('- Actual pricing remains independently gated');
 console.log('- Team, job, package, reporting, storm and assistant UI capability wiring present');
