@@ -7,7 +7,7 @@
   const number = (value) => Number(value || 0) || 0;
   const role = () => String(typeof currentProfile !== 'undefined' ? currentProfile?.role || '' : '').toLowerCase();
   const companyId = () => typeof currentProfile !== 'undefined' ? currentProfile?.company_id || null : null;
-  const isLeader = () => ['gf','admin'].includes(role());
+  const isLeader = () => ['gf','admin','owner'].includes(role());
   const canManageRoster = () => isLeader();
   const getSb = () => typeof sb !== 'undefined' ? sb : window.sb;
   const todayIso = () => new Date().toISOString().slice(0,10);
@@ -175,7 +175,7 @@
   }
 
   async function addEmployee(){
-    if(!canManageRoster()) return alert('Only a General Foreman or Admin can manage the employee roster.');
+    if(!canManageRoster()) return alert('Only an Owner, Admin, or General Foreman can manage the employee roster.');
     const fullName = (byId('tkEmployeeName')?.value || '').trim();
     if(!fullName) return alert('Enter the employee name.');
     const payload = {
