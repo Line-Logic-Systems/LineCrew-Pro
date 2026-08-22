@@ -4,47 +4,17 @@
   const byId=id=>document.getElementById(id);
   const role=()=>String(window.currentProfile?.role || (typeof currentProfile!=='undefined' ? currentProfile?.role : '') || '').toLowerCase();
   const plans={
-    foreman:{
-      title:'Foreman Workspace',
-      text:'Start the day with Safety/JSA, then use Jobs, Production and Timekeeping for your crew.',
-      order:['safetyTile','jobsTile','productionTile','timekeepingTile','trainingTile'],
-      hidden:['teamTile','priceBooksTile']
-    },
-    gf:{
-      title:'General Foreman Workspace',
-      text:'Review crews, jobs, production, safety and timekeeping from one place.',
-      order:['productionTile','jobsTile','safetyTile','timekeepingTile','teamTile','trainingTile'],
-      hidden:['priceBooksTile']
-    },
-    superintendent:{
-      title:'Superintendent Workspace',
-      text:'Manage field operations, crews, jobs, production, safety and company tools available to your permissions.',
-      order:['productionTile','jobsTile','teamTile','safetyTile','timekeepingTile','priceBooksTile','trainingTile'],
-      hidden:[]
-    },
-    admin:{
-      title:'Admin Workspace',
-      text:'Manage company setup, people, pricing, jobs, production, safety and timekeeping.',
-      order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],
-      hidden:[]
-    },
-    owner:{
-      title:'Owner Workspace',
-      text:'Company-wide access for people, pricing, jobs, production, safety and timekeeping.',
-      order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],
-      hidden:[]
-    }
+    foreman:{title:'Foreman Workspace',text:'Start the day with Safety/JSA, then use Jobs, Production and Timekeeping for your crew.',order:['safetyTile','jobsTile','productionTile','timekeepingTile','trainingTile'],hidden:['teamTile','priceBooksTile']},
+    gf:{title:'General Foreman Workspace',text:'Review crews, jobs, production, safety and timekeeping from one place.',order:['productionTile','jobsTile','safetyTile','timekeepingTile','teamTile','trainingTile'],hidden:['priceBooksTile']},
+    superintendent:{title:'Superintendent Workspace',text:'Manage field operations, crews, jobs, production, safety and company tools available to your permissions.',order:['productionTile','jobsTile','teamTile','safetyTile','timekeepingTile','priceBooksTile','trainingTile'],hidden:[]},
+    admin:{title:'Admin Workspace',text:'Manage company setup, people, pricing, jobs, production, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:[]},
+    owner:{title:'Owner Workspace',text:'Company-wide access for people, pricing, jobs, production, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:[]}
   };
   let observer=null;
   let scheduled=false;
 
   function observe(){
-    observer?.observe(document.body,{
-      subtree:true,
-      childList:true,
-      attributes:true,
-      attributeFilter:['class']
-    });
+    observer?.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
   }
 
   function addStyles(){
@@ -67,11 +37,7 @@
     const tile=byId(id);const muted=tile?.querySelector('.muted');if(muted) muted.textContent=text;
   }
 
-  function assistantAllowed(){
-    return ['admin','owner'].includes(role());
-  }
-
-  // Keep the core app role gate aligned with the workspace gate.
+  function assistantAllowed(){return ['admin','owner'].includes(role());}
   window.userCanUseAssistant=assistantAllowed;
 
   function syncAssistantVisibility(){
@@ -79,23 +45,20 @@
     const panel=byId('assistantPanel');
     const dashboard=byId('dashboardPage');
     if(!launcher) return;
-
     const allowed=assistantAllowed();
     const signedIn=!!(window.currentProfile || (typeof currentProfile!=='undefined' && currentProfile));
     launcher.classList.toggle('hidden',!(signedIn && allowed));
-
     if(!(signedIn && allowed)){
       panel?.classList.add('hidden');
       launcher.setAttribute('aria-expanded','false');
     }
-
-    if(dashboard && !dashboard.classList.contains('hidden') && allowed){
-      launcher.setAttribute('data-leadership-assistant-ready','true');
-    }else{
-      launcher.removeAttribute('data-leadership-assistant-ready');
-    }
+    if(dashboard && !dashboard.classList.contains('hidden') && allowed) launcher.setAttribute('data-leadership-assistant-ready','true');
+    else launcher.removeAttribute('data-leadership-assistant-ready');
   }
 
+  /* Only change the legacy hour inputs after the Daily Report form has been opened.
+     Keeping this out of the global MutationObserver prevents it from interfering with
+     the core Create Daily Report click handler. */
   function syncForemanCrewTimeOnly(){
     const hideLegacyHours=role()==='foreman';
     ['dailyRegularHours','dailyOvertimeHours'].forEach(id=>{
@@ -103,15 +66,22 @@
       if(!input) return;
       const wrapper=input.closest('label') || input.parentElement;
       if(wrapper) wrapper.classList.toggle('hidden',hideLegacyHours);
-      input.setAttribute('data-calculated-from-crew-time','true');
       input.readOnly=hideLegacyHours;
+      input.setAttribute('data-calculated-from-crew-time','true');
     });
-
     const crewCard=byId('dailyCrewTimeCard');
     if(crewCard && hideLegacyHours){
       crewCard.setAttribute('data-time-source','primary');
       const help=crewCard.querySelector('.tk-help');
       if(help) help.textContent="Enter each crew member's Regular and OT hours. These hours automatically drive Daily Report totals, production run-rate calculations, and payroll/time reports.";
+    }
+  }
+
+  function bindDailyReportHourUi(){
+    const createBtn=byId('createDailyReportBtn');
+    if(createBtn && !createBtn.dataset.crewTimeUiBound){
+      createBtn.dataset.crewTimeUiBound='true';
+      createBtn.addEventListener('click',()=>setTimeout(syncForemanCrewTimeOnly,0));
     }
   }
 
@@ -121,40 +91,23 @@
     const r=role();
     const plan=plans[r];
     syncAssistantVisibility();
-    syncForemanCrewTimeOnly();
+    bindDailyReportHourUi();
     if(!dashboard||!grid||!plan) return;
 
     observer?.disconnect();
     try{
       addStyles();
       let banner=byId('lcRoleWorkspace');
-      if(!banner){
-        banner=document.createElement('div');
-        banner.id='lcRoleWorkspace';
-        banner.className='lc-role-workspace';
-        grid.parentNode.insertBefore(banner,grid);
-      }
+      if(!banner){banner=document.createElement('div');banner.id='lcRoleWorkspace';banner.className='lc-role-workspace';grid.parentNode.insertBefore(banner,grid);}
       const bannerMarkup=`<strong>${plan.title}</strong><span>${plan.text}</span>`;
       if(banner.innerHTML!==bannerMarkup) banner.innerHTML=bannerMarkup;
 
-      ['jobsTile','productionTile','safetyTile','priceBooksTile','teamTile','timekeepingTile','trainingTile'].forEach(id=>{
-        byId(id)?.classList.toggle('hidden',plan.hidden.includes(id));
-      });
-
-      const desiredTiles=plan.order
-        .map(id=>byId(id))
-        .filter(el=>el&&!el.classList.contains('hidden'));
+      ['jobsTile','productionTile','safetyTile','priceBooksTile','teamTile','timekeepingTile','trainingTile'].forEach(id=>byId(id)?.classList.toggle('hidden',plan.hidden.includes(id)));
+      const desiredTiles=plan.order.map(id=>byId(id)).filter(el=>el&&!el.classList.contains('hidden'));
       const desiredIds=desiredTiles.map(el=>el.id);
-      const currentIds=Array.from(grid.children)
-        .filter(el=>desiredIds.includes(el.id))
-        .map(el=>el.id);
-      const tilesNeedReordering=
-        desiredIds.length!==currentIds.length ||
-        desiredIds.some((id,index)=>id!==currentIds[index]);
-
-      if(tilesNeedReordering){
-        desiredTiles.forEach(el=>grid.appendChild(el));
-      }
+      const currentIds=Array.from(grid.children).filter(el=>desiredIds.includes(el.id)).map(el=>el.id);
+      const tilesNeedReordering=desiredIds.length!==currentIds.length || desiredIds.some((id,index)=>id!==currentIds[index]);
+      if(tilesNeedReordering) desiredTiles.forEach(el=>grid.appendChild(el));
 
       if(r==='foreman'){
         setDescription('jobsTile','Open assigned jobs and work points');
@@ -176,34 +129,25 @@
         setDescription('safetyTile','JSA and safety reporting');
         setDescription('timekeepingTile','Crew hours, payroll and billing exports');
       }
-
       if(typeof window.userHasCapability==='function' && r==='superintendent'){
-        const pb=byId('priceBooksTile');
-        if(pb) pb.classList.toggle('hidden',!window.userHasCapability('price_books'));
+        const pb=byId('priceBooksTile');if(pb) pb.classList.toggle('hidden',!window.userHasCapability('price_books'));
       }
-
       syncAssistantVisibility();
-      syncForemanCrewTimeOnly();
+      bindDailyReportHourUi();
       dashboard.dataset.roleWorkspace=r;
-    }finally{
-      observe();
-    }
+    }finally{observe();}
   }
 
-  function schedule(){
-    if(scheduled) return;
-    scheduled=true;
-    setTimeout(()=>{scheduled=false;apply();},0);
-  }
+  function schedule(){if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;apply();},0);}
 
   function init(){
     observer=new MutationObserver(schedule);
     observe();
     schedule();
-    [120,500,1200,2500].forEach(delay=>setTimeout(()=>{syncAssistantVisibility();syncForemanCrewTimeOnly();schedule();},delay));
-    document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncAssistantVisibility();syncForemanCrewTimeOnly();schedule();}});
-    window.addEventListener('focus',()=>{syncAssistantVisibility();syncForemanCrewTimeOnly();schedule();});
-    setInterval(()=>{syncAssistantVisibility();syncForemanCrewTimeOnly();},3000);
+    [120,500,1200,2500].forEach(delay=>setTimeout(()=>{syncAssistantVisibility();bindDailyReportHourUi();schedule();},delay));
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncAssistantVisibility();bindDailyReportHourUi();schedule();}});
+    window.addEventListener('focus',()=>{syncAssistantVisibility();bindDailyReportHourUi();schedule();});
+    setInterval(()=>{syncAssistantVisibility();bindDailyReportHourUi();},3000);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
