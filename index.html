@@ -778,6 +778,16 @@ button:disabled{
 .daily-review-counts .pending{ color:#8a5800; font-weight:800; }
 .daily-review-counts .redline{ color:#b42318; font-weight:800; }
 
+.daily-draft-guidance{
+  margin-top:10px;
+  padding:10px 12px;
+  border:1px solid #e2ad38;
+  border-radius:8px;
+  background:#fff7df;
+  color:#6d4800;
+  line-height:1.45;
+}
+
 .job-progress-list{
   display:grid;
   gap:12px;
@@ -3383,7 +3393,7 @@ function userCanManageJobs(){ return userHasCapability('jobs') || currentUserRol
 function userCanReviewProduction(){ return userHasCapability('production_review') || currentUserRole() === 'gf'; }
 function userCanManageProductionRecords(){ return userHasCapability('production_review'); }
 function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
-function userCanUseAssistant(){ return currentUserRole() === 'admin'; }
+function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }
 function userCanManageCompanySettings(){ return userHasCapability('company_settings'); }
 function userCanManageCustomersContracts(){ return userHasCapability('customers_contracts'); }
 function userCanManagePriceBooks(){ return userHasCapability('price_books'); }
@@ -12378,6 +12388,13 @@ async function loadProductionReports(){
               .toUpperCase()
           )}
         </strong>
+        ${String(report.status || 'draft').toLowerCase() === 'draft' ? `
+          <div class="daily-draft-guidance">
+            <strong>DRAFT — NOT SENT FOR REVIEW</strong><br>
+            Add units and Crew Time, then click <strong>Submit Report</strong>.
+            Leadership cannot approve or return this report until it is submitted.
+          </div>
+        ` : ''}
         ${report.storm_mode ? `
           <br>
           Storm Event:
@@ -13264,17 +13281,19 @@ function renderDailyBatchSuggestions(row){
 
 function dailyUnitSearchRank(item, search){
   const code = String(item.item_code || '').trim().toLowerCase();
+  const normalizedCode = normalizeDailyUnitSearch(code);
+  const normalizedSearch = normalizeDailyUnitSearch(search);
   const name = String(item.item_name || '').toLowerCase();
   const description = String(item.description || '').toLowerCase();
   const category = String(item.category || '').toLowerCase();
 
-  if(code === search){
+  if(code === search || (normalizedSearch && normalizedCode === normalizedSearch)){
     return 0;
   }
-  if(code.startsWith(search)){
+  if(code.startsWith(search) || (normalizedSearch && normalizedCode.startsWith(normalizedSearch))){
     return 1;
   }
-  if(code.includes(search)){
+  if(code.includes(search) || (normalizedSearch && normalizedCode.includes(normalizedSearch))){
     return 2;
   }
   if(name.startsWith(search) || description.startsWith(search)){
@@ -13287,6 +13306,13 @@ function dailyUnitSearchRank(item, search){
     return 5;
   }
   return 99;
+}
+
+function normalizeDailyUnitSearch(value){
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 }
 
 function selectDailyBatchUnit(row, item){
@@ -14370,7 +14396,7 @@ loadApp();
 
 </script>
 
-  <script src="expanded-jsa.js?v=20260819"></script>
+  <script src="expanded-jsa.js?v=20260822a"></script>
 
 <script>
 (function () {

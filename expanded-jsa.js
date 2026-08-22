@@ -74,7 +74,7 @@
   };
 
   load('app-polish.js?v=20260820');
-  load('role-workspace-polish.js?v=20260820a');
+  load('role-workspace-polish.js?v=20260822a');
   load('expanded-jsa-core.js?v=20260820', () => {
     load('jsa-signatures.js?v=20260820j', () => load('jsa-signature-layout-fix.js?v=20260820a'));
   });

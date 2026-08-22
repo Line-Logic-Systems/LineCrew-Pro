@@ -40,13 +40,13 @@ for (const [label, pattern] of publicSecretPatterns) assert(!pattern.test(index)
 
 assert(assistant.includes('client.auth.getUser()'), 'AI assistant must authenticate the caller.');
 assert(assistant.includes('.select("company_id, role, active")'), 'AI assistant must load role and active status server-side.');
-assert(assistant.includes('role !== "admin"'), 'AI assistant must reject every non-Admin role server-side.');
+assert(assistant.includes('!["admin", "owner"].includes(role)'), 'AI assistant must reject every role except active Owner/Admin server-side.');
 assert(assistant.includes('profile.active !== true'), 'AI assistant must reject suspended Admin profiles.');
 assert(assistant.includes('.eq("company_id", companyId)'), 'AI assistant company data queries must be tenant-scoped.');
 assert(!assistant.includes('Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")'), 'AI assistant should not use a service-role key for user-scoped reads.');
 assert(assistant.includes('store: false'), 'AI responses must disable OpenAI application-state storage.');
 assert(assistant.includes('history.slice(-10)'), 'AI assistant must bound conversational history.');
-assert(index.includes("function userCanUseAssistant(){ return currentUserRole() === 'admin'; }"), 'AI assistant launcher must be Admin-only.');
+assert(index.includes("function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }"), 'AI assistant launcher must be Owner/Admin-only.');
 assert(!index.includes("['ai_assistant','AI Assistant']"), 'AI assistant must not be configurable as a Superintendent capability.');
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
@@ -97,7 +97,7 @@ if (failures.length) {
 
 console.log('Production readiness validation passed.');
 console.log('- Vercel security headers and secret checks passed');
-console.log('- Active Admin-only AI authorization present');
+console.log('- Active Owner/Admin-only AI authorization present');
 console.log('- Owner/Admin/Superintendent hierarchy protections present');
 console.log('- Suspended leadership profiles cannot use role/capability management');
 console.log('- Legacy Owner compatibility present');
