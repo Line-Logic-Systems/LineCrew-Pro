@@ -14,6 +14,8 @@
       .metric{transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease}
       .metric[role="link"]{cursor:pointer}.metric[role="link"]:hover{transform:translateY(-1px);box-shadow:0 5px 18px rgba(12,37,62,.10)}
       .lc-unsaved-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#8a4b08;background:#fff4db;border:1px solid #f2c97d;border-radius:999px;padding:5px 9px;margin-left:8px}
+      .lc-dashboard-topbar{display:flex;justify-content:flex-end;margin:0 0 12px}
+      .lc-dashboard-topbar button{width:auto;margin:0;padding:10px 14px}
       @media(max-width:720px){
         #timekeepingPage .tk-grid{grid-template-columns:1fr!important}
         #timekeepingPage .tk-summary{grid-template-columns:1fr 1fr!important}
@@ -38,7 +40,7 @@
   window.LineCrewUI={...(window.LineCrewUI||{}),toast};
 
   // Convert legacy alert calls in newer modules into non-blocking app messages.
-  if(!window.__lcNativeAlert){window.__lcNativeAlert=window.alert.bind(window);window.alert=(msg)=>toast(msg,/failed|could not|error/i.test(String(msg))?'error':'info',4200);}
+  if(!window.__lcNativeAlert){window.__lcNativeAlert=window.alert.bind(window);window.alert=(msg)=>toast(msg,/failed|could not|error|unable/i.test(String(msg))?'error':/returned|warning|correct/i.test(String(msg))?'warning':'info',4200);}
 
   function loadingButton(btn, busyText){
     if(!btn || btn.dataset.lcBusy==='1') return ()=>{};
@@ -47,12 +49,72 @@
   }
   window.LineCrewUI.loadingButton=loadingButton;
 
-  // Helpful empty-state copy for Timekeeping.
   function improveEmptyStates(){
     const box=byId('tkReportList');
     if(box && /No time entries match these filters\./.test(box.textContent||'')){
       box.innerHTML='<div class="tk-crew-card"><strong>No time recorded for this view.</strong><p class="tk-help">Create or save a Daily Report with crew time, or change the date, employee, or job filters.</p></div>';
     }
+  }
+
+  // Put Sign Out at the top of the Dashboard for every signed-in role.
+  function ensureTopSignOut(){
+    const dashboard=byId('dashboardPage');
+    if(!dashboard || byId('lcDashboardTopSignOut')) return;
+    const bar=document.createElement('div');
+    bar.className='lc-dashboard-topbar';
+    const btn=document.createElement('button');
+    btn.id='lcDashboardTopSignOut';
+    btn.className='secondary small';
+    btn.textContent='Sign Out';
+    btn.onclick=()=>{
+      if(typeof window.signOut==='function') return window.signOut();
+      byId('signOutBtn')?.click();
+    };
+    bar.appendChild(btn);
+    dashboard.insertBefore(bar,dashboard.firstChild);
+  }
+
+  // Prevent two overlapping Production refreshes from rendering the same report twice.
+  function hardenProductionLoader(){
+    if(window.__lcProductionLoaderHardened || typeof window.loadProductionReports!=='function') return;
+    window.__lcProductionLoaderHardened=true;
+    const original=window.loadProductionReports;
+    let running=null;
+    let rerun=false;
+    let lastArgs=[];
+    window.loadProductionReports=async function(...args){
+      lastArgs=args;
+      if(running){rerun=true;return running;}
+      do{
+        rerun=false;
+        running=Promise.resolve(original.apply(this,lastArgs));
+        try{await running;}finally{running=null;}
+      }while(rerun);
+    };
+  }
+
+  // Do not let a Foreman leave unit entry believing unsaved/zero saved units are attached.
+  function hardenDoneAddingUnits(){
+    const btn=byId('closeDailyUnitEditorBtn');
+    if(!btn || btn.dataset.lcSavedUnitGuard==='1' || typeof btn.onclick!=='function') return;
+    btn.dataset.lcSavedUnitGuard='1';
+    const original=btn.onclick;
+    btn.onclick=async function(event){
+      try{
+        const report=window.currentDailyUnitReport || (typeof currentDailyUnitReport!=='undefined'?currentDailyUnitReport:null);
+        if(report?.id && window.sb){
+          const {data,error}=await sb.rpc('get_daily_report_unit_locations',{p_report_id:report.id});
+          if(error){toast('Unable to verify saved units: '+error.message,'error',5200);return;}
+          if(!data || data.length===0){
+            toast('No units are saved to this report yet. Use Save Pole & Add Next before Done Adding Units.','warning',6200);
+            return;
+          }
+        }
+      }catch(error){
+        console.warn('Saved-unit verification failed:',error);
+      }
+      return original.call(this,event);
+    };
   }
 
   // Unsaved-change guard for the two highest-risk field forms.
@@ -62,10 +124,23 @@
   document.addEventListener('change',e=>{const form=e.target?.closest?.('form');if(form && tracked.includes(form.id)){dirty=true;dirtyScope=form.id;form.dataset.lcDirty='1';}},true);
   document.addEventListener('click',e=>{
     const id=e.target?.id||'';
-    if(['saveDailyReportBtn','saveSafetyJsaBtn'].includes(id)){setTimeout(()=>{dirty=false;dirtyScope=null;tracked.forEach(x=>{const f=byId(x);if(f)delete f.dataset.lcDirty;});},1700);}
+    if(['saveDailyReportBtn','saveSafetyJsaBtn','saveDailyUnitBatchBtn'].includes(id)){setTimeout(()=>{dirty=false;dirtyScope=null;tracked.forEach(x=>{const f=byId(x);if(f)delete f.dataset.lcDirty;});},1700);}
   },true);
   window.addEventListener('beforeunload',e=>{if(!dirty)return;e.preventDefault();e.returnValue='';});
 
-  function init(){addStyles();improveEmptyStates();const obs=new MutationObserver(improveEmptyStates);obs.observe(document.body,{subtree:true,childList:true,characterData:true});}
+  function harden(){
+    ensureTopSignOut();
+    hardenProductionLoader();
+    hardenDoneAddingUnits();
+  }
+
+  function init(){
+    addStyles();
+    improveEmptyStates();
+    harden();
+    const obs=new MutationObserver(()=>{improveEmptyStates();harden();});
+    obs.observe(document.body,{subtree:true,childList:true,characterData:true});
+    [250,750,1500,3000].forEach(delay=>setTimeout(harden,delay));
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
