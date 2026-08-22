@@ -96,12 +96,32 @@
     }
   }
 
+  function syncForemanCrewTimeOnly(){
+    const hideLegacyHours=role()==='foreman';
+    ['dailyRegularHours','dailyOvertimeHours'].forEach(id=>{
+      const input=byId(id);
+      if(!input) return;
+      const wrapper=input.closest('label') || input.parentElement;
+      if(wrapper) wrapper.classList.toggle('hidden',hideLegacyHours);
+      input.setAttribute('data-calculated-from-crew-time','true');
+      input.readOnly=hideLegacyHours;
+    });
+
+    const crewCard=byId('dailyCrewTimeCard');
+    if(crewCard && hideLegacyHours){
+      crewCard.setAttribute('data-time-source','primary');
+      const help=crewCard.querySelector('.tk-help');
+      if(help) help.textContent="Enter each crew member's Regular and OT hours. These hours automatically drive Daily Report totals, production run-rate calculations, and payroll/time reports.";
+    }
+  }
+
   function apply(){
     const dashboard=byId('dashboardPage');
     const grid=dashboard?.querySelector('.grid');
     const r=role();
     const plan=plans[r];
     syncAssistantVisibility();
+    syncForemanCrewTimeOnly();
     if(!dashboard||!grid||!plan) return;
 
     observer?.disconnect();
@@ -163,6 +183,7 @@
       }
 
       syncAssistantVisibility();
+      syncForemanCrewTimeOnly();
       dashboard.dataset.roleWorkspace=r;
     }finally{
       observe();
@@ -179,10 +200,10 @@
     observer=new MutationObserver(schedule);
     observe();
     schedule();
-    [120,500,1200,2500].forEach(delay=>setTimeout(()=>{syncAssistantVisibility();schedule();},delay));
-    document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncAssistantVisibility();schedule();}});
-    window.addEventListener('focus',()=>{syncAssistantVisibility();schedule();});
-    setInterval(syncAssistantVisibility,3000);
+    [120,500,1200,2500].forEach(delay=>setTimeout(()=>{syncAssistantVisibility();syncForemanCrewTimeOnly();schedule();},delay));
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncAssistantVisibility();syncForemanCrewTimeOnly();schedule();}});
+    window.addEventListener('focus',()=>{syncAssistantVisibility();syncForemanCrewTimeOnly();schedule();});
+    setInterval(()=>{syncAssistantVisibility();syncForemanCrewTimeOnly();},3000);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
