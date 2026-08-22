@@ -67,25 +67,32 @@
     const tile=byId(id);const muted=tile?.querySelector('.muted');if(muted) muted.textContent=text;
   }
 
+  function assistantAllowed(){
+    return ['admin','owner'].includes(role());
+  }
+
+  // Keep the core app role gate aligned with the workspace gate.
+  window.userCanUseAssistant=assistantAllowed;
+
   function syncAssistantVisibility(){
     const launcher=byId('assistantLauncher');
     const panel=byId('assistantPanel');
     const dashboard=byId('dashboardPage');
     if(!launcher) return;
 
-    const isAdmin=role()==='admin';
+    const allowed=assistantAllowed();
     const signedIn=!!(window.currentProfile || (typeof currentProfile!=='undefined' && currentProfile));
-    launcher.classList.toggle('hidden',!(signedIn && isAdmin));
+    launcher.classList.toggle('hidden',!(signedIn && allowed));
 
-    if(!(signedIn && isAdmin)){
+    if(!(signedIn && allowed)){
       panel?.classList.add('hidden');
       launcher.setAttribute('aria-expanded','false');
     }
 
-    if(dashboard && !dashboard.classList.contains('hidden') && isAdmin){
-      launcher.setAttribute('data-admin-assistant-ready','true');
+    if(dashboard && !dashboard.classList.contains('hidden') && allowed){
+      launcher.setAttribute('data-leadership-assistant-ready','true');
     }else{
-      launcher.removeAttribute('data-admin-assistant-ready');
+      launcher.removeAttribute('data-leadership-assistant-ready');
     }
   }
 
