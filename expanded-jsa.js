@@ -86,3 +86,201 @@
     });
   });
 })();
+
+/* Returned Daily Report recovery + Foreman notification */
+(() => {
+  'use strict';
+
+  const RETURN_NOTICE_ID = 'linecrewReturnedReportNotice';
+
+  function esc(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function foremanReady() {
+    try {
+      return typeof currentProfile !== 'undefined' &&
+        currentProfile &&
+        String(currentProfile.role || '').toLowerCase() === 'foreman' &&
+        typeof sb !== 'undefined';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  async function getReturnedReports() {
+    if (!foremanReady()) return [];
+    const { data, error } = await sb
+      .from('daily_reports')
+      .select(`
+        id,
+        job_id,
+        work_date,
+        foreman_name,
+        crew_name,
+        regular_hours,
+        overtime_hours,
+        weather_conditions,
+        delay_hours,
+        delay_reason,
+        notes,
+        status,
+        review_notes,
+        reviewed_at,
+        updated_at,
+        jobs (
+          job_number,
+          job_name
+        )
+      `)
+      .eq('company_id', currentProfile.company_id)
+      .eq('foreman_id', currentProfile.id)
+      .eq('status', 'draft')
+      .not('review_notes', 'is', null)
+      .order('reviewed_at', { ascending:false });
+
+    if (error) {
+      console.warn('Unable to check returned Daily Reports:', error.message);
+      return [];
+    }
+    return (data || []).filter(report => String(report.review_notes || '').trim());
+  }
+
+  async function openReturnedReport(report) {
+    const form = document.getElementById('dailyReportForm');
+    if (!form) return;
+
+    form.classList.remove('hidden');
+    form.dataset.reportId = report.id;
+
+    const setValue = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value ?? '';
+    };
+
+    setValue('dailyForemanName', report.foreman_name || currentProfile?.full_name || '');
+    setValue('dailyWorkDate', report.work_date || '');
+    setValue('dailyRegularHours', report.regular_hours || 0);
+    setValue('dailyOvertimeHours', report.overtime_hours || 0);
+    setValue('dailyCrewName', report.crew_name || '');
+    setValue('dailyWeatherConditions', report.weather_conditions || '');
+    setValue('dailyDelayHours', report.delay_hours || 0);
+    setValue('dailyDelayReason', report.delay_reason || '');
+    setValue('dailyNotes', report.notes || '');
+
+    const saveBtn = document.getElementById('saveDailyReportBtn');
+    if (saveBtn) saveBtn.textContent = 'Save & Continue to Units';
+
+    const jobSelect = document.getElementById('dailyJobId');
+    if (jobSelect) {
+      jobSelect.innerHTML = '<option value="">Select active job</option>';
+      const { data:jobs, error } = await sb
+        .from('jobs')
+        .select('id, job_number, job_name')
+        .eq('company_id', currentProfile.company_id)
+        .eq('active', true)
+        .order('job_number', { ascending:true });
+
+      if (error) {
+        alert('The returned report is safe, but its job list could not be loaded: ' + error.message);
+        return;
+      }
+
+      (jobs || []).forEach(job => {
+        const option = document.createElement('option');
+        option.value = job.id;
+        option.textContent = (job.job_number || 'Job') + ' - ' + (job.job_name || 'Unnamed');
+        option.selected = job.id === report.job_id;
+        jobSelect.appendChild(option);
+      });
+    }
+
+    form.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  async function openReturnedUnits(report) {
+    if (typeof openDailyUnitEditor !== 'function') {
+      alert('Unit editor is still loading. Try again in a moment.');
+      return;
+    }
+    await openDailyUnitEditor(report);
+  }
+
+  function showOneTimePopup(report) {
+    const token = [report.id, report.reviewed_at || report.updated_at || '', report.review_notes || ''].join('|');
+    const key = 'linecrew-return-seen:' + token;
+    if (localStorage.getItem(key) === '1') return;
+    localStorage.setItem(key, '1');
+
+    const job = report.jobs?.job_number || 'Daily Report';
+    alert(
+      'REPORT RETURNED BY GENERAL FOREMAN\n\n' +
+      job + ' has been returned for correction.\n\n' +
+      'GF Note: ' + String(report.review_notes || 'No note provided') + '\n\n' +
+      'Open Production to edit the returned report and resubmit it.'
+    );
+  }
+
+  function renderReturnedNotice(reports) {
+    const productionList = document.getElementById('productionList');
+    if (!productionList?.parentElement) return;
+
+    document.getElementById(RETURN_NOTICE_ID)?.remove();
+    if (!reports.length) return;
+
+    const wrap = document.createElement('div');
+    wrap.id = RETURN_NOTICE_ID;
+    wrap.className = 'card';
+    wrap.style.border = '2px solid #d97706';
+    wrap.style.background = '#fff7ed';
+
+    const heading = document.createElement('h3');
+    heading.textContent = reports.length === 1
+      ? 'Daily Report Returned by GF'
+      : reports.length + ' Daily Reports Returned by GF';
+    wrap.appendChild(heading);
+
+    reports.forEach(report => {
+      const item = document.createElement('div');
+      item.className = 'job-card';
+      item.innerHTML =
+        '<strong>' + esc(report.jobs?.job_number || 'Daily Report') + '</strong>' +
+        (report.jobs?.job_name ? ' — ' + esc(report.jobs.job_name) : '') +
+        '<br><span class="muted">Work date: ' + esc(report.work_date || '') + '</span>' +
+        '<br><strong>GF Note:</strong> ' + esc(report.review_notes || 'No note provided');
+
+      const edit = document.createElement('button');
+      edit.className = 'warning small';
+      edit.textContent = 'Edit Returned Report';
+      edit.onclick = () => openReturnedReport(report);
+      item.appendChild(edit);
+
+      const units = document.createElement('button');
+      units.className = 'secondary small';
+      units.textContent = 'Edit Returned Units';
+      units.onclick = () => openReturnedUnits(report);
+      item.appendChild(units);
+
+      wrap.appendChild(item);
+    });
+
+    productionList.parentElement.insertBefore(wrap, productionList);
+  }
+
+  async function refreshReturnedReports() {
+    const reports = await getReturnedReports();
+    renderReturnedNotice(reports);
+    reports.forEach(showOneTimePopup);
+  }
+
+  const productionTile = document.getElementById('productionTile');
+  productionTile?.addEventListener('click', () => setTimeout(refreshReturnedReports, 300));
+
+  [1500, 3500, 7000].forEach(delay => setTimeout(refreshReturnedReports, delay));
+  setInterval(refreshReturnedReports, 10000);
+})();
