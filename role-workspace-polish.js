@@ -37,8 +37,11 @@
     const tile=byId(id);const muted=tile?.querySelector('.muted');if(muted) muted.textContent=text;
   }
 
-  function assistantAllowed(){return ['admin','owner'].includes(role());}
-  window.userCanUseAssistant=assistantAllowed;
+  function assistantAllowed(){
+    return typeof window.userCanUseAssistant==='function'
+      ? window.userCanUseAssistant()
+      : ['admin','owner'].includes(role());
+  }
 
   function syncAssistantVisibility(){
     const launcher=byId('assistantLauncher');
