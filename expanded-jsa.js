@@ -208,7 +208,45 @@
       alert('Unit editor is still loading. Try again in a moment.');
       return;
     }
-    await openDailyUnitEditor(report);
+
+    const freshReportResult = await sb
+      .from('daily_reports')
+      .select(`id,job_id,work_date,status,review_notes,jobs(job_number,job_name)`)
+      .eq('id', report.id)
+      .eq('company_id', currentProfile.company_id)
+      .eq('foreman_id', currentProfile.id)
+      .single();
+
+    if (freshReportResult.error) {
+      alert('Unable to reload the returned report: ' + freshReportResult.error.message);
+      return;
+    }
+
+    const savedResult = await sb.rpc('get_daily_report_unit_locations', {
+      p_report_id: report.id
+    });
+
+    if (savedResult.error) {
+      alert('Unable to reload the returned units: ' + savedResult.error.message);
+      return;
+    }
+
+    if (!savedResult.data || savedResult.data.length === 0) {
+      alert('No saved units are attached to this returned report. Do not re-enter them yet; contact the trial admin so the report can be checked.');
+      return;
+    }
+
+    await openDailyUnitEditor(freshReportResult.data);
+
+    setTimeout(() => {
+      document.querySelectorAll('#dailyUnitList .daily-saved-pole').forEach(details => {
+        details.open = true;
+      });
+      const firstQuantity = document.querySelector(
+        '#dailyUnitList .daily-install-quantity, #dailyUnitList .daily-retirement-quantity'
+      );
+      firstQuantity?.scrollIntoView({ behavior:'smooth', block:'center' });
+    }, 150);
   }
 
   function showOneTimePopup(report) {
@@ -222,7 +260,7 @@
       'REPORT RETURNED BY GENERAL FOREMAN\n\n' +
       job + ' has been returned for correction.\n\n' +
       'GF Note: ' + String(report.review_notes || 'No note provided') + '\n\n' +
-      'Open Production to edit the returned report and resubmit it.'
+      'Open Production and choose Correct Returned Units or Edit Report Details.'
     );
   }
 
@@ -254,17 +292,17 @@
         '<br><span class="muted">Work date: ' + esc(report.work_date || '') + '</span>' +
         '<br><strong>GF Note:</strong> ' + esc(report.review_notes || 'No note provided');
 
-      const edit = document.createElement('button');
-      edit.className = 'warning small';
-      edit.textContent = 'Edit Returned Report';
-      edit.onclick = () => openReturnedReport(report);
-      item.appendChild(edit);
-
       const units = document.createElement('button');
-      units.className = 'secondary small';
-      units.textContent = 'Edit Returned Units';
+      units.className = 'warning small';
+      units.textContent = 'Correct Returned Units';
       units.onclick = () => openReturnedUnits(report);
       item.appendChild(units);
+
+      const edit = document.createElement('button');
+      edit.className = 'secondary small';
+      edit.textContent = 'Edit Report Details';
+      edit.onclick = () => openReturnedReport(report);
+      item.appendChild(edit);
 
       wrap.appendChild(item);
     });
