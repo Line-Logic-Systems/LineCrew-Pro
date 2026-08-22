@@ -249,6 +249,40 @@
     }, 150);
   }
 
+  async function resubmitReturnedReport(report, button) {
+    const savedResult = await sb.rpc('get_daily_report_unit_locations', {
+      p_report_id: report.id
+    });
+    if (savedResult.error) {
+      alert('Unable to verify corrected units before resubmitting: ' + savedResult.error.message);
+      return;
+    }
+    if (!savedResult.data || savedResult.data.length === 0) {
+      alert('This report still has no saved units. Correct and save at least one unit before resubmitting.');
+      return;
+    }
+
+    if (!confirm('Send this corrected Daily Report back to the General Foreman for review?')) return;
+
+    button.disabled = true;
+    button.textContent = 'Resubmitting...';
+    const { error } = await sb.rpc('submit_daily_report', {
+      p_report_id: report.id
+    });
+    button.disabled = false;
+    button.textContent = 'Resubmit to GF';
+
+    if (error) {
+      alert('Unable to resubmit report: ' + error.message);
+      return;
+    }
+
+    alert('Corrected Daily Report sent back to the General Foreman.');
+    document.getElementById('dailyUnitEditor')?.classList.add('hidden');
+    if (typeof loadProductionReports === 'function') await loadProductionReports();
+    await refreshReturnedReports();
+  }
+
   function showOneTimePopup(report) {
     const token = [report.id, report.reviewed_at || report.updated_at || '', report.review_notes || ''].join('|');
     const key = 'linecrew-return-seen:' + token;
@@ -303,6 +337,12 @@
       edit.textContent = 'Edit Report Details';
       edit.onclick = () => openReturnedReport(report);
       item.appendChild(edit);
+
+      const resubmit = document.createElement('button');
+      resubmit.className = 'success small';
+      resubmit.textContent = 'Resubmit to GF';
+      resubmit.onclick = () => resubmitReturnedReport(report, resubmit);
+      item.appendChild(resubmit);
 
       wrap.appendChild(item);
     });
