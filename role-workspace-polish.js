@@ -67,11 +67,34 @@
     const tile=byId(id);const muted=tile?.querySelector('.muted');if(muted) muted.textContent=text;
   }
 
+  function syncAssistantVisibility(){
+    const launcher=byId('assistantLauncher');
+    const panel=byId('assistantPanel');
+    const dashboard=byId('dashboardPage');
+    if(!launcher) return;
+
+    const isAdmin=role()==='admin';
+    const signedIn=!!(window.currentProfile || (typeof currentProfile!=='undefined' && currentProfile));
+    launcher.classList.toggle('hidden',!(signedIn && isAdmin));
+
+    if(!(signedIn && isAdmin)){
+      panel?.classList.add('hidden');
+      launcher.setAttribute('aria-expanded','false');
+    }
+
+    if(dashboard && !dashboard.classList.contains('hidden') && isAdmin){
+      launcher.setAttribute('data-admin-assistant-ready','true');
+    }else{
+      launcher.removeAttribute('data-admin-assistant-ready');
+    }
+  }
+
   function apply(){
     const dashboard=byId('dashboardPage');
     const grid=dashboard?.querySelector('.grid');
     const r=role();
     const plan=plans[r];
+    syncAssistantVisibility();
     if(!dashboard||!grid||!plan) return;
 
     observer?.disconnect();
@@ -91,49 +114,48 @@
         byId(id)?.classList.toggle('hidden',plan.hidden.includes(id));
       });
 
-    const desiredTiles=plan.order
-      .map(id=>byId(id))
-      .filter(el=>el&&!el.classList.contains('hidden'));
-    const desiredIds=desiredTiles.map(el=>el.id);
-    const currentIds=Array.from(grid.children)
-      .filter(el=>desiredIds.includes(el.id))
-      .map(el=>el.id);
-    const tilesNeedReordering=
-      desiredIds.length!==currentIds.length ||
-      desiredIds.some((id,index)=>id!==currentIds[index]);
+      const desiredTiles=plan.order
+        .map(id=>byId(id))
+        .filter(el=>el&&!el.classList.contains('hidden'));
+      const desiredIds=desiredTiles.map(el=>el.id);
+      const currentIds=Array.from(grid.children)
+        .filter(el=>desiredIds.includes(el.id))
+        .map(el=>el.id);
+      const tilesNeedReordering=
+        desiredIds.length!==currentIds.length ||
+        desiredIds.some((id,index)=>id!==currentIds[index]);
 
       if(tilesNeedReordering){
         desiredTiles.forEach(el=>grid.appendChild(el));
       }
 
-    if(r==='foreman'){
-      setDescription('jobsTile','Open assigned jobs and work points');
-      setDescription('productionTile','Create and review your Daily Reports');
-      setDescription('safetyTile','Complete today’s JSA and safety records');
-      setDescription('timekeepingTile','Enter and review your crew hours');
-      setDescription('trainingTile','How-to videos for Foreman tasks');
-    }else if(r==='gf'){
-      setDescription('productionTile','Review and approve crew Daily Reports');
-      setDescription('jobsTile','Manage jobs, work points and crew progress');
-      setDescription('safetyTile','Review field safety and JSA records');
-      setDescription('timekeepingTile','Review crew hours and reporting');
-      setDescription('teamTile','View company crews and Foremen');
-    }else{
-      setDescription('teamTile','People, roles and company access');
-      setDescription('priceBooksTile','Contracts, pricing and unit catalogs');
-      setDescription('jobsTile','Create and manage jobs and work points');
-      setDescription('productionTile','Daily production reporting and review');
-      setDescription('safetyTile','JSA and safety reporting');
-      setDescription('timekeepingTile','Crew hours, payroll and billing exports');
-    }
+      if(r==='foreman'){
+        setDescription('jobsTile','Open assigned jobs and work points');
+        setDescription('productionTile','Create and review your Daily Reports');
+        setDescription('safetyTile','Complete today’s JSA and safety records');
+        setDescription('timekeepingTile','Enter and review your crew hours');
+        setDescription('trainingTile','How-to videos for Foreman tasks');
+      }else if(r==='gf'){
+        setDescription('productionTile','Review and approve crew Daily Reports');
+        setDescription('jobsTile','Manage jobs, work points and crew progress');
+        setDescription('safetyTile','Review field safety and JSA records');
+        setDescription('timekeepingTile','Review crew hours and reporting');
+        setDescription('teamTile','View company crews and Foremen');
+      }else{
+        setDescription('teamTile','People, roles and company access');
+        setDescription('priceBooksTile','Contracts, pricing and unit catalogs');
+        setDescription('jobsTile','Create and manage jobs and work points');
+        setDescription('productionTile','Daily production reporting and review');
+        setDescription('safetyTile','JSA and safety reporting');
+        setDescription('timekeepingTile','Crew hours, payroll and billing exports');
+      }
 
-    if(typeof window.userHasCapability==='function' && r==='superintendent'){
-      const pb=byId('priceBooksTile');
-      if(pb) pb.classList.toggle('hidden',!window.userHasCapability('price_books'));
-    }
+      if(typeof window.userHasCapability==='function' && r==='superintendent'){
+        const pb=byId('priceBooksTile');
+        if(pb) pb.classList.toggle('hidden',!window.userHasCapability('price_books'));
+      }
 
-      const launcher=byId('assistantLauncher');
-      if(launcher) launcher.classList.toggle('hidden',r!=='admin');
+      syncAssistantVisibility();
       dashboard.dataset.roleWorkspace=r;
     }finally{
       observe();
@@ -145,12 +167,15 @@
     scheduled=true;
     setTimeout(()=>{scheduled=false;apply();},0);
   }
+
   function init(){
     observer=new MutationObserver(schedule);
     observe();
     schedule();
-    setTimeout(schedule,120);
-    setTimeout(schedule,500);
+    [120,500,1200,2500].forEach(delay=>setTimeout(()=>{syncAssistantVisibility();schedule();},delay));
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden){syncAssistantVisibility();schedule();}});
+    window.addEventListener('focus',()=>{syncAssistantVisibility();schedule();});
+    setInterval(syncAssistantVisibility,3000);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
