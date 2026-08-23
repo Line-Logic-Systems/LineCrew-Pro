@@ -23,6 +23,7 @@ const mustExist = [
   'supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql',
   'supabase/migrations/20260823030000_company_employee_roster_assignment.sql',
   'supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql',
+  'number-input-polish.js',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
 ];
@@ -46,6 +47,7 @@ const foremanJobAssignments = fs.readFileSync('supabase/migrations/2026082302363
 const supervisorJobAssignees = fs.readFileSync('supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
 const employeeRosterAssignment = fs.readFileSync('supabase/migrations/20260823030000_company_employee_roster_assignment.sql', 'utf8');
 const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
+const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
@@ -180,6 +182,9 @@ assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id
 assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
 assert(expandedJsa.includes("load('timekeeping.js?v=20260823f'"), 'Direct Foreman crew preload must use a fresh cache version.');
 assert(timekeepingRoster.includes('await autoLoadAssignedCrew();'), 'Foreman roster selectors must wait for assigned crew data before rebuilding employee options.');
+assert(expandedJsa.includes("load('number-input-polish.js?v=20260823a'"), 'Global numeric input polish must be cache-versioned and loaded.');
+assert(numberInputPolish.includes("input.defaultValue === '0'"), 'Only numeric fields designed with a zero default may restore an empty value to zero.');
+assert(numberInputPolish.includes('input.select();'), 'Clicking a displayed zero must select it for immediate replacement.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
