@@ -1393,6 +1393,18 @@ button:disabled{
   margin-top:0;
 }
 
+.job-setup-actions{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  align-items:center;
+  gap:8px;
+}
+
+.job-setup-actions button{
+  margin:0;
+}
+
 .import-actions{
   display:flex;
   flex-wrap:wrap;
@@ -1948,7 +1960,7 @@ button:disabled{
         </p>
       </div>
 
-      <div class="button-row">
+      <div class="button-row job-setup-actions">
         <button
           id="showAddJobPackageBtn"
           class="success hidden"
@@ -2040,6 +2052,11 @@ button:disabled{
         <input id="billingExportIncludeRedlines" type="checkbox">
         Include approved redlines in a separate section
       </label>
+      <label class="checkbox-row">
+        <input id="billingExportIsFinal" type="checkbox">
+        Final Bill — this job is complete
+      </label>
+      <p class="muted">Leave Final Bill unchecked for partial billing. Each new batch pulls only newly approved, unbilled production.</p>
       <label for="billingExportNotes">Batch Notes</label>
       <textarea id="billingExportNotes" rows="2" placeholder="Optional internal billing notes"></textarea>
       <button id="createBillingExportBatchBtn" class="success">Create Billing Batch</button>
@@ -7459,6 +7476,7 @@ async function openBillingExportCenter(){
   $('billingExportCenter').classList.remove('hidden');
   $('billingBatchDetail').classList.add('hidden');
   $('billingBatchCreateForm').classList.remove('hidden');
+  $('billingExportIsFinal').checked = false;
   await loadBillingExportBatches();
   $('billingExportCenter').scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -7470,7 +7488,7 @@ function closeBillingExportCenter(){
 }
 
 async function loadBillingExportBatches(){
-  const { data,error } = await sb.rpc('get_billing_export_batches');
+  const { data,error } = await sb.rpc('get_billing_export_batches_v2');
   if(error){
     alert('Unable to load billing batches: ' + error.message);
     return;
@@ -7481,6 +7499,11 @@ async function loadBillingExportBatches(){
 
 function billingStatusLabel(status){
   return String(status || 'draft').replaceAll('_',' ').toUpperCase();
+}
+
+function billingStageLabel(batch){
+  if(String(batch?.billing_type || 'partial').toLowerCase() === 'final') return 'Final Bill';
+  return 'Partial Bill ' + Number(batch?.billing_sequence || 1);
 }
 
 function renderBillingBatchHistory(){
@@ -7497,6 +7520,7 @@ function renderBillingBatchHistory(){
       '<div class="section-header"><div><strong>' + escapeHtml(batch.batch_number) +
       '</strong><br><span>' + escapeHtml(batch.job_number) + ' — ' +
       escapeHtml(batch.job_name || 'Unnamed Job') + '</span><br><span class="muted">' +
+      escapeHtml(billingStageLabel(batch)) + ' · ' +
       escapeHtml(batch.created_at ? new Date(batch.created_at).toLocaleString() : '') +
       ' · ' + Number(batch.authorized_line_count || 0) + ' authorized · ' +
       Number(batch.redline_line_count || 0) + ' redline</span></div><div><span class="billing-status ' +
@@ -7563,8 +7587,11 @@ async function createBillingExportBatch(){
     return;
   }
   const includeRedlines = $('billingExportIncludeRedlines').checked;
+  const isFinal = $('billingExportIsFinal').checked;
   const confirmed = confirm(
-    'Create a billing batch from approved, unbilled production?' +
+    'Create ' + (isFinal ? 'the Final Bill' : 'the next Partial Bill') +
+    ' from approved, unbilled production?' +
+    (isFinal ? '\n\nOnly choose Final Bill when the job is complete.' : '') +
     (includeRedlines ? '\n\nApproved redlines will be included in a separate section.' : '')
   );
   if(!confirmed) return;
@@ -7572,12 +7599,13 @@ async function createBillingExportBatch(){
   const button = $('createBillingExportBatchBtn');
   button.disabled = true;
   button.textContent = 'Creating Billing Batch...';
-  const { data:batchId,error } = await sb.rpc('create_billing_export_batch', {
+  const { data:batchId,error } = await sb.rpc('create_billing_export_batch_v2', {
     p_job_id:jobId,
     p_date_from:dateFrom,
     p_date_to:dateTo,
     p_include_redlines:includeRedlines,
-    p_notes:$('billingExportNotes').value.trim() || null
+    p_notes:$('billingExportNotes').value.trim() || null,
+    p_is_final:isFinal
   });
   button.disabled = false;
   button.textContent = 'Create Billing Batch';
@@ -7586,6 +7614,7 @@ async function createBillingExportBatch(){
     return;
   }
   $('billingExportNotes').value = '';
+  $('billingExportIsFinal').checked = false;
   await loadBillingExportBatches();
   const batch = currentBillingBatches.find(item => String(item.batch_id) === String(batchId));
   if(batch) await openBillingBatch(batch);
@@ -7626,6 +7655,7 @@ function renderBillingBatchDetail(){
   const redlines = currentBillingBatchLines.filter(line => line.authorization_status === 'redline');
   $('billingBatchSummary').innerHTML =
     '<span><strong>' + escapeHtml(batch.batch_number) + '</strong><br>Batch</span>' +
+    '<span><strong>' + escapeHtml(billingStageLabel(batch)) + '</strong><br>Billing Stage</span>' +
     '<span><strong>' + escapeHtml(batch.job_number) + '</strong><br>Job</span>' +
     '<span><strong>' + authorized.length + '</strong><br>Authorized Lines</span>' +
     '<span><strong>' + redlines.length + '</strong><br>Redline Lines</span>' +
@@ -7662,6 +7692,7 @@ function renderBillingBatchDetail(){
 function billingExportRows(lines){
   return lines.map(line => ({
     'Batch Number':line.batch_number,
+    'Billing Stage':billingStageLabel(currentBillingBatch),
     'Job Number':line.job_number,
     'Job Name':line.job_name || '',
     'Customer':line.customer_name || '',
@@ -7708,6 +7739,7 @@ async function exportBillingExcel(){
   const workbook = XLSX.utils.book_new();
   const summaryRows = [
     ['Billing Batch',currentBillingBatch.batch_number],
+    ['Billing Stage',billingStageLabel(currentBillingBatch)],
     ['Job Number',currentBillingBatch.job_number],
     ['Job Name',currentBillingBatch.job_name || ''],
     ['From Date',currentBillingBatch.date_from || 'All approved production'],
@@ -7721,7 +7753,7 @@ async function exportBillingExcel(){
   summarySheet['!cols'] = [{wch:22},{wch:32}];
   const workPointRows = billingExportRows(currentBillingBatchLines);
   const workPointSheet = XLSX.utils.json_to_sheet(workPointRows);
-  workPointSheet['!cols'] = [18,15,24,20,20,14,14,16,18,60,14,18,14,18,24,20].map(wch => ({wch}));
+  workPointSheet['!cols'] = [18,16,15,24,20,20,14,14,16,18,60,14,18,14,18,24,20].map(wch => ({wch}));
   XLSX.utils.book_append_sheet(workbook,workPointSheet,'Work Points + Redlines');
   XLSX.utils.book_append_sheet(workbook,summarySheet,'Billing Summary');
   const redlines = billingExportRows(currentBillingBatchLines.filter(line => line.authorization_status === 'redline'));
@@ -7777,7 +7809,8 @@ async function exportBillingPdf(){
     '.muted{color:#52677d}table{width:100%;border-collapse:collapse;margin:12px 0 24px;font-size:11px}' +
     'th,td{border:1px solid #ccd8e3;padding:6px;text-align:left}th{background:#eef4f8}' +
     '.total{font-size:18px;font-weight:bold;margin:14px 0}@media print{button{display:none}}</style></head><body>' +
-    '<h1>Billing Export ' + escapeHtml(currentBillingBatch.batch_number) + '</h1><p>' +
+    '<h1>' + escapeHtml(billingStageLabel(currentBillingBatch)) + '</h1><p class="muted">Billing Export ' +
+    escapeHtml(currentBillingBatch.batch_number) + '</p><p>' +
     escapeHtml(currentBillingBatch.job_number) + ' — ' + escapeHtml(currentBillingBatch.job_name || '') +
     '</p><p class="total">Total: ' + escapeHtml(formatCurrency(currentBillingBatch.total_value)) + '</p>' +
     section('Work Point Production',currentBillingBatchLines) +
@@ -7875,7 +7908,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['billing export','bill job','billing batch','excel billing','csv billing','pdf billing','mark submitted','mark paid','duplicate billing'],
-    answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. Select the job and optional approved-report date range, decide whether approved redlines should be included, then Create Billing Batch. Excel opens on Work Points + Redlines so every redline stays beside its work point; Excel and PDF also provide a Redlines-only summary. Download Excel, CSV or Print/Save PDF. The batch reserves those exact approved unit lines so they cannot be billed twice. Mark the batch Submitted after sending it to the utility and Paid when payment is received. Void releases the lines for a corrected replacement batch. Admin/Owner may permanently delete a batch only after it is voided.'
+    answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. Leave Final Bill unchecked while the job is still active; LineCrew Pro labels batches Partial Bill 1, Partial Bill 2 and so on, and each batch pulls only newly approved, unbilled production. Check Final Bill only when the job is complete. Excel opens on Work Points + Redlines so every redline stays beside its work point; Excel and PDF also provide a Redlines-only summary. Download Excel, CSV or Print/Save PDF. Mark the batch Submitted after sending it to the utility and Paid when payment is received. Void releases its lines for a corrected replacement batch. Admin/Owner may permanently delete a batch only after it is voided.'
   },
   {
     terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
