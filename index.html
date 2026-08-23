@@ -4696,7 +4696,10 @@ async function claimInitialOwner(){
   await loadApp();
 }
 
+let teamLoadRequest = 0;
+
 async function loadTeamMembers(){
+  const requestId = ++teamLoadRequest;
   $('teamLoading').classList.remove('hidden');
   $('teamList').replaceChildren();
   const canManageTeam = userCanManageTeam();
@@ -4705,6 +4708,7 @@ async function loadTeamMembers(){
   const { data:members, error } = await sb.from('profiles')
     .select('id, full_name, role, role_permissions, company_id, active')
     .eq('company_id', currentProfile.company_id).order('full_name', { ascending:true });
+  if(requestId !== teamLoadRequest) return;
   $('teamLoading').classList.add('hidden');
   if(error) return alert('Unable to load team members: ' + error.message);
   if(!members?.length){ $('teamList').innerHTML = '<p class="muted">No team members found.</p>'; return; }
