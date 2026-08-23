@@ -1323,8 +1323,16 @@ button:disabled{
     <button id="saveRecoveryPassword">Save New Password</button>
   </div>
 
-  <div class="card">
-    <h2>Create Account</h2>
+  <div id="signupCard" class="card">
+    <h2 id="signupHeading">Create Account</h2>
+    <p id="signupInviteMessage" class="muted hidden">
+      This private invitation will place you directly into the correct company.
+    </p>
+
+    <div id="signupInviteNameWrap" class="hidden">
+      <label for="signupInviteName">Your Full Name</label>
+      <input id="signupInviteName" type="text" maxlength="120" autocomplete="name">
+    </div>
 
     <label>Email</label>
     <input id="signupEmail" type="email">
@@ -1349,7 +1357,7 @@ button:disabled{
     </p>
   </div>
 
-  <div class="card">
+  <div id="createCompanyCard" class="card">
     <h2>Create Company</h2>
 
     <label>Your Name</label>
@@ -1363,7 +1371,7 @@ button:disabled{
     </button>
   </div>
 
-  <div class="card">
+  <div id="joinCompanyCard" class="card">
     <h2>Join Existing Company</h2>
 
     <label>Your Name</label>
@@ -1379,6 +1387,17 @@ button:disabled{
     <button id="joinCompanyBtn">
       Join Company
     </button>
+  </div>
+
+  <div id="acceptInvitationCard" class="card hidden">
+    <h2>Accept Team Invitation</h2>
+    <p class="muted">
+      You will join the company that invited this email address. No company code is required.
+    </p>
+    <label for="invitationFullName">Your Full Name</label>
+    <input id="invitationFullName" type="text" maxlength="120" autocomplete="name">
+    <button id="acceptInvitationBtn">Join My Team</button>
+    <p id="invitationStatus" class="muted" aria-live="polite"></p>
   </div>
 
   <button class="secondary" id="setupSignOut">
@@ -3234,6 +3253,61 @@ const sb = supabase.createClient(
 const $ = id =>
   document.getElementById(id);
 
+let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
+if(!/^[A-Za-z0-9_-]{43}$/.test(pendingInviteToken)){
+  pendingInviteToken = '';
+}
+
+function applyInvitationMode(){
+  const invited = Boolean(pendingInviteToken);
+  $('signupHeading').textContent = invited ? 'Accept Team Invitation' : 'Create Account';
+  $('signupInviteMessage').classList.toggle('hidden', !invited);
+  $('signupInviteNameWrap').classList.toggle('hidden', !invited);
+  $('signupBtn').textContent = invited ? 'Create Account & Join Team' : 'Create Account';
+  $('createCompanyCard').classList.toggle('hidden', invited);
+  $('joinCompanyCard').classList.toggle('hidden', invited);
+  $('acceptInvitationCard').classList.toggle('hidden', !invited);
+}
+
+async function invitationTokenHash(){
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(pendingInviteToken)
+  );
+  return Array.from(new Uint8Array(digest), byte =>
+    byte.toString(16).padStart(2, '0')
+  ).join('');
+}
+
+function clearInvitationUrl(){
+  pendingInviteToken = '';
+  const url = new URL(window.location.href);
+  url.searchParams.delete('invite');
+  window.history.replaceState(null, '', url.toString());
+  applyInvitationMode();
+}
+
+async function acceptPendingInvitation(session, suppliedName){
+  if(!pendingInviteToken || !session?.user) return { accepted:false };
+  const fullName = String(
+    suppliedName || session.user.user_metadata?.full_name || ''
+  ).trim();
+  if(fullName.length < 2){
+    return { accepted:false, needsName:true };
+  }
+
+  const tokenHash = await invitationTokenHash();
+  const { error } = await sb.rpc('accept_team_invitation', {
+    p_token_hash:tokenHash,
+    p_user_name:fullName
+  });
+  if(error) return { accepted:false, error };
+  clearInvitationUrl();
+  return { accepted:true };
+}
+
+applyInvitationMode();
+
 
 /* CURRENT USER STATE */
 
@@ -3647,7 +3721,10 @@ async function loadApp(){
     currentProfile = null;
     currentCompany = null;
 
-    window.history.replaceState(null, '', window.location.href);
+    if(!pendingInviteToken){
+      window.history.replaceState(null, '', window.location.href);
+    }
+    applyInvitationMode();
     show('authPage');
 
     return;
@@ -3696,6 +3773,23 @@ async function loadApp(){
   }
 
   if(!profile){
+    if(pendingInviteToken){
+      const invitationResult = await acceptPendingInvitation(session);
+      if(invitationResult.accepted){
+        await loadApp();
+        return;
+      }
+
+      applyInvitationMode();
+      $('invitationFullName').value = String(
+        session.user.user_metadata?.full_name || ''
+      ).trim();
+      $('invitationStatus').textContent = invitationResult.error
+        ? invitationResult.error.message
+        : 'Confirm your full name to join the company that invited you.';
+      show('setupPage');
+      return;
+    }
 
     window.history.replaceState(null, '', window.location.href);
     show('setupPage');
@@ -3932,12 +4026,20 @@ $('signupBtn').onclick = async()=>{
   const password =
     $('signupPassword').value;
 
+  const invitedName = pendingInviteToken
+    ? $('signupInviteName').value.trim()
+    : '';
+
 
   if(!email || !password){
 
     return alert(
       'Enter email and password.'
     );
+  }
+
+  if(pendingInviteToken && invitedName.length < 2){
+    return alert('Enter your full name.');
   }
 
 
@@ -3947,7 +4049,14 @@ $('signupBtn').onclick = async()=>{
   } =
     await sb.auth.signUp({
       email,
-      password
+      password,
+      options: pendingInviteToken ? {
+        emailRedirectTo:
+          window.location.origin +
+          window.location.pathname +
+          '?invite=' + encodeURIComponent(pendingInviteToken),
+        data:{ full_name:invitedName }
+      } : undefined
     });
 
 
@@ -3960,7 +4069,9 @@ $('signupBtn').onclick = async()=>{
   if(!data.session){
 
     alert(
-      'Account created. Check your email to confirm your account, then sign in.'
+      pendingInviteToken
+        ? 'Account created. Confirm your email to finish joining your team.'
+        : 'Account created. Check your email to confirm your account, then sign in.'
     );
 
     return;
@@ -4051,6 +4162,29 @@ $('joinCompanyBtn').onclick = async()=>{
   await loadApp();
 };
 
+$('acceptInvitationBtn').onclick = async()=>{
+  const name = $('invitationFullName').value.trim();
+  if(name.length < 2) return alert('Enter your full name.');
+
+  const { data:{ session } } = await sb.auth.getSession();
+  if(!session) return alert('Sign in or create your invited account first.');
+
+  const button = $('acceptInvitationBtn');
+  button.disabled = true;
+  button.textContent = 'Joining...';
+  $('invitationStatus').textContent = '';
+
+  const result = await acceptPendingInvitation(session, name);
+  button.disabled = false;
+  button.textContent = 'Join My Team';
+
+  if(result.error){
+    $('invitationStatus').textContent = result.error.message;
+    return;
+  }
+  if(result.accepted) await loadApp();
+};
+
 
 /* SIGN OUT */
 
@@ -4062,7 +4196,10 @@ async function signOut(){
   currentCompany = null;
   updatePilotFeedbackUi();
 
-  window.history.replaceState(null, '', window.location.href);
+  if(!pendingInviteToken){
+    window.history.replaceState(null, '', window.location.href);
+  }
+  applyInvitationMode();
   show('authPage');
 }
 
@@ -6532,7 +6669,10 @@ sb.auth.onAuthStateChange((event)=>{
     currentProfile = null;
     currentCompany = null;
 
-    window.history.replaceState(null, '', window.location.href);
+    if(!pendingInviteToken){
+      window.history.replaceState(null, '', window.location.href);
+    }
+    applyInvitationMode();
     show('authPage');
 
     return;
