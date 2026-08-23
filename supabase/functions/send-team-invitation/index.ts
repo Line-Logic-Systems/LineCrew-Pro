@@ -129,7 +129,7 @@ Deno.serve(async (request) => {
       return jsonResponse(request, { error: "Unable to create the invitation." }, 400);
     }
 
-    const appUrl = `https://app.linecrewpro.com/?invite=${encodeURIComponent(rawToken)}`;
+    const appUrl = `https://app.linecrewpro.com/?invite=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(recipient)}`;
     const subject = `You’re invited to join ${companyName} in LineCrew Pro`;
     const text = [
       `You have been invited to join ${companyName} in LineCrew Pro.`,
