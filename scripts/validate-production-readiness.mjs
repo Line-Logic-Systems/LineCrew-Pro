@@ -173,8 +173,10 @@ assert(index.includes('if(requestId !== teamLoadRequest) return;'), 'Team render
 assert(timekeeping.includes('+ Add Extra Man'), 'Foreman Crew Time must provide an explicit extra-man action.');
 assert(timekeeping.includes('tk-crew-group'), 'Leadership employee roster must group crew members by Foreman.');
 assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time options must identify assigned crew members first.');
-assert(timekeepingRoster.includes('rowsBox.replaceChildren();'), 'New Foreman Daily Reports must start from authoritative crew assignments.');
-assert(expandedJsa.includes("load('timekeeping.js?v=20260823d'"), 'Foreman crew assignment fixes must use a fresh cache version.');
+assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
+assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach"), 'Foreman Daily Reports must directly preload assigned crew members.');
+assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
+assert(expandedJsa.includes("load('timekeeping.js?v=20260823e'"), 'Direct Foreman crew preload must use a fresh cache version.');
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');

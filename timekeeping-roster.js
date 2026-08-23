@@ -162,26 +162,10 @@
     if(role()!=='foreman' || !companyId())return;
     const form=byId('dailyReportForm');
     const rowsBox=byId('dailyCrewTimeRows');
-    const addButton=byId('dailyAddCrewMember');
-    if(!form || form.classList.contains('hidden') || !rowsBox || !addButton)return;
+    if(!form || form.classList.contains('hidden') || !rowsBox)return;
     const key=form.dataset.reportId||`new:${byId('dailyJobId')?.value||''}:${byId('dailyWorkDate')?.value||''}`;
     if(lastAutoLoadKey===key){restrictDailySelectors();return;}
     await loadRoster();
-    if(!assigned.length){
-      if(!form.dataset.reportId) rowsBox.replaceChildren();
-      lastAutoLoadKey=key;
-      restrictDailySelectors();
-      return;
-    }
-    await new Promise(resolve=>setTimeout(resolve,220));
-    if(form.dataset.reportId && rowsBox.querySelector('.tk-crew-row')){lastAutoLoadKey=key;restrictDailySelectors();return;}
-    rowsBox.replaceChildren();
-    assigned.forEach(employee=>{
-      addButton.click();
-      const selects=[...rowsBox.querySelectorAll('.tk-employee')];
-      const select=selects[selects.length-1];
-      if(select){select.innerHTML=assignedOptions(employee.id);select.value=employee.id;select.dispatchEvent(new Event('change',{bubbles:true}));}
-    });
     lastAutoLoadKey=key;
     restrictDailySelectors();
   }

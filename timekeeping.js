@@ -67,8 +67,8 @@
         </div>
       </div>
       <div id="timekeepingRosterCard" class="card hidden">
-        <h3>Employee Roster</h3>
-        <p class="muted">Add field employees who do not need a LineCrew login, then assign each person to the Foreman who enters their daily time.</p>
+        <h3>Manage Foreman Crews</h3>
+        <p class="muted">Add field employees who do not need a LineCrew login. Open a Foreman section below and use the Assigned Foreman dropdown to move employees between crews. Assigned members automatically appear on that Foreman's Daily Report.</p>
         <div class="tk-grid">
           <label>Employee #<input id="tkEmployeeNumber" type="text" placeholder="Optional"></label>
           <label>Employee Name<input id="tkEmployeeName" type="text" placeholder="Full name"></label>
@@ -119,11 +119,14 @@
     tile.setAttribute('role','link');
     tile.setAttribute('tabindex','0');
     tile.innerHTML = '<strong>Timekeeping</strong><span class="muted">Crew hours, payroll and billing exports</span>';
-    const open = async () => {
+    const open = async (options={}) => {
       if(typeof show === 'function') show('dashboardPage');
       ['dashboardPage','teamPage','jobsPage','productionPage','safetyPage','priceBooksPage','setupPage','authPage'].forEach(id => byId(id)?.classList.add('hidden'));
       byId('timekeepingPage')?.classList.remove('hidden');
       await refreshTimekeeping();
+      if(options?.focusRoster){
+        byId('timekeepingRosterCard')?.scrollIntoView({behavior:'smooth',block:'start'});
+      }
     };
     window.openLineCrewTimekeeping = open;
     tile.addEventListener('click', open);
@@ -398,6 +401,11 @@
     if(reportId){
       const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
       if(!error && data?.length){data.forEach(addCrewRow);return;}
+    }
+    if(role()==='foreman'){
+      const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
+      employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach(e=>addCrewRow({employee_id:e.id}));
+      return;
     }
     await loadDefaultCrewRows();
   }
