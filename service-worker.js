@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v7';
+const CACHE_NAME = 'linecrew-pro-shell-v8';
 const APP_SHELL = [
   '/',
   '/index.html',

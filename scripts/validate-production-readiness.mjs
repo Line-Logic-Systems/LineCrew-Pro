@@ -17,6 +17,7 @@ const mustExist = [
   'supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql',
   'supabase/migrations/20260823004222_superintendent_customers_contracts_policies.sql',
   'supabase/migrations/20260823015316_one_click_company_invitations.sql',
+  'supabase/migrations/20260823021011_automate_invited_foreman_signup.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
 ];
@@ -34,6 +35,7 @@ const driftRepair = fs.readFileSync('supabase/migrations/20260822220000_producti
 const rpcAccessRepair = fs.readFileSync('supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql', 'utf8');
 const superintendentContractsPolicies = fs.readFileSync('supabase/migrations/20260823004222_superintendent_customers_contracts_policies.sql', 'utf8');
 const companyInvitations = fs.readFileSync('supabase/migrations/20260823015316_one_click_company_invitations.sql', 'utf8');
+const automaticInvitationSignup = fs.readFileSync('supabase/migrations/20260823021011_automate_invited_foreman_signup.sql', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
@@ -71,7 +73,7 @@ assert(teamInvitation.includes('.eq("id", profile.company_id)'), 'Team invitatio
 assert(teamInvitation.includes('crypto.getRandomValues(new Uint8Array(32))'), 'Team invitations must use cryptographically random one-time tokens.');
 assert(teamInvitation.includes('crypto.subtle.digest("SHA-256"'), 'Team invitation storage must use token hashes, not raw tokens.');
 assert(teamInvitation.includes('client.rpc("create_team_invitation"'), 'Team invitation sender must create an email-bound server record.');
-assert(teamInvitation.includes('?invite=${encodeURIComponent(rawToken)}'), 'Team email must carry the one-time invitation link.');
+assert(teamInvitation.includes('?invite=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(recipient)}'), 'Team email must carry the one-time token and locked recipient email.');
 assert(teamInvitation.includes('LineCrew Pro <invites@auth.linecrewpro.com>'), 'Team invitations must use the verified app sender.');
 assert(teamInvitation.includes('reply_to: "support@linecrewpro.com"'), 'Team invitations need the company support reply-to address.');
 assert(!teamInvitation.includes('SUPABASE_SERVICE_ROLE_KEY'), 'Team invitation sender must not bypass RLS with a service-role key.');
@@ -88,6 +90,16 @@ for (const marker of [
   'accepted_at = now()',
   'for update'
 ]) assert(companyInvitations.includes(marker), `One-click invitation security marker missing: ${marker}`);
+
+for (const marker of [
+  'create or replace function public.complete_team_invitation_signup()',
+  "new.raw_user_meta_data ->> 'team_invitation_token_hash'",
+  'lower(email) = lower(new.email)',
+  "'foreman'",
+  'accepted_at = now()',
+  'after insert on auth.users',
+  'revoke all on function public.complete_team_invitation_signup() from public, anon, authenticated'
+]) assert(automaticInvitationSignup.includes(marker), `Automatic invitation signup marker missing: ${marker}`);
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');
@@ -169,9 +181,10 @@ for (const marker of [
 for (const marker of [
   'id="emailTeamInviteBtn"',
   'Invitation sent from invites@auth.linecrewpro.com.',
-  'id="acceptInvitationCard"',
-  'Create Account & Join Team',
-  "sb.rpc('accept_team_invitation'",
+  'Create Account & Join Company',
+  'team_invitation_token_hash:inviteTokenHash',
+  "$('loginCard').classList.toggle('hidden', invited)",
+  "$('signupEmail').readOnly = invited",
   "$('createCompanyCard').classList.toggle('hidden', invited)",
   "$('joinCompanyCard').classList.toggle('hidden', invited)",
   'id="newPriceBookImportFile"',

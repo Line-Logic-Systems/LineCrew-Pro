@@ -1293,7 +1293,7 @@ button:disabled{
 
 <section id="authPage">
 
-  <div class="card">
+  <div id="loginCard" class="card">
     <h2>Sign In</h2>
 
     <label>Email</label>
@@ -1329,13 +1329,8 @@ button:disabled{
       This private invitation will place you directly into the correct company.
     </p>
 
-    <div id="signupInviteNameWrap" class="hidden">
-      <label for="signupInviteName">Your Full Name</label>
-      <input id="signupInviteName" type="text" maxlength="120" autocomplete="name">
-    </div>
-
     <label>Email</label>
-    <input id="signupEmail" type="email">
+    <input id="signupEmail" type="email" autocomplete="email">
 
     <label>Password</label>
     <input id="signupPassword" type="password">
@@ -3254,19 +3249,28 @@ const $ = id =>
   document.getElementById(id);
 
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
+let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
 if(!/^[A-Za-z0-9_-]{43}$/.test(pendingInviteToken)){
   pendingInviteToken = '';
+}
+if(!/^\S+@\S+\.\S+$/.test(pendingInviteEmail)){
+  pendingInviteEmail = '';
 }
 
 function applyInvitationMode(){
   const invited = Boolean(pendingInviteToken);
-  $('signupHeading').textContent = invited ? 'Accept Team Invitation' : 'Create Account';
+  $('signupHeading').textContent = invited ? 'Create Your Account' : 'Create Account';
   $('signupInviteMessage').classList.toggle('hidden', !invited);
-  $('signupInviteNameWrap').classList.toggle('hidden', !invited);
-  $('signupBtn').textContent = invited ? 'Create Account & Join Team' : 'Create Account';
+  $('signupBtn').textContent = invited ? 'Create Account & Join Company' : 'Create Account';
+  $('loginCard').classList.toggle('hidden', invited);
+  if(invited) $('pwaInstallCard').classList.add('hidden');
+  $('signupEmail').readOnly = invited;
+  if(invited && pendingInviteEmail){
+    $('signupEmail').value = pendingInviteEmail;
+  }
   $('createCompanyCard').classList.toggle('hidden', invited);
   $('joinCompanyCard').classList.toggle('hidden', invited);
-  $('acceptInvitationCard').classList.toggle('hidden', !invited);
+  $('acceptInvitationCard').classList.add('hidden');
 }
 
 async function invitationTokenHash(){
@@ -3281,8 +3285,10 @@ async function invitationTokenHash(){
 
 function clearInvitationUrl(){
   pendingInviteToken = '';
+  pendingInviteEmail = '';
   const url = new URL(window.location.href);
   url.searchParams.delete('invite');
+  url.searchParams.delete('email');
   window.history.replaceState(null, '', url.toString());
   applyInvitationMode();
 }
@@ -4026,11 +4032,6 @@ $('signupBtn').onclick = async()=>{
   const password =
     $('signupPassword').value;
 
-  const invitedName = pendingInviteToken
-    ? $('signupInviteName').value.trim()
-    : '';
-
-
   if(!email || !password){
 
     return alert(
@@ -4038,9 +4039,13 @@ $('signupBtn').onclick = async()=>{
     );
   }
 
-  if(pendingInviteToken && invitedName.length < 2){
-    return alert('Enter your full name.');
+  if(pendingInviteToken && (!pendingInviteEmail || email.toLowerCase() !== pendingInviteEmail.toLowerCase())){
+    return alert('Use the email address that received this invitation.');
   }
+
+  const inviteTokenHash = pendingInviteToken
+    ? await invitationTokenHash()
+    : '';
 
 
   const {
@@ -4053,9 +4058,8 @@ $('signupBtn').onclick = async()=>{
       options: pendingInviteToken ? {
         emailRedirectTo:
           window.location.origin +
-          window.location.pathname +
-          '?invite=' + encodeURIComponent(pendingInviteToken),
-        data:{ full_name:invitedName }
+          window.location.pathname,
+        data:{ team_invitation_token_hash:inviteTokenHash }
       } : undefined
     });
 
@@ -4070,7 +4074,7 @@ $('signupBtn').onclick = async()=>{
 
     alert(
       pendingInviteToken
-        ? 'Account created. Confirm your email to finish joining your team.'
+        ? 'Account created and added to your company as a Foreman. Confirm your email, then sign in.'
         : 'Account created. Check your email to confirm your account, then sign in.'
     );
 
