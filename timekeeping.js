@@ -448,7 +448,15 @@
     const desired=[['Actual MH Run Rate',denominator?actual/denominator:0],['Field MH Run Rate',denominator?field/denominator:0]];
     desired.forEach(([label,value])=>{
       let span=spans.find(s=>s.textContent.includes(label));
-      const html='<strong>'+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value)+'</strong><br>'+label;
+      const isField=label==='Field MH Run Rate';
+      const status=isField && typeof window.manHourTargetStatus==='function'
+        ? window.manHourTargetStatus(value)
+        : null;
+      const targetHtml=status
+        ? '<br><span class="mh-rate-target '+status.key+'">'+status.label+' · Target '+
+          new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(status.target)+'</span>'
+        : '';
+      const html='<strong>'+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value)+'</strong><br>'+label+targetHtml;
       if(!span){span=document.createElement('span');box.appendChild(span);}
       if(span.innerHTML!==html)span.innerHTML=html;
     });

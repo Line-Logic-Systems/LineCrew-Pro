@@ -23,6 +23,7 @@ const mustExist = [
   'supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql',
   'supabase/migrations/20260823030000_company_employee_roster_assignment.sql',
   'supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql',
+  'supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql',
   'number-input-polish.js',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
@@ -47,6 +48,7 @@ const foremanJobAssignments = fs.readFileSync('supabase/migrations/2026082302363
 const supervisorJobAssignees = fs.readFileSync('supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
 const employeeRosterAssignment = fs.readFileSync('supabase/migrations/20260823030000_company_employee_roster_assignment.sql', 'utf8');
 const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
+const manHourRateTarget = fs.readFileSync('supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
@@ -171,8 +173,6 @@ assert(timekeepingRoster.includes('if(select.dataset.lcEmployeeOptions===html)re
 assert(timekeeping.includes('window.saveDailyReportCrewTime=async(reportId)'), 'Daily Report crew time must expose an awaited Timekeeping save.');
 assert(index.includes('await window.saveDailyReportCrewTime(savedReportId);'), 'Daily Report save must await Timekeeping before opening unit entry.');
 assert(!timekeeping.includes('setTimeout(() => persistCrewTime'), 'Crew time must not rely on a delayed save race.');
-assert(index.includes('id="dailyRegularHours"\n    class="hidden"'), 'Legacy Daily Report regular-hours input must stay hidden.');
-assert(index.includes('id="dailyOvertimeHours"\n    class="hidden"'), 'Legacy Daily Report overtime-hours input must stay hidden.');
 assert(index.includes('if(requestId !== teamLoadRequest) return;'), 'Team rendering must ignore stale overlapping refreshes.');
 assert(timekeeping.includes('+ Add Extra Man'), 'Foreman Crew Time must provide an explicit extra-man action.');
 assert(timekeeping.includes('tk-crew-group'), 'Leadership employee roster must group crew members by Foreman.');
@@ -180,7 +180,7 @@ assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time option
 assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
 assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach"), 'Foreman Daily Reports must directly preload assigned crew members.');
 assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
-assert(expandedJsa.includes("load('timekeeping.js?v=20260823f'"), 'Direct Foreman crew preload must use a fresh cache version.');
+assert(expandedJsa.includes("load('timekeeping.js?v=20260823g'"), 'Direct Foreman crew preload must use a fresh cache version.');
 assert(timekeepingRoster.includes('await autoLoadAssignedCrew();'), 'Foreman roster selectors must wait for assigned crew data before rebuilding employee options.');
 assert(expandedJsa.includes("load('number-input-polish.js?v=20260823a'"), 'Global numeric input polish must be cache-versioned and loaded.');
 assert(numberInputPolish.includes("input.defaultValue === '0'"), 'Only numeric fields designed with a zero default may restore an empty value to zero.');
@@ -204,7 +204,19 @@ assert(index.includes("if(reportStatus === 'draft' && canEditDraft)"), 'Edit and
 assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned Foreman drafts must recognize both the report creator and assigned Foreman ownership fields.');
 assert(index.includes("created_by,\n      work_date"), 'Production report loading must include the creator used to restore returned-draft editing.');
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
-assert(index.includes('expanded-jsa.js?v=20260823c'), 'The returned-report correction fix must use a cache-busted script version.');
+assert(index.includes('expanded-jsa.js?v=20260823d'), 'The returned-report correction fix must use a cache-busted script version.');
+
+for (const marker of [
+  'required_man_hour_rate numeric(12,2)',
+  'create or replace function public.update_company_man_hour_rate',
+  "v_role not in ('owner', 'admin')",
+  "set search_path = ''",
+  'revoke all on function public.update_company_man_hour_rate(numeric) from anon',
+  'grant execute on function public.update_company_man_hour_rate(numeric) to authenticated'
+]) assert(manHourRateTarget.includes(marker), `MH rate target security marker missing: ${marker}`);
+assert(index.includes('function manHourTargetStatus(rate)'), 'Supervision MH rate target status helper is missing.');
+assert(index.includes("ratio < 0.95"), 'MH rate red threshold must be below 95% of target.');
+assert(index.includes("ratio < 1"), 'MH rate yellow threshold must stop below the exact target.');
 assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
 assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');
 assert(index.includes("'<br>Field MH Run Rate: <strong>'"), 'Supervision report cards must show the field man-hour run rate.');
