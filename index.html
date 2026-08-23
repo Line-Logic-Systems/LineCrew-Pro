@@ -2404,6 +2404,14 @@ button:disabled{
 
   <div id="dailyUnitValueSummary" class="daily-value-summary"></div>
 
+  <div class="daily-saved-unit-section">
+    <h3>Saved Units</h3>
+    <p id="dailyUnitCount" class="muted">No units added to this report yet.</p>
+    <div id="dailyUnitList"></div>
+  </div>
+
+  <h3>Add More Units</h3>
+
   <datalist id="dailyUnitPoleLocations"></datalist>
   <div class="daily-pole-entry-header">
     <label for="dailyUnitPoleLocation">Pole / Location</label>
@@ -2421,8 +2429,6 @@ button:disabled{
     </button>
   </div>
 
-  <p id="dailyUnitCount" class="muted">No units added to this report yet.</p>
-  <div id="dailyUnitList"></div>
 </div>
 
   <div id="productionPaginationTop" class="production-pagination hidden"></div>
@@ -13320,6 +13326,9 @@ function dailyReportAuthorizationSummaryMarkup(report, summary){
 async function openDailyUnitEditor(report){
   currentDailyUnitReport = report;
   currentDailyUnitBatchRows = [];
+  const doneButton = $('closeDailyUnitEditorBtn');
+  doneButton.disabled = false;
+  doneButton.textContent = 'Done Adding Units';
   $('dailyUnitEditor').classList.remove('hidden');
   $('dailyUnitReportLabel').textContent =
     (report.jobs?.job_number || 'Job') + ' — ' +
@@ -13903,6 +13912,9 @@ $('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(5);
 $('saveDailyUnitBatchBtn').onclick = saveDailyUnitBatch;
 
 function closeDailyUnitEditor(){
+  const doneButton = $('closeDailyUnitEditorBtn');
+  doneButton.disabled = false;
+  doneButton.textContent = 'Done Adding Units';
   $('dailyUnitEditor').classList.add('hidden');
   currentDailyUnitCatalog = [];
   currentDailySavedUnits = [];
