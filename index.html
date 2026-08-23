@@ -1725,8 +1725,8 @@ button:disabled{
     <div class="section-header">
 
       <div>
-        <h2>Jobs</h2>
-        <p class="muted">
+        <h2 id="jobsPageTitle">Jobs</h2>
+        <p id="jobsPageDescription" class="muted">
           Company job management
         </p>
       </div>
@@ -3546,14 +3546,11 @@ function userCanManageProductionRecords(){ return userHasCapability('production_
 function userCanEditDailyReportDraft(report){
   if(String(report?.status || 'draft').toLowerCase() !== 'draft') return false;
   const role = currentUserRole().trim();
-  if(role === 'gf') return false;
-  if(role === 'foreman'){
-    const profileId = String(currentProfile?.id || '').trim();
-    if(!profileId) return false;
-    return [report?.created_by, report?.foreman_id]
-      .some(id => String(id || '').trim() === profileId);
-  }
-  return userCanManageProductionRecords();
+  if(role !== 'foreman') return false;
+  const profileId = String(currentProfile?.id || '').trim();
+  if(!profileId) return false;
+  return [report?.created_by, report?.foreman_id]
+    .some(id => String(id || '').trim() === profileId);
 }
 function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
 function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }
@@ -3711,6 +3708,16 @@ async function displayAppPage(page, state = {}){
 
   if(page === 'jobsPage'){
     const canManageJobs = userCanManageJobs();
+    const role = currentUserRole();
+
+    $('jobsPageTitle').textContent = ['owner','admin'].includes(role)
+      ? 'Job Setup & Management'
+      : (role === 'foreman' ? 'Assigned Jobs' : 'Jobs & Crew Progress');
+    $('jobsPageDescription').textContent = ['owner','admin'].includes(role)
+      ? 'Create and import jobs, assign Foremen, manage packets and monitor progress'
+      : (role === 'foreman'
+          ? 'Review the jobs, work points and assignments available to your crew'
+          : 'Manage field assignments, work points and job progress');
 
     $('showCreateJobBtn')
       .classList
@@ -12495,11 +12502,15 @@ function exportFilteredProductionCsv(){
 
 async function loadProductionReports(){
 
-  const gfReviewWorkspace = currentUserRole() === 'gf';
-  $('createDailyReportBtn').classList.toggle('hidden', gfReviewWorkspace);
-  $('productionPageDescription').textContent = gfReviewWorkspace
-    ? 'Review submitted Foreman reports, then approve or return with notes'
-    : 'Daily production reporting';
+  const role = currentUserRole();
+  const foremanEntryWorkspace = role === 'foreman';
+  const gfReviewWorkspace = role === 'gf';
+  $('createDailyReportBtn').classList.toggle('hidden', !foremanEntryWorkspace);
+  $('productionPageDescription').textContent = foremanEntryWorkspace
+    ? 'Create and review your Daily Reports'
+    : (role === 'gf'
+        ? 'Review submitted Foreman reports, then approve or return with notes'
+        : 'Monitor production, job performance and Daily Report history');
 
   $('productionLoading').classList.remove('hidden');
   $('productionEmpty').classList.add('hidden');
@@ -12827,10 +12838,10 @@ async function loadProductionReports(){
               .toUpperCase()
           )}
         </strong>
-        ${reportStatus === 'draft' ? (gfReviewWorkspace ? `
+        ${reportStatus === 'draft' ? (!foremanEntryWorkspace ? `
           <div class="daily-draft-guidance">
             <strong>DRAFT — WAITING FOR FOREMAN</strong><br>
-            This report is read-only for the GF until the Foreman submits it for review.
+            This report is read-only for leadership until the Foreman submits it for review.
           </div>
         ` : `
           <div class="daily-draft-guidance">
@@ -14980,7 +14991,7 @@ startApp();
 
 </script>
 
-  <script src="expanded-jsa.js?v=20260823d"></script>
+  <script src="expanded-jsa.js?v=20260823e"></script>
 
 <script>
 (function () {

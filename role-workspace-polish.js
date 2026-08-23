@@ -7,8 +7,8 @@
     foreman:{title:'Foreman Workspace',text:'Start the day with Safety/JSA, then use Jobs, Production and Timekeeping for your crew.',order:['safetyTile','jobsTile','productionTile','timekeepingTile','trainingTile'],hidden:['teamTile','priceBooksTile']},
     gf:{title:'General Foreman Workspace',text:'Review crews, jobs, production, safety and timekeeping from one place.',order:['productionTile','jobsTile','safetyTile','timekeepingTile','teamTile','trainingTile'],hidden:['priceBooksTile']},
     superintendent:{title:'Superintendent Workspace',text:'Manage field operations, crews, jobs, production, safety and company tools available to your permissions.',order:['productionTile','jobsTile','teamTile','safetyTile','timekeepingTile','priceBooksTile','trainingTile'],hidden:[]},
-    admin:{title:'Admin Workspace',text:'Manage company setup, people, pricing, jobs, production, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:[]},
-    owner:{title:'Owner Workspace',text:'Company-wide access for people, pricing, jobs, production, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:[]}
+    admin:{title:'Admin Workspace',text:'Manage company setup, people, pricing, job setup, production oversight, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:[]},
+    owner:{title:'Owner Workspace',text:'Company-wide access for people, pricing, job setup, production oversight, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:[]}
   };
   let observer=null;
   let scheduled=false;
@@ -128,8 +128,8 @@
       }else{
         setDescription('teamTile','People, roles and company access');
         setDescription('priceBooksTile','Contracts, pricing and unit catalogs');
-        setDescription('jobsTile','Create and manage jobs and work points');
-        setDescription('productionTile','Daily production reporting and review');
+        setDescription('jobsTile','Job setup, imports, assignments and progress');
+        setDescription('productionTile','Production oversight, review and reporting');
         setDescription('safetyTile','JSA and safety reporting');
         setDescription('timekeepingTile','Crew hours, payroll and billing exports');
       }
