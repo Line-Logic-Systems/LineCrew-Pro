@@ -3551,6 +3551,7 @@ let currentOpenJobPackage = null;
 let currentJobPackageImportWorkbook = null;
 let currentJobPackageImportRows = [];
 let currentJobPackageImportFilename = null;
+let currentUtilityPacketImportId = null;
 let currentDailyUnitCatalog = [];
 let currentDailySavedUnits = [];
 let currentDailyUnitUsageMemory = new Map();
@@ -3703,7 +3704,9 @@ function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRol
 function userCanManageCompanySettings(){ return userHasCapability('company_settings'); }
 function userCanManageCustomersContracts(){ return userHasCapability('customers_contracts'); }
 function userCanManagePriceBooks(){ return userHasCapability('price_books'); }
-function userCanManageJobPackages(){ return userHasCapability('job_packages'); }
+function userCanManageJobPackages(){
+  return userHasCapability('job_packages') || currentUserRole() === 'gf';
+}
 function userCanExport(){ return userHasCapability('exports') || currentUserRole() === 'gf'; }
 function userCanSeeSafetyRecords(){ return userHasCapability('safety_records') || ['gf','foreman'].includes(currentUserRole()); }
 function userCanSeeActualContractPrices(){
@@ -6593,13 +6596,187 @@ $('confirmJobPackageImportBtn').onclick = async()=>{
 };
 
 
+function fileAsDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Unable to read the selected file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function sha256File(file){
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(digest)]
+    .map(value => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function parsePdfJobPacketForJob(job, file){
+  const packageContainer = document.getElementById('job-packages-' + job.id);
+  if(!packageContainer) return;
+
+  const review = document.createElement('div');
+  review.className = 'job-card job-packet-smart-review';
+  review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) +
+    '…</strong><p class="muted">Detecting the utility and packet format. Nothing has been added to the job yet.</p>';
+  packageContainer.prepend(review);
+
+  try{
+    if(file.size > 20 * 1024 * 1024){
+      throw new Error('The PDF must be 20 MB or smaller.');
+    }
+    const [fileData, sourceSha256] = await Promise.all([
+      fileAsDataUrl(file), sha256File(file)
+    ]);
+    const { data:parsed, error:parseError } = await sb.functions.invoke(
+      'parse-utility-job-packet',
+      { body:{ filename:file.name, file_data:fileData, source_sha256:sourceSha256 } }
+    );
+    if(parseError) throw new Error(parseError.message || 'The packet could not be analyzed.');
+    if(parsed?.error) throw new Error(parsed.error);
+    if(parsed?.status !== 'supported' || parsed?.provider_key !== 'oncor'){
+      const warning = (parsed?.warnings || []).join(' ') ||
+        'This utility or packet layout is not supported yet.';
+      throw new Error(warning + ' Nothing was added to the job.');
+    }
+
+    review.innerHTML = '<strong>Saving packet review…</strong>';
+    const { data:staged, error:stageError } = await sb.rpc(
+      'create_and_stage_utility_packet_import',
+      {
+        p_job_id:job.id,
+        p_provider_key:parsed.provider_key,
+        p_format_key:parsed.format_key,
+        p_profile_version:parsed.profile_version,
+        p_source_filename:file.name,
+        p_source_sha256:sourceSha256,
+        p_detected_work_order:parsed.work_order || null,
+        p_extraction_confidence:parsed.confidence,
+        p_summary:{ warnings:parsed.warnings || [], extracted_rows:parsed.rows.length },
+        p_rows:parsed.rows
+      }
+    );
+    if(stageError) throw new Error(stageError.message);
+
+    currentUtilityPacketImportId = staged.import_id;
+    const packageRecord = {
+      id:staged.package_id,
+      job_id:job.id,
+      contract_id:job.contract_id,
+      package_name:String(file.name).replace(/\.[^.]+$/, ''),
+      package_number:parsed.work_order || null,
+      source_filename:file.name,
+      status:'draft'
+    };
+    const { data:rows, error:reviewError } = await sb.rpc(
+      'get_utility_packet_import_review',
+      { p_import_id:staged.import_id }
+    );
+    if(reviewError) throw new Error(reviewError.message);
+    renderSmartPacketReview(review, job, packageRecord, staged.import_id, parsed, rows || []);
+  }catch(error){
+    review.innerHTML = '<strong>Packet not added</strong><p class="import-error">' +
+      escapeHtml(error.message || 'Unable to analyze this packet.') + '</p>' +
+      '<button type="button" class="secondary small">Close</button>';
+    review.querySelector('button').onclick = () => review.remove();
+  }
+}
+
+function renderSmartPacketReview(container, job, packageRecord, importId, parsed, rows){
+  const materialOnly = rows.filter(row => !row.contractor_unit_code).length;
+  const unmatched = rows.filter(row => row.include_in_import && !row.price_book_match).length;
+  const lowConfidence = rows.filter(row => Number(row.confidence) < 0.9).length;
+  container.innerHTML = `
+    <div class="section-header"><div>
+      <strong>Review Oncor Job Packet</strong>
+      <div class="muted">${escapeHtml(parsed.work_order || fileNameWithoutExtension(packageRecord.source_filename))} · ${rows.length} source rows</div>
+    </div></div>
+    <div class="import-summary"><strong>Review required before import</strong><br>
+      ${materialOnly} material-only · ${unmatched} Contractor Units not matched to Price Book · ${lowConfidence} low-confidence rows
+    </div>
+    <p class="muted">Est Qty is the authorized quantity. Contractor CU is the production/pay unit. CU is retained only as storeroom reference. Uncheck material-only or unwanted rows.</p>
+    <div class="import-table-wrap"><table class="import-table"><thead><tr>
+      <th>Use</th><th>Page</th><th>Station</th><th>Work</th><th>CU (material)</th><th>Contractor Unit</th><th>Est Qty</th><th>Check</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="button-row">
+      <button type="button" class="success smart-packet-confirm">Import Reviewed Contractor Units</button>
+      <button type="button" class="secondary smart-packet-close">Close Review</button>
+    </div>`;
+
+  const tbody = container.querySelector('tbody');
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.dataset.rowId = row.row_id;
+    tr.innerHTML = `
+      <td><input class="smart-row-use" type="checkbox" ${row.include_in_import ? 'checked' : ''}></td>
+      <td>${escapeHtml(row.source_page || '—')}</td>
+      <td><input class="smart-row-point" value="${escapeHtml(row.work_point_code)}"></td>
+      <td><select class="smart-row-type"><option value="install">Install</option><option value="remove">Remove</option></select></td>
+      <td>${escapeHtml(row.material_cu || '—')}</td>
+      <td><input class="smart-row-unit" value="${escapeHtml(row.contractor_unit_code || '')}" placeholder="Material only"></td>
+      <td><input class="smart-row-qty" type="number" min="0.01" step="0.01" value="${Number(row.estimated_quantity)}"></td>
+      <td class="${row.price_book_match || !row.include_in_import ? '' : 'import-error'}">${
+        !row.contractor_unit_code ? 'Material only' : row.price_book_match ? 'Matched' : 'Needs Price Book match'
+      }</td>`;
+    tr.querySelector('.smart-row-type').value = row.work_type;
+    tbody.appendChild(tr);
+  });
+
+  container.querySelector('.smart-packet-close').onclick = () => container.remove();
+  container.querySelector('.smart-packet-confirm').onclick = async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Saving review…';
+    try{
+      for(const tr of tbody.querySelectorAll('tr')){
+        const { error } = await sb.rpc('update_utility_packet_import_row', {
+          p_row_id:tr.dataset.rowId,
+          p_work_point_code:tr.querySelector('.smart-row-point').value.trim(),
+          p_work_type:tr.querySelector('.smart-row-type').value,
+          p_contractor_unit_code:tr.querySelector('.smart-row-unit').value.trim() || null,
+          p_estimated_quantity:Number(tr.querySelector('.smart-row-qty').value),
+          p_include_in_import:tr.querySelector('.smart-row-use').checked,
+          p_review_note:null
+        });
+        if(error) throw new Error(error.message);
+      }
+      button.textContent = 'Validating and importing…';
+      const { data:result, error } = await sb.rpc('finalize_utility_packet_import', {
+        p_import_id:importId
+      });
+      if(error) throw new Error(error.message);
+      currentOpenJobPackage = packageRecord;
+      container.innerHTML = '<strong>Packet imported</strong><p>' +
+        escapeHtml(String(result?.consolidated_rows || result?.imported_rows || 0)) +
+        ' consolidated Contractor Unit rows were tied to ' + escapeHtml(job.job_number) +
+        '.</p>';
+      await loadJobs();
+      const refreshedJob = currentJobsCatalog.find(item => item.id === job.id);
+      if(refreshedJob) showJobDetail(refreshedJob, false);
+    }catch(error){
+      button.disabled = false;
+      button.textContent = 'Import Reviewed Contractor Units';
+      alert('Nothing was imported: ' + error.message);
+    }
+  };
+}
+
+function fileNameWithoutExtension(value){
+  return String(value || 'Job Packet').replace(/\.[^.]+$/, '');
+}
+
 function chooseJobPacketFileForJob(job){
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
-  fileInput.accept = '.csv,.tsv,.txt,.xlsx,.xls,.ods';
+  fileInput.accept = '.pdf,.csv,.tsv,.txt,.xlsx,.xls,.ods';
   fileInput.onchange = async () => {
     const file = fileInput.files?.[0];
     if(!file) return;
+    if(file.name.toLowerCase().endsWith('.pdf')){
+      await parsePdfJobPacketForJob(job, file);
+      return;
+    }
     showJobPackageForm(job, { inline:true, fileName:file.name });
     await handleJobPackageImportFile(file);
   };
