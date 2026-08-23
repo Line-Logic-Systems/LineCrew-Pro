@@ -7508,8 +7508,46 @@ function renderBillingBatchHistory(){
     button.textContent = 'Open Batch';
     button.onclick = () => openBillingBatch(batch);
     card.appendChild(button);
+    if(userIsCompanyAdmin() && String(batch.status || '').toLowerCase() === 'void'){
+      const deleteButton = document.createElement('button');
+      deleteButton.className = 'danger small';
+      deleteButton.textContent = 'Delete Voided Batch';
+      deleteButton.onclick = () => deleteVoidedBillingBatch(batch,deleteButton);
+      card.appendChild(deleteButton);
+    }
     container.appendChild(card);
   });
+}
+
+async function deleteVoidedBillingBatch(batch,button){
+  const confirmation = prompt(
+    'Permanently delete this voided billing batch and its history?\n\n' +
+    'Type ' + batch.batch_number + ' to confirm:'
+  );
+  if(confirmation === null) return;
+  if(confirmation.trim().toUpperCase() !== String(batch.batch_number || '').toUpperCase()){
+    alert('The batch number did not match. Nothing was deleted.');
+    return;
+  }
+  button.disabled = true;
+  button.textContent = 'Deleting...';
+  const { error } = await sb.rpc('delete_void_billing_export_batch', {
+    p_batch_id:batch.batch_id
+  });
+  if(error){
+    button.disabled = false;
+    button.textContent = 'Delete Voided Batch';
+    alert('Unable to delete voided billing batch: ' + error.message);
+    return;
+  }
+  if(currentBillingBatch?.batch_id === batch.batch_id){
+    currentBillingBatch = null;
+    currentBillingBatchLines = [];
+    $('billingBatchDetail').classList.add('hidden');
+    $('billingBatchCreateForm').classList.remove('hidden');
+  }
+  await loadBillingExportBatches();
+  alert('Voided billing batch permanently deleted.');
 }
 
 async function createBillingExportBatch(){
@@ -7630,13 +7668,13 @@ function billingExportRows(lines){
     'Utility':line.utility_name || '',
     'Report Date':line.report_date || '',
     'Work Point':line.work_point || '',
+    'Authorization':String(line.authorization_status || '').toUpperCase(),
     'Contractor Unit':line.unit_code || '',
     'Unit Description':line.unit_description || line.unit_name || '',
     'Work Type':line.work_type || '',
     'Approved Quantity':Number(line.quantity || 0),
     'Unit Price':Number(line.unit_price || 0),
     'Extended Value':Number(line.extended_value || 0),
-    'Authorization':String(line.authorization_status || '').toUpperCase(),
     'Foreman':line.foreman_name || '',
     'Crew':line.crew_name || ''
   }));
@@ -7681,11 +7719,11 @@ async function exportBillingExcel(){
   ];
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
   summarySheet['!cols'] = [{wch:22},{wch:32}];
-  XLSX.utils.book_append_sheet(workbook,summarySheet,'Billing Summary');
   const workPointRows = billingExportRows(currentBillingBatchLines);
   const workPointSheet = XLSX.utils.json_to_sheet(workPointRows);
-  workPointSheet['!cols'] = [18,15,24,20,20,14,14,18,60,14,18,14,18,16,24,20].map(wch => ({wch}));
-  XLSX.utils.book_append_sheet(workbook,workPointSheet,'Work Point Units');
+  workPointSheet['!cols'] = [18,15,24,20,20,14,14,16,18,60,14,18,14,18,24,20].map(wch => ({wch}));
+  XLSX.utils.book_append_sheet(workbook,workPointSheet,'Work Points + Redlines');
+  XLSX.utils.book_append_sheet(workbook,summarySheet,'Billing Summary');
   const redlines = billingExportRows(currentBillingBatchLines.filter(line => line.authorization_status === 'redline'));
   if(redlines.length){
     const redlineSheet = XLSX.utils.json_to_sheet(redlines);
@@ -7837,7 +7875,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['billing export','bill job','billing batch','excel billing','csv billing','pdf billing','mark submitted','mark paid','duplicate billing'],
-    answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. Select the job and optional approved-report date range, decide whether approved redlines should be included, then Create Billing Batch. The main preview and exports keep redlines beside the other units at their work point, while Excel and PDF also provide a Redlines-only summary. Download Excel, CSV or Print/Save PDF. The batch reserves those exact approved unit lines so they cannot be billed twice. Mark the batch Submitted after sending it to the utility and Paid when payment is received. Void releases the lines for a corrected replacement batch.'
+    answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. Select the job and optional approved-report date range, decide whether approved redlines should be included, then Create Billing Batch. Excel opens on Work Points + Redlines so every redline stays beside its work point; Excel and PDF also provide a Redlines-only summary. Download Excel, CSV or Print/Save PDF. The batch reserves those exact approved unit lines so they cannot be billed twice. Mark the batch Submitted after sending it to the utility and Paid when payment is received. Void releases the lines for a corrected replacement batch. Admin/Owner may permanently delete a batch only after it is voided.'
   },
   {
     terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
