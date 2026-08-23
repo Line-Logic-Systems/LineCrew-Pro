@@ -30,6 +30,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 <style>
 :root{
@@ -2062,6 +2063,8 @@ button:disabled{
       <label for="billingExportNotes">Batch Notes</label>
       <textarea id="billingExportNotes" rows="2" placeholder="Optional internal billing notes"></textarea>
       <button id="createBillingExportBatchBtn" class="success">Create Billing Batch</button>
+      <button id="downloadCompleteBillingRecordBtn" class="secondary">Download Complete Job Billing Record</button>
+      <p id="completeBillingRecordStatus" class="muted">Creates one ZIP containing the complete Excel and PDF billing history, packet revisions, batch files and billing attachments for the selected job.</p>
     </div>
 
     <div id="billingBatchDetail" class="hidden">
@@ -8059,6 +8062,185 @@ async function setBillingBatchStatus(status){
   alert('Billing batch marked ' + labels[status] + '.');
 }
 
+function completeBillingRows(batch,lines){
+  return (lines || []).map(line => ({
+    'Batch Number':batch.batch_number || line.batch_number || '',
+    'Billing Stage':billingStageLabel(batch),'Batch Status':billingStatusLabel(batch.status),
+    'Utility Invoice / Reference':batch.utility_invoice_number || '','Payment Reference':batch.payment_reference || '',
+    'Job Number':line.job_number || batch.job_number || '','Job Name':line.job_name || batch.job_name || '',
+    'Customer':line.customer_name || '','Utility':line.utility_name || '','Report Date':line.report_date || '',
+    'Work Point':line.work_point || '','Authorization':String(line.authorization_status || '').toUpperCase(),
+    'Contractor Unit':line.unit_code || '','Unit Description':line.unit_description || line.unit_name || '',
+    'Work Type':line.work_type || '','Approved Quantity':Number(line.quantity || 0),
+    'Unit Price':Number(line.unit_price || 0),'Extended Value':Number(line.extended_value || 0),
+    'Foreman':line.foreman_name || '','Crew':line.crew_name || ''
+  }));
+}
+
+function completeBillingSafeName(value,fallback='record'){
+  return String(value || fallback).replace(/[^a-z0-9._-]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,110) || fallback;
+}
+
+function completeBillingCsv(rows){
+  const headers=Object.keys(rows[0] || {});
+  if(!headers.length) return '';
+  return '\uFEFF'+[headers,...rows.map(row=>headers.map(header=>row[header]))]
+    .map(row=>row.map(csvCell).join(',')).join('\r\n');
+}
+
+function completeBillingSheetName(label,used){
+  let base=String(label || 'Batch').replace(/[\\/?*\[\]:]/g,' ').trim().slice(0,31) || 'Batch';
+  let name=base;
+  let sequence=2;
+  while(used.has(name)){
+    const suffix=' '+sequence++;
+    name=base.slice(0,31-suffix.length)+suffix;
+  }
+  used.add(name);
+  return name;
+}
+
+function downloadGeneratedBlob(blob,filename){
+  const link=document.createElement('a');
+  link.href=URL.createObjectURL(blob); link.download=filename;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(()=>URL.revokeObjectURL(link.href),1000);
+}
+
+async function downloadCompleteJobBillingRecord(){
+  const jobId=$('billingExportJob').value;
+  if(!jobId) return alert('Select the job whose complete billing record you want to download.');
+  if(typeof XLSX==='undefined' || typeof JSZip==='undefined' || typeof PDFLib==='undefined') return alert('The archive libraries did not load. Refresh the page and try again.');
+  const job=currentJobsCatalog.find(item=>String(item.id)===String(jobId));
+  const button=$('downloadCompleteBillingRecordBtn');
+  const status=$('completeBillingRecordStatus');
+  button.disabled=true;
+  const setProgress=text=>{ button.textContent=text; status.textContent=text; };
+  try{
+    setProgress('Loading complete billing history...');
+    const batchesResult=await sb.rpc('get_billing_export_batches_v3');
+    if(batchesResult.error) throw batchesResult.error;
+    const batches=(batchesResult.data || []).filter(batch=>String(batch.job_id)===String(jobId));
+    if(!batches.length) throw new Error('No billing batches exist for this job yet.');
+    const hasFinal=batches.some(batch=>String(batch.billing_type).toLowerCase()==='final' && String(batch.status).toLowerCase()!=='void');
+    if(!hasFinal && !confirm('This job does not have a retained Final Bill yet. Download the current billing record anyway?')) return;
+    const [reconciliationResult,packagesResult]=await Promise.all([
+      sb.rpc('get_job_billing_reconciliation',{p_job_id:jobId}),sb.rpc('get_job_packages_v2',{p_job_id:jobId})
+    ]);
+    if(reconciliationResult.error) throw reconciliationResult.error;
+    if(packagesResult.error) throw packagesResult.error;
+    const reconciliation=reconciliationResult.data?.[0] || {};
+    const packages=packagesResult.data || [];
+    const batchRecords=[];
+    for(let index=0;index<batches.length;index++){
+      const batch=batches[index]; setProgress('Collecting batch '+(index+1)+' of '+batches.length+'...');
+      const [linesResult,attachmentsResult]=await Promise.all([
+        sb.rpc('get_billing_export_batch_lines',{p_batch_id:batch.batch_id}),
+        sb.rpc('get_billing_export_attachments',{p_batch_id:batch.batch_id})
+      ]);
+      if(linesResult.error) throw linesResult.error;
+      if(attachmentsResult.error) throw attachmentsResult.error;
+      batchRecords.push({batch,lines:linesResult.data || [],attachments:attachmentsResult.data || []});
+    }
+
+    const zip=new JSZip();
+    const workbook=XLSX.utils.book_new();
+    const usedSheets=new Set();
+    const batchHistory=batches.map(batch=>({
+      'Batch Number':batch.batch_number || '','Billing Stage':billingStageLabel(batch),'Status':billingStatusLabel(batch.status),
+      'Created':batch.created_at || '','Submitted':batch.submitted_at || '','Paid':batch.paid_at || '',
+      'Utility Invoice / Reference':batch.utility_invoice_number || '','Payment Reference':batch.payment_reference || '',
+      'Authorized Lines':Number(batch.authorized_line_count || 0),'Redline Lines':Number(batch.redline_line_count || 0),
+      'Total Value':Number(batch.total_value || 0),'Corrects Batch':batch.parent_batch_number || '',
+      'Correction / Void Reason':batch.correction_reason || '','Notes':batch.notes || '','Attachments':Number(batch.attachment_count || 0)
+    }));
+    const summary=[['LineCrew Pro Complete Job Billing Record'],['Job Number',job?.job_number || batches[0]?.job_number || ''],
+      ['Job Name',job?.job_name || batches[0]?.job_name || ''],['Generated',new Date().toLocaleString()],
+      ['Authorized',Number(reconciliation.authorized_value || 0)],['Approved',Number(reconciliation.approved_value || 0)],
+      ['Previously Billed',Number(reconciliation.billed_value || 0)],['Credits',Number(reconciliation.credit_value || 0)],
+      ['Net Billed',Number(reconciliation.billed_value || 0)+Number(reconciliation.credit_value || 0)],
+      ['Approved Unbilled',Number(reconciliation.approved_unbilled_value || 0)],
+      ['Remaining Authorized',Number(reconciliation.remaining_authorized_value || 0)],
+      ['Awaiting Review',Number(reconciliation.awaiting_review_count || 0)],['Draft / Returned',Number(reconciliation.draft_report_count || 0)],
+      ['Billing Batches',batches.length],['Packet Revisions',packages.length]];
+    const summarySheet=XLSX.utils.aoa_to_sheet(summary); summarySheet['!cols']=[{wch:28},{wch:42}];
+    XLSX.utils.book_append_sheet(workbook,summarySheet,completeBillingSheetName('Job Summary',usedSheets));
+    const historySheet=XLSX.utils.json_to_sheet(batchHistory); historySheet['!cols']=[18,18,14,22,22,22,26,24,16,14,16,20,32,40,12].map(wch=>({wch}));
+    XLSX.utils.book_append_sheet(workbook,historySheet,completeBillingSheetName('Batch History',usedSheets));
+    const revisionRows=packages.map(item=>({'Revision':Number(item.revision_number || 1),'Package Name':item.package_name || '',
+      'Package / Reference Number':item.package_number || '','Status':String(item.status || '').toUpperCase(),
+      'Received Date':item.received_date || '','Source File':item.source_filename || '',
+      'Supersedes Package ID':item.supersedes_package_id || '','Created':item.created_at || '','Notes':item.notes || ''}));
+    XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(revisionRows.length?revisionRows:[{'Revision':'No packet revisions found'}]),completeBillingSheetName('Packet Revisions',usedSheets));
+    batchRecords.forEach(({batch,lines})=>{
+      const rows=completeBillingRows(batch,lines);
+      XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(rows.length?rows:[{'Batch Number':batch.batch_number,'Status':'No unit lines'}]),completeBillingSheetName(billingStageLabel(batch),usedSheets));
+      zip.file('Batches/'+completeBillingSafeName(billingStageLabel(batch)+'-'+batch.batch_number)+'.csv',completeBillingCsv(rows));
+    });
+    zip.file('LineCrew-Pro-Complete-Billing-Record.xlsx',XLSX.write(workbook,{bookType:'xlsx',type:'array'}));
+
+    setProgress('Creating combined PDF record...');
+    const pdf=await PDFLib.PDFDocument.create();
+    const regular=await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
+    const bold=await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    let page,y;
+    const addPage=()=>{ page=pdf.addPage([612,792]); y=756; };
+    const pdfLine=(value,options={})=>{
+      const size=options.size || 9; if(y<42) addPage();
+      const safe=String(value ?? '').replace(/[^\x20-\x7E]/g,' ');
+      page.drawText(safe.slice(0,options.limit || 112),{x:36,y,size,font:options.bold?bold:regular,color:PDFLib.rgb(0.05,0.14,0.23)});
+      y-=options.gap || size+4;
+    };
+    addPage();
+    pdfLine('LineCrew Pro - Complete Job Billing Record',{bold:true,size:16,gap:24,limit:80});
+    pdfLine('Job: '+(job?.job_number || batches[0]?.job_number || '')+' - '+(job?.job_name || batches[0]?.job_name || ''),{bold:true,size:11});
+    pdfLine('Generated: '+new Date().toLocaleString());
+    pdfLine('Authorized: '+formatCurrency(reconciliation.authorized_value)+'   Approved: '+formatCurrency(reconciliation.approved_value));
+    pdfLine('Previously billed: '+formatCurrency(reconciliation.billed_value)+'   Credits: '+formatCurrency(reconciliation.credit_value));
+    pdfLine('Approved unbilled: '+formatCurrency(reconciliation.approved_unbilled_value)+'   Remaining authorized: '+formatCurrency(reconciliation.remaining_authorized_value),{gap:20});
+    pdfLine('Billing Batch History',{bold:true,size:12,gap:18});
+    batchRecords.forEach(({batch,lines,attachments})=>{
+      pdfLine(billingStageLabel(batch)+' | '+batch.batch_number+' | '+billingStatusLabel(batch.status)+' | '+formatCurrency(batch.total_value),{bold:true,limit:100});
+      pdfLine('Created '+(batch.created_at?new Date(batch.created_at).toLocaleString():'')+' | Utility Ref: '+(batch.utility_invoice_number || '-')+' | Payment Ref: '+(batch.payment_reference || '-'),{size:8});
+      if(batch.parent_batch_number) pdfLine('Corrects '+batch.parent_batch_number+' | Reason: '+(batch.correction_reason || '-'),{size:8});
+      lines.forEach(item=>pdfLine((item.report_date || '')+' | WP '+(item.work_point || '-')+' | '+(item.unit_code || '')+' '+(item.work_type || '')+' | Qty '+Number(item.quantity || 0).toFixed(2)+' | '+formatCurrency(item.extended_value)+' | '+String(item.authorization_status || '').toUpperCase(),{size:7,gap:10}));
+      if(attachments.length) pdfLine('Attachments: '+attachments.map(item=>item.original_filename).join(', '),{size:8,gap:14});
+      y-=6;
+    });
+    pdfLine('Utility Packet Revision History',{bold:true,size:12,gap:18});
+    packages.forEach(item=>pdfLine('Revision '+Number(item.revision_number || 1)+' | '+(item.package_name || item.package_number || 'Utility Job Packet')+' | '+String(item.status || '').toUpperCase()+' | '+(item.source_filename || 'No source filename'),{size:8}));
+    zip.file('LineCrew-Pro-Complete-Billing-Record.pdf',await pdf.save());
+
+    const attachmentErrors=[];
+    let attachmentNumber=0;
+    const attachmentTotal=batchRecords.reduce((sum,item)=>sum+item.attachments.length,0);
+    for(const record of batchRecords){
+      const folder='Attachments/'+completeBillingSafeName(billingStageLabel(record.batch)+'-'+record.batch.batch_number)+'/';
+      for(const attachment of record.attachments){
+        attachmentNumber++; setProgress('Downloading attachment '+attachmentNumber+' of '+attachmentTotal+'...');
+        try{
+          const stored=await sb.storage.from('billing-export-attachments').download(attachment.storage_path);
+          if(stored.error) throw stored.error;
+          zip.file(folder+completeBillingSafeName(attachment.original_filename,'attachment-'+attachmentNumber),await stored.data.arrayBuffer());
+        }catch(error){ attachmentErrors.push(record.batch.batch_number+' / '+attachment.original_filename+': '+(error.message || error)); }
+      }
+    }
+    zip.file('Billing-Record-Manifest.txt',['LineCrew Pro Complete Job Billing Record',
+      'Job: '+(job?.job_number || batches[0]?.job_number || '')+' - '+(job?.job_name || batches[0]?.job_name || ''),
+      'Generated: '+new Date().toLocaleString(),'Batches: '+batches.length,'Packet revisions: '+packages.length,'Attachments: '+attachmentTotal,'',
+      'Batch history:',...batches.map(batch=>billingStageLabel(batch)+' | '+batch.batch_number+' | '+billingStatusLabel(batch.status)+' | '+formatCurrency(batch.total_value)),'',
+      attachmentErrors.length?'Attachment download issues:\n'+attachmentErrors.join('\n'):'All stored billing attachments were included successfully.'].join('\n'));
+    setProgress('Compressing complete billing record...');
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+    downloadGeneratedBlob(blob,'linecrew-complete-billing-record-'+completeBillingSafeName(job?.job_number || batches[0]?.job_number || 'job')+'-'+new Date().toISOString().slice(0,10)+'.zip');
+    status.textContent='Complete billing record downloaded'+(attachmentErrors.length?' with '+attachmentErrors.length+' attachment warning(s) listed in the manifest.':'.');
+  }catch(error){
+    status.textContent='Unable to create complete billing record: '+(error?.message || error); alert(status.textContent);
+  }finally{
+    button.disabled=false; button.textContent='Download Complete Job Billing Record';
+  }
+}
+
 $('openBillingExportCenterBtn').onclick = openBillingExportCenter;
 $('closeBillingExportCenterBtn').onclick = closeBillingExportCenter;
 $('createBillingExportBatchBtn').onclick = createBillingExportBatch;
@@ -8070,6 +8252,7 @@ $('markBillingPaidBtn').onclick = () => setBillingBatchStatus('paid');
 $('voidBillingBatchBtn').onclick = () => setBillingBatchStatus('void');
 $('saveBillingBatchDetailsBtn').onclick = saveBillingBatchDetails;
 $('createBillingCreditBtn').onclick = createBillingCredit;
+$('downloadCompleteBillingRecordBtn').onclick = downloadCompleteJobBillingRecord;
 $('billingExportJob').addEventListener('change',()=>loadBillingReconciliation());
 $('backToBillingHistoryBtn').onclick = () => {
   currentBillingBatch = null;
