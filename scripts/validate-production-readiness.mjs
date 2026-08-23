@@ -196,7 +196,7 @@ assert(index.includes('row.actionInput.value = inferredWorkType;'), 'Selecting a
 assert(index.includes("if(suffix === 'R') return 'retirement';"), 'R-suffix units must default to removal when pricing alone is ambiguous.');
 assert(index.includes("if(suffix === 'T') return 'transfer';"), 'T-suffix units must default to transfer when pricing alone is ambiguous.');
 assert(index.includes("savedWorkType === 'transfer'"), 'Saved T-unit quantities must be labeled as Transferred rather than Installed.');
-assert(index.includes("if(role === 'gf') return false;"), 'GF review access must not imply permission to edit a Foreman draft.');
+assert(index.includes("if(role !== 'foreman') return false;"), 'Leadership review access must not imply permission to edit a Foreman draft.');
 assert(index.includes('DRAFT — WAITING FOR FOREMAN'), 'GF draft cards must clearly explain that they are awaiting Foreman submission.');
 assert(index.includes("doneButton.textContent = canEditDraft ? 'Done Adding Units' : 'Back to Reports';"), 'The unit editor must switch to a read-only reviewer exit for GF users.');
 assert(index.includes("$('dailyUnitEntryControls').classList.toggle('hidden', !canEditDraft);"), 'Daily unit entry controls must be hidden from read-only reviewers.');
@@ -204,7 +204,7 @@ assert(index.includes("if(reportStatus === 'draft' && canEditDraft)"), 'Edit and
 assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned Foreman drafts must recognize both the report creator and assigned Foreman ownership fields.');
 assert(index.includes("created_by,\n      work_date"), 'Production report loading must include the creator used to restore returned-draft editing.');
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
-assert(index.includes('expanded-jsa.js?v=20260823d'), 'The returned-report correction fix must use a cache-busted script version.');
+assert(index.includes('expanded-jsa.js?v=20260823e'), 'The returned-report correction fix must use a cache-busted script version.');
 
 for (const marker of [
   'required_man_hour_rate numeric(12,2)',
@@ -217,6 +217,10 @@ for (const marker of [
 assert(index.includes('function manHourTargetStatus(rate)'), 'Supervision MH rate target status helper is missing.');
 assert(index.includes("ratio < 0.95"), 'MH rate red threshold must be below 95% of target.');
 assert(index.includes("ratio < 1"), 'MH rate yellow threshold must stop below the exact target.');
+assert(index.includes("const foremanEntryWorkspace = role === 'foreman'"), 'Only Foremen may receive the Create Daily Report field-entry action.');
+assert(index.includes("if(role !== 'foreman') return false"), 'Leadership must not receive Foreman draft-editing controls.');
+assert(index.includes("? 'Job Setup & Management'"), 'Owner/Admin Jobs must be labeled as a management workspace.');
+assert(expandedJsa.includes("load('role-workspace-polish.js?v=20260823a'"), 'Role workspace management labels must use a fresh cache version.');
 assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
 assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');
 assert(index.includes("'<br>Field MH Run Rate: <strong>'"), 'Supervision report cards must show the field man-hour run rate.');
