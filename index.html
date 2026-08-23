@@ -14322,6 +14322,18 @@ if(reportId){
 
   const savedReportId = reportId || data;
 
+  if(typeof window.saveDailyReportCrewTime === 'function'){
+    try{
+      await window.saveDailyReportCrewTime(savedReportId);
+    }catch(crewTimeError){
+      alert(
+        'The Daily Report was saved, but its crew hours could not be added to Timekeeping: ' +
+        (crewTimeError?.message || crewTimeError)
+      );
+      return;
+    }
+  }
+
   const { error:contextError } = await sb.rpc(
     'set_daily_report_context',
     {

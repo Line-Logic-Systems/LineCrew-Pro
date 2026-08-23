@@ -164,7 +164,10 @@ assert(expandedJsa.includes("load('timekeeping-report-v2.js?v=20260823a'"), 'Tim
 assert(timekeeping.includes('if(select.dataset.lcEmployeeOptions===html)return;'), 'Crew employee selectors must not rewrite unchanged options.');
 assert(timekeeping.includes("const extra=role()==='foreman'"), 'Base crew options must match Foreman extra-crew labels.');
 assert(timekeepingRoster.includes('if(select.dataset.lcEmployeeOptions===html)return;'), 'Roster overlay must share the stable crew-option signature.');
-assert(expandedJsa.includes("load('timekeeping.js?v=20260823b'"), 'Foreman Production freeze fix must use a fresh Timekeeping cache version.');
+assert(timekeeping.includes('window.saveDailyReportCrewTime=async(reportId)'), 'Daily Report crew time must expose an awaited Timekeeping save.');
+assert(index.includes('await window.saveDailyReportCrewTime(savedReportId);'), 'Daily Report save must await Timekeeping before opening unit entry.');
+assert(!timekeeping.includes('setTimeout(() => persistCrewTime'), 'Crew time must not rely on a delayed save race.');
+assert(expandedJsa.includes("load('timekeeping.js?v=20260823c'"), 'Daily Report Timekeeping save fix must use a fresh cache version.');
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');

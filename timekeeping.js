@@ -316,9 +316,6 @@
     if(saveBtn){
       saveBtn.addEventListener('click', () => {
         syncDailyTotals();
-        const snapshot = collectCrewRows();
-        const existingReportId = form.dataset.reportId || null;
-        if(snapshot.length) setTimeout(() => persistCrewTime(snapshot, existingReportId), 1400);
       }, true);
     }
 
@@ -403,25 +400,28 @@
     await loadDefaultCrewRows();
   }
 
-  async function resolveReportId(existingReportId){
-    if(existingReportId)return existingReportId;
-    const jobId=byId('dailyJobId')?.value;const workDate=byId('dailyWorkDate')?.value;
-    if(!jobId||!workDate||!companyId())return null;
-    const {data,error}=await getSb().from('daily_reports').select('id').eq('company_id',companyId()).eq('job_id',jobId).eq('work_date',workDate).order('created_at',{ascending:false}).limit(1);
-    return error ? null : data?.[0]?.id||null;
-  }
-
-  async function persistCrewTime(snapshot, existingReportId){
-    const reportId=await resolveReportId(existingReportId);if(!reportId)return;
+  async function persistCrewTime(snapshot, reportId){
+    if(!reportId)throw new Error('The Daily Report must be saved before its crew time can be recorded.');
     const jobId=byId('dailyJobId')?.value||null;const workDate=byId('dailyWorkDate')?.value;if(!workDate)return;
     const crewName=(byId('dailyCrewName')?.value||'').trim()||null;
     const stormWork=typeof currentStormModeAssigned!=='undefined' ? !!currentStormModeAssigned : false;
-    const {data:{user}}=await getSb().auth.getUser();if(!user)return;
+    const {data:{user}}=await getSb().auth.getUser();if(!user)throw new Error('Your session expired. Sign in again before saving crew time.');
     const rows=snapshot.map(r=>({company_id:companyId(),employee_id:r.employee_id,daily_report_id:reportId,job_id:jobId,work_date:workDate,crew_name:crewName,regular_hours:r.regular_hours,overtime_hours:r.overtime_hours,storm_work:stormWork,created_by:user.id,updated_by:user.id,updated_at:new Date().toISOString()}));
-    const {error}=await getSb().from('timekeeping_entries').upsert(rows,{onConflict:'company_id,employee_id,work_date,job_id'});
-    if(error){console.error('Crew time save failed',error);alert('Daily Report saved, but crew time could not be saved: '+error.message);return;}
+    if(rows.length){
+      const {error}=await getSb().from('timekeeping_entries').upsert(rows,{onConflict:'company_id,employee_id,work_date,job_id'});
+      if(error)throw error;
+    }
+    let staleQuery=getSb().from('timekeeping_entries').delete().eq('daily_report_id',reportId);
+    if(snapshot.length)staleQuery=staleQuery.not('employee_id','in','('+snapshot.map(row=>row.employee_id).join(',')+')');
+    const {error:deleteError}=await staleQuery;
+    if(deleteError)throw deleteError;
     crewRowsLoadedForReport=reportId;
   }
+
+  window.saveDailyReportCrewTime=async(reportId)=>{
+    syncDailyTotals();
+    await persistCrewTime(collectCrewRows(),reportId);
+  };
 
   function addRunRates(){
     const box=byId('productionReportingMetrics');if(!box)return;
