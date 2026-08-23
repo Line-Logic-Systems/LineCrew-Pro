@@ -1615,9 +1615,15 @@ button:disabled{
     <div id="teamAdminTools" class="card hidden">
       <h3>Invite Team Members</h3>
       <p class="muted">
-        Give this code only to people who should join your company.
-        New members start with the Foreman role.
+        Email a secure company invitation or copy the code manually.
+        New members create their own password and start as Foreman; an Owner
+        or Admin can promote them after they join.
       </p>
+      <label for="teamInviteEmail">Team Member Email</label>
+      <input id="teamInviteEmail" type="email" autocomplete="email" placeholder="name@company.com">
+      <button id="emailTeamInviteBtn" class="success">
+        Email Team Invitation
+      </button>
       <div class="button-row">
         <strong id="teamJoinCode" class="role"></strong>
         <button id="copyJoinCodeBtn" class="secondary small">
@@ -2724,8 +2730,19 @@ button:disabled{
   placeholder="Optional notes"
 ></textarea>
 
+<label for="newPriceBookImportFile">Unit Pricing File (optional)</label>
+<p class="muted">
+  Upload pricing now, or add it later from inside the saved Price Book.
+  You will review and match the spreadsheet columns before anything imports.
+</p>
+<input
+  id="newPriceBookImportFile"
+  type="file"
+  accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
+>
+
 <button id="savePriceBookBtn" class="success">
-  Save Price Book
+  Save Price Book &amp; Continue
 </button>
 
 <button id="cancelPriceBookBtn" class="secondary">
@@ -4364,6 +4381,38 @@ $('copyJoinCodeBtn').onclick = async () => {
   }catch(error){
     alert('Copy this company code: ' + currentCompany.join_code);
   }
+};
+
+$('emailTeamInviteBtn').onclick = () => {
+  if(!userCanManageTeam() || !currentCompany?.join_code){
+    return;
+  }
+
+  const email = $('teamInviteEmail').value.trim();
+  if(!/^\S+@\S+\.\S+$/.test(email)){
+    alert('Enter the team member’s email address.');
+    return;
+  }
+
+  const companyName = currentCompany?.name || 'our company';
+  const subject = 'You’re invited to join ' + companyName + ' in LineCrew Pro';
+  const body = [
+    'You have been invited to join ' + companyName + ' in LineCrew Pro.',
+    '',
+    '1. Open https://app.linecrewpro.com/',
+    '2. Create your account using this email address.',
+    '3. After confirming your email, choose Join Existing Company.',
+    '4. Enter your name and this company code: ' + currentCompany.join_code,
+    '',
+    'New members begin as Foreman. The company Owner or Admin can update your role after you join.',
+    '',
+    'Do not forward this invitation or company code.'
+  ].join('\n');
+
+  window.location.href =
+    'mailto:' + encodeURIComponent(email) +
+    '?subject=' + encodeURIComponent(subject) +
+    '&body=' + encodeURIComponent(body);
 };
 
 $('rotateJoinCodeBtn').onclick = async () => {
@@ -7788,6 +7837,7 @@ $('addPriceBookBtn').onclick = async () => {
   $('priceBookName').value = '';
   $('priceBookEffectiveDate').value = '';
   $('priceBookNotes').value = '';
+  $('newPriceBookImportFile').value = '';
 
   $('priceBookContract').innerHTML =
     '<option value="">Select contract</option>';
@@ -7827,6 +7877,7 @@ $('addPriceBookBtn').onclick = async () => {
 
 $('cancelPriceBookBtn').onclick = () => {
   $('priceBookForm').classList.add('hidden');
+  $('newPriceBookImportFile').value = '';
 }; 
   $('savePriceBookBtn').onclick = async () => {
 
@@ -7863,7 +7914,11 @@ $('cancelPriceBookBtn').onclick = () => {
   $('savePriceBookBtn').textContent = 'Saving...';
 
 
+  const selectedImportFile =
+    $('newPriceBookImportFile').files?.[0] || null;
+
   const {
+    data:savedPriceBook,
     error
   } = await sb
     .from('price_books')
@@ -7875,11 +7930,13 @@ $('cancelPriceBookBtn').onclick = () => {
       effective_start: effectiveDate,
       notes: notes,
       active: true
-    });
+    })
+    .select('id')
+    .single();
 
 
   $('savePriceBookBtn').disabled = false;
-  $('savePriceBookBtn').textContent = 'Save Price Book';
+  $('savePriceBookBtn').textContent = 'Save Price Book & Continue';
 
 
   if(error){
@@ -7893,11 +7950,33 @@ $('cancelPriceBookBtn').onclick = () => {
   }
 
 
-  alert('Price book saved.');
-
   $('priceBookForm').classList.add('hidden');
 
   await loadPriceBooks();
+
+  const savedRecord =
+    priceBookNavigationRecords.get(savedPriceBook?.id);
+
+  if(savedRecord){
+    openPriceBook(
+      savedRecord.priceBook,
+      savedRecord.contract,
+      savedRecord.customer
+    );
+
+    if(selectedImportFile){
+      $('priceBookImportCard').classList.remove('hidden');
+      await handlePriceBookImportFile(selectedImportFile);
+      $('priceBookImportCard').scrollIntoView({
+        behavior:'smooth',
+        block:'start'
+      });
+      alert('Price Book saved. Review the unit-pricing preview, match the columns, and confirm the import.');
+      return;
+    }
+  }
+
+  alert('Price Book saved. You can now add or upload unit pricing.');
 
 };
 

@@ -14,6 +14,7 @@ const mustExist = [
   'supabase/migrations/202608190200_superintendent_legacy_compatibility.sql',
   'supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql',
   'supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql',
+  'supabase/migrations/20260823004222_superintendent_customers_contracts_policies.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
 ];
@@ -28,6 +29,7 @@ const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_lega
 const superintendentCompat = fs.readFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
 const driftRepair = fs.readFileSync('supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql', 'utf8');
 const rpcAccessRepair = fs.readFileSync('supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql', 'utf8');
+const superintendentContractsPolicies = fs.readFileSync('supabase/migrations/20260823004222_superintendent_customers_contracts_policies.sql', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
@@ -109,6 +111,16 @@ for (const marker of [
 assert(expandedJsa.includes("load('app-polish.js?v=20260822a')"), 'app-polish.js must use the current cache-busting version.');
 
 for (const marker of [
+  'linecrew_superintendent_customers_manage',
+  'linecrew_superintendent_contracts_manage',
+  "public.my_role() = 'superintendent'",
+  "linecrew_has_capability('customers_contracts')",
+  'company_id = public.my_company_id()',
+  'with check',
+  "roles = array['authenticated']::name[]"
+]) assert(superintendentContractsPolicies.includes(marker), `Superintendent Customers & Contracts policies are missing: ${marker}`);
+
+for (const marker of [
   "['owner','admin'].includes(currentUserRole())",
   "role === 'superintendent'",
   "linecrew_set_member_role",
@@ -122,6 +134,16 @@ for (const marker of [
   "userCanManageStormMode()",
   "userCanUseAssistant()"
 ]) assert(index.includes(marker), `Role-aware frontend marker missing: ${marker}`);
+
+for (const marker of [
+  'id="emailTeamInviteBtn"',
+  'https://app.linecrewpro.com/',
+  'Do not forward this invitation or company code.',
+  'id="newPriceBookImportFile"',
+  'Save Price Book &amp; Continue',
+  'await handlePriceBookImportFile(selectedImportFile)',
+  'Review the unit-pricing preview'
+]) assert(index.includes(marker), `Onboarding workflow marker missing: ${marker}`);
 
 if (failures.length) {
   console.error('Production readiness validation failed:');
@@ -138,5 +160,7 @@ console.log('- Tracked Owner compatibility migration present');
 console.log('- Tracked capability-aware Superintendent compatibility migration present');
 console.log('- Forward production drift repair and post-deploy verification present');
 console.log('- Contracts and JSA RPC access gaps are tracked and capability-gated');
+console.log('- Superintendent Customers & Contracts table writes are company-scoped and capability-gated');
 console.log('- Actual pricing remains independently gated');
 console.log('- Team, job, package, reporting, storm and assistant UI capability wiring present');
+console.log('- Email team invitation and first-run Price Book upload workflows present');
