@@ -185,6 +185,10 @@ assert(timekeepingRoster.includes('await autoLoadAssignedCrew();'), 'Foreman ros
 assert(expandedJsa.includes("load('number-input-polish.js?v=20260823a'"), 'Global numeric input polish must be cache-versioned and loaded.');
 assert(numberInputPolish.includes("input.defaultValue === '0'"), 'Only numeric fields designed with a zero default may restore an empty value to zero.');
 assert(numberInputPolish.includes('input.select();'), 'Clicking a displayed zero must select it for immediate replacement.');
+assert(index.includes('await saveDailyUnitBatch({ closeAfterSave:true })'), 'Done Adding Units must await the pending unit save before closing.');
+assert(index.includes("doneButton.textContent = 'Saving & Finishing...'"), 'Done Adding Units must show an in-progress save state.');
+assert(index.includes('if(currentDailySavedUnits.length === 0)'), 'Done Adding Units must not close an empty unit report.');
+assert(expandedJsa.includes("load('app-polish.js?v=20260823b'"), 'Done Adding Units workflow must load the current app polish asset.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
@@ -243,7 +247,7 @@ for (const marker of [
   'revoke all on function public.get_contract_field_settings() from public, anon, authenticated',
   'revoke all on function public.get_daily_report_jsa(uuid) from public, anon, authenticated'
 ]) assert(rpcAccessRepair.includes(marker), `Post-fix RPC access repair is missing: ${marker}`);
-assert(expandedJsa.includes("load('app-polish.js?v=20260822a')"), 'app-polish.js must use the current cache-busting version.');
+assert(expandedJsa.includes("load('app-polish.js?v=20260823b')"), 'app-polish.js must use the current cache-busting version.');
 
 for (const marker of [
   'linecrew_superintendent_customers_manage',
