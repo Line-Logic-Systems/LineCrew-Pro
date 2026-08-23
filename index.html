@@ -7989,6 +7989,18 @@ async function loadBillingAttachments(){
   });
 }
 
+function billingSafeStorageFilename(filename){
+  const parts=String(filename || 'billing-attachment').split('.');
+  const extension=parts.length>1
+    ? '.'+parts.pop().replace(/[^a-z0-9]/gi,'').slice(0,12).toLowerCase()
+    : '';
+  const base=parts.join('.')
+    .replace(/[^a-z0-9_-]+/gi,'-')
+    .replace(/^-+|-+$/g,'')
+    .slice(0,80) || 'billing-attachment';
+  return base+extension;
+}
+
 async function uploadBillingAttachment(){
   const button=$('uploadBillingAttachmentBtn');
   const status=$('billingAttachmentStatus');
@@ -8000,7 +8012,7 @@ async function uploadBillingAttachment(){
     const allowed=['application/pdf','image/jpeg','image/png','image/webp','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv'];
     if(file.type && !allowed.includes(file.type)) throw new Error('Use PDF, JPG, PNG, WEBP, XLSX or CSV.');
     const unique=globalThis.crypto?.randomUUID?.() || String(Date.now());
-    const path=currentProfile.company_id+'/'+currentBillingBatch.batch_id+'/'+unique+'-'+safeStorageFilename(file.name);
+    const path=currentProfile.company_id+'/'+currentBillingBatch.batch_id+'/'+unique+'-'+billingSafeStorageFilename(file.name);
     button.disabled=true; button.textContent='Uploading...'; status.textContent='Uploading '+file.name+'...';
     const upload=await sb.storage.from('billing-export-attachments').upload(path,file,{upsert:false,contentType:file.type || 'application/octet-stream'});
     if(upload.error) throw new Error('Upload failed: '+upload.error.message);
