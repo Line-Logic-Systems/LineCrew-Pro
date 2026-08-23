@@ -6670,26 +6670,40 @@ async function parsePdfJobPacketForJob(job, file){
     const [chunks, sourceSha256] = await Promise.all([
       splitPdfForPacketImport(file), sha256File(file)
     ]);
-    const parsedChunks = [];
-    for(let index = 0; index < chunks.length; index += 1){
-      review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
-        '<p class="muted">Analyzing pages ' + (chunks[index].page_offset + 1) +
-        '–' + (chunks[index].page_offset + chunks[index].page_count) +
-        ' of ' + chunks[index].total_pages + '. Nothing has been added to the job yet.</p>';
-      const { data, error } = await sb.functions.invoke(
-        'parse-utility-job-packet',
-        { body:{
-          filename:file.name,
-          file_data:chunks[index].file_data,
-          source_sha256:sourceSha256,
-          page_offset:chunks[index].page_offset,
-          total_pages:chunks[index].total_pages
-        } }
-      );
-      if(error) throw new Error(await packetFunctionErrorMessage(error));
-      if(data?.error) throw new Error(data.error);
-      parsedChunks.push(data);
-    }
+    const parsedChunks = new Array(chunks.length);
+    let nextChunkIndex = 0;
+    let completedChunks = 0;
+    const analyzeNextChunk = async () => {
+      while(nextChunkIndex < chunks.length){
+        const index = nextChunkIndex;
+        nextChunkIndex += 1;
+        const chunk = chunks[index];
+        const { data, error } = await sb.functions.invoke(
+          'parse-utility-job-packet',
+          { body:{
+            filename:file.name,
+            file_data:chunk.file_data,
+            source_sha256:sourceSha256,
+            page_offset:chunk.page_offset,
+            total_pages:chunk.total_pages
+          } }
+        );
+        if(error) throw new Error(await packetFunctionErrorMessage(error));
+        if(data?.error) throw new Error(data.error);
+        parsedChunks[index] = data;
+        completedChunks += 1;
+        review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+          '<p class="muted">Analyzed ' + completedChunks + ' of ' + chunks.length +
+          ' page groups (' + Math.min(completedChunks * 2, chunk.total_pages) +
+          ' of ' + chunk.total_pages + ' pages). Nothing has been added to the job yet.</p>';
+      }
+    };
+    review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+      '<p class="muted">Analyzing ' + chunks.length +
+      ' page groups, three at a time. Nothing has been added to the job yet.</p>';
+    await Promise.all(
+      Array.from({ length:Math.min(3, chunks.length) }, () => analyzeNextChunk())
+    );
 
     const supported = parsedChunks.filter(chunk =>
       chunk?.status === 'supported' && chunk?.provider_key === 'oncor' &&
