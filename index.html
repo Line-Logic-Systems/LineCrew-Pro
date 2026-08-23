@@ -1641,6 +1641,9 @@ button:disabled{
       <button id="emailTeamInviteBtn" class="success">
         Send Team Invitation
       </button>
+      <button id="manageFieldEmployeesBtn" class="secondary">
+        Add & Assign Field Employees
+      </button>
       <div class="button-row">
         <strong id="teamJoinCode" class="role"></strong>
         <button id="copyJoinCodeBtn" class="secondary small">
@@ -4745,6 +4748,11 @@ async function loadTeamMembers(){
   });
   $('teamList').appendChild(fragment);
 }
+
+$('manageFieldEmployeesBtn').onclick = () => {
+  if(typeof window.openLineCrewTimekeeping === 'function') window.openLineCrewTimekeeping();
+  else alert('Employee roster is still loading. Please try again.');
+};
 
 async function updateTeamMemberRole(member,nextRole){
   if(!userCanManageRoles()) return;
