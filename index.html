@@ -1999,7 +1999,7 @@ button:disabled{
       </div>
     </div>
 
-    <div id="jobPackageProgress" class="daily-value-summary"></div>
+    <div id="jobPackageProgress" class="daily-value-summary"></div>\n    <div id="jobPackagePendingReview"></div>
 
     <div id="jobPackageImportTools" class="card hidden">
       <div class="section-header">
@@ -5961,7 +5961,7 @@ function renderJobPackages(job, container){
     `;
     const openButton = document.createElement('button');
     openButton.className = 'secondary small';
-    openButton.textContent = 'Manage Work Points';
+    openButton.textContent = 'Open Package';
     openButton.onclick = ()=> openJobPackageDetails(jobPackage);
     row.appendChild(openButton);
     if(userCanManageJobPackages()){
@@ -6007,8 +6007,45 @@ async function openJobPackageDetails(jobPackage){
   refreshOpenJobPackageControls();
   resetJobPackageImport();
   $('jobPackageDetailCard').classList.remove('hidden');
+  await loadPendingUtilityPacketReview(jobPackage);
   await loadJobPackageWorkPoints();
   $('jobPackageDetailCard').scrollIntoView({ behavior:'smooth' });
+}
+
+
+async function loadPendingUtilityPacketReview(jobPackage){
+  const container = $('jobPackagePendingReview');
+  container.innerHTML = '';
+  const { data:pendingRows, error:pendingError } = await sb.rpc(
+    'get_pending_utility_packet_import_for_package',
+    { p_package_id:jobPackage.id }
+  );
+  if(pendingError){
+    container.innerHTML = '<p class="import-error">Unable to reopen packet review: ' +
+      escapeHtml(pendingError.message) + '</p>';
+    return;
+  }
+  const pending = pendingRows?.[0];
+  if(!pending) return;
+  const { data:rows, error:reviewError } = await sb.rpc(
+    'get_utility_packet_import_review',
+    { p_import_id:pending.import_id }
+  );
+  if(reviewError){
+    container.innerHTML = '<p class="import-error">Unable to load packet review: ' +
+      escapeHtml(reviewError.message) + '</p>';
+    return;
+  }
+  const job = currentJobsCatalog.find(item => String(item.id) === String(jobPackage.job_id));
+  if(!job){
+    container.innerHTML = '<p class="import-error">The job for this packet was not found.</p>';
+    return;
+  }
+  renderSmartPacketReview(container, job, jobPackage, pending.import_id, {
+    work_order:pending.detected_work_order || jobPackage.package_number || '',
+    confidence:pending.extraction_confidence,
+    warnings:pending.extraction_summary?.warnings || []
+  }, rows || []);
 }
 
 
