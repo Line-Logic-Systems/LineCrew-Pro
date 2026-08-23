@@ -9,6 +9,7 @@ const mustExist = [
   'scripts/validate-app.mjs',
   'supabase/functions/linecrew-assistant/index.ts',
   'supabase/functions/send-team-invitation/index.ts',
+  'supabase/functions/complete-team-invitation-signup/index.ts',
   'supabase/migrations/20260818_owner_superintendent_roles.sql',
   'supabase/migrations/20260818_owner_superintendent_team_access.sql',
   'supabase/migrations/202608190100_owner_legacy_compatibility.sql',
@@ -27,6 +28,7 @@ const index = fs.readFileSync('index.html', 'utf8');
 const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
 const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts', 'utf8');
 const teamInvitation = fs.readFileSync('supabase/functions/send-team-invitation/index.ts', 'utf8');
+const invitationSignup = fs.readFileSync('supabase/functions/complete-team-invitation-signup/index.ts', 'utf8');
 const roleMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_roles.sql', 'utf8');
 const accessMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_team_access.sql', 'utf8');
 const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', 'utf8');
@@ -78,6 +80,18 @@ assert(teamInvitation.includes('LineCrew Pro <invites@auth.linecrewpro.com>'), '
 assert(teamInvitation.includes('reply_to: "support@linecrewpro.com"'), 'Team invitations need the company support reply-to address.');
 assert(!teamInvitation.includes('SUPABASE_SERVICE_ROLE_KEY'), 'Team invitation sender must not bypass RLS with a service-role key.');
 assert(index.includes("sb.functions.invoke('send-team-invitation'"), 'Team invitation button must invoke the secured server sender.');
+
+for (const marker of [
+  'Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")',
+  'admin.auth.admin.createUser',
+  'email_confirm: true',
+  'team_invitation_token_hash: tokenHash',
+  'crypto.subtle.digest("SHA-256"',
+  'allowedOrigins.has(origin)',
+  'password.length < 8',
+  'persistSession: false'
+]) assert(invitationSignup.includes(marker), `Invited signup security marker missing: ${marker}`);
+assert(!/sb_secret_[A-Za-z0-9_-]+/i.test(invitationSignup), 'Invited signup function must not contain a literal secret key.');
 
 for (const marker of [
   'create table if not exists public.team_invitations',
@@ -182,7 +196,10 @@ for (const marker of [
   'id="emailTeamInviteBtn"',
   'Invitation sent from invites@auth.linecrewpro.com.',
   'Create Account & Join Company',
-  'team_invitation_token_hash:inviteTokenHash',
+  'id="signupPasswordConfirm"',
+  "password !== passwordConfirmation",
+  "sb.functions.invoke(\n      'complete-team-invitation-signup'",
+  'sb.auth.signInWithPassword({ email, password })',
   "$('loginCard').classList.toggle('hidden', invited)",
   "$('signupEmail').readOnly = invited",
   "await sb.auth.signOut({ scope:'local' })",
