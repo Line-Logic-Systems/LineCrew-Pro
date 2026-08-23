@@ -121,6 +121,8 @@
       .select(`
         id,
         job_id,
+        foreman_id,
+        created_by,
         work_date,
         foreman_name,
         crew_name,
@@ -212,7 +214,7 @@
 
     const freshReportResult = await sb
       .from('daily_reports')
-      .select(`id,job_id,work_date,status,review_notes,jobs(job_number,job_name)`)
+      .select(`id,job_id,foreman_id,created_by,work_date,status,review_notes,jobs(job_number,job_name)`)
       .eq('id', report.id)
       .eq('company_id', currentProfile.company_id)
       .eq('foreman_id', currentProfile.id)

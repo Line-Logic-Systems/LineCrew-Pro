@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v12';
+const CACHE_NAME = 'linecrew-pro-shell-v13';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -6,7 +6,7 @@ const APP_SHELL = [
   '/icons/linecrew-pro-180.png',
   '/icons/linecrew-pro-192.png',
   '/icons/linecrew-pro-512.png',
-  '/expanded-jsa.js?v=20260822b'
+  '/expanded-jsa.js?v=20260823c'
 ];
 
 self.addEventListener('install', (event) => {
