@@ -3780,20 +3780,9 @@ async function loadApp(){
 
   if(!profile){
     if(pendingInviteToken){
-      const invitationResult = await acceptPendingInvitation(session);
-      if(invitationResult.accepted){
-        await loadApp();
-        return;
-      }
-
+      await sb.auth.signOut({ scope:'local' });
       applyInvitationMode();
-      $('invitationFullName').value = String(
-        session.user.user_metadata?.full_name || ''
-      ).trim();
-      $('invitationStatus').textContent = invitationResult.error
-        ? invitationResult.error.message
-        : 'Confirm your full name to join the company that invited you.';
-      show('setupPage');
+      show('authPage');
       return;
     }
 
@@ -14614,7 +14603,17 @@ $('safetyTile').addEventListener('click', () => { setTimeout(() => { applyFlexib
 
 /* START */
 
-loadApp();
+async function startApp(){
+  if(pendingInviteToken){
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session){
+      await sb.auth.signOut({ scope:'local' });
+    }
+  }
+  await loadApp();
+}
+
+startApp();
 
 </script>
 

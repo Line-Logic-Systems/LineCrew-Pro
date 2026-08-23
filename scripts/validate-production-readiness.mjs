@@ -185,6 +185,8 @@ for (const marker of [
   'team_invitation_token_hash:inviteTokenHash',
   "$('loginCard').classList.toggle('hidden', invited)",
   "$('signupEmail').readOnly = invited",
+  "await sb.auth.signOut({ scope:'local' })",
+  'async function startApp()',
   "$('createCompanyCard').classList.toggle('hidden', invited)",
   "$('joinCompanyCard').classList.toggle('hidden', invited)",
   'id="newPriceBookImportFile"',
