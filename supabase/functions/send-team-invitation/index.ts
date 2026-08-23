@@ -30,6 +30,16 @@ function escapeHtml(value: unknown) {
     .replaceAll("'", "&#039;");
 }
 
+function bytesToHex(bytes: Uint8Array) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function base64Url(bytes: Uint8Array) {
+  let binary = "";
+  bytes.forEach(byte => binary += String.fromCharCode(byte));
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders(request) });
@@ -93,33 +103,47 @@ Deno.serve(async (request) => {
 
     const { data: company, error: companyError } = await client
       .from("companies")
-      .select("name, join_code")
+      .select("name")
       .eq("id", profile.company_id)
       .single();
 
-    if (companyError || !company?.join_code) {
+    if (companyError || !company) {
       return jsonResponse(request, { error: "Company invitation information is unavailable." }, 400);
     }
 
     const companyName = String(company.name || "Your company").slice(0, 160);
-    const companyCode = String(company.join_code).slice(0, 80);
     const safeCompanyName = escapeHtml(companyName);
-    const safeCompanyCode = escapeHtml(companyCode);
-    const appUrl = "https://app.linecrewpro.com/";
+    const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
+    const rawToken = base64Url(tokenBytes);
+    const tokenHash = bytesToHex(new Uint8Array(
+      await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rawToken)),
+    ));
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+    const { error: invitationError } = await client.rpc("create_team_invitation", {
+      p_email: recipient,
+      p_token_hash: tokenHash,
+      p_expires_at: expiresAt,
+    });
+    if (invitationError) {
+      console.error("Unable to create a team invitation.", invitationError.code || "RPC_ERROR");
+      return jsonResponse(request, { error: "Unable to create the invitation." }, 400);
+    }
+
+    const appUrl = `https://app.linecrewpro.com/?invite=${encodeURIComponent(rawToken)}`;
     const subject = `You’re invited to join ${companyName} in LineCrew Pro`;
     const text = [
       `You have been invited to join ${companyName} in LineCrew Pro.`,
       "",
-      `1. Open ${appUrl}`,
-      "2. Create your account using this email address.",
-      "3. After confirming your email, choose Join Existing Company.",
-      `4. Enter your name and this company code: ${companyCode}`,
+      `Open your private invitation: ${appUrl}`,
+      "",
+      "Create your account using the email address that received this invitation. LineCrew Pro will place you directly into the correct company.",
+      "This one-time invitation expires in 72 hours.",
       "",
       "New members begin as Foreman. Your company Owner or Admin can update your role after you join.",
       "",
-      "Do not forward this invitation or company code.",
+      "Do not forward this private invitation link.",
     ].join("\n");
-    const html = `<!doctype html><html><body style="margin:0;background:#f4f7f5;font-family:Arial,sans-serif;color:#15231b"><div style="max-width:600px;margin:0 auto;padding:32px 20px"><div style="background:#ffffff;border:1px solid #dce6df;border-radius:12px;padding:32px"><h1 style="margin:0 0 16px;font-size:24px">You’re invited to LineCrew Pro</h1><p><strong>${safeCompanyName}</strong> invited you to join its team.</p><p><a href="${appUrl}" style="display:inline-block;background:#168a52;color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:8px">Open LineCrew Pro</a></p><ol><li>Create your account using this email address.</li><li>After confirming your email, choose <strong>Join Existing Company</strong>.</li><li>Enter your name and company code:</li></ol><div style="font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;background:#eef6f1;border-radius:8px;padding:14px;text-align:center">${safeCompanyCode}</div><p style="font-size:14px;color:#526158">New members begin as Foreman. Your company Owner or Admin can update your role after you join.</p><p style="font-size:13px;color:#6a746e">Do not forward this invitation or company code.</p></div></div></body></html>`;
+    const html = `<!doctype html><html><body style="margin:0;background:#f4f7f5;font-family:Arial,sans-serif;color:#15231b"><div style="max-width:600px;margin:0 auto;padding:32px 20px"><div style="background:#ffffff;border:1px solid #dce6df;border-radius:12px;padding:32px"><h1 style="margin:0 0 16px;font-size:24px">You’re invited to LineCrew Pro</h1><p><strong>${safeCompanyName}</strong> invited you to join its team.</p><p><a href="${appUrl}" style="display:inline-block;background:#168a52;color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:8px">Accept Team Invitation</a></p><p>Create your account using the email address that received this invitation. LineCrew Pro will place you directly into the correct company—no company code is needed.</p><p style="font-size:14px;color:#526158">This private, one-time invitation expires in 72 hours. New members begin as Foreman; your company Owner or Admin can update your role after you join.</p><p style="font-size:13px;color:#6a746e">Do not forward this private invitation link.</p></div></div></body></html>`;
 
     const resendResponse = await fetch("https://api.resend.com/emails", {
       method: "POST",
