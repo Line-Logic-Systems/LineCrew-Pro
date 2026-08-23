@@ -93,30 +93,6 @@
     };
   }
 
-  // Do not let a Foreman leave unit entry believing unsaved/zero saved units are attached.
-  function hardenDoneAddingUnits(){
-    const btn=byId('closeDailyUnitEditorBtn');
-    if(!btn || btn.dataset.lcSavedUnitGuard==='1' || typeof btn.onclick!=='function') return;
-    btn.dataset.lcSavedUnitGuard='1';
-    const original=btn.onclick;
-    btn.onclick=async function(event){
-      try{
-        const report=window.currentDailyUnitReport || (typeof currentDailyUnitReport!=='undefined'?currentDailyUnitReport:null);
-        if(report?.id && window.sb){
-          const {data,error}=await sb.rpc('get_daily_report_unit_locations',{p_report_id:report.id});
-          if(error){toast('Unable to verify saved units: '+error.message,'error',5200);return;}
-          if(!data || data.length===0){
-            toast('No units are saved to this report yet. Use Save Pole & Add Next before Done Adding Units.','warning',6200);
-            return;
-          }
-        }
-      }catch(error){
-        console.warn('Saved-unit verification failed:',error);
-      }
-      return original.call(this,event);
-    };
-  }
-
   // Unsaved-change guard for the two highest-risk field forms.
   let dirty=false;let dirtyScope=null;
   const tracked=['dailyReportForm','safetyJsaForm'];
@@ -131,7 +107,6 @@
   function harden(){
     ensureTopSignOut();
     hardenProductionLoader();
-    hardenDoneAddingUnits();
   }
 
   function init(){
