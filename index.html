@@ -7521,12 +7521,12 @@ function renderBillingBatchHistory(){
 
 async function deleteVoidedBillingBatch(batch,button){
   const confirmation = prompt(
-    'Permanently delete this voided billing batch and its history?\n\n' +
-    'Type ' + batch.batch_number + ' to confirm:'
+    'Permanently delete this voided batch?\n\n' +
+    'Type DELETE to confirm:'
   );
   if(confirmation === null) return;
-  if(confirmation.trim().toUpperCase() !== String(batch.batch_number || '').toUpperCase()){
-    alert('The batch number did not match. Nothing was deleted.');
+  if(confirmation.trim().toUpperCase() !== 'DELETE'){
+    alert('DELETE was not entered. Nothing was deleted.');
     return;
   }
   button.disabled = true;
