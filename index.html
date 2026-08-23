@@ -990,6 +990,43 @@ button:disabled{
   font-weight:600;
 }
 
+.compact-report-card{
+  position:relative;
+}
+
+.compact-report-card > summary{
+  padding-right:38px;
+}
+
+.mh-rate-status-dot{
+  position:absolute;
+  top:12px;
+  right:12px;
+  width:12px;
+  height:12px;
+  border:2px solid #fff;
+  border-radius:999px;
+  box-shadow:0 0 0 1px rgba(15, 23, 42, 0.12);
+  pointer-events:none;
+}
+
+.mh-rate-status-dot.below{
+  background:#dc2626;
+}
+
+.mh-rate-status-dot.near-target{
+  background:#ca8a04;
+}
+
+.mh-rate-status-dot.at-target,
+.mh-rate-status-dot.above{
+  background:#16a34a;
+}
+
+.mh-rate-status-dot.not-set{
+  background:#94a3b8;
+}
+
 .daily-unit-picker{
   display:grid;
   grid-template-columns:minmax(220px, 2fr) minmax(150px, 1fr) 150px 110px auto;
@@ -12873,6 +12910,7 @@ async function loadProductionReports(){
           <strong>${escapeHtml(String(report.status || 'draft').toUpperCase())}</strong>
           ${report.storm_mode ? '<span class="status warning">STORM</span>' : ''}
         </div>
+        ${dailyReportTargetDotMarkup(report, valueSummary)}
       </summary>
       <div class="report-card-details">
 
@@ -13547,6 +13585,33 @@ function manHourRateNumberMarkup(rate){
     escapeHtml(formatCurrency(rate)) + '</strong>' +
     '<span class="mh-rate-status-text"> — ' +
     escapeHtml(statusText) + '</span>';
+}
+
+function dailyReportTargetDotMarkup(report, summary){
+  if(!userCanReviewProduction() && !userCanUseReporting()) return '';
+
+  const weightedHours =
+    Number(report?.regular_hours || 0) +
+    (Number(report?.overtime_hours || 0) * 1.5);
+  const hasRunRate =
+    summary &&
+    Number(summary.unit_line_count || 0) > 0 &&
+    weightedHours > 0;
+  const fieldRunRate = hasRunRate
+    ? Number(summary.adjusted_total || 0) / weightedHours
+    : NaN;
+  const status = hasRunRate ? manHourTargetStatus(fieldRunRate) : null;
+  const className = status ? status.key : 'not-set';
+  const label = status
+    ? status.label + ' · Field MH Run Rate ' + formatCurrency(fieldRunRate) +
+      ' · Target ' + formatCurrency(status.target)
+    : (Number(currentCompany?.required_man_hour_rate || 0) > 0
+        ? 'Field MH Run Rate unavailable'
+        : 'Man-hour target not set');
+
+  return '<span class="mh-rate-status-dot ' + className + '"' +
+    ' title="' + escapeHtml(label) + '"' +
+    ' aria-label="' + escapeHtml(label) + '"></span>';
 }
 
 function dailyReportAuthorizationSummaryMarkup(report, summary){
