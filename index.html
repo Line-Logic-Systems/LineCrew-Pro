@@ -277,6 +277,52 @@ main{
   margin:0;
 }
 
+.production-job-group{
+  padding:0;
+  overflow:hidden;
+  margin-bottom:10px;
+}
+
+.production-job-group > summary{
+  display:grid;
+  grid-template-columns:auto minmax(0, 1fr) auto;
+  align-items:center;
+  gap:12px;
+  padding:13px 16px;
+  cursor:pointer;
+  list-style:none;
+}
+
+.production-job-group > summary::-webkit-details-marker{ display:none; }
+.production-job-group > summary::before{
+  content:'▶';
+  color:var(--blue);
+  font-size:12px;
+}
+.production-job-group[open] > summary::before{ content:'▼'; }
+.production-job-group-main{ min-width:0; }
+.production-job-group-main strong,
+.production-job-group-main span{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.production-job-group-meta{
+  text-align:right;
+  white-space:nowrap;
+  font-size:13px;
+}
+.production-job-group-reports{
+  border-top:1px solid var(--border);
+  padding:8px;
+  background:#f7fafc;
+}
+.production-job-group-reports .compact-report-card{
+  margin:6px 0;
+  background:#fff;
+}
+
 .compact-report-card{
   padding:0;
   overflow:hidden;
@@ -363,6 +409,14 @@ main{
 }
 
 @media(max-width:600px){
+  .production-job-group > summary{
+    grid-template-columns:auto minmax(0, 1fr);
+  }
+  .production-job-group-meta{
+    grid-column:2;
+    text-align:left;
+    white-space:normal;
+  }
   .compact-report-card > summary{
     grid-template-columns:auto minmax(0, 1fr);
   }
@@ -12900,26 +12954,26 @@ function printStormEventSummary(){
   setTimeout(() => popup.print(), 250);
 }
 
-function renderProductionPagination(totalReports){
-  const totalPages = Math.max(1, Math.ceil(totalReports / currentProductionPageSize));
+function renderProductionPagination(totalItems, itemLabel = 'reports'){
+  const totalPages = Math.max(1, Math.ceil(totalItems / currentProductionPageSize));
   currentProductionPage = Math.min(Math.max(1, currentProductionPage), totalPages);
 
-  const first = totalReports === 0
+  const first = totalItems === 0
     ? 0
     : ((currentProductionPage - 1) * currentProductionPageSize) + 1;
-  const last = Math.min(totalReports, currentProductionPage * currentProductionPageSize);
+  const last = Math.min(totalItems, currentProductionPage * currentProductionPageSize);
 
   ['productionPaginationTop', 'productionPaginationBottom'].forEach(id => {
     const container = $(id);
-    container.classList.toggle('hidden', totalReports <= currentProductionPageSize);
+    container.classList.toggle('hidden', totalItems <= currentProductionPageSize);
     container.innerHTML = '';
 
-    if(totalReports <= currentProductionPageSize) return;
+    if(totalItems <= currentProductionPageSize) return;
 
     const status = document.createElement('span');
     status.className = 'pagination-status';
     status.textContent =
-      'Showing ' + first + '–' + last + ' of ' + totalReports + ' matching reports';
+      'Showing ' + first + '–' + last + ' of ' + totalItems + ' matching ' + itemLabel;
 
     const actions = document.createElement('div');
     actions.className = 'pagination-actions';
@@ -12929,7 +12983,7 @@ function renderProductionPagination(totalReports){
     [10, 25, 50].forEach(size => {
       const option = document.createElement('option');
       option.value = String(size);
-      option.textContent = size + ' per page';
+      option.textContent = size + ' ' + itemLabel + ' per page';
       option.selected = size === currentProductionPageSize;
       pageSize.appendChild(option);
     });
@@ -13426,9 +13480,24 @@ async function loadProductionReports(){
       (submittedPending === 1 ? 'y' : 'ies');
   }
 
+  const groupedReports = new Map();
+  filteredReports.forEach(report => {
+    const key = String(report.job_id || report.jobs?.job_number || 'no-job');
+    if(!groupedReports.has(key)){
+      groupedReports.set(key, {
+        key,
+        jobNumber:report.jobs?.job_number || 'No Job',
+        jobName:report.jobs?.job_name || '',
+        reports:[]
+      });
+    }
+    groupedReports.get(key).reports.push(report);
+  });
+  const jobGroups = [...groupedReports.values()];
+
   const totalPages = Math.max(
     1,
-    Math.ceil(filteredReports.length / currentProductionPageSize)
+    Math.ceil(jobGroups.length / currentProductionPageSize)
   );
   currentProductionPage = Math.min(
     Math.max(1, currentProductionPage),
@@ -13436,7 +13505,7 @@ async function loadProductionReports(){
   );
   const pageStart =
     (currentProductionPage - 1) * currentProductionPageSize;
-  const pagedReports = filteredReports.slice(
+  const pagedJobGroups = jobGroups.slice(
     pageStart,
     pageStart + currentProductionPageSize
   );
@@ -13444,13 +13513,13 @@ async function loadProductionReports(){
   $('productionFilterCount').textContent =
     filteredReports.length === 0
       ? 'No matching reports'
-      : 'Showing ' + (pageStart + 1) + '–' +
-        (pageStart + pagedReports.length) + ' of ' +
-        filteredReports.length + ' matching reports';
+      : filteredReports.length + ' matching report' +
+        (filteredReports.length === 1 ? '' : 's') + ' across ' +
+        jobGroups.length + ' job' + (jobGroups.length === 1 ? '' : 's');
 
   renderProductionReportingSummary(filteredReports, canViewProductionReporting);
   renderStormEventDashboard(filteredReports, canViewProductionReporting);
-  renderProductionPagination(filteredReports.length);
+  renderProductionPagination(jobGroups.length, 'jobs');
 
 
   if(filteredReports.length === 0){
@@ -13461,7 +13530,45 @@ async function loadProductionReports(){
   }
 
 
-  pagedReports.forEach(report => {
+  pagedJobGroups.forEach(group => {
+    const submittedCount = group.reports.filter(report =>
+      String(report.status || '').toLowerCase() === 'submitted'
+    ).length;
+    const approvedCount = group.reports.filter(report =>
+      String(report.status || '').toLowerCase() === 'approved'
+    ).length;
+    const redlineCount = group.reports.reduce((total, report) =>
+      total + Number(
+        currentDailyAuthorizationSummaries.get(report.id)?.redline_count || 0
+      ), 0
+    );
+    const latestDate = group.reports.reduce((latest, report) =>
+      String(report.work_date || '') > latest ? String(report.work_date || '') : latest,
+      ''
+    );
+
+    const groupCard = document.createElement('details');
+    groupCard.className = 'job-card production-job-group';
+    groupCard.open = submittedCount > 0;
+
+    const groupSummary = document.createElement('summary');
+    groupSummary.innerHTML =
+      '<div class="production-job-group-main"><strong>' +
+        escapeHtml(group.jobNumber) + '</strong><span>' +
+        escapeHtml(group.jobName || 'Unnamed job') + '</span></div>' +
+      '<div class="production-job-group-meta"><strong>' +
+        group.reports.length + ' Report' + (group.reports.length === 1 ? '' : 's') +
+        '</strong> &nbsp;•&nbsp; Latest ' + escapeHtml(latestDate || 'No date') +
+        '<br>' + submittedCount + ' Awaiting Review &nbsp;•&nbsp; ' +
+        approvedCount + ' Approved &nbsp;•&nbsp; ' + redlineCount + ' Redline' +
+        (redlineCount === 1 ? '' : 's') + '</div>';
+    groupCard.appendChild(groupSummary);
+
+    const groupReportList = document.createElement('div');
+    groupReportList.className = 'production-job-group-reports';
+    groupCard.appendChild(groupReportList);
+
+    group.reports.forEach(report => {
 
     const card =
       document.createElement('details');
@@ -15254,9 +15361,11 @@ if(userCanManageProductionRecords() || currentUserRole() === 'foreman'){
   }
 }
     
-    $('productionList')
-      .appendChild(card);
+    groupReportList.appendChild(card);
 
+    });
+
+    $('productionList').appendChild(groupCard);
   });
 
 }
