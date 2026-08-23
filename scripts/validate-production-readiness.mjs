@@ -78,8 +78,27 @@ assert(assistant.includes('.eq("company_id", companyId)'), 'AI assistant company
 assert(!assistant.includes('Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")'), 'AI assistant should not use a service-role key for user-scoped reads.');
 assert(assistant.includes('store: false'), 'AI responses must disable OpenAI application-state storage.');
 assert(assistant.includes('history.slice(-10)'), 'AI assistant must bound conversational history.');
+assert(assistant.includes('2026-08-23-workflows-v2'), 'AI assistant knowledge version marker must track the current workflow release.');
+for (const marker of [
+  'Save & Import Authorized Units',
+  'email-bound, one-time link',
+  'multiple Foremen/General Foremen',
+  'Manage Foreman Crews',
+  'Regular + 1.5 × OT',
+  'There is no separate bulk Job-file import',
+  'Supervisors review but do not edit a Foreman',
+  'green at or above the exact target'
+]) assert(assistant.includes(marker), `AI assistant workflow knowledge is missing: ${marker}`);
 assert(index.includes("function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }"), 'AI assistant launcher must be Owner/Admin-only.');
 assert(!index.includes("['ai_assistant','AI Assistant']"), 'AI assistant must not be configurable as a Superintendent capability.');
+for (const marker of [
+  'Save & Import Authorized Units',
+  'Create Account & Join Company',
+  'Assign Another Foreman / Leader',
+  'Manage Foreman Crews',
+  'There is no separate bulk Job-file import',
+  'Red is below 95% of target'
+]) assert(index.includes(marker), `Built-in assistant fallback is missing current workflow help: ${marker}`);
 
 assert(teamInvitation.includes('Deno.env.get("RESEND_API_KEY")'), 'Team invitation sender must use the server-side Resend secret.');
 assert(teamInvitation.includes('client.auth.getUser()'), 'Team invitation sender must authenticate the caller.');
@@ -204,7 +223,10 @@ assert(index.includes("if(reportStatus === 'draft' && canEditDraft)"), 'Edit and
 assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned Foreman drafts must recognize both the report creator and assigned Foreman ownership fields.');
 assert(index.includes("created_by,\n      work_date"), 'Production report loading must include the creator used to restore returned-draft editing.');
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
-assert(index.includes('expanded-jsa.js?v=20260823e'), 'The returned-report correction fix must use a cache-busted script version.');
+assert(index.includes('expanded-jsa.js?v=20260823f'), 'The current workflow release must use a fresh cache-busted script version.');
+assert(index.includes("Importing the package's authorized units lets LineCrew Pro distinguish") && index.includes('normal authorized production from redlines, reconcile Pending Packet'), 'Job-package setup must explain why authorized-unit import matters.');
+assert(index.includes('Save &amp; Import Authorized Units'), 'Job-package save must name the automatic authorized-unit import workflow.');
+assert(index.includes('setJobPackageImportOpen(true)'), 'Saving a utility package must open its authorized-unit import section.');
 
 for (const marker of [
   'required_man_hour_rate numeric(12,2)',

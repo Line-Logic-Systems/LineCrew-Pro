@@ -1861,6 +1861,12 @@ button:disabled{
   <div id="jobPackageFormCard" class="card hidden">
     <h2>Add Utility Job Package</h2>
 
+    <p class="muted">
+      Importing the package's authorized units lets LineCrew Pro distinguish
+      normal authorized production from redlines, reconcile Pending Packet
+      entries and calculate reported and approved job completion.
+    </p>
+
     <label for="jobPackageJob">Job</label>
     <select id="jobPackageJob"></select>
 
@@ -1876,7 +1882,7 @@ button:disabled{
     <label for="jobPackageNotes">Notes</label>
     <textarea id="jobPackageNotes" rows="3"></textarea>
 
-    <button class="success" id="saveJobPackageBtn">Save Job Package</button>
+    <button class="success" id="saveJobPackageBtn">Save &amp; Import Authorized Units</button>
     <button class="secondary" id="cancelJobPackageBtn">Cancel</button>
   </div>
 
@@ -1898,7 +1904,7 @@ button:disabled{
       <div class="section-header">
         <div>
           <h3>Import Utility Job Packet</h3>
-          <p class="muted">Upload CSV or Excel, review the column mapping and preview, then confirm the import.</p>
+          <p class="muted">Upload CSV or Excel, review the column mapping and preview, then confirm the authorized units used for completion and redline reconciliation.</p>
         </div>
         <button id="toggleJobPackageImportBtn" class="secondary small">Import CSV / Excel</button>
       </div>
@@ -6202,6 +6208,17 @@ function resetJobPackageImport(){
   $('previewJobPackageImportBtn').classList.add('hidden');
   $('confirmJobPackageImportBtn').classList.add('hidden');
   $('jobPackageImportPreview').innerHTML = '';
+  $('toggleJobPackageImportBtn').textContent = 'Import CSV / Excel';
+}
+
+function setJobPackageImportOpen(open){
+  $('jobPackageImportForm').classList.toggle('hidden', !open);
+  $('toggleJobPackageImportBtn').textContent = open
+    ? 'Hide Import'
+    : 'Import CSV / Excel';
+  if(open){
+    $('jobPackageImportFile').focus();
+  }
 }
 
 function configureJobPacketMappings(headers){
@@ -6353,7 +6370,9 @@ function renderJobPackageImportPreview(){
 }
 
 $('toggleJobPackageImportBtn').onclick = ()=>{
-  $('jobPackageImportForm').classList.toggle('hidden');
+  setJobPackageImportOpen(
+    $('jobPackageImportForm').classList.contains('hidden')
+  );
 };
 
 $('cancelJobPackageImportBtn').onclick = resetJobPackageImport;
@@ -6453,7 +6472,11 @@ $('saveJobPackageBtn').onclick = async()=>{
     return alert('Job and package name are required.');
   }
 
-  const { error } = await sb.rpc('create_job_package', {
+  const button = $('saveJobPackageBtn');
+  button.disabled = true;
+  button.textContent = 'Saving Package...';
+
+  const { data:packageId, error } = await sb.rpc('create_job_package', {
     p_job_id:jobId,
     p_package_name:packageName,
     p_package_number:$('jobPackageNumber').value.trim() || null,
@@ -6462,13 +6485,29 @@ $('saveJobPackageBtn').onclick = async()=>{
   });
 
   if(error){
+    button.disabled = false;
+    button.textContent = 'Save & Import Authorized Units';
     return alert(error.message);
   }
 
   delete $('jobPackageFormCard').dataset.jobId;
   $('jobPackageFormCard').classList.add('hidden');
   await loadJobs();
-  alert('Utility job package saved.');
+  const savedPackage = currentJobPackageCatalog.find(
+    jobPackage => jobPackage.id === packageId
+  );
+  button.disabled = false;
+  button.textContent = 'Save & Import Authorized Units';
+
+  if(!savedPackage){
+    return alert(
+      'Utility job package saved, but its import screen could not be opened. ' +
+      'Refresh Jobs and open the package to continue.'
+    );
+  }
+
+  await openJobPackageDetails(savedPackage);
+  setJobPackageImportOpen(true);
 };
 
 
@@ -6692,8 +6731,12 @@ function escapeHtml(value){
 
 const assistantBuiltInHelp = [
   {
-    terms:['add job','new job','create job','start job','job setup'],
-    answer:'Job-management steps: Owner, Admin, General Foreman, or a Superintendent with Jobs permission opens Jobs from the dashboard, chooses + Create Job, enters the job number/name and correct Contract, then saves. Utility Job Packages are controlled separately by the Job Packages permission for Superintendents.'
+    terms:['invite team','invite member','team invitation','send invite','automatic company enrollment','join company invitation'],
+    answer:'Preferred team onboarding: an authorized leader opens Team and chooses Invite Team Member, enters the person’s email, and sends the invitation. The email-bound one-time link opens Create Account & Join Company with the email locked. The invited person enters and confirms a password and is enrolled directly in the inviting company as a Foreman—no Company Code and no company-creation choice. Company Code is only a manual fallback when no invitation is being used.'
+  },
+  {
+    terms:['add job','new job','create job','start job','job setup','import jobs','upload jobs','bulk jobs'],
+    answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General Foreman and a Superintendent with Jobs permission use Jobs & Crew Progress. Choose + Create Job, enter the job number/name and correct Contract, then save. There is no separate bulk Job-file import in this release. Utility Job Package authorized-unit import belongs to an existing Job and does not create Jobs. Foremen use Assigned Jobs and see only active jobs assigned to them.'
   },
   {
     terms:['add admin','more admins','new admin','promote admin','make admin'],
@@ -6704,16 +6747,16 @@ const assistantBuiltInHelp = [
     answer:'Open Team and find the Foreman. Owner/Admin can change the role to General Foreman or Superintendent; a Superintendent with Role Management permission can promote/demote Foremen and General Foremen only. Choose Save Role and have the user refresh or sign out and back in.'
   },
   {
-    terms:['price book','pricing','units','import price'],
-    answer:'To import pricing: open Price Books, open the correct contract Price Book, choose Import CSV / Excel, select the worksheet, map Unit Code, Description and price columns, preview the rows, then confirm. Duplicate the Price Book as a new version before loading revised utility pricing so history is preserved.'
+    terms:['price book','pricing','units','import price','upload unit pricing','spreadsheet pricing','excel pricing'],
+    answer:'To upload pricing for a new Price Book: open Price Books, choose + Add Price Book, select the Contract, enter the name/effective date, choose the CSV/Excel file, then Save Price Book & Continue. Select the worksheet, map Unit Code, Description, Install and Retirement/Remove price columns, review the preview and confirm. For an existing book, open it and choose Import CSV / Excel. Duplicate the current book as a new version before revised utility pricing so history is preserved.'
   },
   {
-    terms:['job packet','utility packet','work point','pole packet'],
-    answer:'Open Jobs, select the job, add or open its Utility Job Package, then choose Import CSV / Excel. Map the pole/work-point, unit code and quantity fields, review the preview, and confirm. Production entered before the packet arrives will reconcile by normalized pole/location and unit code.'
+    terms:['job packet','utility packet','work point','pole packet','authorized units','normal units','import package','percent complete'],
+    answer:'Open Jobs, select the existing job, choose + Add Utility Package, enter the package details, then choose Save & Import Authorized Units. The saved package opens its CSV/Excel import immediately. Select the file/worksheet; map work point, description, unit code, work type and authorized quantities; preview and confirm. Imported authorized units define normal/authorized production, identify excess or unlisted redlines, reconcile Pending Packet entries and calculate reported/approved job completion percentage.'
   },
   {
-    terms:['daily report','approve','review','submitted'],
-    answer:'Open Production. Submitted reports appear in the review queue for General Foremen and leadership with Production Review permission. Review hours, units, pole locations and exceptions, then Approve or Return Report with notes. If GF redline approval is required, Owner/Admin or an authorized Superintendent must enter an override reason when using the leadership override.'
+    terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
+    answer:'A Foreman creates and edits field reports. Submitted reports appear in Production Review for General Foremen and leadership with Production Review permission. Review crew hours, units, poles and exceptions, then Approve or Return Report with correction notes. The owning Foreman opens the returned draft, makes the requested correction and submits it again. Supervisors review but do not directly edit the Foreman’s draft. If GF redline approval is required, leadership override requires a recorded reason.'
   },
   {
     terms:['redline','not authorized','extra unit'],
@@ -6724,8 +6767,16 @@ const assistantBuiltInHelp = [
     answer:'Pending Packet means production was reported before a utility job packet was loaded. This is allowed. After Owner/Admin or a Superintendent with Job Packages permission imports the packet, LineCrew Pro reconciles matching pole/location and unit codes; unmatched work remains visible for review.'
   },
   {
-    terms:['team','foreman','general foreman','role','invite'],
-    answer:'Open Team. New members join as Foremen. The company hierarchy is Owner > Admin > Superintendent > General Foreman > Foreman. Only Owner can manage Admin/Owner roles. Admin can manage Superintendent/GF/Foreman. A Superintendent with Role Management permission can manage GF/Foreman only. Owner/Admin can also customize each Superintendent’s permissions.'
+    terms:['team','foreman','general foreman','role','permissions','superintendent permissions','change role'],
+    answer:'Open Team for login accounts and role controls. Hierarchy: Owner > Admin > Superintendent > General Foreman > Foreman. Only Owner manages Owner/Admin roles; Admin manages Superintendent/GF/Foreman; a Superintendent with Role Management may manage GF/Foreman only. Owner/Admin can set each Superintendent capability. Role changes may require refresh or sign-out/sign-in.'
+  },
+  {
+    terms:['assign job','job assignment','multiple foremen','more than one foreman','assignment history','who assigned'],
+    answer:'Owner/Admin, General Foreman, or a Superintendent with Jobs permission opens Jobs and the job detail. In Assigned Foremen / Job Leaders, select a Foreman or General Foreman and choose Assign Another Foreman / Leader; repeat for multiple assignees. Supervisory progress rows show the assignees. View Assignment History records who assigned or unassigned each leader and when. A Foreman sees only active jobs assigned to that Foreman.'
+  },
+  {
+    terms:['add employee','upload employees','employee roster','assign crew','crew member','foreman crew','extra man'],
+    answer:'Non-login field employees are managed in Timekeeping > Manage Foreman Crews. Owner/Admin can add employees or upload a CSV/Excel roster; leadership assigns each active employee to a Foreman. A new Foreman Daily Report auto-populates that assigned crew in Crew Time. Use + Add Extra Man for another active company employee helping that crew that day. Foremen cannot permanently reassign the company roster.'
   },
   {
     terms:['jsa','job safety','morning safety','safety briefing','crew signature'],
@@ -6736,16 +6787,16 @@ const assistantBuiltInHelp = [
     answer:'Owner/Admin or a Superintendent with Storm Mode permission can create or activate a storm event and select participating crews. New reports from those crews are tagged automatically; all other crews remain in normal mode. Storm Mode organizes records and does not automatically change pricing or payroll.'
   },
   {
-    terms:['create daily','enter daily','add daily','save units','manage units','submit report'],
-    answer:'Foreman workflow: Production > Create Daily Report; select job/date and enter crew, hours, weather/delay and notes; save the draft; choose Manage Units; enter one pole/location, add every completed unit for that pole, then choose Save Pole & Add Next. Repeat for each pole, review saved poles, choose Done Adding Units, review attachments and details, then Submit Report.'
+    terms:['create daily','enter daily','add daily','save units','manage units','submit report','crew time','regular hours','ot hours','timekeeping'],
+    answer:'Foreman workflow: Production > Create Daily Report; choose an assigned job/date; verify the auto-populated Crew Time roster; enter Regular and OT per employee and add any Extra Man; enter weather/delay and notes; save the draft. Crew Time saves into Timekeeping for that report/job/date. In Manage Units, enter one pole/location and its completed units, Save Pole & Add Next, repeat, then Done Adding Units. Review details/attachments and Submit Report. A Foreman may delete only their own draft.'
   },
   {
     terms:['adjustment','adjusted price','field value','foreman price','percentage'],
     answer:'Owner/Admin or an authorized Superintendent edits the Contract and sets the Foreman field-value adjustment percentage. Foremen see the permitted field value. Owner/Admin/GF and a Superintendent with Actual Contract Pricing permission can see actual values. Verify the percentage and contract before field rollout.'
   },
   {
-    terms:['job progress','percentage complete','completion','authorized value','remaining value'],
-    answer:'Open Jobs to view Active Job Progress. Authorized value comes from imported utility-package units. Reported completion reflects eligible submitted production; Approved completion reflects approved production. Select the job to review packages, work points and exception counts. A job without a packet may show Pending Packet and no authorized total until the packet is imported.'
+    terms:['job progress','percentage complete','completion','authorized value','remaining value','man hour rate','mh rate','burn rate','red yellow green','rate target'],
+    answer:'Supervisors open Jobs & Crew Progress or Production for progress and Field MH Run Rate. Authorized value comes from imported utility-package units; reported and approved percentages use eligible production against that baseline. Field MH Run Rate is field unit value divided by weighted hours (Regular + 1.5 × OT). Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Red is below 95% of target, yellow is 95% up to but not including the exact target, and green is at or above target. It is an operational rate, not payroll cost or guaranteed profit.'
   },
   {
     terms:['attachment','photo','print','pdf','save pdf'],
@@ -6790,15 +6841,22 @@ function addAssistantMessage(role, text, remember = true){
 function findBuiltInAssistantAnswer(question){
   const normalized = String(question || '')
     .toLowerCase()
+    .replace(/\b(gf|general foremen)\b/g, 'general foreman')
+    .replace(/\b(mh|manhour|manhours)\b/g, 'man hour')
+    .replace(/\b(xlsx|xls|spreadsheet)\b/g, 'excel')
+    .replace(/\b(upload|load)\b/g, 'import')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
   let best = null;
   let bestScore = 0;
   assistantBuiltInHelp.forEach(article => {
-    const score = article.terms.reduce(
-      (total, term) => total + (normalized.includes(String(term).toLowerCase()) ? 1 : 0),
-      0
-    );
+    const score = article.terms.reduce((total, term) => {
+      const normalizedTerm = String(term).toLowerCase();
+      if(normalized.includes(normalizedTerm)) return total + 3;
+      const words = normalizedTerm.split(/\s+/).filter(word => word.length > 2);
+      const matches = words.filter(word => normalized.includes(word)).length;
+      return total + (words.length && matches === words.length ? 2 : matches * 0.25);
+    }, 0);
     if(score > bestScore){
       best = article;
       bestScore = score;
@@ -15030,7 +15088,7 @@ startApp();
 
 </script>
 
-  <script src="expanded-jsa.js?v=20260823e"></script>
+  <script src="expanded-jsa.js?v=20260823f"></script>
 
 <script>
 (function () {
