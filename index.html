@@ -1027,6 +1027,26 @@ button:disabled{
   background:#94a3b8;
 }
 
+#productionFiltersCard .price-book-filter-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
+  gap:10px 12px;
+}
+
+#productionFiltersCard .collapsible-card-content{
+  padding-top:10px;
+}
+
+#productionFiltersCard label{
+  margin-bottom:4px;
+}
+
+@media(max-width:600px){
+  #productionFiltersCard .price-book-filter-grid{
+    grid-template-columns:1fr;
+  }
+}
+
 .daily-unit-picker{
   display:grid;
   grid-template-columns:minmax(220px, 2fr) minmax(150px, 1fr) 150px 110px auto;
@@ -2278,6 +2298,12 @@ button:disabled{
           <label for="productionSearch">Search</label>
           <input id="productionSearch" type="search"
             placeholder="Job number, job name or Foreman">
+        </div>
+        <div class="production-reporting-control hidden">
+          <label for="productionCustomerFilter">Company / Utility</label>
+          <select id="productionCustomerFilter">
+            <option value="">All companies / utilities</option>
+          </select>
         </div>
         <div>
           <label for="productionStatusFilter">Status</label>
@@ -7395,6 +7421,7 @@ $('productionSearch').oninput = () => {
 $('productionStatusFilter').onchange = resetProductionPageAndLoad;
 $('productionDateFrom').onchange = resetProductionPageAndLoad;
 $('productionDateTo').onchange = resetProductionPageAndLoad;
+$('productionCustomerFilter').onchange = resetProductionPageAndLoad;
 $('productionJobFilter').onchange = resetProductionPageAndLoad;
 $('productionForemanFilter').onchange = resetProductionPageAndLoad;
 $('productionCrewFilter').onchange = resetProductionPageAndLoad;
@@ -7412,6 +7439,7 @@ $('clearProductionFilters').onclick = async () => {
   $('productionStatusFilter').value = '';
   $('productionDateFrom').value = '';
   $('productionDateTo').value = '';
+  $('productionCustomerFilter').value = '';
   $('productionJobFilter').value = '';
   $('productionForemanFilter').value = '';
   $('productionCrewFilter').value = '';
@@ -12053,16 +12081,22 @@ async function deletePriceBookItem(item){
 function populateProductionReportingFilters(reports, canReviewProduction){
   if(!canReviewProduction) return;
 
+  const selectedCustomer = $('productionCustomerFilter').value;
   const selectedJob = $('productionJobFilter').value;
   const selectedForeman = $('productionForemanFilter').value;
   const selectedCrew = $('productionCrewFilter').value;
   const selectedStormEvent = $('productionStormEventFilter').value;
+  const customers = new Map();
   const jobs = new Map();
   const foremen = new Set();
   const crews = new Set();
   const stormEvents = new Set();
 
   reports.forEach(report => {
+    const customer = report.jobs?.contracts?.customers;
+    if(customer?.id){
+      customers.set(String(customer.id), String(customer.name || 'Unnamed company / utility'));
+    }
     if(report.job_id){
       jobs.set(
         String(report.job_id),
@@ -12076,7 +12110,18 @@ function populateProductionReportingFilters(reports, canReviewProduction){
     }
   });
 
-  $('productionJobFilter').innerHTML = '<option value="">All jobs</option>';
+  $('productionCustomerFilter').innerHTML =
+    '<option value="">All companies / utilities</option>';
+  [...customers.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .forEach(([id, name]) => {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = name;
+      $('productionCustomerFilter').appendChild(option);
+    });
+
+    $('productionJobFilter').innerHTML = '<option value="">All jobs</option>';
   [...jobs.entries()]
     .sort((a, b) => a[1].localeCompare(b[1]))
     .forEach(([id, label]) => {
@@ -12111,6 +12156,9 @@ function populateProductionReportingFilters(reports, canReviewProduction){
     $('productionStormEventFilter').appendChild(option);
   });
 
+  if(customers.has(selectedCustomer)){
+    $('productionCustomerFilter').value = selectedCustomer;
+  }
   if(jobs.has(selectedJob)) $('productionJobFilter').value = selectedJob;
   if(foremen.has(selectedForeman)) $('productionForemanFilter').value = selectedForeman;
   if(crews.has(selectedCrew)) $('productionCrewFilter').value = selectedCrew;
@@ -12672,7 +12720,13 @@ async function loadProductionReports(){
       storm_event_name,
       jobs (
         job_number,
-        job_name
+        job_name,
+        contracts (
+          customers (
+            id,
+            name
+          )
+        )
       )
     `)
     .eq('company_id', currentProfile.company_id)
@@ -12743,6 +12797,9 @@ async function loadProductionReports(){
   const statusFilter = $('productionStatusFilter').value;
   const dateFrom = $('productionDateFrom').value;
   const dateTo = $('productionDateTo').value;
+  const customerFilter = canViewProductionReporting
+    ? $('productionCustomerFilter').value
+    : '';
   const jobFilter = canViewProductionReporting ? $('productionJobFilter').value : '';
   const foremanFilter = canViewProductionReporting ? $('productionForemanFilter').value : '';
   const crewFilter = canViewProductionReporting ? $('productionCrewFilter').value : '';
@@ -12763,6 +12820,10 @@ async function loadProductionReports(){
 
     if(dateFrom && String(report.work_date || '') < dateFrom) return false;
     if(dateTo && String(report.work_date || '') > dateTo) return false;
+    if(
+      customerFilter &&
+      String(report.jobs?.contracts?.customers?.id || '') !== customerFilter
+    ) return false;
     if(jobFilter && String(report.job_id || '') !== jobFilter) return false;
     if(foremanFilter && String(report.foreman_name || '') !== foremanFilter) return false;
     if(crewFilter && String(report.crew_name || '') !== crewFilter) return false;
@@ -12787,6 +12848,7 @@ async function loadProductionReports(){
       const haystack = [
         report.jobs?.job_number,
         report.jobs?.job_name,
+        report.jobs?.contracts?.customers?.name,
         report.foreman_name,
         report.crew_name,
         report.storm_event_name
