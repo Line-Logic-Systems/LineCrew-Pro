@@ -2016,7 +2016,7 @@ button:disabled{
 
     <p class="muted">
       Importing the package's authorized units lets LineCrew Pro distinguish
-      normal authorized production from redlines, reconcile Pending Job Packet Units
+      normal authorized production from redlines, reconcile Pending Job Units
       entries and calculate reported and approved job completion.
     </p>
 
@@ -5485,7 +5485,7 @@ function renderJobProgressDashboard(jobs, canView){
     '<span><strong>' + escapeHtml(formatCurrency(approved)) + '</strong><br>Approved</span>' +
     '<span><strong>' + escapeHtml(formatCurrency(remaining)) + '</strong><br>Remaining</span>' +
     '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
-    '<span><strong>' + pending + '</strong><br>Pending Job Packet Units</span>';
+    '<span><strong>' + pending + '</strong><br>Pending Job Units</span>';
 
   $('jobProgressCount').textContent =
     'Showing ' + visibleActiveJobs.length + ' of ' +
@@ -7263,7 +7263,7 @@ function exportJobProgressCsv(){
     'Job Number','Job Name','Customer','Utility','Contract','Contract Number',
     'Authorized Value','Reported Value','Reported Percent','Approved Value',
     'Approved Percent','Remaining Value','Packages','Work Points',
-    'Daily Reports','Redlines','Pending Job Packet Units'
+    'Daily Reports','Redlines','Pending Job Units'
   ];
   const rows = jobs.map(job => {
     const summary = currentJobProgressSummaries.get(job.id) || {};
@@ -7372,7 +7372,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['job packet','utility packet','work point','pole packet','authorized units','normal units','import package','percent complete'],
-    answer:'Open Jobs, select the existing job, choose + Add Utility Package, enter the package details, then choose Save & Import Authorized Units. The saved package opens its CSV/Excel import immediately. Select the file/worksheet; map work point, description, unit code, work type and authorized quantities; preview and confirm. Imported authorized units define normal/authorized production, identify excess or unlisted redlines, reconcile Pending Job Packet Units and calculate reported/approved job completion percentage.'
+    answer:'Open Jobs, select the existing job, choose + Add Utility Package, enter the package details, then choose Save & Import Authorized Units. The saved package opens its CSV/Excel import immediately. Select the file/worksheet; map work point, description, unit code, work type and authorized quantities; preview and confirm. Imported authorized units define normal/authorized production, identify excess or unlisted redlines, reconcile Pending Job Units and calculate reported/approved job completion percentage.'
   },
   {
     terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
@@ -7384,7 +7384,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['pending packet','packet pending','no packet'],
-    answer:'Pending Job Packet Units means production was reported before a utility job packet was loaded. This is allowed. After Owner/Admin or a Superintendent with Job Packages permission imports the packet, LineCrew Pro reconciles matching pole/location and unit codes; unmatched work remains visible for review.'
+    answer:'Pending Job Units means production was reported before a utility job packet was loaded. This is allowed. After Owner/Admin or a Superintendent with Job Packages permission imports the packet, LineCrew Pro reconciles matching pole/location and unit codes; unmatched work remains visible for review.'
   },
   {
     terms:['team','foreman','general foreman','role','permissions','superintendent permissions','change role'],
@@ -12790,7 +12790,7 @@ function renderProductionReportingSummary(reports, canReviewProduction){
     '<span><strong>' + regularHours + '</strong><br>Regular Hours</span>' +
     '<span><strong>' + overtimeHours + '</strong><br>OT Hours</span>' +
     '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
-    '<span><strong>' + pending + '</strong><br>Pending Job Packet Units</span>';
+    '<span><strong>' + pending + '</strong><br>Pending Job Units</span>';
 }
 
 function renderStormEventDashboard(reports, canReviewProduction){
@@ -12892,7 +12892,7 @@ function renderStormEventDashboard(reports, canReviewProduction){
     '<span><strong>' + totalRegularHours + '</strong><br>Regular Hours</span>' +
     '<span><strong>' + totalOvertimeHours + '</strong><br>OT Hours</span>' +
     '<span><strong>' + totalRedlines + '</strong><br>Redlines</span>' +
-    '<span><strong>' + totalPending + '</strong><br>Pending Job Packet Units</span>';
+    '<span><strong>' + totalPending + '</strong><br>Pending Job Units</span>';
 
   [...crews.values()]
     .sort((a, b) => b.actual - a.actual || a.crewName.localeCompare(b.crewName))
@@ -12917,7 +12917,7 @@ function renderStormEventDashboard(reports, canReviewProduction){
           '<span><strong>' + crew.regularHours + '</strong><br>Regular Hours</span>' +
           '<span><strong>' + crew.overtimeHours + '</strong><br>OT Hours</span>' +
           '<span><strong>' + crew.redlines + '</strong><br>Redlines</span>' +
-          '<span><strong>' + crew.pending + '</strong><br>Pending Job Packet Units</span>' +
+          '<span><strong>' + crew.pending + '</strong><br>Pending Job Units</span>' +
         '</div>';
 
       list.appendChild(card);
@@ -13112,7 +13112,7 @@ function exportStormBillingCsv(){
   const headers = [
     'Storm Event', 'Job Number', 'Job Name', 'From Date', 'Through Date',
     'Crews', 'Reports', 'Approved Reports', 'Actual Unit Value',
-    'Field Unit Value', 'Regular Hours', 'OT Hours', 'Redlines', 'Pending Job Packet Units'
+    'Field Unit Value', 'Regular Hours', 'OT Hours', 'Redlines', 'Pending Job Units'
   ];
   const totals = {
     reports:0, approved:0, actual:0, field:0,
@@ -13225,7 +13225,7 @@ function exportFilteredProductionCsv(){
     'Job Number', 'Job Name', 'Work Date', 'Foreman', 'Crew', 'Status',
     'Regular Hours', 'OT Hours', 'Weather', 'Delay Hours', 'Delay Reason',
     'Actual Unit Value', 'Field Unit Value',
-    'Authorized Units', 'Pending Job Packet Units', 'Redline Units',
+    'Authorized Units', 'Pending Job Units', 'Redline Units',
     'Storm Mode', 'Storm Event', 'Report Notes', 'Review Notes'
   ];
   const rows = currentProductionExportRows.map(report => {
