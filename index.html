@@ -1333,7 +1333,10 @@ button:disabled{
     <input id="signupEmail" type="email" autocomplete="email">
 
     <label>Password</label>
-    <input id="signupPassword" type="password">
+    <input id="signupPassword" type="password" minlength="8" autocomplete="new-password">
+
+    <label>Confirm Password</label>
+    <input id="signupPasswordConfirm" type="password" minlength="8" autocomplete="new-password">
 
     <button id="signupBtn">Create Account</button>
   </div>
@@ -4021,20 +4024,58 @@ $('signupBtn').onclick = async()=>{
   const password =
     $('signupPassword').value;
 
-  if(!email || !password){
+  const passwordConfirmation =
+    $('signupPasswordConfirm').value;
+
+  if(!email || !password || !passwordConfirmation){
 
     return alert(
-      'Enter email and password.'
+      'Enter email, password and password confirmation.'
     );
+  }
+
+  if(password.length < 8){
+    return alert('Use a password with at least 8 characters.');
+  }
+
+  if(password !== passwordConfirmation){
+    return alert('The passwords do not match.');
   }
 
   if(pendingInviteToken && (!pendingInviteEmail || email.toLowerCase() !== pendingInviteEmail.toLowerCase())){
     return alert('Use the email address that received this invitation.');
   }
 
-  const inviteTokenHash = pendingInviteToken
-    ? await invitationTokenHash()
-    : '';
+  if(pendingInviteToken){
+    const button = $('signupBtn');
+    button.disabled = true;
+    button.textContent = 'Creating Account...';
+
+    const { error:createError } = await sb.functions.invoke(
+      'complete-team-invitation-signup',
+      { body:{ email, password, token:pendingInviteToken } }
+    );
+
+    if(createError){
+      button.disabled = false;
+      button.textContent = 'Create Account & Join Company';
+      return alert('Unable to create the invited account. Request a new invitation and try again.');
+    }
+
+    const { error:signInError } = await sb.auth.signInWithPassword({ email, password });
+    button.disabled = false;
+    button.textContent = 'Create Account & Join Company';
+
+    if(signInError){
+      return alert('Your account was created. Sign in using the password you just entered.');
+    }
+
+    $('signupPassword').value = '';
+    $('signupPasswordConfirm').value = '';
+    clearInvitationUrl();
+    await loadApp();
+    return;
+  }
 
 
   const {
@@ -4043,13 +4084,7 @@ $('signupBtn').onclick = async()=>{
   } =
     await sb.auth.signUp({
       email,
-      password,
-      options: pendingInviteToken ? {
-        emailRedirectTo:
-          window.location.origin +
-          window.location.pathname,
-        data:{ team_invitation_token_hash:inviteTokenHash }
-      } : undefined
+      password
     });
 
 
@@ -4062,9 +4097,7 @@ $('signupBtn').onclick = async()=>{
   if(!data.session){
 
     alert(
-      pendingInviteToken
-        ? 'Account created and added to your company as a Foreman. Confirm your email, then sign in.'
-        : 'Account created. Check your email to confirm your account, then sign in.'
+      'Account created. Check your email to confirm your account, then sign in.'
     );
 
     return;
