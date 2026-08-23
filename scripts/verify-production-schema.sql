@@ -14,6 +14,21 @@ with function_state as (
   select policyname
   from pg_policies
   where schemaname = 'public' and policyname like 'linecrew_owner_%'
+), superintendent_contract_policy_state as (
+  select policyname
+  from pg_policies
+  where schemaname = 'public'
+    and tablename in ('customers', 'contracts')
+    and policyname in (
+      'linecrew_superintendent_customers_manage',
+      'linecrew_superintendent_contracts_manage'
+    )
+    and cmd = 'ALL'
+    and roles = array['authenticated']::name[]
+    and qual like '%customers_contracts%'
+    and qual like '%my_company_id%'
+    and with_check like '%customers_contracts%'
+    and with_check like '%my_company_id%'
 )
 select
   to_regprocedure('public.update_my_profile_name(text)') is not null
@@ -44,6 +59,8 @@ select
     where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_admin_update'
   ) as broad_profile_update_policy_removed,
   (select count(*) from policy_state) as owner_company_policy_count,
+  (select count(*) = 2 from superintendent_contract_policy_state)
+    as superintendent_customers_contracts_policies_safe,
   (select count(*) from function_state f
    where f.prosecdef and has_function_privilege('anon', f.oid, 'execute'))
     as anon_executable_security_definer_count;
