@@ -12784,7 +12784,7 @@ ${report.review_notes ? `
     </strong>
   </span>
 ` : ''}
-        ${dailyReportValueSummaryMarkup(valueSummary)}
+        ${dailyReportValueSummaryMarkup(report, valueSummary)}
         ${dailyReportAuthorizationSummaryMarkup(report, authorizationSummary)}
       </div>
       </div>
@@ -13298,13 +13298,31 @@ async function toggleDailyReportHistory(report, card, button){
   card.appendChild(history);
 }
 
-function dailyReportValueSummaryMarkup(summary){
+function dailyReportValueSummaryMarkup(report, summary){
   if(!summary || Number(summary.unit_line_count || 0) === 0){
     return '<br><span class="muted">Unit Value: No units entered</span>';
   }
 
   const canSeeActual = userCanSeeActualContractPrices();
   const hasAdjustment = summary.has_adjustment === true;
+  const canSeeRunRate = userCanReviewProduction() || userCanUseReporting();
+  const weightedHours =
+    Number(report?.regular_hours || 0) +
+    (Number(report?.overtime_hours || 0) * 1.5);
+  const actualRunRate = weightedHours > 0
+    ? Number(summary.actual_total || 0) / weightedHours
+    : 0;
+  const fieldRunRate = weightedHours > 0
+    ? Number(summary.adjusted_total || 0) / weightedHours
+    : 0;
+  const runRateMarkup = !canSeeRunRate
+    ? ''
+    : (canSeeActual
+        ? '<br>Actual MH Run Rate: <strong>' +
+          escapeHtml(formatCurrency(actualRunRate)) + '</strong>'
+        : '') +
+      '<br>Field MH Run Rate: <strong>' +
+        escapeHtml(formatCurrency(fieldRunRate)) + '</strong>';
 
   if(canSeeActual && hasAdjustment){
     return (
@@ -13313,7 +13331,7 @@ function dailyReportValueSummaryMarkup(summary){
       '</strong>' +
       '<br>Field Unit Value: <strong>' +
         escapeHtml(formatCurrency(summary.adjusted_total)) +
-      '</strong>'
+      '</strong>' + runRateMarkup
     );
   }
 
@@ -13325,7 +13343,7 @@ function dailyReportValueSummaryMarkup(summary){
   return (
     '<br>' + label + ': <strong>' +
       escapeHtml(formatCurrency(amount)) +
-    '</strong>'
+    '</strong>' + runRateMarkup
   );
 }
 

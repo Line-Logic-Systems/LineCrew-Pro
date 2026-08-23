@@ -205,6 +205,9 @@ assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned For
 assert(index.includes("created_by,\n      work_date"), 'Production report loading must include the creator used to restore returned-draft editing.');
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
 assert(index.includes('expanded-jsa.js?v=20260823c'), 'The returned-report correction fix must use a cache-busted script version.');
+assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
+assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');
+assert(index.includes("'<br>Field MH Run Rate: <strong>'"), 'Supervision report cards must show the field man-hour run rate.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
