@@ -191,6 +191,11 @@ assert(index.includes('if(currentDailySavedUnits.length === 0)'), 'Done Adding U
 assert(expandedJsa.includes("load('app-polish.js?v=20260823b'"), 'Done Adding Units workflow must load the current app polish asset.');
 assert(index.includes('<h3>Saved Units</h3>'), 'Edit Draft must show persisted units before the blank Add More Units rows.');
 assert(index.includes("doneButton.textContent = 'Done Adding Units';"), 'The Done Adding Units button must reset whenever its editor opens or closes.');
+assert(index.includes('<option value="transfer">Transfer</option>'), 'Daily unit production must offer Transfer as an explicit work type.');
+assert(index.includes('row.actionInput.value = inferredWorkType;'), 'Selecting a priced unit must automatically choose its inferred work type.');
+assert(index.includes("if(suffix === 'R') return 'retirement';"), 'R-suffix units must default to removal when pricing alone is ambiguous.');
+assert(index.includes("if(suffix === 'T') return 'transfer';"), 'T-suffix units must default to transfer when pricing alone is ambiguous.');
+assert(index.includes("savedWorkType === 'transfer'"), 'Saved T-unit quantities must be labeled as Transferred rather than Installed.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
