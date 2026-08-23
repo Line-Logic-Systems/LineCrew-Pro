@@ -45,6 +45,7 @@ const foremanJobAssignments = fs.readFileSync('supabase/migrations/2026082302363
 const supervisorJobAssignees = fs.readFileSync('supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
 const employeeRosterAssignment = fs.readFileSync('supabase/migrations/20260823030000_company_employee_roster_assignment.sql', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
+const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
@@ -155,6 +156,9 @@ for (const marker of [
   'public.linecrew_foreman_has_job_assignment(timekeeping_entries.job_id)',
   'drop function if exists public.set_my_timekeeping_crew(uuid[])'
 ]) assert(employeeRosterAssignment.includes(marker), `Employee-roster assignment marker missing: ${marker}`);
+assert(timekeepingReport.includes('if(reportRunInFlight) return reportRunInFlight;'), 'Timekeeping reports must prevent overlapping report runs.');
+assert(timekeepingReport.includes('finally{reportRunInFlight=null;}'), 'Timekeeping report lock must always release after completion.');
+assert(expandedJsa.includes("load('timekeeping-report-v2.js?v=20260823a'"), 'Timekeeping report fix must use a fresh cache-busting version.');
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');
@@ -291,3 +295,4 @@ console.log('- First-run Price Book upload workflow present');
 console.log('- Foreman job visibility is assignment-scoped with manager and timestamp audit history');
 console.log('- Supervisor job-progress cards list every assigned Foreman / Job Leader');
 console.log('- Field employees are leadership-assigned; Foremen can add extra active crew only on assigned jobs');
+console.log('- Timekeeping reports use a single-flight guard to prevent repeated Run Report loops');
