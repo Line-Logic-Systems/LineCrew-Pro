@@ -9,6 +9,7 @@
   let rows=[];
   let employees=new Map();
   let jobs=new Map();
+  let reportRunInFlight=null;
 
   function toast(message,type='info'){ window.LineCrewUI?.toast?.(message,type); }
 
@@ -44,6 +45,13 @@
   }
 
   async function run(){
+    if(reportRunInFlight) return reportRunInFlight;
+    reportRunInFlight=runOnce();
+    try{return await reportRunInFlight;}
+    finally{reportRunInFlight=null;}
+  }
+
+  async function runOnce(){
     const box=byId('tkReportList');
     const client=getSb();
     if(!box||!client) return;
