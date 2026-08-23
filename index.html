@@ -2135,7 +2135,7 @@ button:disabled{
    <div class="section-header">
     <div>
         <h2>Production</h2>
-        <p class="muted">
+        <p id="productionPageDescription" class="muted">
             Daily production reporting
         </p>
     </div>
@@ -2410,6 +2410,7 @@ button:disabled{
     <div id="dailyUnitList"></div>
   </div>
 
+  <div id="dailyUnitEntryControls">
   <h3>Add More Units</h3>
 
   <datalist id="dailyUnitPoleLocations"></datalist>
@@ -2427,6 +2428,7 @@ button:disabled{
     <button id="saveDailyUnitBatchBtn" class="success">
       Save Pole &amp; Add Next
     </button>
+  </div>
   </div>
 
 </div>
@@ -3509,6 +3511,13 @@ function userCanManageStormMode(){ return userHasCapability('storm_mode'); }
 function userCanManageJobs(){ return userHasCapability('jobs') || currentUserRole() === 'gf'; }
 function userCanReviewProduction(){ return userHasCapability('production_review') || currentUserRole() === 'gf'; }
 function userCanManageProductionRecords(){ return userHasCapability('production_review'); }
+function userCanEditDailyReportDraft(report){
+  if(String(report?.status || 'draft').toLowerCase() !== 'draft') return false;
+  const role = currentUserRole();
+  if(role === 'gf') return false;
+  if(role === 'foreman') return report?.foreman_id === currentProfile?.id;
+  return userCanManageProductionRecords();
+}
 function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
 function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }
 function userCanManageCompanySettings(){ return userHasCapability('company_settings'); }
@@ -12412,6 +12421,12 @@ function exportFilteredProductionCsv(){
 
 async function loadProductionReports(){
 
+  const gfReviewWorkspace = currentUserRole() === 'gf';
+  $('createDailyReportBtn').classList.toggle('hidden', gfReviewWorkspace);
+  $('productionPageDescription').textContent = gfReviewWorkspace
+    ? 'Review submitted Foreman reports, then approve or return with notes'
+    : 'Daily production reporting';
+
   $('productionLoading').classList.remove('hidden');
   $('productionEmpty').classList.add('hidden');
   $('productionList').innerHTML = '';
@@ -12660,6 +12675,8 @@ async function loadProductionReports(){
       currentDailyReportValueSummaries.get(report.id) || null;
     const authorizationSummary =
       currentDailyAuthorizationSummaries.get(report.id) || null;
+    const reportStatus = String(report.status || 'draft').toLowerCase();
+    const canEditDraft = userCanEditDailyReportDraft(report);
 
 
     card.innerHTML = `
@@ -12735,13 +12752,18 @@ async function loadProductionReports(){
               .toUpperCase()
           )}
         </strong>
-        ${String(report.status || 'draft').toLowerCase() === 'draft' ? `
+        ${reportStatus === 'draft' ? (gfReviewWorkspace ? `
+          <div class="daily-draft-guidance">
+            <strong>DRAFT — WAITING FOR FOREMAN</strong><br>
+            This report is read-only for the GF until the Foreman submits it for review.
+          </div>
+        ` : `
           <div class="daily-draft-guidance">
             <strong>DRAFT — NOT SENT FOR REVIEW</strong><br>
             Add units and Crew Time, then click <strong>Submit Report</strong>.
             Leadership cannot approve or return this report until it is submitted.
           </div>
-        ` : ''}
+        `) : ''}
         ${report.storm_mode ? `
           <br>
           Storm Event:
@@ -12762,12 +12784,13 @@ ${report.review_notes ? `
       </div>
     `;
 
+    if(gfReviewWorkspace && reportStatus === 'submitted'){
+      card.open = true;
+    }
+
     const unitsButton = document.createElement('button');
     unitsButton.className = 'secondary small';
-    unitsButton.textContent =
-      String(report.status || 'draft').toLowerCase() === 'draft'
-        ? 'Manage Units'
-        : 'View Units';
+    unitsButton.textContent = canEditDraft ? 'Manage Units' : 'View Units';
     unitsButton.onclick = () => openDailyUnitEditor(report);
     card.appendChild(unitsButton);
 
@@ -12790,9 +12813,7 @@ ${report.review_notes ? `
       toggleDailyReportAttachments(report, card, attachmentsButton);
     card.appendChild(attachmentsButton);
 
-if(
-  String(report.status || 'draft').toLowerCase() === 'draft'
-){
+if(reportStatus === 'draft' && canEditDraft){
 
  const editBtn =
   document.createElement('button');
@@ -13326,9 +13347,11 @@ function dailyReportAuthorizationSummaryMarkup(report, summary){
 async function openDailyUnitEditor(report){
   currentDailyUnitReport = report;
   currentDailyUnitBatchRows = [];
+  const canEditDraft = userCanEditDailyReportDraft(report);
   const doneButton = $('closeDailyUnitEditorBtn');
   doneButton.disabled = false;
-  doneButton.textContent = 'Done Adding Units';
+  doneButton.textContent = canEditDraft ? 'Done Adding Units' : 'Back to Reports';
+  $('dailyUnitEntryControls').classList.toggle('hidden', !canEditDraft);
   $('dailyUnitEditor').classList.remove('hidden');
   $('dailyUnitReportLabel').textContent =
     (report.jobs?.job_number || 'Job') + ' — ' +
@@ -13387,8 +13410,7 @@ function renderDailyUnitEditor(){
         ' added to this report.';
   $('dailyUnitList').innerHTML = '';
 
-  const canEdit =
-    String(currentDailyUnitReport?.status || 'draft').toLowerCase() === 'draft';
+  const canEdit = userCanEditDailyReportDraft(currentDailyUnitReport);
 
   const savedPoles = new Map();
   savedItems.forEach(item => {
@@ -13960,6 +13982,11 @@ function closeDailyUnitEditor(){
 }
 
 $('closeDailyUnitEditorBtn').onclick = async () => {
+  if(!userCanEditDailyReportDraft(currentDailyUnitReport)){
+    closeDailyUnitEditor();
+    return;
+  }
+
   const hasUnsavedLines = currentDailyUnitBatchRows.some(row =>
     row.selectedItem || row.searchInput.value.trim() ||
     row.quantityInput.value.trim()
