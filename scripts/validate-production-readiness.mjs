@@ -167,6 +167,8 @@ assert(timekeepingRoster.includes('if(select.dataset.lcEmployeeOptions===html)re
 assert(timekeeping.includes('window.saveDailyReportCrewTime=async(reportId)'), 'Daily Report crew time must expose an awaited Timekeeping save.');
 assert(index.includes('await window.saveDailyReportCrewTime(savedReportId);'), 'Daily Report save must await Timekeeping before opening unit entry.');
 assert(!timekeeping.includes('setTimeout(() => persistCrewTime'), 'Crew time must not rely on a delayed save race.');
+assert(index.includes('id="dailyRegularHours"\n    class="hidden"'), 'Legacy Daily Report regular-hours input must stay hidden.');
+assert(index.includes('id="dailyOvertimeHours"\n    class="hidden"'), 'Legacy Daily Report overtime-hours input must stay hidden.');
 assert(index.includes('if(requestId !== teamLoadRequest) return;'), 'Team rendering must ignore stale overlapping refreshes.');
 assert(timekeeping.includes('+ Add Extra Man'), 'Foreman Crew Time must provide an explicit extra-man action.');
 assert(timekeeping.includes('tk-crew-group'), 'Leadership employee roster must group crew members by Foreman.');
