@@ -46,6 +46,8 @@ const supervisorJobAssignees = fs.readFileSync('supabase/migrations/202608230247
 const employeeRosterAssignment = fs.readFileSync('supabase/migrations/20260823030000_company_employee_roster_assignment.sql', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
+const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
+const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
@@ -159,6 +161,10 @@ for (const marker of [
 assert(timekeepingReport.includes('if(reportRunInFlight) return reportRunInFlight;'), 'Timekeeping reports must prevent overlapping report runs.');
 assert(timekeepingReport.includes('finally{reportRunInFlight=null;}'), 'Timekeeping report lock must always release after completion.');
 assert(expandedJsa.includes("load('timekeeping-report-v2.js?v=20260823a'"), 'Timekeeping report fix must use a fresh cache-busting version.');
+assert(timekeeping.includes('if(select.dataset.lcEmployeeOptions===html)return;'), 'Crew employee selectors must not rewrite unchanged options.');
+assert(timekeeping.includes("const extra=role()==='foreman'"), 'Base crew options must match Foreman extra-crew labels.');
+assert(timekeepingRoster.includes('if(select.dataset.lcEmployeeOptions===html)return;'), 'Roster overlay must share the stable crew-option signature.');
+assert(expandedJsa.includes("load('timekeeping.js?v=20260823b'"), 'Foreman Production freeze fix must use a fresh Timekeeping cache version.');
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');
@@ -296,3 +302,4 @@ console.log('- Foreman job visibility is assignment-scoped with manager and time
 console.log('- Supervisor job-progress cards list every assigned Foreman / Job Leader');
 console.log('- Field employees are leadership-assigned; Foremen can add extra active crew only on assigned jobs');
 console.log('- Timekeeping reports use a single-flight guard to prevent repeated Run Report loops');
+console.log('- Crew selectors avoid observer feedback loops on the Foreman Production screen');

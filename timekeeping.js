@@ -327,7 +327,11 @@
   }
 
   function employeeOptions(selected){
-    return '<option value="">Select employee</option>'+employees.filter(e=>e.active).map(e=>`<option value="${esc(e.id)}" ${e.id===selected?'selected':''}>${esc(e.full_name)}${e.classification?' — '+esc(e.classification):''}</option>`).join('');
+    const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
+    return '<option value="">Select employee</option>'+employees.filter(e=>e.active).map(e=>{
+      const extra=role()==='foreman' && e.assigned_foreman_id!==viewerId;
+      return `<option value="${esc(e.id)}" ${e.id===selected?'selected':''}>${esc(e.full_name)}${e.classification?' — '+esc(e.classification):''}${extra?' — Extra crew':''}</option>`;
+    }).join('');
   }
 
   function addCrewRow(data={}){
@@ -341,7 +345,14 @@
   }
 
   function refreshCrewEmployeeSelects(){
-    document.querySelectorAll('#dailyCrewTimeRows .tk-employee').forEach(select=>{const selected=select.value;select.innerHTML=employeeOptions(selected);select.value=selected;});
+    document.querySelectorAll('#dailyCrewTimeRows .tk-employee').forEach(select=>{
+      const selected=select.value;
+      const html=employeeOptions(selected);
+      if(select.dataset.lcEmployeeOptions===html)return;
+      select.innerHTML=html;
+      select.value=selected;
+      select.dataset.lcEmployeeOptions=html;
+    });
   }
 
   function collectCrewRows(){
@@ -377,12 +388,12 @@
 
   async function loadCrewRowsForReport(){
     const form=byId('dailyReportForm');if(!form||form.classList.contains('hidden'))return;
-    if(!employees.length) await loadEmployees();
-    refreshCrewEmployeeSelects();
     const reportId=form.dataset.reportId||null;
     const loadKey=reportId||'new';
     if(crewRowsLoadedForReport===loadKey)return;
     crewRowsLoadedForReport=loadKey;
+    if(!employees.length) await loadEmployees();
+    refreshCrewEmployeeSelects();
     const box=byId('dailyCrewTimeRows');if(!box)return;
     box.innerHTML='';
     if(reportId){
