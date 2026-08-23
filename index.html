@@ -2,7 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta id="appViewport" name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>
+(function(){
+  try{
+    if(localStorage.getItem('linecrew-pro-desktop-view') === '1'){
+      document.getElementById('appViewport')
+        .setAttribute('content', 'width=1180,viewport-fit=cover');
+      document.documentElement.classList.add('desktop-view');
+    }
+  }catch(error){
+    // Device storage may be unavailable; keep the normal responsive layout.
+  }
+})();
+</script>
 <meta name="theme-color" content="#071d31">
 <meta name="application-name" content="LineCrew Pro">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1541,7 +1554,12 @@ button:disabled{
       <strong id="userName"></strong><br>
       <span id="userRole" class="role"></span>
     </p>
-    <button id="toggleMyProfile" class="secondary small">Edit My Profile</button>
+    <div class="button-row">
+      <button id="toggleMyProfile" class="secondary small">Edit My Profile</button>
+      <button id="desktopViewToggle" class="secondary small" type="button">
+        Desktop View
+      </button>
+    </div>
     <div id="myProfileEditor" class="job-card hidden">
       <label for="myProfileName">Display Name</label>
       <input id="myProfileName" maxlength="120">
@@ -6797,6 +6815,10 @@ const assistantBuiltInHelp = [
     answer:'Preferred team onboarding: an authorized leader opens Team and chooses Invite Team Member, enters the person’s email, and sends the invitation. The email-bound one-time link opens Create Account & Join Company with the email locked. The invited person enters and confirms a password and is enrolled directly in the inviting company as a Foreman—no Company Code and no company-creation choice. Company Code is only a manual fallback when no invitation is being used.'
   },
   {
+    terms:['desktop view','desktop mode','mobile view','phone layout','wide layout'],
+    answer:'Every LineCrew Pro role can choose Desktop View from the profile card on the Dashboard. The choice is saved on that device and applies to the entire app. Choose Return to Mobile View in the same location to restore the normal responsive phone layout.'
+  },
+  {
     terms:['add job','new job','create job','start job','job setup','import jobs','upload jobs','bulk jobs'],
     answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General Foreman and a Superintendent with Jobs permission use Jobs & Crew Progress. Choose + Create Job, enter the job number/name and correct Contract, then save. There is no separate bulk Job-file import in this release. Utility Job Package authorized-unit import belongs to an existing Job and does not create Jobs. Foremen use Assigned Jobs and see only active jobs assigned to them.'
   },
@@ -7185,6 +7207,38 @@ $('openProductionReview').onclick = async () => {
 $('productionTile').onclick = async () => {
   await navigateToAppPage('productionPage');
 };
+
+function desktopViewEnabled(){
+  try{
+    return localStorage.getItem('linecrew-pro-desktop-view') === '1';
+  }catch(error){
+    return document.documentElement.classList.contains('desktop-view');
+  }
+}
+
+function updateDesktopViewToggle(){
+  const button = $('desktopViewToggle');
+  if(!button) return;
+  const enabled = desktopViewEnabled();
+  button.textContent = enabled ? 'Return to Mobile View' : 'Desktop View';
+  button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+  button.title = enabled
+    ? 'Use the normal responsive mobile layout on this device'
+    : 'Use the full desktop layout on this device';
+}
+
+$('desktopViewToggle').onclick = () => {
+  const enable = !desktopViewEnabled();
+  try{
+    localStorage.setItem('linecrew-pro-desktop-view', enable ? '1' : '0');
+  }catch(error){
+    alert('This device did not allow LineCrew Pro to save the view preference.');
+    return;
+  }
+  window.location.reload();
+};
+
+updateDesktopViewToggle();
 
 $('toggleMyProfile').onclick = () => {
   $('myProfileEditor').classList.remove('hidden');
