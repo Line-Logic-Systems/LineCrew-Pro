@@ -973,11 +973,21 @@ button:disabled{
 }
 
 .mh-rate-number.at-target{
+  color:#166534;
+}
+
+.mh-rate-number.near-target{
   color:#854d0e;
 }
 
 .mh-rate-number.above{
   color:#166534;
+}
+
+.mh-rate-status-text{
+  color:#5f7184;
+  font-size:12px;
+  font-weight:600;
 }
 
 .daily-unit-picker{
@@ -13520,19 +13530,23 @@ function manHourTargetStatus(rate){
   if(!(target > 0) || !Number.isFinite(rate)) return null;
   const ratio = rate / target;
   if(ratio < 0.95) return { key:'below', label:'Below Target', target };
-  if(ratio < 1) return { key:'at-target', label:'Near Target', target };
-  return { key:'above', label:'Meets Target', target };
+  if(ratio < 1) return { key:'near-target', label:'Below Target — Within 5%', target };
+  if(Math.abs(rate - target) < 0.005){
+    return { key:'at-target', label:'At Target', target };
+  }
+  return { key:'above', label:'Above Target', target };
 }
 
 function manHourRateNumberMarkup(rate){
   const status = manHourTargetStatus(rate);
   const className = status ? 'mh-rate-number ' + status.key : 'mh-rate-number';
-  const title = status
+  const statusText = status
     ? status.label + ' · Target ' + formatCurrency(status.target)
-    : '';
-  return '<strong class="' + className + '"' +
-    (title ? ' title="' + escapeHtml(title) + '"' : '') + '>' +
-    escapeHtml(formatCurrency(rate)) + '</strong>';
+    : 'Target Not Set';
+  return '<strong class="' + className + '">' +
+    escapeHtml(formatCurrency(rate)) + '</strong>' +
+    '<span class="mh-rate-status-text"> — ' +
+    escapeHtml(statusText) + '</span>';
 }
 
 function dailyReportAuthorizationSummaryMarkup(report, summary){
