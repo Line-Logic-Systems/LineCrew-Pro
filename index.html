@@ -1642,7 +1642,7 @@ button:disabled{
         Send Team Invitation
       </button>
       <button id="manageFieldEmployeesBtn" class="secondary">
-        Add & Assign Field Employees
+        Manage Foreman Crews
       </button>
       <div class="button-row">
         <strong id="teamJoinCode" class="role"></strong>
@@ -4762,7 +4762,7 @@ async function loadTeamMembers(){
 }
 
 $('manageFieldEmployeesBtn').onclick = () => {
-  if(typeof window.openLineCrewTimekeeping === 'function') window.openLineCrewTimekeeping();
+  if(typeof window.openLineCrewTimekeeping === 'function') window.openLineCrewTimekeeping({ focusRoster:true });
   else alert('Employee roster is still loading. Please try again.');
 };
 
