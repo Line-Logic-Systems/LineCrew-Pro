@@ -2306,22 +2306,30 @@ button:disabled{
     placeholder="Example: Crew 1"
   >
 
-  <label for="dailyRegularHours">Regular Hours</label>
+  <label for="dailyRegularHours" class="hidden">Regular Hours</label>
   <input
     id="dailyRegularHours"
+    class="hidden"
     type="number"
     min="0"
     step="0.25"
     value="0"
+    readonly
+    aria-hidden="true"
+    tabindex="-1"
   >
 
-  <label for="dailyOvertimeHours">OT Hours</label>
+  <label for="dailyOvertimeHours" class="hidden">OT Hours</label>
   <input
     id="dailyOvertimeHours"
+    class="hidden"
     type="number"
     min="0"
     step="0.25"
     value="0"
+    readonly
+    aria-hidden="true"
+    tabindex="-1"
   >
 
   <label for="dailyWeatherConditions">Weather</label>
