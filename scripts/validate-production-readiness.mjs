@@ -252,6 +252,14 @@ assert(index.includes('.daily-review-counts .redline{\n  color:inherit;'), 'Auth
 assert(!index.includes('mh-rate-target'), 'Man-hour target status must not render as a separate colored badge.');
 assert(timekeeping.includes('window.manHourRateNumberMarkup(value)'), 'Production totals must color only the Field MH Run Rate value.');
 for (const marker of [
+  "label:'Below Target'",
+  "label:'Below Target — Within 5%'",
+  "label:'At Target'",
+  "label:'Above Target'",
+  "'Target Not Set'",
+  'mh-rate-status-text'
+]) assert(index.includes(marker), `Expanded MH rate status is missing: ${marker}`);
+for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
   "lower(coalesce(report.status, 'draft')) = 'draft'",
