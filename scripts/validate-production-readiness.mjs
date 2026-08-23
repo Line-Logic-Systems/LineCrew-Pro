@@ -220,6 +220,8 @@ assert(index.includes("ratio < 1"), 'MH rate yellow threshold must stop below th
 assert(index.includes("const foremanEntryWorkspace = role === 'foreman'"), 'Only Foremen may receive the Create Daily Report field-entry action.');
 assert(index.includes("if(role !== 'foreman') return false"), 'Leadership must not receive Foreman draft-editing controls.');
 assert(index.includes("? 'Job Setup & Management'"), 'Owner/Admin Jobs must be labeled as a management workspace.');
+assert(index.includes("' supervisor-compact-report'"), 'Supervisor Production reports must use compact rows for large report volumes.');
+assert(index.includes('jobName + \' · \' + foreman'), 'Compact supervisor rows must identify both the job and Foreman.');
 assert(expandedJsa.includes("load('role-workspace-polish.js?v=20260823a'"), 'Role workspace management labels must use a fresh cache version.');
 assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
 assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');

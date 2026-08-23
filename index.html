@@ -319,6 +319,35 @@ main{
   margin:4px 4px 12px;
 }
 
+.supervisor-compact-report{
+  margin-bottom:6px;
+  border-radius:9px;
+}
+
+.supervisor-compact-report > summary{
+  min-height:42px;
+  padding:7px 12px;
+  gap:8px;
+}
+
+.supervisor-compact-report .report-summary-main{
+  display:grid;
+  grid-template-columns:minmax(90px, 130px) minmax(0, 1fr);
+  align-items:center;
+  gap:8px;
+}
+
+.supervisor-compact-report .report-summary-main strong,
+.supervisor-compact-report .report-summary-main span{
+  display:block;
+  font-size:12px;
+  line-height:1.2;
+}
+
+.supervisor-compact-report .report-summary-meta{
+  font-size:12px;
+}
+
 @media(max-width:600px){
   .compact-report-card > summary{
     grid-template-columns:auto minmax(0, 1fr);
@@ -327,6 +356,11 @@ main{
   .compact-report-card .report-summary-meta{
     grid-column:2;
     text-align:left;
+  }
+
+  .supervisor-compact-report .report-summary-main{
+    grid-template-columns:1fr;
+    gap:2px;
   }
 }
 
@@ -4542,7 +4576,8 @@ function renderSafetyJsas(){
   }
   records.forEach(jsa => {
     const card = document.createElement('details');
-    card.className = 'job-card compact-report-card';
+    card.className = 'job-card compact-report-card' +
+      (foremanEntryWorkspace ? '' : ' supervisor-compact-report');
     card.innerHTML =
       '<summary><div class="report-summary-main"><strong>' +
       escapeHtml(jsa.job_number || 'Job') + '</strong><span>' +
@@ -12769,7 +12804,11 @@ async function loadProductionReports(){
       <summary>
         <div class="report-summary-main">
           <strong>${escapeHtml(jobNumber)}</strong>
-          <span>${escapeHtml(jobName || foreman)}</span>
+          <span>${escapeHtml(
+            jobName
+              ? jobName + ' · ' + foreman
+              : foreman
+          )}</span>
         </div>
         <div class="report-summary-meta">
           ${escapeHtml(report.work_date || 'No date')}
