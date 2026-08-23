@@ -5981,6 +5981,7 @@ async function deleteJobPackage(jobPackage){
 
 async function openJobPackageDetails(jobPackage){
   $('jobPackageImportTools').appendChild($('jobPackageImportForm'));
+  $('cancelJobPackageImportBtn').classList.remove('hidden');
   currentOpenJobPackage = jobPackage;
   $('jobPackageDetailTitle').textContent = jobPackage.package_name;
   refreshOpenJobPackageControls();
@@ -6672,7 +6673,7 @@ $('saveJobPackageBtn').onclick = async()=>{
 
   if(error){
     button.disabled = false;
-    button.textContent = 'Save & Import Authorized Units';
+    button.textContent = 'Save Package & Preview File';
     return alert(error.message);
   }
 
