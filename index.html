@@ -2063,8 +2063,12 @@ button:disabled{
       <label for="billingExportNotes">Batch Notes</label>
       <textarea id="billingExportNotes" rows="2" placeholder="Optional internal billing notes"></textarea>
       <button id="createBillingExportBatchBtn" class="success">Create Billing Batch</button>
-      <button id="downloadCompleteBillingRecordBtn" class="secondary">Download Complete Job Billing Record</button>
-      <p id="completeBillingRecordStatus" class="muted">Creates one ZIP containing the complete Excel and PDF billing history, packet revisions, batch files and billing attachments for the selected job.</p>
+      <div class="button-row">
+        <button id="exportCompleteBillingExcelBtn" class="success">Export Complete Excel</button>
+        <button id="exportCompleteBillingPdfBtn" class="secondary">Export Complete PDF</button>
+        <button id="downloadCompleteBillingArchiveBtn" class="secondary">Download Full Archive</button>
+      </div>
+      <p id="completeBillingRecordStatus" class="muted">Excel and PDF export the complete job billing history. Full Archive adds batch CSV files and every stored billing attachment.</p>
     </div>
 
     <div id="billingBatchDetail" class="hidden">
@@ -8107,14 +8111,19 @@ function downloadGeneratedBlob(blob,filename){
   setTimeout(()=>URL.revokeObjectURL(link.href),1000);
 }
 
-async function downloadCompleteJobBillingRecord(){
+async function downloadCompleteJobBillingRecord(exportType='archive'){
   const jobId=$('billingExportJob').value;
   if(!jobId) return alert('Select the job whose complete billing record you want to download.');
-  if(typeof XLSX==='undefined' || typeof JSZip==='undefined' || typeof PDFLib==='undefined') return alert('The archive libraries did not load. Refresh the page and try again.');
+  if(typeof XLSX==='undefined' || typeof PDFLib==='undefined' || (exportType==='archive' && typeof JSZip==='undefined')) return alert('The export libraries did not load. Refresh the page and try again.');
   const job=currentJobsCatalog.find(item=>String(item.id)===String(jobId));
-  const button=$('downloadCompleteBillingRecordBtn');
+  const buttons={
+    excel:$('exportCompleteBillingExcelBtn'),
+    pdf:$('exportCompleteBillingPdfBtn'),
+    archive:$('downloadCompleteBillingArchiveBtn')
+  };
+  const button=buttons[exportType] || buttons.archive;
   const status=$('completeBillingRecordStatus');
-  button.disabled=true;
+  Object.values(buttons).forEach(item=>item.disabled=true);
   const setProgress=text=>{ button.textContent=text; status.textContent=text; };
   try{
     setProgress('Loading complete billing history...');
@@ -8143,7 +8152,7 @@ async function downloadCompleteJobBillingRecord(){
       batchRecords.push({batch,lines:linesResult.data || [],attachments:attachmentsResult.data || []});
     }
 
-    const zip=new JSZip();
+    const zip=exportType==='archive' ? new JSZip() : null;
     const workbook=XLSX.utils.book_new();
     const usedSheets=new Set();
     const batchHistory=batches.map(batch=>({
@@ -8175,9 +8184,16 @@ async function downloadCompleteJobBillingRecord(){
     batchRecords.forEach(({batch,lines})=>{
       const rows=completeBillingRows(batch,lines);
       XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(rows.length?rows:[{'Batch Number':batch.batch_number,'Status':'No unit lines'}]),completeBillingSheetName(billingStageLabel(batch),usedSheets));
-      zip.file('Batches/'+completeBillingSafeName(billingStageLabel(batch)+'-'+batch.batch_number)+'.csv',completeBillingCsv(rows));
+      if(zip) zip.file('Batches/'+completeBillingSafeName(billingStageLabel(batch)+'-'+batch.batch_number)+'.csv',completeBillingCsv(rows));
     });
-    zip.file('LineCrew-Pro-Complete-Billing-Record.xlsx',XLSX.write(workbook,{bookType:'xlsx',type:'array'}));
+    const workbookBytes=XLSX.write(workbook,{bookType:'xlsx',type:'array'});
+    const fileStem='linecrew-complete-billing-record-'+completeBillingSafeName(job?.job_number || batches[0]?.job_number || 'job')+'-'+new Date().toISOString().slice(0,10);
+    if(exportType==='excel'){
+      downloadGeneratedBlob(new Blob([workbookBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fileStem+'.xlsx');
+      status.textContent='Complete Excel billing record downloaded.';
+      return;
+    }
+    zip.file('LineCrew-Pro-Complete-Billing-Record.xlsx',workbookBytes);
 
     setProgress('Creating combined PDF record...');
     const pdf=await PDFLib.PDFDocument.create();
@@ -8209,7 +8225,13 @@ async function downloadCompleteJobBillingRecord(){
     });
     pdfLine('Utility Packet Revision History',{bold:true,size:12,gap:18});
     packages.forEach(item=>pdfLine('Revision '+Number(item.revision_number || 1)+' | '+(item.package_name || item.package_number || 'Utility Job Packet')+' | '+String(item.status || '').toUpperCase()+' | '+(item.source_filename || 'No source filename'),{size:8}));
-    zip.file('LineCrew-Pro-Complete-Billing-Record.pdf',await pdf.save());
+    const pdfBytes=await pdf.save();
+    if(exportType==='pdf'){
+      downloadGeneratedBlob(new Blob([pdfBytes],{type:'application/pdf'}),fileStem+'.pdf');
+      status.textContent='Complete PDF billing record downloaded.';
+      return;
+    }
+    zip.file('LineCrew-Pro-Complete-Billing-Record.pdf',pdfBytes);
 
     const attachmentErrors=[];
     let attachmentNumber=0;
@@ -8232,12 +8254,14 @@ async function downloadCompleteJobBillingRecord(){
       attachmentErrors.length?'Attachment download issues:\n'+attachmentErrors.join('\n'):'All stored billing attachments were included successfully.'].join('\n'));
     setProgress('Compressing complete billing record...');
     const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
-    downloadGeneratedBlob(blob,'linecrew-complete-billing-record-'+completeBillingSafeName(job?.job_number || batches[0]?.job_number || 'job')+'-'+new Date().toISOString().slice(0,10)+'.zip');
+    downloadGeneratedBlob(blob,fileStem+'.zip');
     status.textContent='Complete billing record downloaded'+(attachmentErrors.length?' with '+attachmentErrors.length+' attachment warning(s) listed in the manifest.':'.');
   }catch(error){
     status.textContent='Unable to create complete billing record: '+(error?.message || error); alert(status.textContent);
   }finally{
-    button.disabled=false; button.textContent='Download Complete Job Billing Record';
+    buttons.excel.disabled=false; buttons.excel.textContent='Export Complete Excel';
+    buttons.pdf.disabled=false; buttons.pdf.textContent='Export Complete PDF';
+    buttons.archive.disabled=false; buttons.archive.textContent='Download Full Archive';
   }
 }
 
@@ -8252,7 +8276,9 @@ $('markBillingPaidBtn').onclick = () => setBillingBatchStatus('paid');
 $('voidBillingBatchBtn').onclick = () => setBillingBatchStatus('void');
 $('saveBillingBatchDetailsBtn').onclick = saveBillingBatchDetails;
 $('createBillingCreditBtn').onclick = createBillingCredit;
-$('downloadCompleteBillingRecordBtn').onclick = downloadCompleteJobBillingRecord;
+$('exportCompleteBillingExcelBtn').onclick = () => downloadCompleteJobBillingRecord('excel');
+$('exportCompleteBillingPdfBtn').onclick = () => downloadCompleteJobBillingRecord('pdf');
+$('downloadCompleteBillingArchiveBtn').onclick = () => downloadCompleteJobBillingRecord('archive');
 $('billingExportJob').addEventListener('change',()=>loadBillingReconciliation());
 $('backToBillingHistoryBtn').onclick = () => {
   currentBillingBatch = null;
