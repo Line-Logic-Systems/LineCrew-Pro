@@ -138,11 +138,12 @@
   }
 
   function assignedOptions(selected=''){
-    const active = roster.filter(e=>e.active);
-    return '<option value="">Select employee</option>'+active.map(e=>{
-      const extra=e.assigned_foreman_id!==userId();
-      return `<option value="${esc(e.id)}" ${e.id===selected?'selected':''}>${esc(e.full_name)}${e.classification?' — '+esc(e.classification):''}${extra?' — Extra crew':''}</option>`;
-    }).join('');
+    const option=(e,extra)=>`<option value="${esc(e.id)}" ${e.id===selected?'selected':''}>${esc(e.full_name)}${e.classification?' — '+esc(e.classification):''}${extra?' — Extra crew':''}</option>`;
+    const mine=roster.filter(e=>e.active&&e.assigned_foreman_id===userId());
+    const extra=roster.filter(e=>e.active&&e.assigned_foreman_id!==userId());
+    return '<option value="">Select employee</option>'+
+      (mine.length?'<optgroup label="My Assigned Crew">'+mine.map(e=>option(e,false)).join('')+'</optgroup>':'')+
+      (extra.length?'<optgroup label="Extra Company Employees">'+extra.map(e=>option(e,true)).join('')+'</optgroup>':'');
   }
 
   function restrictDailySelectors(){
@@ -166,9 +167,15 @@
     const key=form.dataset.reportId||`new:${byId('dailyJobId')?.value||''}:${byId('dailyWorkDate')?.value||''}`;
     if(lastAutoLoadKey===key){restrictDailySelectors();return;}
     await loadRoster();
-    if(!assigned.length){lastAutoLoadKey=key;restrictDailySelectors();return;}
+    if(!assigned.length){
+      if(!form.dataset.reportId) rowsBox.replaceChildren();
+      lastAutoLoadKey=key;
+      restrictDailySelectors();
+      return;
+    }
     await new Promise(resolve=>setTimeout(resolve,220));
-    if(rowsBox.querySelector('.tk-crew-row')){lastAutoLoadKey=key;restrictDailySelectors();return;}
+    if(form.dataset.reportId && rowsBox.querySelector('.tk-crew-row')){lastAutoLoadKey=key;restrictDailySelectors();return;}
+    rowsBox.replaceChildren();
     assigned.forEach(employee=>{
       addButton.click();
       const selects=[...rowsBox.querySelectorAll('.tk-employee')];
