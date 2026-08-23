@@ -1622,7 +1622,7 @@ button:disabled{
       <label for="teamInviteEmail">Team Member Email</label>
       <input id="teamInviteEmail" type="email" autocomplete="email" placeholder="name@company.com">
       <button id="emailTeamInviteBtn" class="success">
-        Email Team Invitation
+        Send Team Invitation
       </button>
       <div class="button-row">
         <strong id="teamJoinCode" class="role"></strong>
@@ -4383,7 +4383,7 @@ $('copyJoinCodeBtn').onclick = async () => {
   }
 };
 
-$('emailTeamInviteBtn').onclick = () => {
+$('emailTeamInviteBtn').onclick = async () => {
   if(!userCanManageTeam() || !currentCompany?.join_code){
     return;
   }
@@ -4394,25 +4394,24 @@ $('emailTeamInviteBtn').onclick = () => {
     return;
   }
 
-  const companyName = currentCompany?.name || 'our company';
-  const subject = 'You’re invited to join ' + companyName + ' in LineCrew Pro';
-  const body = [
-    'You have been invited to join ' + companyName + ' in LineCrew Pro.',
-    '',
-    '1. Open https://app.linecrewpro.com/',
-    '2. Create your account using this email address.',
-    '3. After confirming your email, choose Join Existing Company.',
-    '4. Enter your name and this company code: ' + currentCompany.join_code,
-    '',
-    'New members begin as Foreman. The company Owner or Admin can update your role after you join.',
-    '',
-    'Do not forward this invitation or company code.'
-  ].join('\n');
+  const button = $('emailTeamInviteBtn');
+  button.disabled = true;
+  button.textContent = 'Sending...';
 
-  window.location.href =
-    'mailto:' + encodeURIComponent(email) +
-    '?subject=' + encodeURIComponent(subject) +
-    '&body=' + encodeURIComponent(body);
+  const { error } = await sb.functions.invoke('send-team-invitation', {
+    body: { email }
+  });
+
+  button.disabled = false;
+  button.textContent = 'Send Team Invitation';
+
+  if(error){
+    alert('Unable to send the invitation. Confirm the email address and try again.');
+    return;
+  }
+
+  $('teamInviteEmail').value = '';
+  alert('Invitation sent from invites@auth.linecrewpro.com.');
 };
 
 $('rotateJoinCodeBtn').onclick = async () => {

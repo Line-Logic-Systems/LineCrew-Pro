@@ -8,6 +8,7 @@ const mustExist = [
   'vercel.json',
   'scripts/validate-app.mjs',
   'supabase/functions/linecrew-assistant/index.ts',
+  'supabase/functions/send-team-invitation/index.ts',
   'supabase/migrations/20260818_owner_superintendent_roles.sql',
   'supabase/migrations/20260818_owner_superintendent_team_access.sql',
   'supabase/migrations/202608190100_owner_legacy_compatibility.sql',
@@ -23,6 +24,7 @@ for (const file of mustExist) assert(fs.existsSync(file), `Missing ${file}`);
 const index = fs.readFileSync('index.html', 'utf8');
 const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
 const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts', 'utf8');
+const teamInvitation = fs.readFileSync('supabase/functions/send-team-invitation/index.ts', 'utf8');
 const roleMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_roles.sql', 'utf8');
 const accessMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_team_access.sql', 'utf8');
 const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', 'utf8');
@@ -57,6 +59,17 @@ assert(assistant.includes('store: false'), 'AI responses must disable OpenAI app
 assert(assistant.includes('history.slice(-10)'), 'AI assistant must bound conversational history.');
 assert(index.includes("function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }"), 'AI assistant launcher must be Owner/Admin-only.');
 assert(!index.includes("['ai_assistant','AI Assistant']"), 'AI assistant must not be configurable as a Superintendent capability.');
+
+assert(teamInvitation.includes('Deno.env.get("RESEND_API_KEY")'), 'Team invitation sender must use the server-side Resend secret.');
+assert(teamInvitation.includes('client.auth.getUser()'), 'Team invitation sender must authenticate the caller.');
+assert(teamInvitation.includes('.select("company_id, role, role_permissions, active")'), 'Team invitation sender must load company authorization server-side.');
+assert(teamInvitation.includes('profile.active !== true'), 'Team invitation sender must reject suspended profiles.');
+assert(teamInvitation.includes('permissions.team_management !== false'), 'Superintendent team invitations must respect the team-management capability.');
+assert(teamInvitation.includes('.eq("id", profile.company_id)'), 'Team invitation company data must be derived from the caller profile.');
+assert(teamInvitation.includes('LineCrew Pro <invites@auth.linecrewpro.com>'), 'Team invitations must use the verified app sender.');
+assert(teamInvitation.includes('reply_to: "support@linecrewpro.com"'), 'Team invitations need the company support reply-to address.');
+assert(!teamInvitation.includes('SUPABASE_SERVICE_ROLE_KEY'), 'Team invitation sender must not bypass RLS with a service-role key.');
+assert(index.includes("sb.functions.invoke('send-team-invitation'"), 'Team invitation button must invoke the secured server sender.');
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');
@@ -137,8 +150,7 @@ for (const marker of [
 
 for (const marker of [
   'id="emailTeamInviteBtn"',
-  'https://app.linecrewpro.com/',
-  'Do not forward this invitation or company code.',
+  'Invitation sent from invites@auth.linecrewpro.com.',
   'id="newPriceBookImportFile"',
   'Save Price Book &amp; Continue',
   'await handlePriceBookImportFile(selectedImportFile)',
@@ -163,4 +175,4 @@ console.log('- Contracts and JSA RPC access gaps are tracked and capability-gate
 console.log('- Superintendent Customers & Contracts table writes are company-scoped and capability-gated');
 console.log('- Actual pricing remains independently gated');
 console.log('- Team, job, package, reporting, storm and assistant UI capability wiring present');
-console.log('- Email team invitation and first-run Price Book upload workflows present');
+console.log('- Authenticated Resend team invitations and first-run Price Book uploads present');
