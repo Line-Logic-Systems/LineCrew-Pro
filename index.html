@@ -5031,6 +5031,7 @@ async function loadJobs(){
   currentJobsCatalog = jobs;
 
   const canViewJobPackages = userCanUseReporting() || userCanManageJobPackages();
+  const canManageJobAssignments = userCanManageJobs();
 
   if(canViewJobPackages){
     const {
@@ -5055,10 +5056,16 @@ async function loadJobs(){
       (jobProgress || []).map(progress => [progress.job_id, progress])
     );
 
+  }else{
+    currentJobPackageCatalog = [];
+    currentJobProgressSummaries = new Map();
+  }
+
+  if(canManageJobAssignments){
     const { data:leaders, error:leadersError } =
       await sb.rpc('get_assignable_job_leaders');
     if(leadersError){
-      alert('Unable to load assignable job leaders: ' + leadersError.message);
+      alert('Unable to load assignable Foremen: ' + leadersError.message);
       return;
     }
     currentJobAssignableLeaders = leaders || [];
@@ -5066,7 +5073,7 @@ async function loadJobs(){
     const { data:assignments, error:assignmentsError } =
       await sb.rpc('get_job_leader_assignments');
     if(assignmentsError){
-      alert('Unable to load job leader assignments: ' + assignmentsError.message);
+      alert('Unable to load job assignments: ' + assignmentsError.message);
       return;
     }
     currentJobLeaderAssignments = new Map();
@@ -5076,8 +5083,6 @@ async function loadJobs(){
       currentJobLeaderAssignments.set(assignment.job_id, list);
     });
   }else{
-    currentJobPackageCatalog = [];
-    currentJobProgressSummaries = new Map();
     currentJobAssignableLeaders = [];
     currentJobLeaderAssignments = new Map();
   }
@@ -5498,13 +5503,13 @@ function renderJobLeaderAssignments(job, container){
   container.replaceChildren();
 
   const title = document.createElement('strong');
-  title.textContent = 'Assigned Job Leaders';
+  title.textContent = 'Assigned Foremen / Job Leaders';
   container.appendChild(title);
 
   const help = document.createElement('p');
   help.className = 'muted';
   help.textContent =
-    'Assign responsibility without restricting anyone’s current job access.';
+    'Foremen can only see and report against jobs assigned to them. Every assignment change is recorded.';
   container.appendChild(help);
 
   if(assignments.length === 0){
@@ -5519,9 +5524,14 @@ function renderJobLeaderAssignments(job, container){
     row.className = 'job-leader-row';
 
     const name = document.createElement('span');
+    const assignmentDetail = assignment.assigned_at
+      ? '<br><span class="muted">Assigned by ' +
+        escapeHtml(assignment.assigned_by_name || 'Unknown Team Member') +
+        ' on ' + escapeHtml(formatAuditTimestamp(assignment.assigned_at)) + '</span>'
+      : '';
     name.innerHTML =
       '<strong>' + escapeHtml(assignment.full_name) + '</strong> · ' +
-      escapeHtml(formatTeamRole(assignment.member_role));
+      escapeHtml(formatTeamRole(assignment.member_role)) + assignmentDetail;
 
     const remove = document.createElement('button');
     remove.className = 'small danger';
@@ -5564,6 +5574,58 @@ function renderJobLeaderAssignments(job, container){
     controls.appendChild(assign);
     container.appendChild(controls);
   }
+
+  const historyButton = document.createElement('button');
+  historyButton.className = 'small secondary';
+  historyButton.textContent = 'View Assignment History';
+  historyButton.onclick = () => toggleJobAssignmentHistory(
+    job,
+    container,
+    historyButton
+  );
+  container.appendChild(historyButton);
+}
+
+async function toggleJobAssignmentHistory(job, container, button){
+  const existing = container.querySelector('.job-assignment-history');
+  if(existing){
+    existing.remove();
+    button.textContent = 'View Assignment History';
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = 'Loading History...';
+  const { data, error } = await sb.rpc('get_job_assignment_history', {
+    p_job_id:job.id
+  });
+  button.disabled = false;
+
+  if(error){
+    button.textContent = 'View Assignment History';
+    alert('Unable to load assignment history: ' + error.message);
+    return;
+  }
+
+  button.textContent = 'Hide Assignment History';
+  const history = document.createElement('div');
+  history.className = 'job-assignment-history';
+  if(!data?.length){
+    history.innerHTML =
+      '<p class="muted">No assignment changes have been recorded yet.</p>';
+  }else{
+    history.innerHTML = data.map(event => {
+      const action = event.action === 'unassigned' ? 'Unassigned' : 'Assigned';
+      return '<div class="daily-history-event"><strong>' +
+        escapeHtml(action + ': ' + (event.member_name || 'Unknown Team Member')) +
+        '</strong><br><span>By ' +
+        escapeHtml(event.actor_name || 'Unknown Team Member') +
+        '</span><br><span class="muted">' +
+        escapeHtml(formatAuditTimestamp(event.event_at)) +
+        '</span></div>';
+    }).join('');
+  }
+  container.appendChild(history);
 }
 
 async function changeJobLeaderAssignment(job, memberId, assigned){
