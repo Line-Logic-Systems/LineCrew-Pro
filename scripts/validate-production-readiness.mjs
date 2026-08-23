@@ -225,8 +225,10 @@ assert(index.includes("created_by,\n      work_date"), 'Production report loadin
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
 assert(index.includes('expanded-jsa.js?v=20260823g'), 'The current workflow release must use a fresh cache-busted script version.');
 assert(index.includes("Importing the package's authorized units lets LineCrew Pro distinguish") && index.includes('normal authorized production from redlines, reconcile Pending Packet'), 'Job-package setup must explain why authorized-unit import matters.');
-assert(index.includes('Save &amp; Import Authorized Units'), 'Job-package save must name the automatic authorized-unit import workflow.');
-assert(index.includes('setJobPackageImportOpen(true)'), 'Saving a utility package must open its authorized-unit import section.');
+assert(index.includes('id="jobPackageInlineImportMount"'), 'Job-package setup must include the inline packet-upload area.');
+assert(index.includes('Save Package &amp; Preview File'), 'Job-package save must name the inline file-preview workflow.');
+assert(index.includes("$('jobPackageInlineImportMount').appendChild($('jobPackageImportForm'))"), 'Adding a utility package must place file selection and mapping inside the same package box.');
+assert(index.includes("return alert('Choose the Excel or CSV job packet file in this box.')"), 'Saving a utility package must require the inline packet file.');
 
 for (const marker of [
   'required_man_hour_rate numeric(12,2)',
