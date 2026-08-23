@@ -150,7 +150,10 @@
     document.querySelectorAll('#dailyCrewTimeRows .tk-employee').forEach(select=>{
       const selected=select.value;
       const html=assignedOptions(selected);
-      if(select.innerHTML!==html){select.innerHTML=html;select.value=selected;}
+      if(select.dataset.lcEmployeeOptions===html)return;
+      select.innerHTML=html;
+      select.value=selected;
+      select.dataset.lcEmployeeOptions=html;
     });
   }
 
