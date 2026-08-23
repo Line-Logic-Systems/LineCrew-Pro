@@ -13437,6 +13437,10 @@ function renderDailyUnitEditor(){
       ? '<div class="daily-authorization-note">' +
         escapeHtml(item.authorization_note) + '</div>'
       : '';
+    const savedWorkType = inferDailyUnitWorkType(item);
+    const installQuantityLabel = savedWorkType === 'transfer'
+      ? 'Transferred'
+      : 'Installed';
     row.innerHTML = `
       <div>
         <div class="daily-unit-code">${escapeHtml(item.item_code)}</div>
@@ -13452,7 +13456,7 @@ function renderDailyUnitEditor(){
         ${authorizationNote}
       </div>
       <div>
-        <label>Installed</label>
+        <label>${installQuantityLabel}</label>
         <input class="daily-install-quantity" type="number" min="0" step="0.01"
           value="${escapeHtml(item.install_quantity || 0)}" ${canEdit ? '' : 'disabled'}>
       </div>
@@ -13530,6 +13534,7 @@ function createDailyUnitBatchRow(){
         <select class="daily-batch-action">
           <option value="install">Install</option>
           <option value="retirement">Remove / Retirement</option>
+          <option value="transfer">Transfer</option>
         </select>
       </div>
       <div>
@@ -13668,13 +13673,43 @@ function normalizeDailyUnitSearch(value){
 function selectDailyBatchUnit(row, item){
   row.selectedItem = item;
   row.searchInput.value = item.item_code;
+  const inferredWorkType = inferDailyUnitWorkType(item);
+  row.actionInput.value = inferredWorkType;
   row.suggestions.classList.add('hidden');
   row.selection.innerHTML =
     '<strong>Selected:</strong> ' + escapeHtml(shortDailyUnitLabel(item)) +
     ' <details><summary>View Description</summary><div class="muted">' +
     escapeHtml(item.description || item.item_name || 'No description') +
-    '</div></details>';
+    '</div></details><div class="muted">Work type set to <strong>' +
+    escapeHtml(dailyUnitWorkTypeLabel(inferredWorkType)) + '</strong></div>';
   row.quantityInput.focus();
+}
+
+function inferDailyUnitWorkType(item){
+  const code = String(item?.item_code || '').trim().toUpperCase();
+  const suffix = code.slice(-1);
+  const installPrice = Number(
+    item?.install_price ?? item?.actual_install_price ?? item?.adjusted_install_price ?? 0
+  );
+  const retirementPrice = Number(
+    item?.retirement_price ?? item?.actual_retirement_price ??
+    item?.adjusted_retirement_price ?? 0
+  );
+
+  if(suffix === 'T' && installPrice > 0 && retirementPrice === 0) return 'transfer';
+  if(retirementPrice > 0 && installPrice === 0) return 'retirement';
+  if(installPrice > 0 && retirementPrice === 0){
+    return suffix === 'T' ? 'transfer' : 'install';
+  }
+  if(suffix === 'R') return 'retirement';
+  if(suffix === 'T') return 'transfer';
+  return 'install';
+}
+
+function dailyUnitWorkTypeLabel(workType){
+  if(workType === 'retirement') return 'Remove / Retirement';
+  if(workType === 'transfer') return 'Transfer';
+  return 'Install';
 }
 
 async function saveDailyUnitBatch(options = {}){
