@@ -80,7 +80,7 @@
   });
   load('timekeeping.js?v=20260823a', () => {
     load('timekeeping-roster.js?v=20260823a');
-    load('timekeeping-report-v2.js?v=20260820b', () => {
+    load('timekeeping-report-v2.js?v=20260823a', () => {
       load('timekeeping-polish.js?v=20260820a');
       load('timekeeping-payroll.js?v=20260820a');
     });
