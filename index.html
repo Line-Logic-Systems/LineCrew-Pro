@@ -1040,6 +1040,21 @@ button:disabled{
   background:#94a3b8;
 }
 
+.job-package-inline-mode{
+  margin:12px 0 0;
+  padding:12px 0 0;
+  border:0;
+  border-top:1px solid var(--border);
+  border-radius:0;
+  box-shadow:none;
+  background:transparent;
+}
+
+.job-package-inline-file{
+  margin:0 0 10px;
+  font-weight:700;
+}
+
 #productionFiltersCard .price-book-filter-grid{
   display:grid;
   grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
@@ -1940,6 +1955,7 @@ button:disabled{
 
   </div>
 
+  <div id="jobPackageFormHome"></div>
   <div id="jobPackageFormCard" class="card hidden">
     <h2>Add Utility Job Package</h2>
 
@@ -5714,8 +5730,8 @@ function renderJob(job){
   if(userCanManageJobPackages()){
     const packageButton = document.createElement('button');
     packageButton.className = 'small success';
-    packageButton.textContent = '+ Add Utility Package';
-    packageButton.onclick = ()=> showJobPackageForm(job);
+    packageButton.textContent = '+ Add Job Packet';
+    packageButton.onclick = ()=> chooseJobPacketFileForJob(job);
     actions.appendChild(packageButton);
   }
 
@@ -6562,6 +6578,8 @@ $('confirmJobPackageImportBtn').onclick = async()=>{
   if(inlineCreation){
     delete $('jobPackageFormCard').dataset.jobId;
     $('jobPackageImportTools').appendChild($('jobPackageImportForm'));
+    $('jobPackageFormHome').after($('jobPackageFormCard'));
+    $('jobPackageFormCard').classList.remove('job-package-inline-mode');
     $('jobPackageFormCard').classList.add('hidden');
     await loadJobs();
     const selectedJob = currentJobsCatalog.find(
@@ -6575,13 +6593,40 @@ $('confirmJobPackageImportBtn').onclick = async()=>{
 };
 
 
-function showJobPackageForm(selectedJob = null){
+function chooseJobPacketFileForJob(job){
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = '.csv,.tsv,.txt,.xlsx,.xls,.ods';
+  fileInput.onchange = async () => {
+    const file = fileInput.files?.[0];
+    if(!file) return;
+    showJobPackageForm(job, { inline:true, fileName:file.name });
+    await handleJobPackageImportFile(file);
+  };
+  fileInput.click();
+}
+
+function showJobPackageForm(selectedJob = null, options = {}){
   const activeJobs = currentJobsCatalog.filter(job => job.active === true);
   if(activeJobs.length === 0){
     return alert(
       'Create an active job tied to a contract before adding a Utility Package.'
     );
   }
+
+  const formCard = $('jobPackageFormCard');
+  $('jobPackageFormHome').after(formCard);
+  formCard.classList.remove('job-package-inline-mode');
+  formCard.querySelector('h2').classList.remove('hidden');
+  formCard.querySelector(':scope > p').classList.remove('hidden');
+  ['jobPackageJob','jobPackageName','jobPackageNumber',
+   'jobPackageReceivedDate','jobPackageNotes'].forEach(id => {
+    $(id).classList.remove('hidden');
+    formCard.querySelector('label[for="' + id + '"]')?.classList.remove('hidden');
+  });
+  formCard.querySelector('label[for="jobPackageImportFile"]')?.classList.remove('hidden');
+  $('jobPackageImportFile').classList.remove('hidden');
+  formCard.querySelector('.job-package-inline-file')?.remove();
 
   const jobSelect = $('jobPackageJob');
   jobSelect.innerHTML = '<option value="">Select an existing job</option>';
@@ -6629,15 +6674,44 @@ function showJobPackageForm(selectedJob = null){
   $('saveJobPackageBtn').classList.remove('hidden');
   $('saveJobPackageBtn').disabled = false;
   $('saveJobPackageBtn').textContent = 'Save Package & Preview File';
-  $('jobPackageFormCard').classList.remove('hidden');
-  jobSelect.focus();
-  $('jobPackageFormCard').scrollIntoView({ behavior:'smooth' });
+  formCard.classList.remove('hidden');
+
+  if(options.inline === true && selectedJob){
+    const packageContainer = document.getElementById('job-packages-' + selectedJob.id);
+    if(packageContainer){
+      packageContainer.appendChild(formCard);
+      formCard.classList.add('job-package-inline-mode');
+    }
+    formCard.querySelector('h2').classList.add('hidden');
+    formCard.querySelector(':scope > p').classList.add('hidden');
+    ['jobPackageJob','jobPackageName','jobPackageNumber',
+     'jobPackageReceivedDate','jobPackageNotes'].forEach(id => {
+      $(id).classList.add('hidden');
+      formCard.querySelector('label[for="' + id + '"]')?.classList.add('hidden');
+    });
+    formCard.querySelector('label[for="jobPackageImportFile"]')?.classList.add('hidden');
+    $('jobPackageImportFile').classList.add('hidden');
+    const fileStatus = document.createElement('div');
+    fileStatus.className = 'job-package-inline-file';
+    fileStatus.textContent =
+      'Job Packet: ' + String(options.fileName || 'Selected file');
+    $('jobPackageInlineImportMount').prepend(fileStatus);
+    $('cancelJobPackageBtn').textContent = 'Cancel Packet Upload';
+    $('saveJobPackageBtn').textContent = 'Preview This Job Packet';
+  }else{
+    $('cancelJobPackageBtn').textContent = 'Cancel';
+  }
+
+  (options.inline ? $('jobMapWorkPoint') : jobSelect).focus();
+  formCard.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
 $('cancelJobPackageBtn').onclick = ()=>{
   delete $('jobPackageFormCard').dataset.jobId;
   resetJobPackageImport();
   $('jobPackageImportTools').appendChild($('jobPackageImportForm'));
+  $('jobPackageFormHome').after($('jobPackageFormCard'));
+  $('jobPackageFormCard').classList.remove('job-package-inline-mode');
   $('jobPackageFormCard').classList.add('hidden');
 };
 
