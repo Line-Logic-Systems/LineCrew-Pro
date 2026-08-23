@@ -242,8 +242,10 @@
     if(!box) return;
     if(!employees.length){box.innerHTML='<p class="muted">No employees have been added yet.</p>';return;}
     const foremanOptions=(selected)=>'<option value="">Unassigned</option>'+foremen.map(f=>`<option value="${esc(f.id)}" ${f.id===selected?'selected':''}>${esc(f.full_name||'Foreman')}</option>`).join('');
-    box.innerHTML = `<div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Default Crew</th><th>Assigned Foreman</th><th>Status</th><th></th></tr></thead><tbody>${employees.map(e=>`
-      <tr><td data-label="Employee"><strong>${esc(e.full_name)}</strong></td><td data-label="#">${esc(e.employee_number || '')}</td><td data-label="Classification">${esc(e.classification || '')}</td><td data-label="Default Crew">${esc(e.default_crew_name || '')}</td><td data-label="Assigned Foreman"><select data-tk-foreman="${esc(e.id)}" ${e.active?'':'disabled'}>${foremanOptions(e.assigned_foreman_id)}</select></td><td data-label="Status">${e.active ? 'Active':'Inactive'}</td><td data-label="Action" class="tk-row-actions"><button class="secondary small" data-tk-toggle="${esc(e.id)}" data-active="${e.active ? '0':'1'}">${e.active ? 'Deactivate':'Activate'}</button></td></tr>`).join('')}</tbody></table></div>`;
+    const employeeRows=(group)=>group.map(e=>`<tr><td data-label="Employee"><strong>${esc(e.full_name)}</strong></td><td data-label="#">${esc(e.employee_number || '')}</td><td data-label="Classification">${esc(e.classification || '')}</td><td data-label="Default Crew">${esc(e.default_crew_name || '')}</td><td data-label="Assigned Foreman"><select data-tk-foreman="${esc(e.id)}" ${e.active?'':'disabled'}>${foremanOptions(e.assigned_foreman_id)}</select></td><td data-label="Status">${e.active ? 'Active':'Inactive'}</td><td data-label="Action" class="tk-row-actions"><button class="secondary small" data-tk-toggle="${esc(e.id)}" data-active="${e.active ? '0':'1'}">${e.active ? 'Deactivate':'Activate'}</button></td></tr>`).join('');
+    const crewGroups=foremen.map(f=>({name:f.full_name||'Foreman',members:employees.filter(e=>e.assigned_foreman_id===f.id)}));
+    crewGroups.push({name:'Unassigned Employees',members:employees.filter(e=>!e.assigned_foreman_id)});
+    box.innerHTML=crewGroups.map(group=>`<details class="job-card tk-crew-group"><summary><strong>${esc(group.name)}</strong> — ${group.members.length} crew member${group.members.length===1?'':'s'}</summary>${group.members.length?`<div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Default Crew</th><th>Assigned Foreman</th><th>Status</th><th></th></tr></thead><tbody>${employeeRows(group.members)}</tbody></table></div>`:'<p class="muted">No employees assigned.</p>'}</details>`).join('');
     box.querySelectorAll('[data-tk-toggle]').forEach(btn => btn.onclick = () => toggleEmployee(btn.dataset.tkToggle, btn.dataset.active === '1'));
     box.querySelectorAll('[data-tk-foreman]').forEach(select => select.onchange = () => assignEmployee(select.dataset.tkForeman,select.value));
   }
@@ -306,7 +308,7 @@
     const card = document.createElement('div');
     card.id='dailyCrewTimeCard';
     card.className='tk-crew-card';
-    card.innerHTML=`<h3>Crew Time</h3><p class="tk-help">Your assigned crew loads automatically. Use Add Crew Member for extra employees helping your crew today. Daily Report totals update automatically.</p><div id="dailyCrewTimeRows"></div><div class="tk-inline-actions"><button id="dailyAddCrewMember" type="button" class="secondary small">+ Add Crew Member</button><span id="dailyCrewTimeTotals" class="muted"></span></div>`;
+    card.innerHTML=`<h3>Crew Time</h3><p class="tk-help">Your assigned crew loads automatically. Use Add Extra Man for another active company employee helping your crew today. Daily Report totals update automatically.</p><div id="dailyCrewTimeRows"></div><div class="tk-inline-actions"><button id="dailyAddCrewMember" type="button" class="secondary small">+ Add Extra Man</button><span id="dailyCrewTimeTotals" class="muted"></span></div>`;
     const notes = byId('dailyNotes');
     if(notes?.parentElement) notes.parentElement.insertBefore(card, notes);
     else form.appendChild(card);
