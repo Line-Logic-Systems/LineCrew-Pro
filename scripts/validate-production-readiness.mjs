@@ -20,6 +20,7 @@ const mustExist = [
   'supabase/migrations/20260823015316_one_click_company_invitations.sql',
   'supabase/migrations/20260823021011_automate_invited_foreman_signup.sql',
   'supabase/migrations/20260823023639_restrict_foremen_to_assigned_jobs.sql',
+  'supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
 ];
@@ -40,6 +41,7 @@ const superintendentContractsPolicies = fs.readFileSync('supabase/migrations/202
 const companyInvitations = fs.readFileSync('supabase/migrations/20260823015316_one_click_company_invitations.sql', 'utf8');
 const automaticInvitationSignup = fs.readFileSync('supabase/migrations/20260823021011_automate_invited_foreman_signup.sql', 'utf8');
 const foremanJobAssignments = fs.readFileSync('supabase/migrations/20260823023639_restrict_foremen_to_assigned_jobs.sql', 'utf8');
+const supervisorJobAssignees = fs.readFileSync('supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
@@ -131,6 +133,15 @@ for (const marker of [
   'daily_report_jsas_foreman_assigned_job',
   'revoke all on table public.job_assignment_audit_events from anon, authenticated'
 ]) assert(foremanJobAssignments.includes(marker), `Foreman job-assignment security marker missing: ${marker}`);
+
+for (const marker of [
+  'create or replace function public.get_job_leader_assignments()',
+  "linecrew_has_capability('jobs')",
+  "linecrew_has_capability('reporting')",
+  'assigned_by_name text',
+  'revoke all on function public.get_job_leader_assignments()',
+  'grant execute on function public.get_job_leader_assignments()'
+]) assert(supervisorJobAssignees.includes(marker), `Supervisor job-assignee visibility marker missing: ${marker}`);
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');
@@ -237,6 +248,13 @@ for (const marker of [
   'View Assignment History'
 ]) assert(index.includes(marker), `Job-assignment audit UI marker missing: ${marker}`);
 
+for (const marker of [
+  'Assigned Foremen / Job Leaders:</strong>',
+  "assignedNames.join(', ')",
+  "'Unassigned'",
+  'Assign Another Foreman / Leader'
+]) assert(index.includes(marker), `Job-progress assignee marker missing: ${marker}`);
+
 if (failures.length) {
   console.error('Production readiness validation failed:');
   failures.forEach(failure => console.error(`- ${failure}`));
@@ -258,3 +276,4 @@ console.log('- Team, job, package, reporting, storm and assistant UI capability 
 console.log('- Email-bound, one-time Resend team invitations bypass company creation and code entry');
 console.log('- First-run Price Book upload workflow present');
 console.log('- Foreman job visibility is assignment-scoped with manager and timestamp audit history');
+console.log('- Supervisor job-progress cards list every assigned Foreman / Job Leader');
