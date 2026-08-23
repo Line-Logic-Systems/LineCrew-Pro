@@ -203,6 +203,8 @@ assert(index.includes("$('dailyUnitEntryControls').classList.toggle('hidden', !c
 assert(index.includes("if(reportStatus === 'draft' && canEditDraft)"), 'Edit and Submit controls must render only for users allowed to edit that draft.');
 assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned Foreman drafts must recognize both the report creator and assigned Foreman ownership fields.');
 assert(index.includes("created_by,\n      work_date"), 'Production report loading must include the creator used to restore returned-draft editing.');
+assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
+assert(index.includes('expanded-jsa.js?v=20260823c'), 'The returned-report correction fix must use a cache-busted script version.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
