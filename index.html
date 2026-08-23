@@ -6613,7 +6613,7 @@ async function sha256File(file){
     .join('');
 }
 
-async function splitPdfForPacketImport(file, pagesPerChunk = 6){
+async function splitPdfForPacketImport(file, pagesPerChunk = 2){
   if(!window.PDFLib?.PDFDocument){
     throw new Error('The PDF page reader did not load. Refresh and try again.');
   }
