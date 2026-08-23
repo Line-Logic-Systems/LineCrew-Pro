@@ -3513,9 +3513,14 @@ function userCanReviewProduction(){ return userHasCapability('production_review'
 function userCanManageProductionRecords(){ return userHasCapability('production_review'); }
 function userCanEditDailyReportDraft(report){
   if(String(report?.status || 'draft').toLowerCase() !== 'draft') return false;
-  const role = currentUserRole();
+  const role = currentUserRole().trim();
   if(role === 'gf') return false;
-  if(role === 'foreman') return report?.foreman_id === currentProfile?.id;
+  if(role === 'foreman'){
+    const profileId = String(currentProfile?.id || '').trim();
+    if(!profileId) return false;
+    return [report?.created_by, report?.foreman_id]
+      .some(id => String(id || '').trim() === profileId);
+  }
   return userCanManageProductionRecords();
 }
 function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
@@ -12441,6 +12446,7 @@ async function loadProductionReports(){
       id,
       job_id,
       foreman_id,
+      created_by,
       work_date,
       foreman_name,
       crew_name,
