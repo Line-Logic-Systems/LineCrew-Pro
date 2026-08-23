@@ -132,52 +132,16 @@
     byId('tkImportRosterBtn').onclick = importRoster;
   }
 
-  async function saveMyCrew(){
-    if(role() !== 'foreman') return;
-    const ids = [...document.querySelectorAll('[data-tk-my-crew]:checked')].map(el => el.value);
-    const button=byId('tkSaveMyCrewBtn');
-    button.disabled=true;button.textContent='Saving...';
-    const {error}=await getSb().rpc('set_my_timekeeping_crew',{p_employee_ids:ids});
-    button.disabled=false;button.textContent='Save My Crew';
-    if(error) return alert('Could not save your crew: '+error.message);
-    await loadRoster();
-    renderMyCrew();
-    lastAutoLoadKey=null;
-    restrictDailySelectors();
-    alert('Your crew has been saved. These employees will load automatically on new Daily Reports.');
-  }
-
-  function renderMyCrew(){
-    const list=byId('tkMyCrewList');
-    if(!list)return;
-    const active=roster.filter(e=>e.active);
-    if(!active.length){list.innerHTML='<p class="muted">The Admin has not added any employees to the roster yet.</p>';return;}
-    list.innerHTML=active.map(e=>{
-      const mine=e.assigned_foreman_id===userId();
-      const other=!!e.assigned_foreman_id && !mine;
-      return `<label class="tk-my-crew-person ${other?'tk-assigned-other':''}"><input type="checkbox" data-tk-my-crew value="${esc(e.id)}" ${mine?'checked':''} ${other?'disabled':''}><span><strong>${esc(e.full_name)}</strong>${e.classification?'<br><span class="muted">'+esc(e.classification)+'</span>':''}${other?'<br><span class="muted">Assigned to another Foreman</span>':''}</span></label>`;
-    }).join('');
-  }
-
   async function installMyCrew(){
-    const page=byId('timekeepingPage');
-    if(!page || role() !== 'foreman' || byId('tkMyCrewCard')) return;
-    const reportCard=byId('tkRunReportBtn')?.closest('.card');
-    const card=document.createElement('div');
-    card.id='tkMyCrewCard';card.className='card';
-    card.innerHTML=`<h3>My Crew</h3><p class="muted">Choose the employees who normally work on your crew. They will load automatically when you create a Daily Report.</p><div id="tkMyCrewList" class="tk-my-crew-list"></div><button id="tkSaveMyCrewBtn" class="success">Save My Crew</button>`;
-    page.insertBefore(card,reportCard||null);
-    byId('tkSaveMyCrewBtn').onclick=saveMyCrew;
-    await loadRoster();renderMyCrew();
+    // Crew membership is assigned by company leadership, never self-selected.
+    return;
   }
 
   function assignedOptions(selected=''){
     const active = roster.filter(e=>e.active);
     return '<option value="">Select employee</option>'+active.map(e=>{
-      const mine=e.assigned_foreman_id===userId();
-      const borrowed=!!e.assigned_foreman_id && !mine;
-      const suffix=borrowed ? ' — Other crew' : '';
-      return `<option value="${esc(e.id)}" ${e.id===selected?'selected':''}>${esc(e.full_name)}${e.classification?' — '+esc(e.classification):''}${suffix}</option>`;
+      const extra=e.assigned_foreman_id!==userId();
+      return `<option value="${esc(e.id)}" ${e.id===selected?'selected':''}>${esc(e.full_name)}${e.classification?' — '+esc(e.classification):''}${extra?' — Extra crew':''}</option>`;
     }).join('');
   }
 
