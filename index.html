@@ -13668,7 +13668,8 @@ function selectDailyBatchUnit(row, item){
   row.quantityInput.focus();
 }
 
-async function saveDailyUnitBatch(){
+async function saveDailyUnitBatch(options = {}){
+  const closeAfterSave = options?.closeAfterSave === true;
   const enteredRows = currentDailyUnitBatchRows.filter(row =>
     row.selectedItem || row.searchInput.value.trim() ||
     row.quantityInput.value.trim()
@@ -13677,14 +13678,14 @@ async function saveDailyUnitBatch(){
   if(enteredRows.length === 0){
     alert('Enter at least one unit for this pole before saving.');
     currentDailyUnitBatchRows[0]?.searchInput.focus();
-    return;
+    return false;
   }
 
   const location = $('dailyUnitPoleLocation').value.trim();
   if(!location){
     alert('Enter the pole or work location before saving its units.');
     $('dailyUnitPoleLocation').focus();
-    return;
+    return false;
   }
 
   const grouped = new Map();
@@ -13695,12 +13696,12 @@ async function saveDailyUnitBatch(){
     if(!row.selectedItem){
       alert('Select a matching contract unit on completed line ' + (index + 1) + '.');
       row.searchInput.focus();
-      return;
+      return false;
     }
     if(!Number.isFinite(quantity) || quantity <= 0){
       alert('Enter a quantity greater than zero on completed line ' + (index + 1) + '.');
       row.quantityInput.focus();
-      return;
+      return false;
     }
 
     const key = row.selectedItem.price_book_item_id + '|' + location.toLowerCase();
@@ -13747,18 +13748,27 @@ async function saveDailyUnitBatch(){
       );
       await openDailyUnitEditor(currentDailyUnitReport);
       await loadProductionReports();
-      return;
+      return false;
     }
   }
 
   button.disabled = false;
   button.textContent = 'Save Pole & Add Next';
+  const savedMessage =
+    location + ' saved with ' + grouped.size + ' unit line' +
+    (grouped.size === 1 ? '.' : 's.');
+
+  if(closeAfterSave){
+    await loadProductionReports();
+    closeDailyUnitEditor();
+    alert(savedMessage);
+    return true;
+  }
+
   await openDailyUnitEditor(currentDailyUnitReport);
   await loadProductionReports();
-  alert(
-    location + ' saved with ' + grouped.size + ' unit line' +
-    (grouped.size === 1 ? '.' : 's.')
-  );
+  alert(savedMessage);
+  return true;
 }
 
 async function deleteDailyUnitRow(item, button){
@@ -13892,19 +13902,7 @@ async function saveDailyUnitRow(item, row, button){
 $('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(5);
 $('saveDailyUnitBatchBtn').onclick = saveDailyUnitBatch;
 
-$('closeDailyUnitEditorBtn').onclick = () => {
-  const hasUnsavedLines = currentDailyUnitBatchRows.some(row =>
-    row.selectedItem || row.searchInput.value.trim() ||
-    row.quantityInput.value.trim()
-  ) || $('dailyUnitPoleLocation').value.trim();
-
-  if(
-    hasUnsavedLines &&
-    !confirm('Discard the unit lines that have not been saved?')
-  ){
-    return;
-  }
-
+function closeDailyUnitEditor(){
   $('dailyUnitEditor').classList.add('hidden');
   currentDailyUnitCatalog = [];
   currentDailySavedUnits = [];
@@ -13912,6 +13910,33 @@ $('closeDailyUnitEditorBtn').onclick = () => {
   currentDailyUnitReport = null;
   currentDailyUnitBatchRows = [];
   $('productionList').classList.remove('hidden');
+}
+
+$('closeDailyUnitEditorBtn').onclick = async () => {
+  const hasUnsavedLines = currentDailyUnitBatchRows.some(row =>
+    row.selectedItem || row.searchInput.value.trim() ||
+    row.quantityInput.value.trim()
+  ) || $('dailyUnitPoleLocation').value.trim();
+
+  if(hasUnsavedLines){
+    const doneButton = $('closeDailyUnitEditorBtn');
+    doneButton.disabled = true;
+    doneButton.textContent = 'Saving & Finishing...';
+    const saved = await saveDailyUnitBatch({ closeAfterSave:true });
+    if(!saved){
+      doneButton.disabled = false;
+      doneButton.textContent = 'Done Adding Units';
+    }
+    return;
+  }
+
+  if(currentDailySavedUnits.length === 0){
+    alert('No units are saved yet. Enter a pole/location and unit before finishing.');
+    $('dailyUnitPoleLocation').focus();
+    return;
+  }
+
+  closeDailyUnitEditor();
 };
 
 // The report list owns the secure unit-entry helpers. Expose the current
