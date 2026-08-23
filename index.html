@@ -927,6 +927,36 @@ button:disabled{
   background:#eef5fa;
 }
 
+.mh-rate-target{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  margin-top:5px;
+  padding:4px 8px;
+  border:1px solid transparent;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:800;
+}
+
+.mh-rate-target.below{
+  color:#991b1b;
+  background:#fee2e2;
+  border-color:#fecaca;
+}
+
+.mh-rate-target.at-target{
+  color:#854d0e;
+  background:#fef3c7;
+  border-color:#fde68a;
+}
+
+.mh-rate-target.above{
+  color:#166534;
+  background:#dcfce7;
+  border-color:#bbf7d0;
+}
+
 .daily-unit-picker{
   display:grid;
   grid-template-columns:minmax(220px, 2fr) minmax(150px, 1fr) 150px 110px auto;
@@ -1539,6 +1569,17 @@ button:disabled{
       <button id="saveCompanySettings" class="success small">
         Save Company Settings
       </button>
+    </div>
+
+    <div id="companyMhRateSettings" class="job-card hidden">
+      <h3>Required Man-Hour Rate</h3>
+      <p class="muted">
+        Set the company break-even target per weighted man-hour. Supervision sees red more than 5% below it, yellow within 5% below it, and green at or above it.
+      </p>
+      <label for="companyRequiredMhRate">Target ($ per weighted man-hour)</label>
+      <input id="companyRequiredMhRate" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="Example: 45.00">
+      <p class="muted">Leave blank or enter 0 to turn off target colors.</p>
+      <button id="saveCompanyMhRate" class="success small">Save MH Rate Target</button>
     </div>
 
     <div class="job-card">
@@ -2306,30 +2347,22 @@ button:disabled{
     placeholder="Example: Crew 1"
   >
 
-  <label for="dailyRegularHours" class="hidden">Regular Hours</label>
+  <label for="dailyRegularHours">Regular Hours</label>
   <input
     id="dailyRegularHours"
-    class="hidden"
     type="number"
     min="0"
     step="0.25"
     value="0"
-    readonly
-    aria-hidden="true"
-    tabindex="-1"
   >
 
-  <label for="dailyOvertimeHours" class="hidden">OT Hours</label>
+  <label for="dailyOvertimeHours">OT Hours</label>
   <input
     id="dailyOvertimeHours"
-    class="hidden"
     type="number"
     min="0"
     step="0.25"
     value="0"
-    readonly
-    aria-hidden="true"
-    tabindex="-1"
   >
 
   <label for="dailyWeatherConditions">Weather</label>
@@ -2430,7 +2463,6 @@ button:disabled{
     </button>
   </div>
   </div>
-
 </div>
 
   <div id="productionPaginationTop" class="production-pagination hidden"></div>
@@ -3898,6 +3930,11 @@ async function loadApp(){
       : '#0b2d4d';
   $('companyTimezone').value =
     company?.timezone || 'America/Chicago';
+  $('companyMhRateSettings').classList.toggle('hidden', !userIsCompanyAdmin());
+  $('companyRequiredMhRate').value =
+    Number(company?.required_man_hour_rate || 0) > 0
+      ? Number(company.required_man_hour_rate).toFixed(2)
+      : '';
   applyCompanyBranding(company);
   updatePilotFeedbackUi();
 
@@ -7073,6 +7110,38 @@ $('saveCompanySettings').onclick = async () => {
   $('companyName').textContent = currentCompany.name || 'LineCrew Pro';
   applyCompanyBranding(currentCompany);
   alert('Company settings saved.');
+};
+
+$('saveCompanyMhRate').onclick = async () => {
+  if(!userIsCompanyAdmin()) return;
+
+  const raw = $('companyRequiredMhRate').value.trim();
+  const rate = raw === '' ? null : Number(raw);
+  if(rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 1000000)){
+    alert('Enter a target between 0 and 1,000,000. Use 0 or leave blank to turn target colors off.');
+    return;
+  }
+
+  const button = $('saveCompanyMhRate');
+  button.disabled = true;
+  button.textContent = 'Saving...';
+
+  const { data, error } = await sb.rpc('update_company_man_hour_rate', {
+    p_required_rate:rate
+  });
+
+  button.disabled = false;
+  button.textContent = 'Save MH Rate Target';
+
+  if(error){
+    alert('Unable to save the MH rate target: ' + error.message);
+    return;
+  }
+
+  const savedRate = Number(Array.isArray(data) ? data[0] : data);
+  currentCompany.required_man_hour_rate = savedRate > 0 ? savedRate : null;
+  $('companyRequiredMhRate').value = savedRate > 0 ? savedRate.toFixed(2) : '';
+  alert(savedRate > 0 ? 'MH rate target saved.' : 'MH rate target colors turned off.');
 };
 
 $('saveRedlineApprovalSetting').onclick = async () => {
@@ -12796,7 +12865,10 @@ ${report.review_notes ? `
 
     const unitsButton = document.createElement('button');
     unitsButton.className = 'secondary small';
-    unitsButton.textContent = canEditDraft ? 'Manage Units' : 'View Units';
+    unitsButton.textContent =
+      canEditDraft
+        ? 'Manage Units'
+        : 'View Units';
     unitsButton.onclick = () => openDailyUnitEditor(report);
     card.appendChild(unitsButton);
 
@@ -13315,6 +13387,9 @@ function dailyReportValueSummaryMarkup(report, summary){
   const fieldRunRate = weightedHours > 0
     ? Number(summary.adjusted_total || 0) / weightedHours
     : 0;
+  const targetMarkup = canSeeRunRate
+    ? manHourTargetMarkup(fieldRunRate)
+    : '';
   const runRateMarkup = !canSeeRunRate
     ? ''
     : (canSeeActual
@@ -13322,7 +13397,7 @@ function dailyReportValueSummaryMarkup(report, summary){
           escapeHtml(formatCurrency(actualRunRate)) + '</strong>'
         : '') +
       '<br>Field MH Run Rate: <strong>' +
-        escapeHtml(formatCurrency(fieldRunRate)) + '</strong>';
+        escapeHtml(formatCurrency(fieldRunRate)) + '</strong>' + targetMarkup;
 
   if(canSeeActual && hasAdjustment){
     return (
@@ -13344,6 +13419,26 @@ function dailyReportValueSummaryMarkup(report, summary){
     '<br>' + label + ': <strong>' +
       escapeHtml(formatCurrency(amount)) +
     '</strong>' + runRateMarkup
+  );
+}
+
+function manHourTargetStatus(rate){
+  const target = Number(currentCompany?.required_man_hour_rate || 0);
+  if(!(target > 0) || !Number.isFinite(rate)) return null;
+  const ratio = rate / target;
+  if(ratio < 0.95) return { key:'below', label:'Below Target', target };
+  if(ratio < 1) return { key:'at-target', label:'Near Target', target };
+  return { key:'above', label:'Meets Target', target };
+}
+
+function manHourTargetMarkup(rate){
+  const status = manHourTargetStatus(rate);
+  if(!status) return '';
+  return (
+    '<br><span class="mh-rate-target ' + status.key + '">' +
+      escapeHtml(status.label) + ' · Target ' +
+      escapeHtml(formatCurrency(currentCompany.required_man_hour_rate)) +
+    '</span>'
   );
 }
 
@@ -14885,7 +14980,7 @@ startApp();
 
 </script>
 
-  <script src="expanded-jsa.js?v=20260823c"></script>
+  <script src="expanded-jsa.js?v=20260823d"></script>
 
 <script>
 (function () {
