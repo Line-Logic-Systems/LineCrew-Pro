@@ -1999,7 +1999,8 @@ button:disabled{
       </div>
     </div>
 
-    <div id="jobPackageProgress" class="daily-value-summary"></div>\n    <div id="jobPackagePendingReview"></div>
+    <div id="jobPackageProgress" class="daily-value-summary"></div>
+    <div id="jobPackagePendingReview"></div>
 
     <div id="jobPackageImportTools" class="card hidden">
       <div class="section-header">
@@ -2583,6 +2584,8 @@ button:disabled{
   </p>
 
   <div id="dailyUnitValueSummary" class="daily-value-summary"></div>
+
+  <div id="dailyUnitReviewActions" class="button-row hidden"></div>
 
   <div class="daily-saved-unit-section">
     <h3>Saved Units</h3>
@@ -6012,7 +6015,6 @@ async function openJobPackageDetails(jobPackage){
   $('jobPackageDetailCard').scrollIntoView({ behavior:'smooth' });
 }
 
-
 async function loadPendingUtilityPacketReview(jobPackage){
   const container = $('jobPackagePendingReview');
   container.innerHTML = '';
@@ -6731,7 +6733,7 @@ async function parsePdfJobPacketForJob(job, file){
         completedChunks += 1;
         review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
           '<p class="muted">Analyzed ' + completedChunks + ' of ' + chunks.length +
-          ' page groups (' + Math.min(completedChunks * 2, chunk.total_pages) +
+          ' page groups (' + (completedChunks * 2 > chunk.total_pages ? chunk.total_pages : completedChunks * 2) +
           ' of ' + chunk.total_pages + ' pages). Nothing has been added to the job yet.</p>';
       }
     };
@@ -14249,6 +14251,8 @@ async function openDailyUnitEditor(report){
   $('dailyUnitList').innerHTML =
     '<p class="muted">Loading saved units...</p>';
   $('dailyUnitValueSummary').innerHTML = '';
+  $('dailyUnitReviewActions').innerHTML = '';
+  $('dailyUnitReviewActions').classList.add('hidden');
   $('productionList').classList.add('hidden');
   $('productionEmpty').classList.add('hidden');
 
@@ -14283,8 +14287,117 @@ async function openDailyUnitEditor(report){
   renderDailyPoleLocationOptions();
   addDailyUnitBatchRows(10);
   renderDailyUnitEditor();
+  renderDailyUnitReviewActions(report);
   $('dailyUnitPoleLocation').focus();
   $('dailyUnitEditor').scrollIntoView({ behavior:'smooth' });
+}
+
+function renderDailyUnitReviewActions(report){
+  const container = $('dailyUnitReviewActions');
+  container.innerHTML = '';
+
+  if(
+    String(report?.status || '').toLowerCase() !== 'submitted' ||
+    !userCanReviewProduction()
+  ){
+    container.classList.add('hidden');
+    return;
+  }
+
+  container.classList.remove('hidden');
+
+  const approveButton = document.createElement('button');
+  approveButton.className = 'success';
+  approveButton.textContent = 'Approve Report & Units';
+  approveButton.onclick = async () => {
+    const redlineCount = currentDailySavedUnits.filter(item =>
+      String(item.authorization_status || '').toLowerCase() === 'redline'
+    ).length;
+    const pendingCount = currentDailySavedUnits.filter(item =>
+      String(item.authorization_status || '').toLowerCase() === 'pending_packet'
+    ).length;
+    const requiresAdminOverride =
+      redlineCount > 0 &&
+      currentCompany?.require_gf_redline_approval === true &&
+      currentUserRole() !== 'gf';
+
+    const notes = prompt(
+      requiresAdminOverride
+        ? 'This company requires GF approval for redlines. Enter the leadership override reason:'
+        : 'Optional approval notes:',
+      ''
+    );
+    if(notes === null) return;
+    if(requiresAdminOverride && !notes.trim()){
+      alert('An override reason is required for a redline report.');
+      return;
+    }
+
+    let message = 'Approve this daily report and all listed unit production?';
+    if(redlineCount || pendingCount){
+      message =
+        'Authorization review required:\n\n' +
+        redlineCount + ' redline unit entr' +
+        (redlineCount === 1 ? 'y' : 'ies') + '\n' +
+        pendingCount + ' unit entr' +
+        (pendingCount === 1 ? 'y' : 'ies') +
+        ' pending a utility packet\n\n' +
+        (requiresAdminOverride
+          ? 'Your override reason will be recorded. Continue?'
+          : 'Approving confirms that you reviewed these exceptions. Continue?');
+    }
+    if(!confirm(message)) return;
+
+    approveButton.disabled = true;
+    approveButton.textContent = 'Approving...';
+    const { error } = await sb.rpc('approve_daily_report', {
+      p_report_id:report.id,
+      p_review_notes:notes || null
+    });
+    if(error){
+      approveButton.disabled = false;
+      approveButton.textContent = 'Approve Report & Units';
+      alert('Unable to approve report: ' + error.message);
+      return;
+    }
+
+    alert('Daily report and unit production approved.');
+    closeDailyUnitEditor();
+    await loadProductionReports();
+  };
+
+  const returnButton = document.createElement('button');
+  returnButton.className = 'secondary';
+  returnButton.textContent = 'Return Report';
+  returnButton.onclick = async () => {
+    const notes = prompt('Enter the reason this report is being returned:');
+    if(notes === null) return;
+    if(!notes.trim()){
+      alert('Return notes are required.');
+      return;
+    }
+    if(!confirm('Return this report to the foreman?')) return;
+
+    returnButton.disabled = true;
+    returnButton.textContent = 'Returning...';
+    const { error } = await sb.rpc('return_daily_report', {
+      p_report_id:report.id,
+      p_review_notes:notes.trim()
+    });
+    if(error){
+      returnButton.disabled = false;
+      returnButton.textContent = 'Return Report';
+      alert('Unable to return report: ' + error.message);
+      return;
+    }
+
+    alert('Daily report returned to draft.');
+    closeDailyUnitEditor();
+    await loadProductionReports();
+  };
+
+  container.appendChild(approveButton);
+  container.appendChild(returnButton);
 }
 
 function renderDailyUnitEditor(){
@@ -14318,6 +14431,9 @@ function renderDailyUnitEditor(){
     .forEach(([location, poleItems]) => {
       const poleCard = document.createElement('details');
       poleCard.className = 'daily-saved-pole';
+      // Reviewers opened this screen specifically to inspect production.
+      // Show the saved unit lines immediately instead of requiring another click.
+      poleCard.open = !canEdit;
       const summary = document.createElement('summary');
       summary.innerHTML =
         '<span><strong>' + escapeHtml(location) + '</strong><br>' +
