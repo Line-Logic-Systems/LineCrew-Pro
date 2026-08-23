@@ -103,18 +103,28 @@ Deno.serve(async (request) => {
     const filename = String(body?.filename || "").trim().slice(0, 255);
     const fileData = String(body?.file_data || "");
     const sourceSha256 = String(body?.source_sha256 || "").toLowerCase();
+    const pageOffset = Number(body?.page_offset || 0);
+    const totalPages = Number(body?.total_pages || 0);
     if (!filename.toLowerCase().endsWith(".pdf")) throw new Error("This parser accepts PDF job packets only.");
     if (!/^data:application\/pdf;base64,[a-z0-9+/=\r\n]+$/i.test(fileData)) throw new Error("The PDF data is invalid.");
     const estimatedBytes = Math.floor((fileData.length - fileData.indexOf(",") - 1) * 0.75);
     if (estimatedBytes <= 0 || estimatedBytes > MAX_FILE_BYTES) throw new Error("The PDF must be 20 MB or smaller.");
     if (!/^[a-f0-9]{64}$/.test(sourceSha256)) throw new Error("The packet fingerprint is invalid.");
+    if (!Number.isInteger(pageOffset) || pageOffset < 0 ||
+        !Number.isInteger(totalPages) || totalPages < 1 || pageOffset >= totalPages) {
+      throw new Error("The PDF page range is invalid.");
+    }
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { "Authorization": `Bearer ${openAiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: Deno.env.get("OPENAI_DOCUMENT_MODEL") || "gpt-5.4",
-        instructions,
+        instructions: `${instructions}\nThis request contains a page batch from the original PDF. ` +
+          `The first page in this batch is original PDF page ${pageOffset + 1} of ${totalPages}. ` +
+          `For every extracted row, source_page must be the original one-based PDF page number: ` +
+          `batch page number + ${pageOffset}. If this batch contains no supported Oncor CU Estimate construction rows, ` +
+          `return status=uncertain with an empty rows array.`,
         input: [{ role: "user", content: [
           { type: "input_file", filename, file_data: fileData, detail: "high" },
           { type: "input_text", text: "Identify this packet and extract all supported authorized-unit source rows. Return no rows unless the provider/format is supported with confidence." },
@@ -124,7 +134,7 @@ Deno.serve(async (request) => {
         max_output_tokens: 30000,
         store: false,
       }),
-      signal: AbortSignal.timeout(150000),
+      signal: AbortSignal.timeout(140000),
     });
     if (!response.ok) {
       console.error("OpenAI packet parse failed", response.status, (await response.text()).slice(0, 1000));

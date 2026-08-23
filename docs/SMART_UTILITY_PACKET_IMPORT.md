@@ -47,8 +47,8 @@ For the reviewed Station 0014 example, the expected consolidated production rows
 
 ## Transaction and audit behavior
 
-1. The authenticated browser hashes the PDF.
-2. The Edge Function verifies the role, detects the profile, and returns strict structured source rows.
+1. The authenticated browser hashes the PDF and splits large packets into six-page request batches so every response stays inside the Edge Function request timeout.
+2. The Edge Function verifies the role, detects the profile, preserves original PDF page numbers, and returns strict structured source rows for each batch.
 3. One RPC creates the package and stages all source rows atomically.
 4. The reviewer can correct Station, work type, Contractor Unit, quantity, and inclusion.
 5. Finalization validates every included Contractor Unit before writing any authorized unit.

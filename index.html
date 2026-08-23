@@ -29,6 +29,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 
 <style>
 :root{
@@ -6612,6 +6613,46 @@ async function sha256File(file){
     .join('');
 }
 
+async function splitPdfForPacketImport(file, pagesPerChunk = 6){
+  if(!window.PDFLib?.PDFDocument){
+    throw new Error('The PDF page reader did not load. Refresh and try again.');
+  }
+  const source = await PDFLib.PDFDocument.load(await file.arrayBuffer(), {
+    updateMetadata:false
+  });
+  const totalPages = source.getPageCount();
+  if(!totalPages) throw new Error('The PDF does not contain any pages.');
+  const chunks = [];
+  for(let start = 0; start < totalPages; start += pagesPerChunk){
+    const packet = await PDFLib.PDFDocument.create();
+    const indexes = Array.from(
+      { length:Math.min(pagesPerChunk, totalPages - start) },
+      (_, index) => start + index
+    );
+    const pages = await packet.copyPages(source, indexes);
+    pages.forEach(page => packet.addPage(page));
+    const bytes = await packet.save({ useObjectStreams:true });
+    const blob = new Blob([bytes], { type:'application/pdf' });
+    chunks.push({
+      file_data:await fileAsDataUrl(blob),
+      page_offset:start,
+      page_count:indexes.length,
+      total_pages:totalPages
+    });
+  }
+  return chunks;
+}
+
+async function packetFunctionErrorMessage(error){
+  try{
+    const detail = await error?.context?.json();
+    if(detail?.error) return detail.error;
+  }catch(contextError){
+    // Keep the normal client error when the response body is unavailable.
+  }
+  return error?.message || 'The packet could not be analyzed.';
+}
+
 async function parsePdfJobPacketForJob(job, file){
   const packageContainer = document.getElementById('job-packages-' + job.id);
   if(!packageContainer) return;
@@ -6626,20 +6667,49 @@ async function parsePdfJobPacketForJob(job, file){
     if(file.size > 20 * 1024 * 1024){
       throw new Error('The PDF must be 20 MB or smaller.');
     }
-    const [fileData, sourceSha256] = await Promise.all([
-      fileAsDataUrl(file), sha256File(file)
+    const [chunks, sourceSha256] = await Promise.all([
+      splitPdfForPacketImport(file), sha256File(file)
     ]);
-    const { data:parsed, error:parseError } = await sb.functions.invoke(
-      'parse-utility-job-packet',
-      { body:{ filename:file.name, file_data:fileData, source_sha256:sourceSha256 } }
+    const parsedChunks = [];
+    for(let index = 0; index < chunks.length; index += 1){
+      review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+        '<p class="muted">Analyzing pages ' + (chunks[index].page_offset + 1) +
+        '–' + (chunks[index].page_offset + chunks[index].page_count) +
+        ' of ' + chunks[index].total_pages + '. Nothing has been added to the job yet.</p>';
+      const { data, error } = await sb.functions.invoke(
+        'parse-utility-job-packet',
+        { body:{
+          filename:file.name,
+          file_data:chunks[index].file_data,
+          source_sha256:sourceSha256,
+          page_offset:chunks[index].page_offset,
+          total_pages:chunks[index].total_pages
+        } }
+      );
+      if(error) throw new Error(await packetFunctionErrorMessage(error));
+      if(data?.error) throw new Error(data.error);
+      parsedChunks.push(data);
+    }
+
+    const supported = parsedChunks.filter(chunk =>
+      chunk?.status === 'supported' && chunk?.provider_key === 'oncor' &&
+      Array.isArray(chunk?.rows) && chunk.rows.length
     );
-    if(parseError) throw new Error(parseError.message || 'The packet could not be analyzed.');
-    if(parsed?.error) throw new Error(parsed.error);
-    if(parsed?.status !== 'supported' || parsed?.provider_key !== 'oncor'){
-      const warning = (parsed?.warnings || []).join(' ') ||
+    if(!supported.length){
+      const warning = parsedChunks.flatMap(chunk => chunk?.warnings || []).join(' ') ||
         'This utility or packet layout is not supported yet.';
       throw new Error(warning + ' Nothing was added to the job.');
     }
+    const parsed = {
+      status:'supported',
+      provider_key:'oncor',
+      format_key:supported[0].format_key,
+      profile_version:supported[0].profile_version,
+      work_order:supported.map(chunk => chunk.work_order).find(Boolean) || '',
+      confidence:Math.min(...supported.map(chunk => Number(chunk.confidence || 0))),
+      warnings:[...new Set(parsedChunks.flatMap(chunk => chunk?.warnings || []))],
+      rows:supported.flatMap(chunk => chunk.rows)
+    };
 
     review.innerHTML = '<strong>Saving packet review…</strong>';
     const { data:staged, error:stageError } = await sb.rpc(
