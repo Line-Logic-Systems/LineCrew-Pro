@@ -1964,7 +1964,9 @@ button:disabled{
     <label for="jobPackageNotes">Notes</label>
     <textarea id="jobPackageNotes" rows="3"></textarea>
 
-    <button class="success" id="saveJobPackageBtn">Save &amp; Import Authorized Units</button>
+    <div id="jobPackageInlineImportMount"></div>
+
+    <button class="success" id="saveJobPackageBtn">Save Package &amp; Preview File</button>
     <button class="secondary" id="cancelJobPackageBtn">Cancel</button>
   </div>
 
@@ -5978,6 +5980,7 @@ async function deleteJobPackage(jobPackage){
 
 
 async function openJobPackageDetails(jobPackage){
+  $('jobPackageImportTools').appendChild($('jobPackageImportForm'));
   currentOpenJobPackage = jobPackage;
   $('jobPackageDetailTitle').textContent = jobPackage.package_name;
   refreshOpenJobPackageControls();
@@ -6487,8 +6490,7 @@ $('jobPackageImportWorksheet').onchange = ()=>{
   $('confirmJobPackageImportBtn').classList.add('hidden');
 };
 
-$('jobPackageImportFile').onchange = async event => {
-  const file = event.target.files?.[0];
+async function handleJobPackageImportFile(file){
   if(!file) return;
   if(typeof XLSX === 'undefined'){
     return alert('The spreadsheet reader did not load. Refresh and try again.');
@@ -6511,9 +6513,24 @@ $('jobPackageImportFile').onchange = async event => {
     });
     if(!rows.length) throw new Error('No completed rows were found.');
     configureJobPacketMappings(Object.keys(rows[0]));
+
+    if(
+      $('jobPackageFormCard').contains($('jobPackageImportForm')) &&
+      !$('jobPackageName').value.trim()
+    ){
+      $('jobPackageName').value = String(file.name || '')
+        .replace(/\.[^.]+$/, '')
+        .trim();
+    }
   }catch(error){
+    currentJobPackageImportWorkbook = null;
+    currentJobPackageImportFilename = null;
     alert('Unable to read packet: ' + error.message);
   }
+}
+
+$('jobPackageImportFile').onchange = async event => {
+  await handleJobPackageImportFile(event.target.files?.[0]);
 };
 
 $('confirmJobPackageImportBtn').onclick = async()=>{
@@ -6537,7 +6554,22 @@ $('confirmJobPackageImportBtn').onclick = async()=>{
     return alert('Nothing was imported: ' + error.message);
   }
   alert(`${data?.imported_rows || currentJobPackageImportRows.length} authorized unit rows imported.`);
+  const inlineCreation =
+    $('jobPackageFormCard').contains($('jobPackageImportForm'));
   resetJobPackageImport();
+
+  if(inlineCreation){
+    delete $('jobPackageFormCard').dataset.jobId;
+    $('jobPackageImportTools').appendChild($('jobPackageImportForm'));
+    $('jobPackageFormCard').classList.add('hidden');
+    await loadJobs();
+    const selectedJob = currentJobsCatalog.find(
+      job => String(job.id) === String(currentOpenJobId)
+    );
+    if(selectedJob) showJobDetail(selectedJob, false);
+    return;
+  }
+
   await loadJobPackageWorkPoints();
 };
 
@@ -6584,6 +6616,18 @@ function showJobPackageForm(selectedJob = null){
   $('jobPackageNumber').value = '';
   $('jobPackageReceivedDate').value = '';
   $('jobPackageNotes').value = '';
+  ['jobPackageJob','jobPackageName','jobPackageNumber',
+   'jobPackageReceivedDate','jobPackageNotes'].forEach(id => {
+    $(id).disabled = false;
+  });
+  currentOpenJobPackage = null;
+  resetJobPackageImport();
+  $('jobPackageInlineImportMount').appendChild($('jobPackageImportForm'));
+  $('jobPackageImportForm').classList.remove('hidden');
+  $('cancelJobPackageImportBtn').classList.add('hidden');
+  $('saveJobPackageBtn').classList.remove('hidden');
+  $('saveJobPackageBtn').disabled = false;
+  $('saveJobPackageBtn').textContent = 'Save Package & Preview File';
   $('jobPackageFormCard').classList.remove('hidden');
   jobSelect.focus();
   $('jobPackageFormCard').scrollIntoView({ behavior:'smooth' });
@@ -6591,6 +6635,8 @@ function showJobPackageForm(selectedJob = null){
 
 $('cancelJobPackageBtn').onclick = ()=>{
   delete $('jobPackageFormCard').dataset.jobId;
+  resetJobPackageImport();
+  $('jobPackageImportTools').appendChild($('jobPackageImportForm'));
   $('jobPackageFormCard').classList.add('hidden');
 };
 
@@ -6604,6 +6650,9 @@ $('saveJobPackageBtn').onclick = async()=>{
 
   if(!selectedJob){
     return alert('Select the existing active job this Utility Package belongs to.');
+  }
+  if(!currentJobPackageImportWorkbook || !currentJobPackageImportFilename){
+    return alert('Choose the Excel or CSV job packet file in this box.');
   }
   if(!packageName){
     return alert('Enter a Utility Package name.');
@@ -6627,27 +6676,25 @@ $('saveJobPackageBtn').onclick = async()=>{
     return alert(error.message);
   }
 
-  delete $('jobPackageFormCard').dataset.jobId;
-  $('jobPackageFormCard').classList.add('hidden');
   currentOpenJobId = jobId;
-  await loadJobs();
-  const savedPackage = currentJobPackageCatalog.find(
-    jobPackage =>
-      String(jobPackage.id) === String(packageId) &&
-      String(jobPackage.job_id) === String(jobId)
-  );
-  button.disabled = false;
-  button.textContent = 'Save & Import Authorized Units';
+  const savedPackage = {
+    id:packageId,
+    job_id:jobId,
+    contract_id:selectedJob.contract_id,
+    package_name:packageName,
+    package_number:$('jobPackageNumber').value.trim() || null,
+    received_date:$('jobPackageReceivedDate').value || null,
+    notes:$('jobPackageNotes').value.trim() || null,
+    status:'draft'
+  };
+  currentOpenJobPackage = savedPackage;
+  ['jobPackageJob','jobPackageName','jobPackageNumber',
+   'jobPackageReceivedDate','jobPackageNotes'].forEach(id => {
+    $(id).disabled = true;
+  });
+  button.classList.add('hidden');
 
-  if(!savedPackage){
-    return alert(
-      'The Utility Package was saved, but LineCrew Pro could not verify it under ' +
-      selectedJob.job_number + '. Refresh Jobs and open that job before importing.'
-    );
-  }
-
-  await openJobPackageDetails(savedPackage);
-  setJobPackageImportOpen(true);
+  await previewJobPackageImport();
 };
 
 
