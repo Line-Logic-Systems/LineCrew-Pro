@@ -13549,7 +13549,7 @@ async function loadProductionReports(){
 
     const groupCard = document.createElement('details');
     groupCard.className = 'job-card production-job-group';
-    groupCard.open = submittedCount > 0;
+    groupCard.open = false;
 
     const groupSummary = document.createElement('summary');
     groupSummary.innerHTML =
