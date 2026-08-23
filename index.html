@@ -2094,8 +2094,9 @@ button:disabled{
         <div class="attachment-upload-row">
           <input id="billingAttachmentFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.xlsx,.csv">
           <input id="billingAttachmentCaption" maxlength="500" placeholder="Optional caption">
-          <button id="uploadBillingAttachmentBtn" class="success small">Upload Attachment</button>
+          <button id="uploadBillingAttachmentBtn" type="button" class="success small" onclick="uploadBillingAttachment()">Upload Attachment</button>
         </div>
+        <p id="billingAttachmentStatus" class="muted"></p>
         <div id="billingAttachmentList"><p class="muted">No attachments added yet.</p></div>
       </div>
       <div id="billingBatchLinePreview"></div>
@@ -7989,24 +7990,35 @@ async function loadBillingAttachments(){
 }
 
 async function uploadBillingAttachment(){
-  if(!currentBillingBatch) return;
-  const file=$('billingAttachmentFile').files?.[0];
-  if(!file) return alert('Choose a billing attachment first.');
-  if(file.size>15728640) return alert('Billing attachments must be 15 MB or smaller.');
-  const path=currentProfile.company_id+'/'+currentBillingBatch.batch_id+'/'+
-    (crypto.randomUUID?crypto.randomUUID():Date.now())+'-'+safeStorageFilename(file.name);
-  const button=$('uploadBillingAttachmentBtn'); button.disabled=true; button.textContent='Uploading...';
-  const upload=await sb.storage.from('billing-export-attachments').upload(path,file,{upsert:false,contentType:file.type});
-  if(upload.error){ button.disabled=false; button.textContent='Upload Attachment'; return alert('Upload failed: '+upload.error.message); }
-  const registered=await sb.rpc('register_billing_export_attachment',{
-    p_batch_id:currentBillingBatch.batch_id,p_storage_path:path,p_original_filename:file.name,
-    p_mime_type:file.type,p_file_size_bytes:file.size,
-    p_caption:$('billingAttachmentCaption').value.trim() || null
-  });
-  if(registered.error){ await sb.storage.from('billing-export-attachments').remove([path]); button.disabled=false; button.textContent='Upload Attachment'; return alert('Unable to register attachment: '+registered.error.message); }
-  button.disabled=false; button.textContent='Upload Attachment';
-  $('billingAttachmentFile').value=''; $('billingAttachmentCaption').value='';
-  await loadBillingAttachments(); await loadBillingExportBatches();
+  const button=$('uploadBillingAttachmentBtn');
+  const status=$('billingAttachmentStatus');
+  try{
+    if(!currentBillingBatch) throw new Error('Open a billing batch before uploading.');
+    const file=$('billingAttachmentFile').files?.[0];
+    if(!file) throw new Error('Choose a billing attachment first.');
+    if(file.size>15728640) throw new Error('Billing attachments must be 15 MB or smaller.');
+    const allowed=['application/pdf','image/jpeg','image/png','image/webp','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv'];
+    if(file.type && !allowed.includes(file.type)) throw new Error('Use PDF, JPG, PNG, WEBP, XLSX or CSV.');
+    const unique=globalThis.crypto?.randomUUID?.() || String(Date.now());
+    const path=currentProfile.company_id+'/'+currentBillingBatch.batch_id+'/'+unique+'-'+safeStorageFilename(file.name);
+    button.disabled=true; button.textContent='Uploading...'; status.textContent='Uploading '+file.name+'...';
+    const upload=await sb.storage.from('billing-export-attachments').upload(path,file,{upsert:false,contentType:file.type || 'application/octet-stream'});
+    if(upload.error) throw new Error('Upload failed: '+upload.error.message);
+    const registered=await sb.rpc('register_billing_export_attachment',{
+      p_batch_id:currentBillingBatch.batch_id,p_storage_path:path,p_original_filename:file.name,
+      p_mime_type:file.type || null,p_file_size_bytes:file.size,
+      p_caption:$('billingAttachmentCaption').value.trim() || null
+    });
+    if(registered.error){ await sb.storage.from('billing-export-attachments').remove([path]); throw new Error('Unable to register attachment: '+registered.error.message); }
+    $('billingAttachmentFile').value=''; $('billingAttachmentCaption').value='';
+    status.textContent='Attachment uploaded successfully.';
+    await loadBillingAttachments(); await loadBillingExportBatches();
+  }catch(error){
+    status.textContent=error?.message || String(error);
+    alert(status.textContent);
+  }finally{
+    button.disabled=false; button.textContent='Upload Attachment';
+  }
 }
 
 async function setBillingBatchStatus(status){
@@ -8046,7 +8058,6 @@ $('markBillingPaidBtn').onclick = () => setBillingBatchStatus('paid');
 $('voidBillingBatchBtn').onclick = () => setBillingBatchStatus('void');
 $('saveBillingBatchDetailsBtn').onclick = saveBillingBatchDetails;
 $('createBillingCreditBtn').onclick = createBillingCredit;
-$('uploadBillingAttachmentBtn').onclick = uploadBillingAttachment;
 $('billingExportJob').addEventListener('change',()=>loadBillingReconciliation());
 $('backToBillingHistoryBtn').onclick = () => {
   currentBillingBatch = null;
