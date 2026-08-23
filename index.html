@@ -5032,6 +5032,7 @@ async function loadJobs(){
 
   const canViewJobPackages = userCanUseReporting() || userCanManageJobPackages();
   const canManageJobAssignments = userCanManageJobs();
+  const canViewJobAssignments = canManageJobAssignments || canViewJobPackages;
 
   if(canViewJobPackages){
     const {
@@ -5070,6 +5071,11 @@ async function loadJobs(){
     }
     currentJobAssignableLeaders = leaders || [];
 
+  }else{
+    currentJobAssignableLeaders = [];
+  }
+
+  if(canViewJobAssignments){
     const { data:assignments, error:assignmentsError } =
       await sb.rpc('get_job_leader_assignments');
     if(assignmentsError){
@@ -5083,7 +5089,6 @@ async function loadJobs(){
       currentJobLeaderAssignments.set(assignment.job_id, list);
     });
   }else{
-    currentJobAssignableLeaders = [];
     currentJobLeaderAssignments = new Map();
   }
 
@@ -5195,6 +5200,11 @@ function renderJobProgressDashboard(jobs, canView){
 
   visibleActiveJobs.forEach(job => {
     const summary = currentJobProgressSummaries.get(job.id) || {};
+    const assignments = currentJobLeaderAssignments.get(job.id) || [];
+    const assignedNames = assignments.map(assignment => assignment.full_name);
+    const assignmentLabel = assignedNames.length
+      ? assignedNames.join(', ')
+      : 'Unassigned';
     const reportedPercent = Number(summary.reported_percent || 0);
     const approvedPercent = Number(summary.approved_percent || 0);
     const row = document.createElement('div');
@@ -5209,6 +5219,8 @@ function renderJobProgressDashboard(jobs, canView){
         Number(summary.package_count || 0) + ' package(s) · ' +
         Number(summary.work_point_count || 0) + ' work point(s) · ' +
         Number(summary.report_count || 0) + ' daily report(s)</div>' +
+      '<div class="job-progress-assignees"><strong>Assigned Foremen / Job Leaders:</strong> ' +
+        escapeHtml(assignmentLabel) + '</div>' +
       '<div class="daily-review-counts"><span class="authorized">' +
         escapeHtml(formatCurrency(summary.authorized_value || 0)) + ' Authorized</span>' +
         ' &nbsp;•&nbsp; ' + escapeHtml(formatCurrency(summary.remaining_value || 0)) + ' Remaining' +
@@ -5563,7 +5575,9 @@ function renderJobLeaderAssignments(job, container){
 
     const assign = document.createElement('button');
     assign.className = 'small success';
-    assign.textContent = 'Assign Leader';
+    assign.textContent = assignments.length > 0
+      ? 'Assign Another Foreman / Leader'
+      : 'Assign Foreman / Leader';
     assign.onclick = () => changeJobLeaderAssignment(
       job,
       select.value,
