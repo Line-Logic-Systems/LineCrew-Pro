@@ -189,6 +189,8 @@ assert(index.includes('await saveDailyUnitBatch({ closeAfterSave:true })'), 'Don
 assert(index.includes("doneButton.textContent = 'Saving & Finishing...'"), 'Done Adding Units must show an in-progress save state.');
 assert(index.includes('if(currentDailySavedUnits.length === 0)'), 'Done Adding Units must not close an empty unit report.');
 assert(expandedJsa.includes("load('app-polish.js?v=20260823b'"), 'Done Adding Units workflow must load the current app polish asset.');
+assert(index.includes('<h3>Saved Units</h3>'), 'Edit Draft must show persisted units before the blank Add More Units rows.');
+assert(index.includes("doneButton.textContent = 'Done Adding Units';"), 'The Done Adding Units button must reset whenever its editor opens or closes.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
