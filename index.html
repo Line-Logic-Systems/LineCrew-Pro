@@ -808,9 +808,12 @@ button:disabled{
   font-size:12px;
 }
 
-.daily-review-counts .authorized{ color:#08743d; font-weight:800; }
-.daily-review-counts .pending{ color:#8a5800; font-weight:800; }
-.daily-review-counts .redline{ color:#b42318; font-weight:800; }
+.daily-review-counts .authorized,
+.daily-review-counts .pending,
+.daily-review-counts .redline{
+  color:inherit;
+  font-weight:800;
+}
 
 .daily-draft-guidance{
   margin-top:10px;
@@ -961,34 +964,20 @@ button:disabled{
   background:#eef5fa;
 }
 
-.mh-rate-target{
-  display:inline-flex;
-  align-items:center;
-  gap:5px;
-  margin-top:5px;
-  padding:4px 8px;
-  border:1px solid transparent;
-  border-radius:999px;
-  font-size:12px;
+.mh-rate-number{
   font-weight:800;
 }
 
-.mh-rate-target.below{
+.mh-rate-number.below{
   color:#991b1b;
-  background:#fee2e2;
-  border-color:#fecaca;
 }
 
-.mh-rate-target.at-target{
+.mh-rate-number.at-target{
   color:#854d0e;
-  background:#fef3c7;
-  border-color:#fde68a;
 }
 
-.mh-rate-target.above{
+.mh-rate-number.above{
   color:#166534;
-  background:#dcfce7;
-  border-color:#bbf7d0;
 }
 
 .daily-unit-picker{
@@ -13495,17 +13484,13 @@ function dailyReportValueSummaryMarkup(report, summary){
   const fieldRunRate = weightedHours > 0
     ? Number(summary.adjusted_total || 0) / weightedHours
     : 0;
-  const targetMarkup = canSeeRunRate
-    ? manHourTargetMarkup(fieldRunRate)
-    : '';
   const runRateMarkup = !canSeeRunRate
     ? ''
     : (canSeeActual
         ? '<br>Actual MH Run Rate: <strong>' +
           escapeHtml(formatCurrency(actualRunRate)) + '</strong>'
         : '') +
-      '<br>Field MH Run Rate: <strong>' +
-        escapeHtml(formatCurrency(fieldRunRate)) + '</strong>' + targetMarkup;
+      '<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate);
 
   if(canSeeActual && hasAdjustment){
     return (
@@ -13539,15 +13524,15 @@ function manHourTargetStatus(rate){
   return { key:'above', label:'Meets Target', target };
 }
 
-function manHourTargetMarkup(rate){
+function manHourRateNumberMarkup(rate){
   const status = manHourTargetStatus(rate);
-  if(!status) return '';
-  return (
-    '<br><span class="mh-rate-target ' + status.key + '">' +
-      escapeHtml(status.label) + ' · Target ' +
-      escapeHtml(formatCurrency(currentCompany.required_man_hour_rate)) +
-    '</span>'
-  );
+  const className = status ? 'mh-rate-number ' + status.key : 'mh-rate-number';
+  const title = status
+    ? status.label + ' · Target ' + formatCurrency(status.target)
+    : '';
+  return '<strong class="' + className + '"' +
+    (title ? ' title="' + escapeHtml(title) + '"' : '') + '>' +
+    escapeHtml(formatCurrency(rate)) + '</strong>';
 }
 
 function dailyReportAuthorizationSummaryMarkup(report, summary){
@@ -15088,7 +15073,7 @@ startApp();
 
 </script>
 
-  <script src="expanded-jsa.js?v=20260823f"></script>
+  <script src="expanded-jsa.js?v=20260823g"></script>
 
 <script>
 (function () {

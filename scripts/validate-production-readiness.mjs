@@ -199,7 +199,7 @@ assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time option
 assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
 assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach"), 'Foreman Daily Reports must directly preload assigned crew members.');
 assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
-assert(expandedJsa.includes("load('timekeeping.js?v=20260823g'"), 'Direct Foreman crew preload must use a fresh cache version.');
+assert(expandedJsa.includes("load('timekeeping.js?v=20260823h'"), 'Direct Foreman crew preload must use a fresh cache version.');
 assert(timekeepingRoster.includes('await autoLoadAssignedCrew();'), 'Foreman roster selectors must wait for assigned crew data before rebuilding employee options.');
 assert(expandedJsa.includes("load('number-input-polish.js?v=20260823a'"), 'Global numeric input polish must be cache-versioned and loaded.');
 assert(numberInputPolish.includes("input.defaultValue === '0'"), 'Only numeric fields designed with a zero default may restore an empty value to zero.');
@@ -223,7 +223,7 @@ assert(index.includes("if(reportStatus === 'draft' && canEditDraft)"), 'Edit and
 assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned Foreman drafts must recognize both the report creator and assigned Foreman ownership fields.');
 assert(index.includes("created_by,\n      work_date"), 'Production report loading must include the creator used to restore returned-draft editing.');
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
-assert(index.includes('expanded-jsa.js?v=20260823f'), 'The current workflow release must use a fresh cache-busted script version.');
+assert(index.includes('expanded-jsa.js?v=20260823g'), 'The current workflow release must use a fresh cache-busted script version.');
 assert(index.includes("Importing the package's authorized units lets LineCrew Pro distinguish") && index.includes('normal authorized production from redlines, reconcile Pending Packet'), 'Job-package setup must explain why authorized-unit import matters.');
 assert(index.includes('Save &amp; Import Authorized Units'), 'Job-package save must name the automatic authorized-unit import workflow.');
 assert(index.includes('setJobPackageImportOpen(true)'), 'Saving a utility package must open its authorized-unit import section.');
@@ -247,7 +247,10 @@ assert(index.includes('jobName + \' · \' + foreman'), 'Compact supervisor rows 
 assert(expandedJsa.includes("load('role-workspace-polish.js?v=20260823a'"), 'Role workspace management labels must use a fresh cache version.');
 assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
 assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');
-assert(index.includes("'<br>Field MH Run Rate: <strong>'"), 'Supervision report cards must show the field man-hour run rate.');
+assert(index.includes("'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)"), 'Supervision report cards must color only the field man-hour rate number.');
+assert(index.includes('.daily-review-counts .redline{\n  color:inherit;'), 'Authorization, Pending Packet and Redline summary counts must remain neutral.');
+assert(!index.includes('mh-rate-target'), 'Man-hour target status must not render as a separate colored badge.');
+assert(timekeeping.includes('window.manHourRateNumberMarkup(value)'), 'Production totals must color only the Field MH Run Rate value.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
