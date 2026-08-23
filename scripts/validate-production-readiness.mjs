@@ -178,7 +178,8 @@ assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time option
 assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
 assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach"), 'Foreman Daily Reports must directly preload assigned crew members.');
 assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
-assert(expandedJsa.includes("load('timekeeping.js?v=20260823e'"), 'Direct Foreman crew preload must use a fresh cache version.');
+assert(expandedJsa.includes("load('timekeeping.js?v=20260823f'"), 'Direct Foreman crew preload must use a fresh cache version.');
+assert(timekeepingRoster.includes('await autoLoadAssignedCrew();'), 'Foreman roster selectors must wait for assigned crew data before rebuilding employee options.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',

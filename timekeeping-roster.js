@@ -172,10 +172,10 @@
 
   function scheduleRefresh(){
     clearTimeout(refreshTimer);
-    refreshTimer=setTimeout(()=>{
+    refreshTimer=setTimeout(async()=>{
       installAdminImport();
       installMyCrew();
-      autoLoadAssignedCrew();
+      await autoLoadAssignedCrew();
       restrictDailySelectors();
     },80);
   }
