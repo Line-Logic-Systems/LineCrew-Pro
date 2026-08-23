@@ -1839,12 +1839,20 @@ button:disabled{
         </p>
       </div>
 
-      <button
-        id="showCreateJobBtn"
-        class="success hidden"
-      >
-        + Create Job
-      </button>
+      <div class="button-row">
+        <button
+          id="showAddJobPackageBtn"
+          class="success hidden"
+        >
+          + Add Utility Package to Existing Job
+        </button>
+        <button
+          id="showCreateJobBtn"
+          class="success hidden"
+        >
+          + Create Job
+        </button>
+      </div>
 
     </div>
 
@@ -3842,6 +3850,9 @@ async function displayAppPage(page, state = {}){
     $('showCreateJobBtn')
       .classList
       .toggle('hidden', !canManageJobs);
+    $('showAddJobPackageBtn')
+      .classList
+      .toggle('hidden', !userCanManageJobPackages());
 
     await loadJobContractOptions();
     currentOpenJobId =
@@ -4999,6 +5010,10 @@ $('jobsTile').onclick = async()=>{
       .add('hidden');
   }
 
+  $('showAddJobPackageBtn').classList.toggle(
+    'hidden',
+    !userCanManageJobPackages()
+  );
 
   await navigateToAppPage('jobsPage');
 };
@@ -5027,6 +5042,8 @@ $('backToDashboard').onclick = ()=>{
 
 
 /* CREATE JOB FORM */
+
+$('showAddJobPackageBtn').onclick = ()=> showJobPackageForm();
 
 $('showCreateJobBtn').onclick = ()=>{
 
@@ -5489,6 +5506,7 @@ function showJobDetail(job, scroll = true){
   currentOpenJobId = job.id;
   $('jobProgressDashboard').classList.add('hidden');
   $('showCreateJobBtn').classList.add('hidden');
+  $('showAddJobPackageBtn').classList.add('hidden');
   $('jobsList').innerHTML = '';
 
   const backButton = document.createElement('button');
@@ -5521,6 +5539,10 @@ function closeJobDetail(){
   $('showCreateJobBtn').classList.toggle(
     'hidden',
     !userCanManageJobs()
+  );
+  $('showAddJobPackageBtn').classList.toggle(
+    'hidden',
+    !userCanManageJobPackages()
   );
   $('jobProgressDashboard').scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -5879,7 +5901,7 @@ async function changeJobLeaderAssignment(job, memberId, assigned){
 
 function renderJobPackages(job, container){
   const packages = currentJobPackageCatalog.filter(
-    jobPackage => jobPackage.job_id === job.id
+    jobPackage => String(jobPackage.job_id) === String(job.id)
   );
 
   if(!packages.length){
@@ -6520,23 +6542,52 @@ $('confirmJobPackageImportBtn').onclick = async()=>{
 };
 
 
-function showJobPackageForm(job){
-  $('jobPackageFormCard').dataset.jobId = job.id;
-  $('jobPackageJob').innerHTML = '';
+function showJobPackageForm(selectedJob = null){
+  const activeJobs = currentJobsCatalog.filter(job => job.active === true);
+  if(activeJobs.length === 0){
+    return alert(
+      'Create an active job tied to a contract before adding a Utility Package.'
+    );
+  }
 
-  const option = document.createElement('option');
-  option.value = job.id;
-  option.textContent = `${job.job_number} — ${job.job_name}`;
-  $('jobPackageJob').appendChild(option);
+  const jobSelect = $('jobPackageJob');
+  jobSelect.innerHTML = '<option value="">Select an existing job</option>';
+  activeJobs
+    .slice()
+    .sort((a, b) =>
+      String(a.job_number || '').localeCompare(
+        String(b.job_number || ''),
+        undefined,
+        { numeric:true }
+      )
+    )
+    .forEach(job => {
+      const option = document.createElement('option');
+      option.value = job.id;
+      option.textContent =
+        String(job.job_number || 'No job number') +
+        (job.job_name ? ' — ' + job.job_name : '');
+      jobSelect.appendChild(option);
+    });
+
+  const preferredJobId = selectedJob?.id || currentOpenJobId || '';
+  if(activeJobs.some(job => String(job.id) === String(preferredJobId))){
+    jobSelect.value = preferredJobId;
+  }
+
+  $('jobPackageFormCard').dataset.jobId = jobSelect.value;
+  jobSelect.onchange = () => {
+    $('jobPackageFormCard').dataset.jobId = jobSelect.value;
+  };
 
   $('jobPackageName').value = '';
   $('jobPackageNumber').value = '';
   $('jobPackageReceivedDate').value = '';
   $('jobPackageNotes').value = '';
   $('jobPackageFormCard').classList.remove('hidden');
+  jobSelect.focus();
   $('jobPackageFormCard').scrollIntoView({ behavior:'smooth' });
 }
-
 
 $('cancelJobPackageBtn').onclick = ()=>{
   delete $('jobPackageFormCard').dataset.jobId;
@@ -6545,11 +6596,17 @@ $('cancelJobPackageBtn').onclick = ()=>{
 
 
 $('saveJobPackageBtn').onclick = async()=>{
-  const jobId = $('jobPackageFormCard').dataset.jobId;
+  const jobId = $('jobPackageJob').value;
   const packageName = $('jobPackageName').value.trim();
+  const selectedJob = currentJobsCatalog.find(
+    job => String(job.id) === String(jobId) && job.active === true
+  );
 
-  if(!jobId || !packageName){
-    return alert('Job and package name are required.');
+  if(!selectedJob){
+    return alert('Select the existing active job this Utility Package belongs to.');
+  }
+  if(!packageName){
+    return alert('Enter a Utility Package name.');
   }
 
   const button = $('saveJobPackageBtn');
@@ -6572,17 +6629,20 @@ $('saveJobPackageBtn').onclick = async()=>{
 
   delete $('jobPackageFormCard').dataset.jobId;
   $('jobPackageFormCard').classList.add('hidden');
+  currentOpenJobId = jobId;
   await loadJobs();
   const savedPackage = currentJobPackageCatalog.find(
-    jobPackage => jobPackage.id === packageId
+    jobPackage =>
+      String(jobPackage.id) === String(packageId) &&
+      String(jobPackage.job_id) === String(jobId)
   );
   button.disabled = false;
   button.textContent = 'Save & Import Authorized Units';
 
   if(!savedPackage){
     return alert(
-      'Utility job package saved, but its import screen could not be opened. ' +
-      'Refresh Jobs and open the package to continue.'
+      'The Utility Package was saved, but LineCrew Pro could not verify it under ' +
+      selectedJob.job_number + '. Refresh Jobs and open that job before importing.'
     );
   }
 
