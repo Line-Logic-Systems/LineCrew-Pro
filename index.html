@@ -2048,6 +2048,7 @@ button:disabled{
           <input id="billingExportDateTo" type="date">
         </div>
       </div>
+      <div id="billingReconciliationPanel" class="daily-value-summary hidden"></div>
       <label class="checkbox-row">
         <input id="billingExportIncludeRedlines" type="checkbox">
         Add a separate redline summary to the export
@@ -2065,6 +2066,19 @@ button:disabled{
 
     <div id="billingBatchDetail" class="hidden">
       <div id="billingBatchSummary" class="daily-value-summary"></div>
+      <div class="grid">
+        <div>
+          <label for="billingUtilityInvoiceNumber">Utility Invoice / Reference</label>
+          <input id="billingUtilityInvoiceNumber" placeholder="Optional utility billing reference">
+        </div>
+        <div>
+          <label for="billingPaymentReference">Payment Reference</label>
+          <input id="billingPaymentReference" placeholder="Optional check, ACH or payment reference">
+        </div>
+      </div>
+      <label for="billingDetailNotes">Batch Notes</label>
+      <textarea id="billingDetailNotes" rows="2" placeholder="Internal billing notes"></textarea>
+      <button id="saveBillingBatchDetailsBtn" class="secondary">Save Billing Details</button>
       <div class="button-row">
         <button id="exportBillingExcelBtn" class="success">Export Excel</button>
         <button id="exportBillingCsvBtn" class="secondary">Export CSV</button>
@@ -2072,7 +2086,17 @@ button:disabled{
         <button id="markBillingSubmittedBtn" class="secondary">Mark Submitted</button>
         <button id="markBillingPaidBtn" class="success">Mark Paid</button>
         <button id="voidBillingBatchBtn" class="danger">Void Batch</button>
+        <button id="createBillingCreditBtn" class="warning hidden">Create Credit / Adjustment</button>
         <button id="backToBillingHistoryBtn" class="secondary">Back to Batches</button>
+      </div>
+      <div class="daily-report-history">
+        <h3>Billing Attachments</h3>
+        <div class="attachment-upload-row">
+          <input id="billingAttachmentFile" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.xlsx,.csv">
+          <input id="billingAttachmentCaption" maxlength="500" placeholder="Optional caption">
+          <button id="uploadBillingAttachmentBtn" class="success small">Upload Attachment</button>
+        </div>
+        <div id="billingAttachmentList"><p class="muted">No attachments added yet.</p></div>
       </div>
       <div id="billingBatchLinePreview"></div>
     </div>
@@ -3717,6 +3741,7 @@ let currentJobsCatalog = [];
 let currentBillingBatches = [];
 let currentBillingBatch = null;
 let currentBillingBatchLines = [];
+let currentBillingReconciliation = null;
 let currentOpenJobId = null;
 let currentJobProgressVisibleCount = 25;
 let currentOpenJobPackage = null;
@@ -5459,7 +5484,7 @@ async function loadJobs(){
     const {
       data:jobPackages,
       error:jobPackagesError
-    } = await sb.rpc('get_job_packages');
+    } = await sb.rpc('get_job_packages_v2');
 
     if(jobPackagesError){
       alert('Unable to load utility job packages: ' + jobPackagesError.message);
@@ -6123,6 +6148,9 @@ function renderJobPackages(job, container){
         <div>
           <strong>${escapeHtml(jobPackage.package_name)}</strong>
           <div class="muted">
+            ${jobPackage.revision_number > 1
+              ? 'Revision ' + escapeHtml(jobPackage.revision_number - 1)
+              : 'Original Packet'} ·
             Reference: ${escapeHtml(jobPackage.package_number || 'Not provided')}
             ${jobPackage.received_date
               ? ' · Received: ' + escapeHtml(jobPackage.received_date)
@@ -6142,6 +6170,13 @@ function renderJobPackages(job, container){
     openButton.textContent = 'Open Package';
     openButton.onclick = ()=> openJobPackageDetails(jobPackage);
     row.appendChild(openButton);
+    if(Number(jobPackage.revision_number || 1) > 1){
+      const changesButton = document.createElement('button');
+      changesButton.className = 'secondary small';
+      changesButton.textContent = 'View Revision Changes';
+      changesButton.onclick = ()=> toggleJobPackageRevisionChanges(jobPackage,row,changesButton);
+      row.appendChild(changesButton);
+    }
     if(userCanManageJobPackages()){
       const deleteButton = document.createElement('button');
       deleteButton.className = 'danger small';
@@ -6151,6 +6186,28 @@ function renderJobPackages(job, container){
     }
     container.appendChild(row);
   });
+}
+
+async function toggleJobPackageRevisionChanges(jobPackage,row,button){
+  const existing = row.querySelector('.packet-revision-delta');
+  if(existing){ existing.remove(); button.textContent='View Revision Changes'; return; }
+  button.disabled=true; button.textContent='Loading Changes...';
+  const { data,error } = await sb.rpc('get_job_package_revision_delta',{ p_package_id:jobPackage.id });
+  button.disabled=false; button.textContent='Hide Revision Changes';
+  if(error){ button.textContent='View Revision Changes'; return alert('Unable to compare packet revisions: '+error.message); }
+  const panel=document.createElement('div'); panel.className='daily-report-history packet-revision-delta';
+  if(!data?.length){
+    panel.innerHTML='<strong>Revision Changes</strong><p class="muted">No authorized quantity changes were found.</p>';
+  }else{
+    panel.innerHTML='<strong>Revision Changes</strong>' + data.map(change =>
+      '<div class="daily-history-event"><strong>WP '+escapeHtml(change.work_point)+' · '+escapeHtml(change.unit_code)+'</strong><br>'+
+      'Install: '+escapeHtml(change.prior_install)+' → '+escapeHtml(change.new_install)+
+      ' ('+(Number(change.install_change)>=0?'+':'')+escapeHtml(change.install_change)+') · Remove: '+
+      escapeHtml(change.prior_remove)+' → '+escapeHtml(change.new_remove)+
+      ' ('+(Number(change.remove_change)>=0?'+':'')+escapeHtml(change.remove_change)+')</div>'
+    ).join('');
+  }
+  row.appendChild(panel);
 }
 
 
@@ -7265,46 +7322,36 @@ async function editJob(job){
 /* CLOSE / REOPEN JOB */
 
 async function changeJobStatus(job){
-
-  const newStatus =
-    !job.active;
-
-
-  const action =
-    newStatus
-      ? 'reopen'
-      : 'close';
-
-
-  const confirmed =
-    confirm(
-      `Are you sure you want to ${action} job ${job.job_number}?`
-    );
-
-
-  if(!confirmed){
-
-    return;
+  const reopening=!job.active;
+  let reason=null;
+  if(reopening){
+    reason=prompt('Why is job '+job.job_number+' being reopened?');
+    if(reason===null) return;
+    if(!reason.trim()) return alert('A reopening reason is required.');
+  }else{
+    const { data,error }=await sb.rpc('get_job_billing_reconciliation',{p_job_id:job.id});
+    if(error) return alert('Unable to check job closeout: '+error.message);
+    const rec=data?.[0] || {};
+    const batchesResult=await sb.rpc('get_billing_export_batches_v3');
+    if(batchesResult.error) return alert('Unable to check Final Bill: '+batchesResult.error.message);
+    const paidFinal=(batchesResult.data||[]).some(batch=>batch.job_id===job.id && batch.billing_type==='final' && batch.status==='paid');
+    const blockers=[];
+    if(!paidFinal) blockers.push('No paid Final Bill');
+    if(Number(rec.approved_unbilled_value)>0.01) blockers.push(formatCurrency(rec.approved_unbilled_value)+' approved production still unbilled');
+    if(Number(rec.awaiting_review_count)>0) blockers.push(rec.awaiting_review_count+' report(s) awaiting review');
+    if(Number(rec.draft_report_count)>0) blockers.push(rec.draft_report_count+' draft/returned report(s)');
+    if(blockers.length){
+      reason=prompt('Job closeout check found:\n\n• '+blockers.join('\n• ')+'\n\nEnter an override reason to close anyway, or Cancel.');
+      if(reason===null) return;
+      if(!reason.trim()) return alert('An override reason is required.');
+    }else if(!confirm('Close job '+job.job_number+'?\n\nThe Final Bill is paid and no approved production is waiting to be billed.')) return;
   }
-
-
-  const {error} =
-    await sb.rpc(
-      'set_job_active',
-      {
-        p_job_id:job.id,
-        p_active:newStatus
-      }
-    );
-
-
-  if(error){
-
-    return alert(error.message);
-  }
-
-
+  const { error }=await sb.rpc('set_job_closeout',{
+    p_job_id:job.id,p_close:!reopening,p_reason:reason
+  });
+  if(error) return alert('Unable to '+(reopening?'reopen':'close')+' job: '+error.message);
   await loadJobs();
+  alert('Job '+(reopening?'reopened. Foremen can report against it again.':'closed and locked against new Daily Reports.'));
 }
 
 
@@ -7479,6 +7526,7 @@ async function openBillingExportCenter(){
   $('billingBatchCreateForm').classList.remove('hidden');
   $('billingExportIsFinal').checked = false;
   await loadBillingExportBatches();
+  await loadBillingReconciliation();
   $('billingExportCenter').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
@@ -7489,7 +7537,7 @@ function closeBillingExportCenter(){
 }
 
 async function loadBillingExportBatches(){
-  const { data,error } = await sb.rpc('get_billing_export_batches_v2');
+  const { data,error } = await sb.rpc('get_billing_export_batches_v3');
   if(error){
     alert('Unable to load billing batches: ' + error.message);
     return;
@@ -7498,11 +7546,45 @@ async function loadBillingExportBatches(){
   renderBillingBatchHistory();
 }
 
+async function loadBillingReconciliation(jobId = $('billingExportJob').value){
+  const panel=$('billingReconciliationPanel');
+  currentBillingReconciliation=null;
+  if(!jobId){ panel.classList.add('hidden'); panel.innerHTML=''; return null; }
+  panel.classList.remove('hidden');
+  panel.innerHTML='<span class="muted">Loading job billing reconciliation...</span>';
+  const { data,error }=await sb.rpc('get_job_billing_reconciliation',{ p_job_id:jobId });
+  if(error){ panel.innerHTML='<span class="danger-text">Unable to load reconciliation: '+escapeHtml(error.message)+'</span>'; return null; }
+  currentBillingReconciliation=data?.[0] || null;
+  const item=currentBillingReconciliation;
+  if(!item){ panel.innerHTML='<span class="muted">No job billing information is available.</span>'; return null; }
+  panel.innerHTML=
+    '<span><strong>'+escapeHtml(formatCurrency(item.authorized_value))+'</strong><br>Authorized</span>'+
+    '<span><strong>'+escapeHtml(formatCurrency(item.approved_value))+'</strong><br>Approved</span>'+
+    '<span><strong>'+escapeHtml(formatCurrency(item.billed_value))+'</strong><br>Previously Billed</span>'+
+    '<span><strong>'+escapeHtml(formatCurrency(item.credit_value))+'</strong><br>Credits</span>'+
+    '<span><strong>'+escapeHtml(formatCurrency(item.approved_unbilled_value))+'</strong><br>Approved Unbilled</span>'+
+    '<span><strong>'+escapeHtml(formatCurrency(item.remaining_authorized_value))+'</strong><br>Remaining Authorized</span>'+
+    '<span><strong>'+escapeHtml(item.awaiting_review_count)+'</strong><br>Awaiting Review</span>'+
+    '<span><strong>'+escapeHtml(item.draft_report_count)+'</strong><br>Draft / Returned</span>';
+  return item;
+}
+
+function billingFinalBlockers(reconciliation){
+  if(!reconciliation) return [];
+  const blockers=[];
+  if(Number(reconciliation.remaining_authorized_value)>0.01) blockers.push(formatCurrency(reconciliation.remaining_authorized_value)+' authorized work remaining');
+  if(Number(reconciliation.awaiting_review_count)>0) blockers.push(reconciliation.awaiting_review_count+' report(s) awaiting review');
+  if(Number(reconciliation.draft_report_count)>0) blockers.push(reconciliation.draft_report_count+' draft/returned report(s)');
+  if(Number(reconciliation.pending_packet_count)>0) blockers.push(reconciliation.pending_packet_count+' pending job unit(s)');
+  return blockers;
+}
+
 function billingStatusLabel(status){
   return String(status || 'draft').replaceAll('_',' ').toUpperCase();
 }
 
 function billingStageLabel(batch){
+  if(String(batch?.billing_type || '').toLowerCase() === 'credit') return 'Credit / Adjustment';
   if(String(batch?.billing_type || 'partial').toLowerCase() === 'final') return 'Final Bill';
   return 'Partial Bill ' + Number(batch?.billing_sequence || 1);
 }
@@ -7524,7 +7606,10 @@ function renderBillingBatchHistory(){
       escapeHtml(billingStageLabel(batch)) + ' · ' +
       escapeHtml(batch.created_at ? new Date(batch.created_at).toLocaleString() : '') +
       ' · ' + Number(batch.authorized_line_count || 0) + ' authorized · ' +
-      Number(batch.redline_line_count || 0) + ' redline</span></div><div><span class="billing-status ' +
+      Number(batch.redline_line_count || 0) + ' redline' +
+      (batch.utility_invoice_number ? ' · Ref: '+escapeHtml(batch.utility_invoice_number) : '') +
+      (batch.parent_batch_number ? ' · Corrects: '+escapeHtml(batch.parent_batch_number) : '') +
+      '</span></div><div><span class="billing-status ' +
       escapeHtml(String(batch.status || 'draft').toLowerCase()) + '">' +
       escapeHtml(billingStatusLabel(batch.status)) + '</span><br><strong>' +
       escapeHtml(formatCurrency(batch.total_value)) + '</strong></div></div>';
@@ -7589,6 +7674,17 @@ async function createBillingExportBatch(){
   }
   const separateRedlineSummary = $('billingExportIncludeRedlines').checked;
   const isFinal = $('billingExportIsFinal').checked;
+  const reconciliation=await loadBillingReconciliation(jobId);
+  let finalOverrideReason=null;
+  const blockers=isFinal ? billingFinalBlockers(reconciliation) : [];
+  if(blockers.length){
+    finalOverrideReason=prompt(
+      'Final Bill check found:\n\n• '+blockers.join('\n• ')+
+      '\n\nIf the utility reduced the design or this is otherwise correct, enter the override reason. Cancel to stop.'
+    );
+    if(finalOverrideReason===null) return;
+    if(!finalOverrideReason.trim()) return alert('An override reason is required while Final Bill checks are unresolved.');
+  }
   const confirmed = confirm(
     'Create ' + (isFinal ? 'the Final Bill' : 'the next Partial Bill') +
     ' from approved, unbilled production?' +
@@ -7601,13 +7697,14 @@ async function createBillingExportBatch(){
   const button = $('createBillingExportBatchBtn');
   button.disabled = true;
   button.textContent = 'Creating Billing Batch...';
-  const { data:batchId,error } = await sb.rpc('create_billing_export_batch_v2', {
+  const { data:batchId,error } = await sb.rpc('create_billing_export_batch_v3', {
     p_job_id:jobId,
     p_date_from:dateFrom,
     p_date_to:dateTo,
-    p_include_redlines:separateRedlineSummary,
+    p_separate_redline_summary:separateRedlineSummary,
     p_notes:$('billingExportNotes').value.trim() || null,
-    p_is_final:isFinal
+    p_is_final:isFinal,
+    p_final_override_reason:finalOverrideReason
   });
   button.disabled = false;
   button.textContent = 'Create Billing Batch';
@@ -7647,6 +7744,7 @@ async function openBillingBatch(batch){
   $('billingBatchCreateForm').classList.add('hidden');
   $('billingBatchDetail').classList.remove('hidden');
   renderBillingBatchDetail();
+  await loadBillingAttachments();
   $('billingBatchDetail').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
@@ -7662,12 +7760,19 @@ function renderBillingBatchDetail(){
     '<span><strong>' + authorized.length + '</strong><br>Authorized Lines</span>' +
     '<span><strong>' + redlines.length + '</strong><br>Redline Lines</span>' +
     '<span><strong>' + escapeHtml(formatCurrency(batch.total_value)) + '</strong><br>Total Value</span>' +
-    '<span><strong>' + escapeHtml(billingStatusLabel(batch.status)) + '</strong><br>Status</span>';
+    '<span><strong>' + escapeHtml(billingStatusLabel(batch.status)) + '</strong><br>Status</span>' +
+    (batch.parent_batch_number ? '<span><strong>'+escapeHtml(batch.parent_batch_number)+'</strong><br>Corrects Batch</span>' : '') +
+    (batch.correction_reason ? '<span><strong>'+escapeHtml(batch.correction_reason)+'</strong><br>Correction Reason</span>' : '');
+
+  $('billingUtilityInvoiceNumber').value=batch.utility_invoice_number || '';
+  $('billingPaymentReference').value=batch.payment_reference || '';
+  $('billingDetailNotes').value=batch.notes || '';
 
   const status = String(batch.status || 'draft').toLowerCase();
   $('markBillingSubmittedBtn').classList.toggle('hidden', !['draft','exported'].includes(status));
   $('markBillingPaidBtn').classList.toggle('hidden', status !== 'submitted');
   $('voidBillingBatchBtn').classList.toggle('hidden', ['paid','void'].includes(status));
+  $('createBillingCreditBtn').classList.toggle('hidden', status!=='paid' || !userIsCompanyAdmin() || batch.billing_type==='credit');
   ['exportBillingExcelBtn','exportBillingCsvBtn','exportBillingPdfBtn'].forEach(id =>
     $(id).disabled = status === 'void'
   );
@@ -7695,6 +7800,8 @@ function billingExportRows(lines){
   return lines.map(line => ({
     'Batch Number':line.batch_number,
     'Billing Stage':billingStageLabel(currentBillingBatch),
+    'Utility Invoice / Reference':currentBillingBatch?.utility_invoice_number || '',
+    'Payment Reference':currentBillingBatch?.payment_reference || '',
     'Job Number':line.job_number,
     'Job Name':line.job_name || '',
     'Customer':line.customer_name || '',
@@ -7721,8 +7828,8 @@ function billingFileBase(){
 
 async function recordBillingBatchExported(){
   if(!currentBillingBatch || String(currentBillingBatch.status).toLowerCase() !== 'draft') return;
-  const { error } = await sb.rpc('set_billing_export_batch_status', {
-    p_batch_id:currentBillingBatch.batch_id,p_status:'exported'
+  const { error } = await sb.rpc('set_billing_export_batch_status_v2', {
+    p_batch_id:currentBillingBatch.batch_id,p_status:'exported',p_reason:null
   });
   if(error){
     alert('The file downloaded, but LineCrew Pro could not mark the batch Exported: ' + error.message);
@@ -7742,6 +7849,8 @@ async function exportBillingExcel(){
   const summaryRows = [
     ['Billing Batch',currentBillingBatch.batch_number],
     ['Billing Stage',billingStageLabel(currentBillingBatch)],
+    ['Utility Invoice / Reference',currentBillingBatch.utility_invoice_number || ''],
+    ['Payment Reference',currentBillingBatch.payment_reference || ''],
     ['Job Number',currentBillingBatch.job_number],
     ['Job Name',currentBillingBatch.job_name || ''],
     ['From Date',currentBillingBatch.date_from || 'All approved production'],
@@ -7755,7 +7864,7 @@ async function exportBillingExcel(){
   summarySheet['!cols'] = [{wch:22},{wch:32}];
   const workPointRows = billingExportRows(currentBillingBatchLines);
   const workPointSheet = XLSX.utils.json_to_sheet(workPointRows);
-  workPointSheet['!cols'] = [18,16,15,24,20,20,14,14,16,18,60,14,18,14,18,24,20].map(wch => ({wch}));
+  workPointSheet['!cols'] = [18,16,24,20,15,24,20,20,14,14,16,18,60,14,18,14,18,24,20].map(wch => ({wch}));
   XLSX.utils.book_append_sheet(workbook,workPointSheet,'Work Points + Redlines');
   XLSX.utils.book_append_sheet(workbook,summarySheet,'Billing Summary');
   const redlines = billingExportRows(currentBillingBatchLines.filter(line => line.authorization_status === 'redline'));
@@ -7814,6 +7923,8 @@ async function exportBillingPdf(){
     '<h1>' + escapeHtml(billingStageLabel(currentBillingBatch)) + '</h1><p class="muted">Billing Export ' +
     escapeHtml(currentBillingBatch.batch_number) + '</p><p>' +
     escapeHtml(currentBillingBatch.job_number) + ' — ' + escapeHtml(currentBillingBatch.job_name || '') +
+    (currentBillingBatch.utility_invoice_number ? '<br>Utility Reference: '+escapeHtml(currentBillingBatch.utility_invoice_number) : '') +
+    (currentBillingBatch.payment_reference ? '<br>Payment Reference: '+escapeHtml(currentBillingBatch.payment_reference) : '') +
     '</p><p class="total">Total: ' + escapeHtml(formatCurrency(currentBillingBatch.total_value)) + '</p>' +
     section('Work Point Production',currentBillingBatchLines) +
     (redlines.length && currentBillingBatch.include_redlines ? section('Redline Summary',redlines) : '') +
@@ -7824,12 +7935,92 @@ async function exportBillingPdf(){
   await recordBillingBatchExported();
 }
 
+async function saveBillingBatchDetails(){
+  if(!currentBillingBatch) return;
+  const button=$('saveBillingBatchDetailsBtn'); button.disabled=true;
+  const { error }=await sb.rpc('save_billing_export_batch_details',{
+    p_batch_id:currentBillingBatch.batch_id,
+    p_utility_invoice_number:$('billingUtilityInvoiceNumber').value.trim() || null,
+    p_payment_reference:$('billingPaymentReference').value.trim() || null,
+    p_notes:$('billingDetailNotes').value.trim() || null
+  });
+  button.disabled=false;
+  if(error) return alert('Unable to save billing details: '+error.message);
+  await loadBillingExportBatches();
+  const refreshed=currentBillingBatches.find(item=>item.batch_id===currentBillingBatch.batch_id);
+  if(refreshed){ currentBillingBatch=refreshed; renderBillingBatchDetail(); }
+  alert('Billing details saved.');
+}
+
+async function createBillingCredit(){
+  if(!currentBillingBatch || currentBillingBatch.status!=='paid') return;
+  const reason=prompt('Why is this paid batch being credited or adjusted?');
+  if(reason===null) return;
+  if(!reason.trim()) return alert('A credit reason is required.');
+  if(!confirm('Create a full credit for '+currentBillingBatch.batch_number+'?\n\nThe paid batch remains locked and this creates a separate negative adjustment.')) return;
+  const { data,error }=await sb.rpc('create_billing_credit_batch',{
+    p_paid_batch_id:currentBillingBatch.batch_id,p_reason:reason.trim()
+  });
+  if(error) return alert('Unable to create credit batch: '+error.message);
+  await loadBillingExportBatches();
+  const credit=currentBillingBatches.find(item=>item.batch_id===data);
+  if(credit) await openBillingBatch(credit);
+}
+
+async function loadBillingAttachments(){
+  const list=$('billingAttachmentList');
+  if(!currentBillingBatch){ list.innerHTML='<p class="muted">No batch selected.</p>'; return; }
+  list.innerHTML='<p class="muted">Loading attachments...</p>';
+  const { data,error }=await sb.rpc('get_billing_export_attachments',{p_batch_id:currentBillingBatch.batch_id});
+  if(error){ list.innerHTML='<p class="danger-text">'+escapeHtml(error.message)+'</p>'; return; }
+  if(!data?.length){ list.innerHTML='<p class="muted">No attachments added yet.</p>'; return; }
+  list.replaceChildren();
+  data.forEach(attachment=>{
+    const row=document.createElement('div'); row.className='daily-history-event';
+    row.innerHTML='<strong>'+escapeHtml(attachment.original_filename)+'</strong>'+
+      (attachment.caption?'<br>'+escapeHtml(attachment.caption):'')+
+      '<br><span class="muted">'+escapeHtml(new Date(attachment.created_at).toLocaleString())+'</span>';
+    const open=document.createElement('button'); open.className='secondary small'; open.textContent='Open';
+    open.onclick=async()=>{ const signed=await sb.storage.from('billing-export-attachments').createSignedUrl(attachment.storage_path,300); if(signed.error) return alert(signed.error.message); window.open(signed.data.signedUrl,'_blank','noopener'); };
+    const del=document.createElement('button'); del.className='danger small'; del.textContent='Delete';
+    del.onclick=async()=>{ if(!confirm('Delete this billing attachment?')) return; const result=await sb.rpc('delete_billing_export_attachment',{p_attachment_id:attachment.id}); if(result.error) return alert(result.error.message); await sb.storage.from('billing-export-attachments').remove([result.data]); await loadBillingAttachments(); };
+    row.append(open,del); list.appendChild(row);
+  });
+}
+
+async function uploadBillingAttachment(){
+  if(!currentBillingBatch) return;
+  const file=$('billingAttachmentFile').files?.[0];
+  if(!file) return alert('Choose a billing attachment first.');
+  if(file.size>15728640) return alert('Billing attachments must be 15 MB or smaller.');
+  const path=currentProfile.company_id+'/'+currentBillingBatch.batch_id+'/'+
+    (crypto.randomUUID?crypto.randomUUID():Date.now())+'-'+safeStorageFilename(file.name);
+  const button=$('uploadBillingAttachmentBtn'); button.disabled=true; button.textContent='Uploading...';
+  const upload=await sb.storage.from('billing-export-attachments').upload(path,file,{upsert:false,contentType:file.type});
+  if(upload.error){ button.disabled=false; button.textContent='Upload Attachment'; return alert('Upload failed: '+upload.error.message); }
+  const registered=await sb.rpc('register_billing_export_attachment',{
+    p_batch_id:currentBillingBatch.batch_id,p_storage_path:path,p_original_filename:file.name,
+    p_mime_type:file.type,p_file_size_bytes:file.size,
+    p_caption:$('billingAttachmentCaption').value.trim() || null
+  });
+  if(registered.error){ await sb.storage.from('billing-export-attachments').remove([path]); button.disabled=false; button.textContent='Upload Attachment'; return alert('Unable to register attachment: '+registered.error.message); }
+  button.disabled=false; button.textContent='Upload Attachment';
+  $('billingAttachmentFile').value=''; $('billingAttachmentCaption').value='';
+  await loadBillingAttachments(); await loadBillingExportBatches();
+}
+
 async function setBillingBatchStatus(status){
   if(!currentBillingBatch) return;
   const labels = {submitted:'submitted to the utility',paid:'paid',void:'void'};
   if(!confirm('Mark billing batch ' + currentBillingBatch.batch_number + ' as ' + labels[status] + '?')) return;
-  const { error } = await sb.rpc('set_billing_export_batch_status', {
-    p_batch_id:currentBillingBatch.batch_id,p_status:status
+  let reason=null;
+  if(status==='void' && String(currentBillingBatch.status).toLowerCase()==='submitted'){
+    reason=prompt('Why is this submitted batch being voided?');
+    if(reason===null) return;
+    if(!reason.trim()) return alert('A correction reason is required.');
+  }
+  const { error } = await sb.rpc('set_billing_export_batch_status_v2', {
+    p_batch_id:currentBillingBatch.batch_id,p_status:status,p_reason:reason
   });
   if(error){
     alert('Unable to update billing batch: ' + error.message);
@@ -7853,6 +8044,10 @@ $('exportBillingPdfBtn').onclick = exportBillingPdf;
 $('markBillingSubmittedBtn').onclick = () => setBillingBatchStatus('submitted');
 $('markBillingPaidBtn').onclick = () => setBillingBatchStatus('paid');
 $('voidBillingBatchBtn').onclick = () => setBillingBatchStatus('void');
+$('saveBillingBatchDetailsBtn').onclick = saveBillingBatchDetails;
+$('createBillingCreditBtn').onclick = createBillingCredit;
+$('uploadBillingAttachmentBtn').onclick = uploadBillingAttachment;
+$('billingExportJob').addEventListener('change',()=>loadBillingReconciliation());
 $('backToBillingHistoryBtn').onclick = () => {
   currentBillingBatch = null;
   currentBillingBatchLines = [];
@@ -7910,7 +8105,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['billing export','bill job','billing batch','excel billing','csv billing','pdf billing','mark submitted','mark paid','duplicate billing'],
-    answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. Leave Final Bill unchecked while the job is still active; LineCrew Pro labels batches Partial Bill 1, Partial Bill 2 and so on, and each batch pulls only newly approved, unbilled production. Check Final Bill only when the job is complete. Approved redlines are always included beside their work points. The separate redline-summary checkbox only adds an extra Redlines sheet or PDF section; leaving it unchecked never removes redlines from the main billing report. Download Excel, CSV or Print/Save PDF. Mark the batch Submitted after sending it to the utility and Paid when payment is received. Void releases its lines for a corrected replacement batch. Admin/Owner may permanently delete a batch only after it is voided.'
+    answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. The reconciliation panel shows Authorized, Approved, Previously Billed, Credits, Approved Unbilled and Remaining. Leave Final Bill unchecked while the job is active; batches become Partial Bill 1, 2 and so on. Final Bill checks remaining work and pending reports and requires an override reason when unresolved. Approved redlines always stay beside their work points; the summary checkbox only adds an extra Redlines sheet or PDF section. Save the utility invoice/reference, payment reference, notes and attachments on the batch. Submitted batches require a correction reason before voiding. Paid batches stay locked; Admin/Owner uses Create Credit / Adjustment for a separate negative correcting batch.'
   },
   {
     terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
@@ -7970,7 +8165,11 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['delete job','cannot delete','foreign key','archive'],
-    answer:'Commercial history should normally be closed or archived, not deleted. A job with Daily Reports, packages or other dependent records cannot be deleted until those test dependencies are deliberately removed. For real work, close the Job and archive completed reports so audit history is preserved.'
+    answer:'Commercial history should normally be closed or archived, not deleted. Close Job runs a closeout check for a paid Final Bill, approved unbilled production and pending Daily Reports. A clean job closes and locks against new Daily Reports. Unresolved closeout requires a recorded override reason. Reopen Job also requires a reason and restores field reporting. Jobs with commercial history should remain preserved for audit.'
+  },
+  {
+    terms:['packet revision','revised packet','change order','revision changes','supersede packet'],
+    answer:'Each additional Utility Job Packet on the same job is versioned as Revision 1, Revision 2 and so on. Open View Revision Changes to compare authorized install/remove quantities by work point and Contractor Unit. When a newer revision is activated, it supersedes and closes the prior active packet so authorized quantities are not doubled; the prior packet remains in history.'
   },
   {
     terms:['password','forgot','login','sign in'],
