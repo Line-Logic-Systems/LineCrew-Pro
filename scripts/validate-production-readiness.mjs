@@ -22,6 +22,7 @@ const mustExist = [
   'supabase/migrations/20260823023639_restrict_foremen_to_assigned_jobs.sql',
   'supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql',
   'supabase/migrations/20260823030000_company_employee_roster_assignment.sql',
+  'supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
 ];
@@ -44,6 +45,7 @@ const automaticInvitationSignup = fs.readFileSync('supabase/migrations/202608230
 const foremanJobAssignments = fs.readFileSync('supabase/migrations/20260823023639_restrict_foremen_to_assigned_jobs.sql', 'utf8');
 const supervisorJobAssignees = fs.readFileSync('supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
 const employeeRosterAssignment = fs.readFileSync('supabase/migrations/20260823030000_company_employee_roster_assignment.sql', 'utf8');
+const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
@@ -177,6 +179,13 @@ assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), '
 assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach"), 'Foreman Daily Reports must directly preload assigned crew members.');
 assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
 assert(expandedJsa.includes("load('timekeeping.js?v=20260823e'"), 'Direct Foreman crew preload must use a fresh cache version.');
+for (const marker of [
+  "v_role = 'foreman' and report.foreman_id = auth.uid()",
+  'delete from public.timekeeping_entries entry',
+  "lower(coalesce(report.status, 'draft')) = 'draft'",
+  'revoke all on function public.delete_draft_daily_report(uuid) from public, anon'
+]) assert(foremanDraftDeletion.includes(marker), `Foreman draft-deletion marker missing: ${marker}`);
+assert(index.includes("currentUserRole() === 'foreman' && report.foreman_id === currentProfile.id"), 'Foremen must see Delete Draft only on their own reports.');
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');

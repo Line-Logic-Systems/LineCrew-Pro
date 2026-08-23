@@ -12419,6 +12419,7 @@ async function loadProductionReports(){
     .select(`
       id,
       job_id,
+      foreman_id,
       work_date,
       foreman_name,
       crew_name,
@@ -14086,10 +14087,13 @@ window.openDailyUnitEditor = openDailyUnitEditor;
 
 }
 
-if(userCanManageProductionRecords()){
+if(userCanManageProductionRecords() || currentUserRole() === 'foreman'){
   const reportStatus = String(report.status || 'draft').toLowerCase();
 
-  if(reportStatus === 'draft' && report.archived !== true){
+  const canDeleteDraft = userCanManageProductionRecords() ||
+    (currentUserRole() === 'foreman' && report.foreman_id === currentProfile.id);
+
+  if(canDeleteDraft && reportStatus === 'draft' && report.archived !== true){
     const deleteReportBtn = document.createElement('button');
     deleteReportBtn.className = 'danger small';
     deleteReportBtn.textContent = 'Delete Draft';
@@ -14121,7 +14125,7 @@ if(userCanManageProductionRecords()){
     card.appendChild(deleteReportBtn);
   }
 
-  if(reportStatus === 'approved' || report.archived === true){
+  if(userCanManageProductionRecords() && (reportStatus === 'approved' || report.archived === true)){
     const archiveBtn = document.createElement('button');
     archiveBtn.className = 'secondary small';
     archiveBtn.textContent = report.archived === true ? 'Restore Report' : 'Archive Report';
