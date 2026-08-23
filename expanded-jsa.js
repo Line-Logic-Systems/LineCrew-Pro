@@ -73,7 +73,7 @@
     document.head.appendChild(script);
   };
 
-  load('app-polish.js?v=20260822a');
+  load('app-polish.js?v=20260823b');
   load('number-input-polish.js?v=20260823a');
   load('role-workspace-polish.js?v=20260822a');
   load('expanded-jsa-core.js?v=20260820', () => {
