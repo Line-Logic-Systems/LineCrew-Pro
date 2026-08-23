@@ -19,6 +19,7 @@
   };
 
   let employees = [];
+  let foremen = [];
   let entries = [];
   let jobs = [];
   let crewRowsLoadedForReport = null;
@@ -67,12 +68,13 @@
       </div>
       <div id="timekeepingRosterCard" class="card hidden">
         <h3>Employee Roster</h3>
-        <p class="muted">Add the employees Foremen can select on daily crew time.</p>
+        <p class="muted">Add field employees who do not need a LineCrew login, then assign each person to the Foreman who enters their daily time.</p>
         <div class="tk-grid">
           <label>Employee #<input id="tkEmployeeNumber" type="text" placeholder="Optional"></label>
           <label>Employee Name<input id="tkEmployeeName" type="text" placeholder="Full name"></label>
-          <label>Classification<input id="tkEmployeeClass" type="text" placeholder="Foreman, JL, Operator..."></label>
+          <label>Classification<input id="tkEmployeeClass" type="text" placeholder="Lineman, Operator, Groundman..."></label>
           <label>Default Crew<input id="tkEmployeeCrew" type="text" placeholder="Crew name / number"></label>
+          <label>Assigned Foreman<select id="tkEmployeeForeman"><option value="">Unassigned</option></select></label>
         </div>
         <button id="tkAddEmployeeBtn" class="success">Add Employee</button>
         <div id="tkRosterList" style="margin-top:12px"></div>
@@ -123,6 +125,7 @@
       byId('timekeepingPage')?.classList.remove('hidden');
       await refreshTimekeeping();
     };
+    window.openLineCrewTimekeeping = open;
     tile.addEventListener('click', open);
     tile.addEventListener('keydown', (event) => {
       if(event.key === 'Enter' || event.key === ' '){event.preventDefault();open();}
@@ -133,7 +136,7 @@
   async function refreshTimekeeping(){
     if(!companyId() || !getSb()) return;
     byId('timekeepingRosterCard')?.classList.toggle('hidden', !canManageRoster());
-    await Promise.all([loadEmployees(), loadJobs()]);
+    await Promise.all([loadEmployees(), loadJobs(), loadForemen()]);
     renderRoster();
     fillFilters();
     await loadEntries();
@@ -142,12 +145,30 @@
   async function loadEmployees(){
     if(!companyId()) return;
     const { data, error } = await getSb().from('timekeeping_employees')
-      .select('id,employee_number,full_name,classification,default_crew_name,active')
+      .select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id')
       .eq('company_id', companyId())
       .order('active', { ascending:false })
       .order('full_name');
     if(error){ console.error('Timekeeping employee load failed', error); return; }
     employees = data || [];
+  }
+
+  async function loadForemen(){
+    if(!companyId() || !canManageRoster()) return;
+    const { data, error } = await getSb().from('profiles')
+      .select('id,full_name,role,active')
+      .eq('company_id', companyId())
+      .eq('role','foreman')
+      .eq('active',true)
+      .order('full_name');
+    if(error){ console.error('Foreman load failed', error); return; }
+    foremen = data || [];
+    const select=byId('tkEmployeeForeman');
+    if(select){
+      const selected=select.value;
+      select.innerHTML='<option value="">Unassigned</option>'+foremen.map(f=>`<option value="${esc(f.id)}">${esc(f.full_name||'Foreman')}</option>`).join('');
+      select.value=selected;
+    }
   }
 
   async function loadJobs(){
@@ -184,11 +205,12 @@
       full_name: fullName,
       classification: (byId('tkEmployeeClass')?.value || '').trim() || null,
       default_crew_name: (byId('tkEmployeeCrew')?.value || '').trim() || null,
+      assigned_foreman_id: byId('tkEmployeeForeman')?.value || null,
       active: true
     };
     const { error } = await getSb().from('timekeeping_employees').insert(payload);
     if(error) return alert('Could not add employee: ' + error.message);
-    ['tkEmployeeNumber','tkEmployeeName','tkEmployeeClass','tkEmployeeCrew'].forEach(id => { if(byId(id)) byId(id).value=''; });
+    ['tkEmployeeNumber','tkEmployeeName','tkEmployeeClass','tkEmployeeCrew','tkEmployeeForeman'].forEach(id => { if(byId(id)) byId(id).value=''; });
     await loadEmployees();
     renderRoster();
     fillFilters();
@@ -204,13 +226,26 @@
     refreshCrewEmployeeSelects();
   }
 
+  async function assignEmployee(id, assignedForemanId){
+    if(!canManageRoster()) return;
+    const { error } = await getSb().from('timekeeping_employees')
+      .update({assigned_foreman_id:assignedForemanId||null,updated_at:new Date().toISOString()})
+      .eq('id',id);
+    if(error) return alert('Could not assign employee: '+error.message);
+    await loadEmployees();
+    renderRoster();
+    refreshCrewEmployeeSelects();
+  }
+
   function renderRoster(){
     const box = byId('tkRosterList');
     if(!box) return;
     if(!employees.length){box.innerHTML='<p class="muted">No employees have been added yet.</p>';return;}
-    box.innerHTML = `<div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Default Crew</th><th>Status</th><th></th></tr></thead><tbody>${employees.map(e=>`
-      <tr><td><strong>${esc(e.full_name)}</strong></td><td>${esc(e.employee_number || '')}</td><td>${esc(e.classification || '')}</td><td>${esc(e.default_crew_name || '')}</td><td>${e.active ? 'Active':'Inactive'}</td><td class="tk-row-actions"><button class="secondary small" data-tk-toggle="${esc(e.id)}" data-active="${e.active ? '0':'1'}">${e.active ? 'Deactivate':'Activate'}</button></td></tr>`).join('')}</tbody></table></div>`;
+    const foremanOptions=(selected)=>'<option value="">Unassigned</option>'+foremen.map(f=>`<option value="${esc(f.id)}" ${f.id===selected?'selected':''}>${esc(f.full_name||'Foreman')}</option>`).join('');
+    box.innerHTML = `<div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Default Crew</th><th>Assigned Foreman</th><th>Status</th><th></th></tr></thead><tbody>${employees.map(e=>`
+      <tr><td data-label="Employee"><strong>${esc(e.full_name)}</strong></td><td data-label="#">${esc(e.employee_number || '')}</td><td data-label="Classification">${esc(e.classification || '')}</td><td data-label="Default Crew">${esc(e.default_crew_name || '')}</td><td data-label="Assigned Foreman"><select data-tk-foreman="${esc(e.id)}" ${e.active?'':'disabled'}>${foremanOptions(e.assigned_foreman_id)}</select></td><td data-label="Status">${e.active ? 'Active':'Inactive'}</td><td data-label="Action" class="tk-row-actions"><button class="secondary small" data-tk-toggle="${esc(e.id)}" data-active="${e.active ? '0':'1'}">${e.active ? 'Deactivate':'Activate'}</button></td></tr>`).join('')}</tbody></table></div>`;
     box.querySelectorAll('[data-tk-toggle]').forEach(btn => btn.onclick = () => toggleEmployee(btn.dataset.tkToggle, btn.dataset.active === '1'));
+    box.querySelectorAll('[data-tk-foreman]').forEach(select => select.onchange = () => assignEmployee(select.dataset.tkForeman,select.value));
   }
 
   async function loadEntries(){
@@ -271,7 +306,7 @@
     const card = document.createElement('div');
     card.id='dailyCrewTimeCard';
     card.className='tk-crew-card';
-    card.innerHTML=`<h3>Crew Time</h3><p class="tk-help">Enter each crew member's Regular and OT hours. Daily Report totals update automatically.</p><div id="dailyCrewTimeRows"></div><div class="tk-inline-actions"><button id="dailyAddCrewMember" type="button" class="secondary small">+ Add Crew Member</button><span id="dailyCrewTimeTotals" class="muted"></span></div>`;
+    card.innerHTML=`<h3>Crew Time</h3><p class="tk-help">Your assigned crew loads automatically. Use Add Crew Member for extra employees helping your crew today. Daily Report totals update automatically.</p><div id="dailyCrewTimeRows"></div><div class="tk-inline-actions"><button id="dailyAddCrewMember" type="button" class="secondary small">+ Add Crew Member</button><span id="dailyCrewTimeTotals" class="muted"></span></div>`;
     const notes = byId('dailyNotes');
     if(notes?.parentElement) notes.parentElement.insertBefore(card, notes);
     else form.appendChild(card);
