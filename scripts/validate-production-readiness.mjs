@@ -196,6 +196,11 @@ assert(index.includes('row.actionInput.value = inferredWorkType;'), 'Selecting a
 assert(index.includes("if(suffix === 'R') return 'retirement';"), 'R-suffix units must default to removal when pricing alone is ambiguous.');
 assert(index.includes("if(suffix === 'T') return 'transfer';"), 'T-suffix units must default to transfer when pricing alone is ambiguous.');
 assert(index.includes("savedWorkType === 'transfer'"), 'Saved T-unit quantities must be labeled as Transferred rather than Installed.');
+assert(index.includes("if(role === 'gf') return false;"), 'GF review access must not imply permission to edit a Foreman draft.');
+assert(index.includes('DRAFT — WAITING FOR FOREMAN'), 'GF draft cards must clearly explain that they are awaiting Foreman submission.');
+assert(index.includes("doneButton.textContent = canEditDraft ? 'Done Adding Units' : 'Back to Reports';"), 'The unit editor must switch to a read-only reviewer exit for GF users.');
+assert(index.includes("$('dailyUnitEntryControls').classList.toggle('hidden', !canEditDraft);"), 'Daily unit entry controls must be hidden from read-only reviewers.');
+assert(index.includes("if(reportStatus === 'draft' && canEditDraft)"), 'Edit and Submit controls must render only for users allowed to edit that draft.');
 for (const marker of [
   "v_role = 'foreman' and report.foreman_id = auth.uid()",
   'delete from public.timekeeping_entries entry',
