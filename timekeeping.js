@@ -449,14 +449,11 @@
     desired.forEach(([label,value])=>{
       let span=spans.find(s=>s.textContent.includes(label));
       const isField=label==='Field MH Run Rate';
-      const status=isField && typeof window.manHourTargetStatus==='function'
-        ? window.manHourTargetStatus(value)
-        : null;
-      const targetHtml=status
-        ? '<br><span class="mh-rate-target '+status.key+'">'+status.label+' · Target '+
-          new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(status.target)+'</span>'
-        : '';
-      const html='<strong>'+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value)+'</strong><br>'+label+targetHtml;
+      const formatted=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value);
+      const valueHtml=isField && typeof window.manHourRateNumberMarkup==='function'
+        ? window.manHourRateNumberMarkup(value)
+        : '<strong>'+formatted+'</strong>';
+      const html=valueHtml+'<br>'+label;
       if(!span){span=document.createElement('span');box.appendChild(span);}
       if(span.innerHTML!==html)span.innerHTML=html;
     });
