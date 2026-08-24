@@ -94,7 +94,7 @@ Set these Supabase Edge Function secrets/config values:
 - `STRIPE_WEBHOOK_SECRET` — signing secret for the deployed webhook endpoint.
 - `APP_URL` — LineCrew Pro base URL with no trailing slash.
 - `BILLING_PLAN_PRICE_MAP` — JSON object mapping LineCrew Pro plan codes to Stripe Price IDs.
-- `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — the dedicated Stripe Customer Portal configuration used only by the upgrade-confirmation flow.
+- `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated Stripe Customer Portal configuration used only by the upgrade-confirmation flow. If omitted, the server discovers exactly one active configuration labeled with metadata `linecrew_purpose=linecrew_upgrade_only_v1` and otherwise fails closed.
 
 Example shape only:
 
@@ -125,9 +125,9 @@ The plan map fails closed: no configured mapping means no Checkout.
 
 ### Upgrade-only Stripe Portal configuration
 
-Keep plan switching **off** in the normal Customer Portal used by the **Manage Billing** button. Create a separate Stripe Customer Portal configuration for upgrade confirmations and put its `bpc_...` ID in `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`.
+Keep plan switching **off** in the normal Customer Portal used by the **Manage Billing** button. Create a separate Stripe Customer Portal configuration for upgrade confirmations. Label it with metadata `linecrew_purpose=linecrew_upgrade_only_v1`. You may also put its `bpc_...` ID in `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`; the explicit ID takes precedence.
 
-The dedicated configuration must enable subscription updates and include the Starter, Business, Pro, and Enterprise monthly products/prices. It is never opened as a general portal. `create-plan-upgrade` uses it only with Stripe's `subscription_update_confirm` deep-link flow, which displays the exact server-selected higher plan and its proration for confirmation.
+The dedicated configuration must allow **price changes only**, use `always_invoice` proration, and include the Starter, Business, Pro, and Enterprise monthly products/prices. It is never opened as a general portal. `create-plan-upgrade` verifies the price-only and immediate-proration settings on every request; Stripe rejects a server-selected target that is not in the configuration. The endpoint uses the configuration only with Stripe's `subscription_update_confirm` deep-link flow, which displays the exact server-selected higher plan and its immediate prorated charge for confirmation.
 
 The upgrade endpoint fails closed unless all of these checks pass:
 
@@ -248,7 +248,7 @@ For customer-specific negotiated prices, create the needed Stripe Price and map 
 15. Verify a normal Foreman cannot use `my_company_billing_summary()`.
 16. Open Stripe Customer Portal from a company Admin session.
 17. Keep plan switching and quantity changes disabled in the normal sandbox Customer Portal.
-18. Create a dedicated sandbox Portal configuration that enables subscription updates for the Starter, Business, Pro, and Enterprise monthly products, then save its ID as `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`.
+18. Create a dedicated sandbox Portal configuration labeled `linecrew_purpose=linecrew_upgrade_only_v1` that permits price changes only, uses `always_invoice` proration, and includes the Starter, Business, Pro, and Enterprise monthly products. Optionally save its ID as `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`.
 19. Use the billing page to upgrade the test subscription and confirm Stripe shows the exact higher plan and proration before confirmation.
 20. Confirm the billing page updates its plan, price, and active-crew limit from the new Stripe Price ID after the webhook arrives.
 21. Confirm Starter accepts active crews 1–5, rejects active crew 6, and still permits an inactive historical crew.

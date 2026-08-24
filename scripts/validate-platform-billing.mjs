@@ -144,6 +144,10 @@ if (!portal.includes('String(profile.role).toLowerCase() !== "admin"')) throw ne
 if (!portal.includes('/billing.html?billing=portal-return')) throw new Error('Billing portal must return to the contractor billing page.');
 for (const marker of [
   'STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID',
+  'linecrew_upgrade_only_v1',
+  'allowedUpdates.length === 1',
+  'update?.proration_behavior === "always_invoice"',
+  'Exactly one active Stripe upgrade-only Portal configuration must be provisioned.',
   'BILLING_PLAN_PRICE_MAP',
   'String(profile.role).toLowerCase() !== "admin"',
   'subscription.customer !== stored.stripe_customer_id',

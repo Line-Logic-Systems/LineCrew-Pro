@@ -11,6 +11,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const planOrder = ["starter", "business", "pro", "enterprise"] as const;
 type PlanCode = typeof planOrder[number];
+const upgradePortalPurpose = "linecrew_upgrade_only_v1";
 
 class RequestError extends Error {
   status: number;
@@ -76,6 +77,55 @@ async function stripePost(path: string, body: URLSearchParams, stripeKey: string
   return data;
 }
 
+function portalConfigurationSupportsSafeUpgrades(
+  configuration: Record<string, unknown>,
+) {
+  const features = configuration.features as Record<string, unknown> | undefined;
+  const update = features?.subscription_update as Record<string, unknown> | undefined;
+  const allowedUpdates = Array.isArray(update?.default_allowed_updates)
+    ? update.default_allowed_updates.map(String)
+    : [];
+  return (
+    configuration.active === true &&
+    update?.enabled === true &&
+    allowedUpdates.length === 1 &&
+    allowedUpdates[0] === "price" &&
+    update?.proration_behavior === "always_invoice"
+  );
+}
+
+async function resolveUpgradePortalConfiguration(
+  configuredId: string | undefined,
+  stripeKey: string,
+) {
+  if (configuredId && /^bpc_[A-Za-z0-9]+$/.test(configuredId)) {
+    const configured = await stripeGet(
+      `/billing_portal/configurations/${encodeURIComponent(configuredId)}`,
+      stripeKey,
+    );
+    if (!portalConfigurationSupportsSafeUpgrades(configured)) {
+      throw new Error("The configured Stripe upgrade Portal is not price-only with immediate proration.");
+    }
+    return configuredId;
+  }
+
+  const listed = await stripeGet("/billing_portal/configurations?active=true&limit=100", stripeKey);
+  const matches = (Array.isArray(listed?.data) ? listed.data : []).filter((configuration: Record<string, unknown>) => {
+    const metadata = configuration.metadata as Record<string, unknown> | undefined;
+    return metadata?.linecrew_purpose === upgradePortalPurpose;
+  });
+  if (matches.length !== 1) {
+    throw new Error("Exactly one active Stripe upgrade-only Portal configuration must be provisioned.");
+  }
+  const match = matches[0] as Record<string, unknown>;
+  if (!portalConfigurationSupportsSafeUpgrades(match)) {
+    throw new Error("The discovered Stripe upgrade Portal is not price-only with immediate proration.");
+  }
+  const id = String(match.id || "");
+  if (!/^bpc_[A-Za-z0-9]+$/.test(id)) throw new Error("Stripe returned an invalid upgrade Portal configuration ID.");
+  return id;
+}
+
 Deno.serve(async request => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "POST required." }, 405);
@@ -88,15 +138,13 @@ Deno.serve(async request => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    const portalConfiguration = Deno.env.get("STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID");
+    const configuredPortalId = Deno.env.get("STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID");
     const appUrl = (Deno.env.get("APP_URL") || "").replace(/\/$/, "");
     const priceMap = readPlanPriceMap(Deno.env.get("BILLING_PLAN_PRICE_MAP"));
     if (!supabaseUrl || !anonKey || !serviceKey || !stripeKey || !appUrl) {
       throw new Error("Plan upgrade service is not fully configured.");
     }
-    if (!portalConfiguration || !/^bpc_[A-Za-z0-9]+$/.test(portalConfiguration)) {
-      throw new Error("The upgrade-only Stripe Portal configuration is not configured.");
-    }
+    const portalConfiguration = await resolveUpgradePortalConfiguration(configuredPortalId, stripeKey);
 
     let payload: unknown;
     try {
