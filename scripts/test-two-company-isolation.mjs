@@ -185,6 +185,7 @@ async function main() {
   const contractB = await serviceInsert("contracts", { company_id: companyB.id, customer_id: customerB.id, contract_name: "Isolation Contract B" });
   const priorPackageA = await serviceInsert("job_packages", { company_id: companyA.id, job_id: jobA.id, contract_id: contractA.id, package_name: "Isolation Package A revision 1", created_by: userA.id });
   const currentPackageA = await serviceInsert("job_packages", { company_id: companyA.id, job_id: jobA.id, contract_id: contractA.id, package_name: "Isolation Package A revision 2", created_by: userA.id });
+  await servicePatch("job_packages", currentPackageA.id, { supersedes_package_id: priorPackageA.id });
   const packageB = await serviceInsert("job_packages", { company_id: companyB.id, job_id: jobB.id, contract_id: contractB.id, package_name: "Isolation Package B", created_by: userB.id });
   const priorWorkPointA = await serviceInsert("job_package_work_points", { company_id: companyA.id, job_package_id: priorPackageA.id, job_id: jobA.id, work_point_code: "WP-1", created_by: userA.id });
   const currentWorkPointA = await serviceInsert("job_package_work_points", { company_id: companyA.id, job_package_id: currentPackageA.id, job_id: jobA.id, work_point_code: "WP-1", created_by: userA.id });
