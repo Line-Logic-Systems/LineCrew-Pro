@@ -1445,6 +1445,12 @@ Desktop View
 Create, manage and close jobs
 </span>
 </div>
+<div class="metric hidden" id="completedJobsTile">
+<strong>Completed Jobs</strong>
+<span class="muted">
+Read-only job records and exports
+</span>
+</div>
 <div class="metric" id="productionTile">
 <strong>Production</strong>
 <span class="muted">
@@ -1942,6 +1948,23 @@ Create the first job for this company.
 </p>
 </div>
 <div id="jobsList"></div>
+</section>
+<!-- COMPLETED JOBS ARCHIVE -->
+<section id="completedJobsPage" class="hidden">
+<div class="toolbar">
+<button class="secondary" id="backFromCompletedJobs">← Back to Dashboard</button>
+<button id="refreshCompletedJobs">Refresh Completed Jobs</button>
+</div>
+<div class="card">
+<h2>Completed Jobs</h2>
+<p class="muted">Permanent, read-only records for closed and final-billed jobs. Reopen a job from Job Setup before making corrections.</p>
+<label for="completedJobsSearch">Find a Completed Job</label>
+<input id="completedJobsSearch" placeholder="Job number, job name, customer or contract">
+</div>
+<div id="completedJobsLoading" class="card center hidden">Loading completed jobs...</div>
+<div id="completedJobsEmpty" class="card center hidden"><h3>No Completed Jobs</h3><p class="muted">Jobs appear here after they are closed.</p></div>
+<div id="completedJobsList"></div>
+<div id="completedJobDetail" class="hidden"></div>
 </section>
 <!-- SAFETY / JSA PAGE -->
 <section id="safetyPage" class="hidden">
@@ -3415,6 +3438,7 @@ const APP_PAGE_IDS = new Set([
 'dashboardPage',
 'teamPage',
 'jobsPage',
+'completedJobsPage',
 'productionPage',
 'safetyPage',
 'priceBooksPage'
@@ -3481,6 +3505,9 @@ return ['owner','admin'].includes(currentUserRole()) ||
 (currentUserRole() === 'superintendent' &&
 userHasCapability('reporting') &&
 userHasCapability('actual_pricing'));
+}
+function userCanViewCompletedJobs(){
+return ['owner','admin','superintendent','gf'].includes(currentUserRole());
 }
 function userHasAnyCompanyControls(){
 return userIsCompanyAdmin() || (currentUserRole() === 'superintendent' && [
@@ -3575,6 +3602,7 @@ $('setupPage').classList.add('hidden');
 $('dashboardPage').classList.add('hidden');
 $('teamPage').classList.add('hidden');
 $('jobsPage').classList.add('hidden');
+$('completedJobsPage').classList.add('hidden');
 $('productionPage').classList.add('hidden');
 $('safetyPage').classList.add('hidden');
 $('priceBooksPage').classList.add('hidden');
@@ -3622,6 +3650,13 @@ state.view === 'jobDetail' && state.jobId
 ? state.jobId
 : null;
 await loadJobs();
+}
+if(page === 'completedJobsPage'){
+if(!userCanViewCompletedJobs()){
+await returnToDashboard();
+return;
+}
+await loadCompletedJobs(state.jobId || null);
 }
 if(page === 'productionPage'){
 await loadProductionReports();
@@ -3816,6 +3851,7 @@ $('userRole').textContent =
 String(profile.role || 'foreman').toLowerCase() === 'employee'
 ? 'foreman'
 : profile.role;
+$('completedJobsTile').classList.toggle('hidden', !userCanViewCompletedJobs());
 $('assistantLauncher').classList.toggle('hidden', !userCanUseAssistant());
 if(!userCanUseAssistant()) $('assistantPanel').classList.add('hidden');
 $('adminNotice').classList.toggle('hidden', !userHasAnyCompanyControls());
@@ -4552,6 +4588,144 @@ if(error){ alert('Unable to change team access: '+error.message); await loadTeam
 alert(restoreAccess?'Team member access restored.':'Team member access suspended.');
 await loadTeamMembers();
 }
+/* COMPLETED JOBS ARCHIVE */
+let completedJobsCatalog = [];
+let completedJobsProgress = new Map();
+let completedJobsAssignments = new Map();
+let currentCompletedJobRecord = null;
+function completedJobSearchMatch(job){
+const search = String($('completedJobsSearch').value || '').trim().toLowerCase();
+if(!search) return true;
+return [
+job.job_number,job.job_name,job.customer_name,job.utility_name,
+job.contracts?.contract_name,job.contracts?.contract_number,
+job.contracts?.customers?.name
+].some(value => String(value || '').toLowerCase().includes(search));
+}
+function formatCompletedJobDate(value){
+return value ? new Date(value).toLocaleString() : 'Not recorded';
+}
+function renderCompletedJobs(){
+const list=$('completedJobsList');
+list.replaceChildren();
+const jobs=completedJobsCatalog.filter(completedJobSearchMatch);
+$('completedJobsEmpty').classList.toggle('hidden',jobs.length>0);
+if(!jobs.length) return;
+jobs.forEach(job=>{
+const progress=completedJobsProgress.get(job.id)||{};
+const assignments=completedJobsAssignments.get(job.id)||[];
+const card=document.createElement('div');
+card.className='job-card';
+card.innerHTML='<div class="section-header"><div><div class="job-number">'+escapeHtml(job.job_number)+'</div><div class="job-title">'+escapeHtml(job.job_name)+'</div></div><span class="status closed">COMPLETED</span></div>'+
+'<div class="job-info">Customer: <strong>'+escapeHtml(job.contracts?.customers?.name||job.customer_name||'Not recorded')+'</strong><br>Contract: <strong>'+escapeHtml(job.contracts?.contract_name||'Not assigned')+'</strong><br>Closed: <strong>'+escapeHtml(formatCompletedJobDate(job.closed_at))+'</strong></div>'+
+'<div class="daily-value-summary"><span><strong>'+Number(progress.reported_percent||0).toFixed(1)+'%</strong><br>Reported</span><span><strong>'+Number(progress.approved_percent||0).toFixed(1)+'%</strong><br>Approved</span><span><strong>'+Number(progress.report_count||0)+'</strong><br>Daily Reports</span><span><strong>'+Number(progress.work_point_count||0)+'</strong><br>Work Points</span></div>'+
+'<p class="muted">Supervision: '+escapeHtml(assignments.map(item=>item.full_name).join(', ')||'No retained assignment')+'</p>';
+const open=document.createElement('button');open.className='secondary';open.textContent='Open Read-Only Record';open.onclick=()=>openCompletedJob(job.id);card.appendChild(open);list.appendChild(card);
+});
+}
+async function loadCompletedJobs(openJobId=null){
+$('completedJobDetail').classList.add('hidden');$('completedJobsList').classList.remove('hidden');
+$('completedJobsLoading').classList.remove('hidden');$('completedJobsEmpty').classList.add('hidden');
+const [jobsResult,progressResult,assignmentsResult]=await Promise.all([
+sb.from('jobs').select(`*,contracts(id,contract_name,contract_number,customers(name))`).eq('company_id',currentProfile.company_id).eq('active',false).order('closed_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}),
+sb.rpc('get_job_progress_dashboard'),sb.rpc('get_job_leader_assignments')
+]);
+$('completedJobsLoading').classList.add('hidden');
+if(jobsResult.error) return alert('Unable to load completed jobs: '+jobsResult.error.message);
+if(progressResult.error) return alert('Unable to load completed job progress: '+progressResult.error.message);
+if(assignmentsResult.error) return alert('Unable to load completed job assignments: '+assignmentsResult.error.message);
+completedJobsCatalog=jobsResult.data||[];
+completedJobsProgress=new Map((progressResult.data||[]).map(item=>[item.job_id,item]));
+completedJobsAssignments=new Map();
+(assignmentsResult.data||[]).forEach(item=>{const rows=completedJobsAssignments.get(item.job_id)||[];rows.push(item);completedJobsAssignments.set(item.job_id,rows);});
+renderCompletedJobs();
+if(openJobId && completedJobsCatalog.some(job=>String(job.id)===String(openJobId))) await openCompletedJob(openJobId,false);
+}
+async function collectCompletedJobRecord(job){
+const reportsResult=await sb.from('daily_reports').select('id,job_id,work_date,foreman_name,crew_name,regular_hours,overtime_hours,weather_conditions,delay_hours,delay_reason,notes,status,archived,review_notes,storm_mode,storm_event_name,created_at,updated_at').eq('company_id',currentProfile.company_id).eq('job_id',job.id).order('work_date',{ascending:true});
+if(reportsResult.error) throw reportsResult.error;
+const [packagesResult,jsasResult]=await Promise.all([sb.rpc('get_job_packages_v2',{p_job_id:job.id}),sb.rpc('get_company_jsas')]);
+if(packagesResult.error) throw packagesResult.error;
+if(jsasResult.error) throw jsasResult.error;
+const units=[];
+const audit=[];
+for(const report of (reportsResult.data||[])){
+const [result,historyResult]=await Promise.all([sb.rpc('get_daily_report_unit_locations_v2',{p_report_id:report.id}),sb.rpc('get_daily_report_audit_history',{p_report_id:report.id})]);
+if(result.error) throw result.error;if(historyResult.error) throw historyResult.error;
+(result.data||[]).forEach(unit=>units.push({...unit,report_id:report.id,work_date:report.work_date,foreman_name:report.foreman_name,crew_name:report.crew_name}));
+(historyResult.data||[]).forEach(event=>audit.push({...event,report_id:report.id,work_date:report.work_date}));
+}
+let attachments=[];
+const reportIds=(reportsResult.data||[]).map(report=>report.id);
+if(reportIds.length){
+const attachmentsResult=await sb.from('daily_report_attachments').select('id,daily_report_id,storage_path,original_filename,mime_type,file_size_bytes,caption,created_at').in('daily_report_id',reportIds).order('created_at',{ascending:true});
+if(attachmentsResult.error) throw attachmentsResult.error;
+attachments=attachmentsResult.data||[];
+}
+let billing=[];let reconciliation=null;
+if(userCanUseBillingExports()){
+const [batchesResult,reconciliationResult]=await Promise.all([sb.rpc('get_billing_export_batches_v4',{p_archive_filter:'all'}),sb.rpc('get_job_billing_reconciliation',{p_job_id:job.id})]);
+if(batchesResult.error) throw batchesResult.error;
+if(reconciliationResult.error) throw reconciliationResult.error;
+billing=(batchesResult.data||[]).filter(item=>String(item.job_id)===String(job.id));
+reconciliation=reconciliationResult.data?.[0]||null;
+}
+return {job,progress:completedJobsProgress.get(job.id)||{},assignments:completedJobsAssignments.get(job.id)||[],reports:reportsResult.data||[],units,audit,attachments,packages:packagesResult.data||[],jsas:(jsasResult.data||[]).filter(item=>String(item.job_id||'')===String(job.id)),billing,reconciliation};
+}
+function completedJobUnitRows(record){
+return record.units.map(unit=>({'Work Date':unit.work_date||'','Foreman':unit.foreman_name||'','Crew':unit.crew_name||'','Pole / Work Point':unit.pole_location||unit.work_point||'','Unit Code':unit.item_code||unit.unit_code||'','Description':unit.item_name||unit.unit_name||unit.description||'','Installed':Number(unit.install_quantity||0),'Transferred':Number(unit.transfer_quantity||0),'Removed':Number(unit.retirement_quantity||unit.remove_quantity||0),'Authorization':String(unit.authorization_status||'').replaceAll('_',' '),'Visible Value':Number(unit.visible_line_value||unit.adjusted_line_value||unit.actual_line_value||0)}));
+}
+async function openCompletedJob(jobId,updateHistory=true){
+const job=completedJobsCatalog.find(item=>String(item.id)===String(jobId));
+if(!job) return alert('Completed job was not found.');
+const detail=$('completedJobDetail');detail.classList.remove('hidden');$('completedJobsList').classList.add('hidden');detail.innerHTML='<div class="card center">Loading complete read-only record...</div>';
+try{currentCompletedJobRecord=await collectCompletedJobRecord(job);}catch(error){detail.innerHTML='';$('completedJobsList').classList.remove('hidden');return alert('Unable to load the completed job record: '+error.message);}
+const r=currentCompletedJobRecord;const p=r.progress;
+detail.innerHTML='<div class="card"><button id="closeCompletedJobDetail" class="secondary job-detail-back">← Back to Completed Jobs</button><div class="section-header"><div><h2>'+escapeHtml(job.job_number)+' — '+escapeHtml(job.job_name)+'</h2><p class="muted">Closed '+escapeHtml(formatCompletedJobDate(job.closed_at))+'</p></div><span class="status closed">READ ONLY</span></div><p><strong>Customer:</strong> '+escapeHtml(job.contracts?.customers?.name||job.customer_name||'Not recorded')+'<br><strong>Contract:</strong> '+escapeHtml(job.contracts?.contract_name||'Not assigned')+(job.contracts?.contract_number?' ('+escapeHtml(job.contracts.contract_number)+')':'')+'<br><strong>Closeout note:</strong> '+escapeHtml(job.closeout_notes||'No override note')+'</p><div class="button-row"><button id="exportCompletedJobExcel" class="success small">Export Complete Excel</button><button id="printCompletedJob" class="secondary small">Print / Save PDF</button></div><p class="muted">This archive cannot be edited. Owner/Admin must deliberately reopen the job from Job Setup before corrections can be made.</p></div>'+
+'<div class="card"><h3>Final Job Summary</h3><div class="daily-value-summary"><span><strong>'+Number(p.reported_percent||0).toFixed(1)+'%</strong><br>Reported</span><span><strong>'+Number(p.approved_percent||0).toFixed(1)+'%</strong><br>Approved</span><span><strong>'+Number(r.reports.length)+'</strong><br>Daily Reports</span><span><strong>'+Number(r.units.length)+'</strong><br>Unit Lines</span><span><strong>'+Number(r.packages.length)+'</strong><br>Packet Revisions</span><span><strong>'+Number(r.jsas.length)+'</strong><br>JSAs</span><span><strong>'+Number(r.attachments.length)+'</strong><br>Attachments</span></div></div>'+
+'<div class="card"><h3>Supervision & Crew History</h3><p>'+escapeHtml(r.assignments.map(item=>item.full_name+' — '+formatTeamRole(item.member_role)).join('; ')||'No retained job-leader assignments.')+'</p></div>'+
+'<div class="card"><h3>Daily Reports ('+r.reports.length+')</h3>'+((r.reports.map(report=>'<div class="daily-history-event"><strong>'+escapeHtml(report.work_date)+' — '+escapeHtml(report.foreman_name||'Foreman not recorded')+'</strong><br>'+escapeHtml(report.crew_name||'Crew not recorded')+' · '+Number(report.regular_hours||0)+' regular / '+Number(report.overtime_hours||0)+' OT · '+escapeHtml(String(report.status||'').toUpperCase())+(report.notes?'<br>'+escapeHtml(report.notes):'')+'</div>').join(''))||'<p class="muted">No Daily Reports.</p>')+'</div>'+
+'<div class="card"><h3>Unit Production ('+r.units.length+')</h3>'+((completedJobUnitRows(r).slice(0,100).map(unit=>'<div class="daily-history-event"><strong>'+escapeHtml(unit['Work Date'])+' · '+escapeHtml(unit['Pole / Work Point'])+' · '+escapeHtml(unit['Unit Code'])+'</strong><br>Installed '+unit.Installed+' · Transferred '+unit.Transferred+' · Removed '+unit.Removed+' · '+escapeHtml(unit.Authorization)+'</div>').join(''))||'<p class="muted">No unit production.</p>')+(r.units.length>100?'<p class="muted">Showing the first 100 unit lines. Export Excel for the complete record.</p>':'')+'</div>'+
+'<div class="card"><h3>Utility Packet Revisions ('+r.packages.length+')</h3>'+((r.packages.map(item=>'<div class="daily-history-event"><strong>Revision '+Number(item.revision_number||1)+' — '+escapeHtml(item.package_name||item.package_number||'Utility Job Packet')+'</strong><br>'+escapeHtml(String(item.status||'').toUpperCase())+' · '+escapeHtml(item.source_filename||'No source filename')+'</div>').join(''))||'<p class="muted">No utility packet revisions.</p>')+'</div>'+
+'<div class="card"><h3>Report Attachments ('+r.attachments.length+')</h3><div id="completedJobAttachments">'+((r.attachments.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(item.original_filename||'Attachment')+'</strong>'+(item.caption?'<br>'+escapeHtml(item.caption):'')+'<br><span class="muted">'+escapeHtml(formatCompletedJobDate(item.created_at))+'</span><br><button class="secondary small completed-attachment-open" data-attachment-id="'+escapeHtml(item.id)+'">Open Read-Only</button></div>').join(''))||'<p class="muted">No report attachments.</p>')+'</div></div>'+
+'<div class="card"><h3>Audit History ('+r.audit.length+')</h3>'+((r.audit.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(String(item.event_type||'updated').replaceAll('_',' '))+'</strong><br>'+escapeHtml(item.actor_name||'System')+' · '+escapeHtml(formatCompletedJobDate(item.event_at))+(item.event_notes?'<br>'+escapeHtml(item.event_notes):'')+'</div>').join(''))||'<p class="muted">No recorded audit events.</p>')+'</div>'+
+'<div class="card"><h3>Billing History</h3>'+(userCanUseBillingExports()?((r.billing.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(item.batch_number||'Billing Batch')+' — '+escapeHtml(billingStageLabel(item))+'</strong><br>'+escapeHtml(billingStatusLabel(item.status))+' · '+escapeHtml(formatCurrency(item.total_value||0))+'</div>').join(''))||'<p class="muted">No billing batches.</p>'):'<p class="muted">Billing dollars remain limited to roles with billing and actual-pricing permission.</p>')+'</div>';
+$('closeCompletedJobDetail').onclick=()=>{detail.classList.add('hidden');$('completedJobsList').classList.remove('hidden');if(window.history.state?.lineCrewPage==='completedJobsPage'&&window.history.state?.jobId) setAppHistory({lineCrewPage:'completedJobsPage'},true);};
+$('exportCompletedJobExcel').onclick=exportCompletedJobExcel;
+$('printCompletedJob').onclick=printCompletedJobRecord;
+detail.querySelectorAll('.completed-attachment-open').forEach(button=>{button.onclick=async()=>{const attachment=r.attachments.find(item=>String(item.id)===button.dataset.attachmentId);if(!attachment)return;const signed=await sb.storage.from('daily-report-attachments').createSignedUrl(attachment.storage_path,300);if(signed.error)return alert('Unable to open attachment: '+signed.error.message);window.open(signed.data.signedUrl,'_blank','noopener');};});
+if(updateHistory) setAppHistory({lineCrewPage:'completedJobsPage',jobId:job.id});
+detail.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function completedJobSheet(rows,fallback){return XLSX.utils.json_to_sheet(rows.length?rows:[{Record:fallback}]);}
+function exportCompletedJobExcel(){
+if(!currentCompletedJobRecord||typeof XLSX==='undefined') return alert('The completed job export is not ready.');
+if(!userCanExport()) return alert('Your role does not have export permission.');
+const r=currentCompletedJobRecord;const wb=XLSX.utils.book_new();
+const summary=[{'Job Number':r.job.job_number,'Job Name':r.job.job_name,'Customer':r.job.contracts?.customers?.name||r.job.customer_name||'','Contract':r.job.contracts?.contract_name||'','Contract Number':r.job.contracts?.contract_number||'','Closed At':r.job.closed_at||'','Closeout Status':r.job.closeout_status||'closed','Closeout Note':r.job.closeout_notes||'','Reported Percent':Number(r.progress.reported_percent||0),'Approved Percent':Number(r.progress.approved_percent||0),'Daily Reports':r.reports.length,'Unit Lines':r.units.length,'Packet Revisions':r.packages.length,'JSAs':r.jsas.length}];
+XLSX.utils.book_append_sheet(wb,completedJobSheet(summary,'No summary'),'Job Summary');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(r.assignments.map(item=>({'Name':item.full_name||'','Role':formatTeamRole(item.member_role),'Assigned At':item.assigned_at||'','Assigned By':item.assigned_by_name||''})),'No assignments'),'Supervision');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(r.reports.map(item=>({'Work Date':item.work_date||'','Foreman':item.foreman_name||'','Crew':item.crew_name||'','Regular Hours':Number(item.regular_hours||0),'OT Hours':Number(item.overtime_hours||0),'Weather':item.weather_conditions||'','Delay Hours':Number(item.delay_hours||0),'Delay Reason':item.delay_reason||'','Status':String(item.status||'').toUpperCase(),'Storm Mode':item.storm_mode?'Yes':'No','Storm Event':item.storm_event_name||'','Report Notes':item.notes||'','Review Notes':item.review_notes||''})),'No Daily Reports'),'Daily Reports');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(completedJobUnitRows(r),'No unit production'),'Unit Production');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(r.packages.map(item=>({'Revision':Number(item.revision_number||1),'Package Name':item.package_name||'','Package Number':item.package_number||'','Status':String(item.status||'').toUpperCase(),'Received':item.received_date||'','Source File':item.source_filename||'','Created':item.created_at||'','Notes':item.notes||''})),'No packet revisions'),'Packet Revisions');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(r.jsas.map(item=>({'Work Date':item.work_date||'','Foreman':item.foreman_name||item.creator_name||'','Crew':item.crew_name||'','Status':item.status||'','Created':item.created_at||''})),'No JSAs'),'JSA Index');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(r.attachments.map(item=>({'Daily Report ID':item.daily_report_id||'','File Name':item.original_filename||'','Caption':item.caption||'','MIME Type':item.mime_type||'','Size Bytes':Number(item.file_size_bytes||0),'Created':item.created_at||''})),'No attachments'),'Attachment Index');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(r.audit.map(item=>({'Work Date':item.work_date||'','Event':String(item.event_type||'').replaceAll('_',' '),'Actor':item.actor_name||'System','Role':item.actor_role||'','Event Time':item.event_at||'','Notes':item.event_notes||''})),'No audit events'),'Audit History');
+if(userCanUseBillingExports()) XLSX.utils.book_append_sheet(wb,completedJobSheet(r.billing.map(item=>({'Batch Number':item.batch_number||'','Billing Stage':billingStageLabel(item),'Status':billingStatusLabel(item.status),'Created':item.created_at||'','Submitted':item.submitted_at||'','Paid':item.paid_at||'','Total Value':Number(item.total_value||0),'Utility Reference':item.utility_invoice_number||'','Payment Reference':item.payment_reference||'','Notes':item.notes||''})),'No billing history'),'Billing History');
+const name='linecrew-completed-job-'+completeBillingSafeName(r.job.job_number,'job')+'-'+new Date().toISOString().slice(0,10)+'.xlsx';
+XLSX.writeFile(wb,name,{compression:true});
+}
+function printCompletedJobRecord(){
+if(!currentCompletedJobRecord) return;
+const r=currentCompletedJobRecord;const win=window.open('','_blank');if(!win) return alert('Allow pop-ups to print the completed job record.');
+const reportRows=r.reports.map(item=>'<tr><td>'+escapeHtml(item.work_date||'')+'</td><td>'+escapeHtml(item.foreman_name||'')+'</td><td>'+escapeHtml(item.crew_name||'')+'</td><td>'+Number(item.regular_hours||0)+'</td><td>'+Number(item.overtime_hours||0)+'</td><td>'+escapeHtml(String(item.status||'').toUpperCase())+'</td></tr>').join('');
+const unitRows=completedJobUnitRows(r).map(item=>'<tr><td>'+escapeHtml(item['Work Date'])+'</td><td>'+escapeHtml(item['Pole / Work Point'])+'</td><td>'+escapeHtml(item['Unit Code'])+'</td><td>'+item.Installed+'</td><td>'+item.Transferred+'</td><td>'+item.Removed+'</td></tr>').join('');
+win.document.write('<!doctype html><html><head><title>Completed Job '+escapeHtml(r.job.job_number)+'</title><style>body{font-family:Arial;margin:28px;color:#102235}h1,h2{color:#0b2d4d}table{width:100%;border-collapse:collapse;margin:12px 0 24px}th,td{border:1px solid #ccd6df;padding:7px;text-align:left}th{background:#eef3f7}.badge{float:right;border:1px solid #777;padding:5px 9px;border-radius:12px}@media print{body{margin:10mm}}</style></head><body><span class="badge">READ ONLY</span><h1>'+escapeHtml(currentCompany?.name||'LineCrew Pro')+'</h1><h2>Completed Job Record</h2><p><strong>Job:</strong> '+escapeHtml(r.job.job_number)+' — '+escapeHtml(r.job.job_name)+'<br><strong>Customer:</strong> '+escapeHtml(r.job.contracts?.customers?.name||r.job.customer_name||'')+'<br><strong>Contract:</strong> '+escapeHtml(r.job.contracts?.contract_name||'')+'<br><strong>Closed:</strong> '+escapeHtml(formatCompletedJobDate(r.job.closed_at))+'<br><strong>Progress:</strong> '+Number(r.progress.reported_percent||0).toFixed(1)+'% reported / '+Number(r.progress.approved_percent||0).toFixed(1)+'% approved</p><h2>Daily Reports</h2><table><thead><tr><th>Date</th><th>Foreman</th><th>Crew</th><th>Regular</th><th>OT</th><th>Status</th></tr></thead><tbody>'+reportRows+'</tbody></table><h2>Unit Production</h2><table><thead><tr><th>Date</th><th>Location</th><th>Unit</th><th>Installed</th><th>Transferred</th><th>Removed</th></tr></thead><tbody>'+unitRows+'</tbody></table><p>Generated by LineCrew Pro on '+escapeHtml(new Date().toLocaleString())+'</p><script>window.onload=function(){window.print()}<\/script></body></html>');win.document.close();
+}
+$('completedJobsTile').onclick=()=>navigateToAppPage('completedJobsPage');
+$('backFromCompletedJobs').onclick=()=>returnToDashboard();
+$('refreshCompletedJobs').onclick=()=>loadCompletedJobs();
+$('completedJobsSearch').addEventListener('input',renderCompletedJobs);
 /* OPEN JOBS */
 $('jobsTile').onclick = async()=>{
 if(!currentProfile){
@@ -5083,13 +5257,13 @@ card.querySelector(
 `#actions-${job.id}`
 );
 const canManage = userCanManageJobs();
-if(canManage){
+if(canManage && job.active){
 renderJobLeaderAssignments(
 job,
 card.querySelector(`#job-leaders-${job.id}`)
 );
 }
-if(canManage){
+if(canManage && job.active){
 const editButton =
 document.createElement('button');
 editButton.className =
@@ -5113,25 +5287,30 @@ job.active
 : 'Reopen Job';
 statusButton.onclick =
 ()=> changeJobStatus(job);
-actions.appendChild(
-statusButton
-);
+actions.appendChild(statusButton);
 }
-if(userCanManageJobPackages()){
+if(canManage && !job.active){
+const statusButton = document.createElement('button');
+statusButton.className = 'small success';
+statusButton.textContent = 'Reopen Job';
+statusButton.onclick = ()=> changeJobStatus(job);
+actions.appendChild(statusButton);
+}
+if(userCanManageJobPackages() && job.active){
 const packageButton = document.createElement('button');
 packageButton.className = 'small success';
 packageButton.textContent = '+ Add Job Packet';
 packageButton.onclick = ()=> chooseJobPacketFileForJob(job);
 actions.appendChild(packageButton);
 }
-if(userCanManageJobs()){
+if(userCanManageJobs() && job.active){
 const deleteButton = document.createElement('button');
 deleteButton.className = 'small danger';
 deleteButton.textContent = 'Delete Job';
 deleteButton.onclick = ()=> deleteJob(job);
 actions.appendChild(deleteButton);
 }
-if(userCanUseReporting() || userCanManageJobPackages()){
+if(job.active && (userCanUseReporting() || userCanManageJobPackages())){
 renderJobPackages(job, card.querySelector(`#job-packages-${job.id}`));
 }
 }
@@ -7965,7 +8144,7 @@ $('customerForm').classList.add('hidden');
 delete $('customerForm').dataset.customerId;
 await loadCustomers();
 await loadContracts();
-}; 
+};
 /* LOAD CUSTOMERS */
 async function loadCustomers(){
 const loadSequence = ++customerLoadSequence;
@@ -8599,7 +8778,7 @@ $('priceBookContract').appendChild(option);
 $('cancelPriceBookBtn').onclick = () => {
 $('priceBookForm').classList.add('hidden');
 $('newPriceBookImportFile').value = '';
-}; 
+};
 $('savePriceBookBtn').onclick = async () => {
 const contractId =
 $('priceBookContract').value;
@@ -12529,7 +12708,7 @@ option.selected = true;
 $('dailyJobId').appendChild(option);
 });
 };
-card.appendChild(editBtn); 
+card.appendChild(editBtn);
 const submitBtn =
 document.createElement('button');
 submitBtn.className = 'success small';
@@ -14083,7 +14262,7 @@ return;
 $('dailyReportForm').classList.add('hidden');
 await loadProductionReports();
 await window.openDailyUnitEditor(savedReport);
-};  
+};
 /* FLEXIBLE JSA */
 function applyFlexibleJsaUi(){
 const method = String(currentCompany?.jsa_method || 'both').toLowerCase();
