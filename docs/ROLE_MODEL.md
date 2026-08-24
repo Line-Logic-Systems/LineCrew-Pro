@@ -36,7 +36,8 @@ Initial capability names for frontend enforcement:
 - `safety_records`
 - `actual_pricing`
 - `exports`
-- `ai_assistant`
+
+The AI assistant is intentionally Owner/Admin-only and is not a configurable Superintendent capability.
 
 Billing/subscription/platform-owner functions remain outside the Superintendent capability model.
 

@@ -64,6 +64,8 @@ const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824063000_
 const jobCloseoutHistory = fs.readFileSync('supabase/migrations/20260824070000_append_only_job_closeout_history.sql', 'utf8');
 const dailyReportScaleIntegrity = fs.readFileSync('supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
+const appPolish = fs.readFileSync('app-polish.js', 'utf8');
+const packetParser = fs.readFileSync('supabase/functions/parse-utility-job-packet/index.ts', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
@@ -216,6 +218,10 @@ for (const marker of [
 assert(index.includes("sb.rpc('linecrew_mfa_bootstrap_identity')"), 'The app must complete the narrow MFA bootstrap before other Data API requests.');
 assert(index.indexOf("sb.rpc('linecrew_mfa_bootstrap_identity')") < index.indexOf("sb.rpc('is_my_profile_suspended')"), 'The MFA bootstrap must run before protected profile checks.');
 assert(support.includes("rpc('linecrew_mfa_bootstrap_identity')"), 'The support console must complete the narrow MFA bootstrap before protected support RPCs.');
+assert(packetParser.includes('if (origin && !allowedOrigins.has(origin))'), 'Job-packet parsing must reject unapproved browser origins.');
+assert(!packetParser.includes('"Access-Control-Allow-Origin": "*"'), 'Job-packet parsing must not allow every browser origin.');
+assert(appPolish.includes("tile.setAttribute('role','link')") && appPolish.includes("tile.addEventListener('keydown'"), 'Dashboard tiles must support keyboard and screen-reader navigation.');
+assert(index.includes('Create, review and report daily production'), 'The Production dashboard description must reflect the shipped workflow.');
 
 for (const marker of [
   'create table if not exists public.job_closeout_history',

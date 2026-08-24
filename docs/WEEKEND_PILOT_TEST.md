@@ -157,8 +157,8 @@ As Foreman:
 
 - Owner: assistant available.
 - Admin: assistant available.
-- Superintendent with `ai_assistant` ON: available.
-- Superintendent with `ai_assistant` OFF: unavailable.
+- Owner/Admin: AI assistant available.
+- Superintendent/GF/Foreman: AI assistant unavailable by design.
 - GF: unavailable.
 - Foreman: unavailable.
 

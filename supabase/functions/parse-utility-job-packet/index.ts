@@ -1,9 +1,19 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const allowedOrigins = new Set([
+  "https://app.linecrewpro.com",
+  ...(Deno.env.get("CORS_ALLOWED_ORIGINS") || "").split(",").map((value) => value.trim()).filter(Boolean),
+]);
+
+function corsHeaders(request: Request) {
+  const origin = request.headers.get("Origin") || "";
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.has(origin) ? origin : "https://app.linecrewpro.com",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const PROFILE_VERSION = "oncor-tivoli-cu-estimate-v1";
@@ -75,7 +85,13 @@ function outputText(result: Record<string, unknown>): string {
 }
 
 Deno.serve(async (request) => {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const origin = request.headers.get("Origin") || "";
+  if (origin && !allowedOrigins.has(origin)) {
+    return new Response(JSON.stringify({ error: "Origin not allowed." }), {
+      status: 403, headers: { ...corsHeaders(request), "Content-Type": "application/json" },
+    });
+  }
+  if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders(request) });
   try {
     if (request.method !== "POST") throw new Error("POST required.");
     const authorization = request.headers.get("Authorization");
@@ -95,7 +111,7 @@ Deno.serve(async (request) => {
     const { data: allowed, error: permissionError } = await client.rpc("linecrew_can_manage_job_packages");
     if (permissionError || allowed !== true) {
       return new Response(JSON.stringify({ error: "You do not have permission to add job packets." }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 403, headers: { ...corsHeaders(request), "Content-Type": "application/json" },
       });
     }
 
@@ -163,11 +179,11 @@ Deno.serve(async (request) => {
     }
 
     return new Response(JSON.stringify({ ...parsed, source_sha256: sourceSha256 }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(request), "Content-Type": "application/json" },
     });
   } catch (error) {
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unable to analyze packet." }), {
-      status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 400, headers: { ...corsHeaders(request), "Content-Type": "application/json" },
     });
   }
 });

@@ -38,7 +38,7 @@ Do not sell or onboard production customers until:
 - the full cross-company test passes;
 - automated backup and restore procedures are tested;
 - error monitoring is installed;
-- subscription entitlements are enforced server-side;
+- subscription entitlements remain enforced server-side through the production pre-request hook and guarded access RPCs;
 - privacy policy, terms and data retention rules are approved;
 - browser and mobile testing is complete;
 - a disaster-recovery owner and support process are assigned.
