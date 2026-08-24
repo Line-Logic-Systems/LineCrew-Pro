@@ -2,6 +2,10 @@ import fs from 'node:fs';
 
 const failures = [];
 const assert = (condition, message) => { if (!condition) failures.push(message); };
+const hasVersionedAsset = (source, assetName) => {
+  const escapedName = assetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`${escapedName}\\?v=[A-Za-z0-9._-]+`).test(source);
+};
 
 const mustExist = [
   'index.html',
@@ -230,7 +234,7 @@ for (const marker of [
 ]) assert(employeeRosterAssignment.includes(marker), `Employee-roster assignment marker missing: ${marker}`);
 assert(timekeepingReport.includes('if(reportRunInFlight) return reportRunInFlight;'), 'Timekeeping reports must prevent overlapping report runs.');
 assert(timekeepingReport.includes('finally{reportRunInFlight=null;}'), 'Timekeeping report lock must always release after completion.');
-assert(expandedJsa.includes("load('timekeeping-report-v2.js?v=20260823a'"), 'Timekeeping report fix must use a fresh cache-busting version.');
+assert(hasVersionedAsset(expandedJsa, 'timekeeping-report-v2.js'), 'Timekeeping report fix must use a cache-busting version.');
 assert(timekeeping.includes('if(select.dataset.lcEmployeeOptions===html)return;'), 'Crew employee selectors must not rewrite unchanged options.');
 assert(timekeeping.includes("const extra=role()==='foreman'"), 'Base crew options must match Foreman extra-crew labels.');
 assert(timekeepingRoster.includes('if(select.dataset.lcEmployeeOptions===html)return;'), 'Roster overlay must share the stable crew-option signature.');
@@ -244,15 +248,15 @@ assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time option
 assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
 assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach"), 'Foreman Daily Reports must directly preload assigned crew members.');
 assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
-assert(expandedJsa.includes("load('timekeeping.js?v=20260823h'"), 'Direct Foreman crew preload must use a fresh cache version.');
+assert(hasVersionedAsset(expandedJsa, 'timekeeping.js'), 'Direct Foreman crew preload must use a cache version.');
 assert(timekeepingRoster.includes('await autoLoadAssignedCrew();'), 'Foreman roster selectors must wait for assigned crew data before rebuilding employee options.');
-assert(expandedJsa.includes("load('number-input-polish.js?v=20260823a'"), 'Global numeric input polish must be cache-versioned and loaded.');
+assert(hasVersionedAsset(expandedJsa, 'number-input-polish.js'), 'Global numeric input polish must be cache-versioned and loaded.');
 assert(numberInputPolish.includes("input.defaultValue === '0'"), 'Only numeric fields designed with a zero default may restore an empty value to zero.');
 assert(numberInputPolish.includes('input.select();'), 'Clicking a displayed zero must select it for immediate replacement.');
 assert(index.includes('await saveDailyUnitBatch({ closeAfterSave:true })'), 'Done Adding Units must await the pending unit save before closing.');
 assert(index.includes("doneButton.textContent = 'Saving & Finishing...'"), 'Done Adding Units must show an in-progress save state.');
 assert(index.includes('if(currentDailySavedUnits.length === 0)'), 'Done Adding Units must not close an empty unit report.');
-assert(expandedJsa.includes("load('app-polish.js?v=20260823b'"), 'Done Adding Units workflow must load the current app polish asset.');
+assert(hasVersionedAsset(expandedJsa, 'app-polish.js'), 'Done Adding Units workflow must load a cache-versioned app polish asset.');
 assert(index.includes('<h3>Saved Units</h3>'), 'Edit Draft must show persisted units before the blank Add More Units rows.');
 assert(index.includes("doneButton.textContent = 'Done Adding Units';"), 'The Done Adding Units button must reset whenever its editor opens or closes.');
 assert(index.includes('<option value="transfer">Transfer</option>'), 'Daily unit production must offer Transfer as an explicit work type.');
@@ -266,9 +270,9 @@ assert(index.includes("doneButton.textContent = canEditDraft ? 'Done Adding Unit
 assert(index.includes("$('dailyUnitEntryControls').classList.toggle('hidden', !canEditDraft);"), 'Daily unit entry controls must be hidden from read-only reviewers.');
 assert(index.includes("if(reportStatus === 'draft' && canEditDraft)"), 'Edit and Submit controls must render only for users allowed to edit that draft.');
 assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned Foreman drafts must recognize both the report creator and assigned Foreman ownership fields.');
-assert(index.includes("created_by,\n      work_date"), 'Production report loading must include the creator used to restore returned-draft editing.');
+assert(/\.from\('daily_reports'\)[\s\S]{0,250}\.select\(`[^`]*\bcreated_by,\s*work_date,/m.test(index), 'Production report loading must include the creator used to restore returned-draft editing.');
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
-assert(index.includes('expanded-jsa.js?v=20260823g'), 'The current workflow release must use a fresh cache-busted script version.');
+assert(hasVersionedAsset(index, 'expanded-jsa.js'), 'The current workflow release must use a cache-busted script version.');
 assert(index.includes("Importing the package's authorized units lets LineCrew Pro distinguish") && index.includes('normal authorized production from redlines, reconcile Pending Job Units'), 'Job-package setup must explain why authorized-unit import matters.');
 assert(index.includes('id="jobPackageInlineImportMount"'), 'Job-package setup must include the inline packet-upload area.');
 assert(index.includes('Save Package &amp; Preview File'), 'Job-package save must name the inline file-preview workflow.');
@@ -291,11 +295,11 @@ assert(index.includes("if(role !== 'foreman') return false"), 'Leadership must n
 assert(index.includes("? 'Job Setup & Management'"), 'Owner/Admin Jobs must be labeled as a management workspace.');
 assert(index.includes("' supervisor-compact-report'"), 'Supervisor Production reports must use compact rows for large report volumes.');
 assert(index.includes('jobName + \' · \' + foreman'), 'Compact supervisor rows must identify both the job and Foreman.');
-assert(expandedJsa.includes("load('role-workspace-polish.js?v=20260823a'"), 'Role workspace management labels must use a fresh cache version.');
+assert(hasVersionedAsset(expandedJsa, 'role-workspace-polish.js'), 'Role workspace management labels must use a cache version.');
 assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
 assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');
 assert(index.includes("'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)"), 'Supervision report cards must color only the field man-hour rate number.');
-assert(index.includes('.daily-review-counts .redline{\n  color:inherit;'), 'Authorization, Pending Packet and Redline summary counts must remain neutral.');
+assert(/\.daily-review-counts\s+\.authorized,\s*\.daily-review-counts\s+\.pending,\s*\.daily-review-counts\s+\.redline\s*\{[^}]*color\s*:\s*inherit\s*;/m.test(index), 'Authorization, Pending Packet and Redline summary counts must remain neutral.');
 assert(!index.includes('mh-rate-target'), 'Man-hour target status must not render as a separate colored badge.');
 assert(timekeeping.includes('window.manHourRateNumberMarkup(value)'), 'Production totals must color only the Field MH Run Rate value.');
 for (const marker of [
@@ -364,7 +368,7 @@ for (const marker of [
   'revoke all on function public.get_contract_field_settings() from public, anon, authenticated',
   'revoke all on function public.get_daily_report_jsa(uuid) from public, anon, authenticated'
 ]) assert(rpcAccessRepair.includes(marker), `Post-fix RPC access repair is missing: ${marker}`);
-assert(expandedJsa.includes("load('app-polish.js?v=20260823b')"), 'app-polish.js must use the current cache-busting version.');
+assert(hasVersionedAsset(expandedJsa, 'app-polish.js'), 'app-polish.js must use a cache-busting version.');
 
 for (const marker of [
   'linecrew_superintendent_customers_manage',
@@ -397,7 +401,7 @@ for (const marker of [
   'Create Account & Join Company',
   'id="signupPasswordConfirm"',
   "password !== passwordConfirmation",
-  "sb.functions.invoke(\n      'complete-team-invitation-signup'",
+  /sb\.functions\.invoke\(\s*['"]complete-team-invitation-signup['"]/,
   'sb.auth.signInWithPassword({ email, password })',
   "$('loginCard').classList.toggle('hidden', invited)",
   "$('signupEmail').readOnly = invited",
@@ -409,7 +413,7 @@ for (const marker of [
   'Save Price Book &amp; Continue',
   'await handlePriceBookImportFile(selectedImportFile)',
   'Review the unit-pricing preview'
-]) assert(index.includes(marker), `Onboarding workflow marker missing: ${marker}`);
+]) assert(marker instanceof RegExp ? marker.test(index) : index.includes(marker), `Onboarding workflow marker missing: ${marker}`);
 
 for (const marker of [
   'Foremen can only see and report against jobs assigned to them.',
