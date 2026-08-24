@@ -1343,6 +1343,30 @@ This private invitation will place you directly into the correct company.
 <button id="signupBtn">Create Account</button>
 </div>
 </section>
+<!-- PRIVILEGED ACCOUNT MFA -->
+<section id="mfaPage" class="hidden">
+<div class="card center">
+<h2 id="mfaTitle">Protect Your Account</h2>
+<p id="mfaMessage" class="muted">
+Owners and Admins use an authenticator code in addition to their password.
+</p>
+<div id="mfaEnrollPanel" class="hidden">
+<p>Open Microsoft Authenticator or another authenticator app, choose <strong>Other account</strong>, and scan this QR code.</p>
+<img id="mfaQrCode" alt="Authenticator setup QR code" style="display:block;max-width:260px;width:100%;margin:16px auto">
+<details>
+<summary>Can’t scan the QR code?</summary>
+<p class="muted">Enter this setup key manually in your authenticator app:</p>
+<code id="mfaSecret" style="display:block;overflow-wrap:anywhere;padding:10px;background:#eef3f7;border-radius:8px"></code>
+</details>
+</div>
+<label for="mfaCode">6-digit authenticator code</label>
+<input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000">
+<button id="verifyMfaBtn">Verify and Continue</button>
+<button id="postponeMfaBtn" class="secondary hidden">Set Up Later</button>
+<button id="mfaSignOutBtn" class="secondary">Sign Out</button>
+<p id="mfaStatus" class="muted" aria-live="polite"></p>
+</div>
+</section>
 <!-- COMPANY SETUP -->
 <section id="setupPage" class="hidden">
 <div class="card center">
@@ -3088,6 +3112,10 @@ const $ = id =>
 document.getElementById(id);
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
+const MFA_ENFORCEMENT_DATE = new Date('2026-08-31T05:00:00Z');
+let pendingMfaFactor = null;
+let pendingMfaMode = '';
+let continueAfterMfa = null;
 if(!/^[A-Za-z0-9_-]{43}$/.test(pendingInviteToken)){
 pendingInviteToken = '';
 }
@@ -3109,6 +3137,116 @@ $('createCompanyCard').classList.toggle('hidden', invited);
 $('joinCompanyCard').classList.toggle('hidden', invited);
 $('acceptInvitationCard').classList.add('hidden');
 }
+function privilegedRoleRequiresMfa(profile){
+return ['owner','admin'].includes(String(profile?.role || '').toLowerCase());
+}
+async function verifiedTotpFactors(){
+const { data, error } = await sb.auth.mfa.listFactors();
+if(error) throw error;
+return (data?.totp || []).filter(factor => factor.status === 'verified');
+}
+function resetMfaScreen(){
+$('mfaCode').value = '';
+$('mfaStatus').textContent = '';
+$('verifyMfaBtn').disabled = false;
+$('verifyMfaBtn').textContent = 'Verify and Continue';
+}
+async function showMfaChallenge(factor, onComplete){
+pendingMfaFactor = factor;
+pendingMfaMode = 'challenge';
+continueAfterMfa = onComplete;
+resetMfaScreen();
+$('mfaTitle').textContent = 'Authenticator Code Required';
+$('mfaMessage').textContent = 'Enter the current code from your authenticator app to finish signing in.';
+$('mfaEnrollPanel').classList.add('hidden');
+$('postponeMfaBtn').classList.add('hidden');
+show('mfaPage');
+$('mfaCode').focus();
+}
+async function showMfaEnrollment(onComplete){
+continueAfterMfa = onComplete;
+resetMfaScreen();
+const existing = await sb.auth.mfa.listFactors();
+if(existing.error) throw existing.error;
+for(const factor of (existing.data?.all || []).filter(item => item.status !== 'verified')){
+await sb.auth.mfa.unenroll({ factorId:factor.id });
+}
+const { data, error } = await sb.auth.mfa.enroll({
+factorType:'totp',
+friendlyName:'LineCrew Pro'
+});
+if(error) throw error;
+pendingMfaFactor = data;
+pendingMfaMode = 'enroll';
+$('mfaTitle').textContent = 'Protect Your Admin Account';
+$('mfaMessage').textContent = Date.now() < MFA_ENFORCEMENT_DATE.getTime()
+? 'Set up an authenticator now. During the rollout, you may postpone until August 31, 2026.'
+: 'Authenticator setup is required for LineCrew Pro Owner and Admin accounts.';
+$('mfaQrCode').src = data.totp.qr_code;
+$('mfaSecret').textContent = data.totp.secret;
+$('mfaEnrollPanel').classList.remove('hidden');
+$('postponeMfaBtn').classList.toggle('hidden', Date.now() >= MFA_ENFORCEMENT_DATE.getTime());
+show('mfaPage');
+$('mfaCode').focus();
+}
+async function enforcePrivilegedMfa(profile, onComplete){
+if(!privilegedRoleRequiresMfa(profile)) return false;
+const factors = await verifiedTotpFactors();
+const { data:aal, error:aalError } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+if(aalError) throw aalError;
+if(factors.length && aal?.currentLevel !== 'aal2'){
+await showMfaChallenge(factors[0], onComplete);
+return true;
+}
+if(!factors.length){
+await showMfaEnrollment(onComplete);
+return true;
+}
+return false;
+}
+$('verifyMfaBtn').onclick = async () => {
+const code = $('mfaCode').value.replace(/\D/g, '');
+if(code.length !== 6) return alert('Enter the 6-digit code from your authenticator app.');
+const button = $('verifyMfaBtn');
+button.disabled = true;
+button.textContent = 'Verifying...';
+$('mfaStatus').textContent = '';
+const challenge = await sb.auth.mfa.challenge({ factorId:pendingMfaFactor.id });
+if(challenge.error){
+button.disabled = false;
+button.textContent = 'Verify and Continue';
+$('mfaStatus').textContent = challenge.error.message;
+return;
+}
+const verified = await sb.auth.mfa.verify({
+factorId:pendingMfaFactor.id,
+challengeId:challenge.data.id,
+code
+});
+if(verified.error){
+button.disabled = false;
+button.textContent = 'Verify and Continue';
+$('mfaStatus').textContent = 'That code did not work. Wait for a new code and try again.';
+return;
+}
+pendingMfaFactor = null;
+pendingMfaMode = '';
+const next = continueAfterMfa;
+continueAfterMfa = null;
+if(next) await next();
+};
+$('postponeMfaBtn').onclick = async () => {
+if(Date.now() >= MFA_ENFORCEMENT_DATE.getTime()) return;
+if(pendingMfaMode === 'enroll' && pendingMfaFactor?.id){
+await sb.auth.mfa.unenroll({ factorId:pendingMfaFactor.id });
+}
+pendingMfaFactor = null;
+pendingMfaMode = '';
+const next = continueAfterMfa;
+continueAfterMfa = null;
+if(next) await next();
+};
+$('mfaSignOutBtn').onclick = signOut;
 async function invitationTokenHash(){
 const digest = await crypto.subtle.digest(
 'SHA-256',
@@ -3432,6 +3570,7 @@ document.querySelectorAll('.storm-crew-assignment:checked')
 /* PAGE NAVIGATION */
 function show(page){
 $('authPage').classList.add('hidden');
+$('mfaPage').classList.add('hidden');
 $('setupPage').classList.add('hidden');
 $('dashboardPage').classList.add('hidden');
 $('teamPage').classList.add('hidden');
@@ -3528,7 +3667,7 @@ await displayAppPage(state.lineCrewPage, state);
 }
 });
 /* LOAD APP */
-async function loadApp(){
+async function loadApp(skipMfaCheck = false){
 const {
 data:{session}
 } = await sb.auth.getSession();
@@ -3585,6 +3724,20 @@ return;
 window.history.replaceState(null, '', window.location.href);
 show('setupPage');
 return;
+}
+if(!skipMfaCheck){
+try{
+const mfaStoppedLoad = await enforcePrivilegedMfa(
+profile,
+() => loadApp(true)
+);
+if(mfaStoppedLoad) return;
+}catch(mfaError){
+alert('Unable to verify account protection: ' + mfaError.message);
+await sb.auth.signOut({ scope:'local' });
+show('authPage');
+return;
+}
 }
 const {
 data:company,

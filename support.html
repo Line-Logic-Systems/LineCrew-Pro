@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <title>LineCrew Pro Support Access</title>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
   <style>
     :root{color-scheme:light;--navy:#0b2d4d;--blue:#1976d2;--bg:#f4f7fa;--line:#d9e2ea;--danger:#b42318;--ok:#067647}
     *{box-sizing:border-box}body{margin:0;background:var(--bg);color:#17212b;font-family:Arial,sans-serif}main{max-width:1050px;margin:auto;padding:24px}
@@ -26,6 +26,14 @@
   <header><div><span id="modeBadge" class="support-badge">SUPPORT MODE</span><h1 id="pageTitle">LineCrew Pro Support Workspace</h1><p id="pageSubtitle" class="muted">Customer-approved, temporary and fully audited.</p></div><div class="header-actions"><a id="companyAppLink" class="secondary hidden" href="/?support_company=1">Open Support Company App</a><button id="signOut" class="secondary">Sign Out</button></div></header>
   <div id="loading" class="card">Checking your secure access…</div>
   <div id="error" class="card error hidden"></div>
+  <div id="mfaGate" class="card hidden">
+    <h2 id="mfaTitle">Authenticator Code Required</h2>
+    <p id="mfaInstructions">Enter the current 6-digit code from your authenticator app before opening protected support controls.</p>
+    <div id="mfaSetup" class="hidden"><p>Scan this code using Microsoft Authenticator’s <strong>Other account</strong> option or another authenticator app.</p><img id="mfaQr" alt="Authenticator setup QR code" style="display:block;max-width:260px;width:100%;margin:16px auto"><p class="muted">Manual setup key:</p><code id="mfaSecret" style="display:block;overflow-wrap:anywhere;padding:10px;background:#eef3f7;border-radius:8px"></code></div>
+    <label for="mfaCode">Authenticator code</label><input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+    <button id="verifyMfa">Verify and Continue</button>
+    <p id="mfaStatus" class="error" aria-live="polite"></p>
+  </div>
 
   <section id="supportView" class="hidden">
     <div class="card notice"><h2>Platform Support Console</h2><p>This console never signs in as a customer. A company Owner or Admin must approve every request before aggregate diagnostics become available.</p></div>
@@ -52,6 +60,19 @@ function date(value){return value?new Date(value).toLocaleString():'—'}
 function clear(node){while(node.firstChild)node.removeChild(node.firstChild)}
 function line(label,value){const d=document.createElement('div');d.className='metric';const s=document.createElement('span');s.className='muted';s.textContent=label;const b=document.createElement('strong');b.textContent=esc(value);d.append(s,b);return d}
 async function rpc(name,args={}){const {data,error}=await client.rpc(name,args);if(error)throw error;return data}
+let supportMfaFactor=null;
+async function requireSupportMfa(){
+  const factors=await client.auth.mfa.listFactors();if(factors.error)throw factors.error;
+  const verified=(factors.data?.totp||[]).filter(f=>f.status==='verified');
+  const aal=await client.auth.mfa.getAuthenticatorAssuranceLevel();if(aal.error)throw aal.error;
+  if(verified.length&&aal.data?.currentLevel==='aal2')return false;
+  $('loading').classList.add('hidden');$('mfaGate').classList.remove('hidden');
+  if(verified.length){supportMfaFactor=verified[0];return true}
+  for(const factor of (factors.data?.all||[]).filter(f=>f.status!=='verified'))await client.auth.mfa.unenroll({factorId:factor.id});
+  const enrolled=await client.auth.mfa.enroll({factorType:'totp',friendlyName:'LineCrew Pro Support'});if(enrolled.error)throw enrolled.error;
+  supportMfaFactor=enrolled.data;$('mfaTitle').textContent='Protect Your Support Account';$('mfaInstructions').textContent='Authenticator setup is required before protected support controls can open.';$('mfaQr').src=enrolled.data.totp.qr_code;$('mfaSecret').textContent=enrolled.data.totp.secret;$('mfaSetup').classList.remove('hidden');return true;
+}
+$('verifyMfa').onclick=async()=>{const code=$('mfaCode').value.replace(/\D/g,'');if(code.length!==6)return alert('Enter the 6-digit code from your authenticator app.');const b=$('verifyMfa');b.disabled=true;b.textContent='Verifying...';$('mfaStatus').textContent='';const challenge=await client.auth.mfa.challenge({factorId:supportMfaFactor.id});if(challenge.error){$('mfaStatus').textContent=challenge.error.message;b.disabled=false;b.textContent='Verify and Continue';return}const verified=await client.auth.mfa.verify({factorId:supportMfaFactor.id,challengeId:challenge.data.id,code});if(verified.error){$('mfaStatus').textContent='That code did not work. Wait for a new code and try again.';b.disabled=false;b.textContent='Verify and Continue';return}window.location.reload()};
 
 let supportCompanies=[];
 function syncAccessCompany(){const c=supportCompanies.find(x=>x.id===$('accessCompany').value);if(!c)return;$('accessStatus').value=c.subscription_status||'trial';$('accessExpires').value=c.subscription_expires_at?new Date(new Date(c.subscription_expires_at).getTime()-new Date(c.subscription_expires_at).getTimezoneOffset()*60000).toISOString().slice(0,16):'';$('accessExpires').disabled=$('accessStatus').value!=='trial';$('accessSummary').textContent=`${c.name}: ${c.subscription_status||'trial'} • ${c.recent_errors||0} technical error${Number(c.recent_errors)===1?'':'s'} in the last 24 hours.`}
@@ -92,7 +113,7 @@ $('accessCompany').onchange=syncAccessCompany;$('accessStatus').onchange=()=>{$(
 $('saveAccess').onclick=async()=>{const status=$('accessStatus').value;const raw=$('accessExpires').value;const expires=status==='trial'&&raw?new Date(raw).toISOString():null;if(!confirm(`Set this company to ${status.replace('_',' ')}?`))return;const b=$('saveAccess');b.disabled=true;try{await rpc('support_set_company_access',{p_company_id:$('accessCompany').value,p_status:status,p_expires_at:expires});await loadSupport();alert('Company access updated.')}catch(e){alert(e.message)}finally{b.disabled=false}};
 $('refreshSupport').onclick=loadSupport;$('refreshCommand').onclick=loadPilotCommandCenter;$('refreshFeedback').onclick=loadPilotFeedback;$('refreshCompany').onclick=loadCompany;
 $('signOut').onclick=async()=>{await client.auth.signOut();window.location.replace('/')};
-(async()=>{try{const {data:{user}}=await client.auth.getUser();if(!user)return fail('Sign in to LineCrew Pro before opening Support Access.');const rows=await rpc('support_console_identity');const who=rows?.[0];$('loading').classList.add('hidden');let allowed=false;if(who?.is_support){allowed=true;$('companyAppLink').classList.remove('hidden');$('supportView').classList.remove('hidden');await loadSupport()}if(['owner','admin'].includes(who?.company_role)){allowed=true;$('companyView').classList.remove('hidden');await loadCompany()}if(!who?.is_support){$('modeBadge').textContent='COMPANY APPROVALS';$('pageTitle').textContent='LineCrew Pro Support Access';$('pageSubtitle').textContent='Review and control temporary support requests for your company.'}if(!allowed)fail('Only LineCrew Pro platform support or a company Owner/Admin can open this page.')}catch(e){fail(e.message)}})();
+(async()=>{try{const {data:{user}}=await client.auth.getUser();if(!user)return fail('Sign in to LineCrew Pro before opening Support Access.');const rows=await rpc('support_console_identity');const who=rows?.[0];if(!who?.is_support&&!['owner','admin'].includes(who?.company_role))return fail('Only LineCrew Pro platform support or a company Owner/Admin can open this page.');if(await requireSupportMfa())return;$('loading').classList.add('hidden');let allowed=false;if(who?.is_support){allowed=true;$('companyAppLink').classList.remove('hidden');$('supportView').classList.remove('hidden');await loadSupport()}if(['owner','admin'].includes(who?.company_role)){allowed=true;$('companyView').classList.remove('hidden');await loadCompany()}if(!who?.is_support){$('modeBadge').textContent='COMPANY APPROVALS';$('pageTitle').textContent='LineCrew Pro Support Access';$('pageSubtitle').textContent='Review and control temporary support requests for your company.'}if(!allowed)fail('Only LineCrew Pro platform support or a company Owner/Admin can open this page.')}catch(e){fail(e.message)}})();
 </script>
 </body>
 </html>
