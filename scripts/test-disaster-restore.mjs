@@ -93,12 +93,36 @@ async function main() {
   const profileA = await insert('profiles', { id: userA.id, company_id: companyA.id, full_name: 'Restore Admin A', role: 'admin', active: true });
   await insert('profiles', { id: userB.id, company_id: companyB.id, full_name: 'Restore Admin B', role: 'admin', active: true });
   const customerA = await insert('customers', { company_id: companyA.id, name: `${runId} Preserved Customer`, notes: 'must survive restore' });
+  const priceBookA = await insert('price_books', { company_id: companyA.id, name: `${runId} Price Book` });
+  const jobA = await insert('jobs', {
+    company_id: companyA.id, job_number: `${runId}-JOB`, job_name: 'Restore Drill Job',
+    created_by: userA.id, price_book_id: priceBookA.id,
+  });
+  const jsaA = await insert('daily_report_jsas', {
+    company_id: companyA.id, daily_report_id: null, job_id: jobA.id, created_by: userA.id,
+    work_date: new Date().toISOString().slice(0, 10), crew_name: 'Restore Drill Crew',
+    job_briefing: 'Synthetic restore test', hazards: 'Synthetic restore test',
+    controls: 'Synthetic restore test', ppe: 'Synthetic restore test',
+    emergency_plan: 'Synthetic restore test', crew_members: 'Synthetic restore test', jsa_source: 'upload',
+  });
   const snapshot = {
     company: { id: companyA.id, name: companyA.name, created_by: companyA.created_by },
     profile: { id: profileA.id, company_id: profileA.company_id, full_name: profileA.full_name, role: profileA.role, active: profileA.active },
     customer: { id: customerA.id, company_id: customerA.company_id, name: customerA.name, notes: customerA.notes },
+    priceBook: { id: priceBookA.id, company_id: priceBookA.company_id, name: priceBookA.name },
+    job: {
+      id: jobA.id, company_id: jobA.company_id, job_number: jobA.job_number, job_name: jobA.job_name,
+      created_by: jobA.created_by, price_book_id: jobA.price_book_id,
+    },
+    jsa: {
+      id: jsaA.id, company_id: jsaA.company_id, daily_report_id: null, job_id: jsaA.job_id,
+      created_by: jsaA.created_by, work_date: jsaA.work_date, crew_name: jsaA.crew_name,
+      job_briefing: jsaA.job_briefing, hazards: jsaA.hazards, controls: jsaA.controls,
+      ppe: jsaA.ppe, emergency_plan: jsaA.emergency_plan, crew_members: jsaA.crew_members,
+      jsa_source: jsaA.jsa_source,
+    },
   };
-  created.objectPath = `${companyA.id}/restore-drills/${runId}.pdf`;
+  created.objectPath = `${companyA.id}/${jsaA.id}/${runId}.pdf`;
   await storageUpload(created.objectPath, pdf);
 
   const deleteResult = await request(`/rest/v1/companies?id=eq.${companyA.id}`, { method: 'DELETE', prefer: 'return=representation' });
@@ -109,6 +133,9 @@ async function main() {
   await insert('companies', snapshot.company);
   await insert('profiles', snapshot.profile);
   const restoredCustomer = await insert('customers', snapshot.customer);
+  await insert('price_books', snapshot.priceBook);
+  await insert('jobs', snapshot.job);
+  await insert('daily_report_jsas', snapshot.jsa);
   await storageUpload(created.objectPath, pdf);
   assert(restoredCustomer.notes === 'must survive restore', 'Restored customer content changed.');
 
