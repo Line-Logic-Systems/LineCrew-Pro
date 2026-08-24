@@ -200,9 +200,37 @@ async function main() {
   const verifyJobB = await request(`/rest/v1/jobs?id=eq.${jobB.id}&select=id`);
   assert(verifyJobB.ok && verifyJobB.data.length === 1, "SECURITY FAILURE: foreign job no longer exists after delete attempt.");
 
-  await servicePatch("profiles", userA.id, { active: false });
+  const deactivatedProfile = await servicePatch("profiles", userA.id, { active: false });
+  assert(
+    Array.isArray(deactivatedProfile) &&
+      deactivatedProfile.length === 1 &&
+      deactivatedProfile[0].active === false,
+    `Test setup failed to suspend profile: ${JSON.stringify(deactivatedProfile)}`,
+  );
+
+  const inactiveGate = await userRest(tokenA, "rpc/current_user_has_active_profile", "", {
+    method: "POST",
+    body: {},
+  });
+  assert(
+    inactiveGate.ok && inactiveGate.data === false,
+    `SECURITY FAILURE: active-profile gate remained open after suspension: ${JSON.stringify(inactiveGate.data)}`,
+  );
+
+  const inactiveTenant = await userRest(tokenA, "rpc/my_company_id", "", {
+    method: "POST",
+    body: {},
+  });
+  assert(
+    inactiveTenant.ok && inactiveTenant.data === null,
+    "SECURITY FAILURE: inactive profile still resolved tenant context.",
+  );
+
   const inactiveRead = await userRest(tokenA, "customers", `id=eq.${customerA.id}&select=id`);
-  assert(inactiveRead.ok && inactiveRead.data.length === 0, "SECURITY FAILURE: inactive profile retained tenant access.");
+  assert(
+    inactiveRead.ok && Array.isArray(inactiveRead.data) && inactiveRead.data.length === 0,
+    `SECURITY FAILURE: inactive profile retained tenant access: ${JSON.stringify(inactiveRead.data)}`,
+  );
   await servicePatch("profiles", userA.id, { active: true });
 
   console.log("PASS: same-company access works; cross-company reads and mutations are blocked; inactive profiles are locked out.");
