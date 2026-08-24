@@ -212,9 +212,9 @@ assert(index.includes('<h3>Saved Units</h3>'), 'Edit Draft must show persisted u
 assert(index.includes("doneButton.textContent = 'Done Adding Units';"), 'The Done Adding Units button must reset whenever its editor opens or closes.');
 assert(index.includes('<option value="transfer">Transfer</option>'), 'Daily unit production must offer Transfer as an explicit work type.');
 assert(index.includes('row.actionInput.value = inferredWorkType;'), 'Selecting a priced unit must automatically choose its inferred work type.');
-assert(index.includes("if(suffix === 'R') return 'retirement';"), 'R-suffix units must default to removal when pricing alone is ambiguous.');
-assert(index.includes("if(suffix === 'T') return 'transfer';"), 'T-suffix units must default to transfer when pricing alone is ambiguous.');
-assert(index.includes("savedWorkType === 'transfer'"), 'Saved T-unit quantities must be labeled as Transferred rather than Installed.');
+assert(index.includes("if(Number(item?.transfer_quantity || 0) > 0) return 'transfer';"), 'Saved transfer quantities must preserve their explicit work type.');
+assert(index.includes('class="daily-transfer-quantity"'), 'Saved units must expose a separate Transferred quantity.');
+assert(index.includes("'save_daily_report_unit_location_v2'"), 'Daily production must save explicit transfer quantities through the v2 RPC.');
 assert(index.includes("if(role !== 'foreman') return false;"), 'Leadership review access must not imply permission to edit a Foreman draft.');
 assert(index.includes('DRAFT — WAITING FOR FOREMAN'), 'GF draft cards must clearly explain that they are awaiting Foreman submission.');
 assert(index.includes("doneButton.textContent = canEditDraft ? 'Done Adding Units' : 'Back to Reports';"), 'The unit editor must switch to a read-only reviewer exit for GF users.');
@@ -224,7 +224,7 @@ assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned For
 assert(index.includes("created_by,\n      work_date"), 'Production report loading must include the creator used to restore returned-draft editing.');
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
 assert(index.includes('expanded-jsa.js?v=20260823g'), 'The current workflow release must use a fresh cache-busted script version.');
-assert(index.includes("Importing the package's authorized units lets LineCrew Pro distinguish") && index.includes('normal authorized production from redlines, reconcile Pending Packet'), 'Job-package setup must explain why authorized-unit import matters.');
+assert(index.includes("Importing the package's authorized units lets LineCrew Pro distinguish") && index.includes('normal authorized production from redlines, reconcile Pending Job Units'), 'Job-package setup must explain why authorized-unit import matters.');
 assert(index.includes('id="jobPackageInlineImportMount"'), 'Job-package setup must include the inline packet-upload area.');
 assert(index.includes('Save Package &amp; Preview File'), 'Job-package save must name the inline file-preview workflow.');
 assert(index.includes("$('jobPackageInlineImportMount').appendChild($('jobPackageImportForm'))"), 'Adding a utility package must place file selection and mapping inside the same package box.');
