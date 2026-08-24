@@ -177,10 +177,90 @@ alter policy training_progress_update_own on public.training_progress using (use
 alter policy training_progress_write_own on public.training_progress with check (user_id = (select auth.uid()) and exists (select 1 from public.current_training_access() a where a.company_id = training_progress.company_id and a.can_train));
 
 alter policy timekeeping_entries_delete_company on public.timekeeping_entries using (company_id = (select p.company_id from public.profiles p where p.id = (select auth.uid())) and (created_by = (select auth.uid()) or lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = any (array['gf','admin','owner'])));
-alter policy timekeeping_entries_select_company on public.timekeeping_entries using (company_id = (select p.company_id from public.profiles p where p.id = (select auth.uid())) and (lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = any (array['gf','admin','owner']) or (lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = 'foreman' and (created_by = (select auth.uid()) or exists (select 1 from public.timekeeping_employees te where te.id = timekeeping_entries.employee_id and te.company_id = timekeeping_entries.company_id and te.assigned_foreman_id = (select auth.uid())))));
-alter policy timekeeping_entry_history_select_company on public.timekeeping_entry_history using (company_id = (select p.company_id from public.profiles p where p.id = (select auth.uid())) and (lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = any (array['gf','admin','owner']) or (lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = 'foreman' and (created_by = (select auth.uid()) or exists (select 1 from public.timekeeping_employees te where te.id = timekeeping_entry_history.employee_id and te.company_id = timekeeping_entry_history.company_id and te.assigned_foreman_id = (select auth.uid())))));
+alter policy timekeeping_entries_select_company on public.timekeeping_entries
+using (
+  company_id = (select p.company_id from public.profiles p where p.id = (select auth.uid()))
+  and (
+    lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = any (array['gf','admin','owner'])
+    or (
+      lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = 'foreman'
+      and (
+        created_by = (select auth.uid())
+        or exists (
+          select 1 from public.timekeeping_employees te
+          where te.id = timekeeping_entries.employee_id
+            and te.company_id = timekeeping_entries.company_id
+            and te.assigned_foreman_id = (select auth.uid())
+        )
+      )
+    )
+  )
+);
+alter policy timekeeping_entry_history_select_company on public.timekeeping_entry_history
+using (
+  company_id = (select p.company_id from public.profiles p where p.id = (select auth.uid()))
+  and (
+    lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = any (array['gf','admin','owner'])
+    or (
+      lower(coalesce((select p.role from public.profiles p where p.id = (select auth.uid())), '')) = 'foreman'
+      and (
+        created_by = (select auth.uid())
+        or exists (
+          select 1 from public.timekeeping_employees te
+          where te.id = timekeeping_entry_history.employee_id
+            and te.company_id = timekeeping_entry_history.company_id
+            and te.assigned_foreman_id = (select auth.uid())
+        )
+      )
+    )
+  )
+);
 alter policy timekeeping_pay_periods_select_company on public.timekeeping_pay_periods using (company_id = (select p.company_id from public.profiles p where p.id = (select auth.uid())));
 alter policy timekeeping_pay_period_audit_select_company on public.timekeeping_pay_period_audit using (company_id = (select p.company_id from public.profiles p where p.id = (select auth.uid())));
 
-alter policy timekeeping_entries_role_scoped_insert on public.timekeeping_entries with check (company_id = (select public.my_company_id()) and (select public.current_user_has_active_profile()) and created_by = (select auth.uid()) and updated_by = (select auth.uid()) and exists (select 1 from public.timekeeping_employees employee where employee.id = timekeeping_entries.employee_id and employee.company_id = timekeeping_entries.company_id and employee.active is true and (lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf']) or (lower(coalesce((select public.my_role()), '')) = 'foreman' and (select public.linecrew_foreman_has_job_assignment(timekeeping_entries.job_id)))));
-alter policy timekeeping_entries_role_scoped_update on public.timekeeping_entries using (company_id = (select public.my_company_id()) and (select public.current_user_has_active_profile()) and (lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf']) or created_by = (select auth.uid()))) with check (company_id = (select public.my_company_id()) and updated_by = (select auth.uid()) and exists (select 1 from public.timekeeping_employees employee where employee.id = timekeeping_entries.employee_id and employee.company_id = timekeeping_entries.company_id and employee.active is true and (lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf']) or (lower(coalesce((select public.my_role()), '')) = 'foreman' and (select public.linecrew_foreman_has_job_assignment(timekeeping_entries.job_id)))));
+alter policy timekeeping_entries_role_scoped_insert on public.timekeeping_entries
+with check (
+  company_id = (select public.my_company_id())
+  and (select public.current_user_has_active_profile())
+  and created_by = (select auth.uid())
+  and updated_by = (select auth.uid())
+  and exists (
+    select 1 from public.timekeeping_employees employee
+    where employee.id = timekeeping_entries.employee_id
+      and employee.company_id = timekeeping_entries.company_id
+      and employee.active is true
+      and (
+        lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf'])
+        or (
+          lower(coalesce((select public.my_role()), '')) = 'foreman'
+          and (select public.linecrew_foreman_has_job_assignment(timekeeping_entries.job_id))
+        )
+      )
+  )
+);
+alter policy timekeeping_entries_role_scoped_update on public.timekeeping_entries
+using (
+  company_id = (select public.my_company_id())
+  and (select public.current_user_has_active_profile())
+  and (
+    lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf'])
+    or created_by = (select auth.uid())
+  )
+)
+with check (
+  company_id = (select public.my_company_id())
+  and updated_by = (select auth.uid())
+  and exists (
+    select 1 from public.timekeeping_employees employee
+    where employee.id = timekeeping_entries.employee_id
+      and employee.company_id = timekeeping_entries.company_id
+      and employee.active is true
+      and (
+        lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf'])
+        or (
+          lower(coalesce((select public.my_role()), '')) = 'foreman'
+          and (select public.linecrew_foreman_has_job_assignment(timekeeping_entries.job_id))
+        )
+      )
+  )
+);
