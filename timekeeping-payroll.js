@@ -188,15 +188,15 @@
     XLSX.writeFile(wb,`linecrew-timesheet-${from}-to-${through}.xlsx`);toast('Excel timesheet exported.','success');
   }
 
-  function loadScript(src){return new Promise((resolve,reject)=>{const existing=document.querySelector(`script[src="${src}"]`);if(existing){if(existing.dataset.loaded==='1')return resolve();existing.addEventListener('load',resolve,{once:true});existing.addEventListener('error',reject,{once:true});return;}const s=document.createElement('script');s.src=src;s.onload=()=>{s.dataset.loaded='1';resolve();};s.onerror=reject;document.head.appendChild(s);});}
+  function loadScript(src,integrity){return new Promise((resolve,reject)=>{const existing=document.querySelector(`script[src="${src}"]`);if(existing){if(existing.dataset.loaded==='1')return resolve();existing.addEventListener('load',resolve,{once:true});existing.addEventListener('error',reject,{once:true});return;}const s=document.createElement('script');s.src=src;s.integrity=integrity;s.crossOrigin='anonymous';s.onload=()=>{s.dataset.loaded='1';resolve();};s.onerror=()=>reject(new Error('A protected PDF library failed its integrity check or could not be loaded.'));document.head.appendChild(s);});}
 
   async function exportPdf(){
     const rows=await ensureReport();if(!rows.length)return toast('There is no Timekeeping data to export for these filters.','warning');
     const button=byId('tkExportPdfBtn');const done=window.LineCrewUI?.loadingButton?.(button,'Building PDF…')||(()=>{});
     try{
-      if(!window.jspdf?.jsPDF)await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js');
+      if(!window.jspdf?.jsPDF)await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js','sha384-en/ztfPSRkGfME4KIm05joYXynqzUgbsG5nMrj/xEFAHXkeZfO3yMK8QQ+mP7p1/');
       if(!window.jspdf?.jsPDF)throw new Error('PDF library did not load.');
-      if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js');
+      if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js','sha384-Xl/CUCfJbzsngMp0CFxkmF0VW/8C160IsGujqeQlIhaGxKz2+JsIGORFqtCPeldF');
       await buildExceptions();const {jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',unit:'pt',format:'letter'});const [from,through]=currentRange();
       doc.setFontSize(16);doc.text('LineCrew Pro Weekly Timesheet',36,34);doc.setFontSize(10);doc.text(`Period: ${from} through ${through}    Status: ${(periodState.status||'open').toUpperCase()}`,36,52);
       doc.autoTable({startY:66,head:[['Date','Employee','Class','Job','Crew','Regular','OT','Total','Storm']],body:detailData(rows).map(r=>[r[3],r[1],r[2],r[4],r[6],Number(r[7]).toFixed(2),Number(r[8]).toFixed(2),Number(r[9]).toFixed(2),r[10]]),styles:{fontSize:8,cellPadding:3},headStyles:{fontStyle:'bold'}});
