@@ -13240,10 +13240,25 @@ return String(value || '')
 .toLowerCase()
 .replace(/[^a-z0-9]/g, '');
 }
-function selectDailyBatchUnit(row, item){
+async function selectDailyBatchUnit(row, item){
 row.selectedItem = item;
 row.searchInput.value = item.item_code;
-const inferredWorkType = inferDailyUnitWorkType(item);
+let inferredWorkType = inferDailyUnitWorkType(item);
+const location = $('dailyUnitPoleLocation').value.trim();
+if(location && currentDailyUnitReport?.id){
+const { data:authorization } = await sb.rpc(
+'get_daily_report_unit_authorized_action',
+{
+p_report_id:currentDailyUnitReport.id,
+p_price_book_item_id:item.price_book_item_id,
+p_pole_location:location
+}
+);
+const authorizedAction = authorization?.[0]?.preferred_work_type;
+if(['install','transfer','retirement'].includes(authorizedAction)){
+inferredWorkType = authorizedAction;
+}
+}
 row.actionInput.value = inferredWorkType;
 row.suggestions.classList.add('hidden');
 row.selection.innerHTML =
