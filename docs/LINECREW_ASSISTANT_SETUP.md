@@ -15,8 +15,9 @@ The browser never stores an OpenAI key. The key belongs only in Supabase Edge Fu
 4. Open the function's **Secrets**.
 5. Add `OPENAI_API_KEY` with the server API key.
 6. Optional: add `OPENAI_MODEL` to override the default model.
-7. Confirm JWT verification remains enabled.
-8. Deploy the function.
+7. Optional: add `CORS_ALLOWED_ORIGINS` as a comma-separated list of exact development app origins. Production `https://app.linecrewpro.com` is always allowed. Do not add the public marketing site or wildcard origins.
+8. Confirm JWT verification remains enabled.
+9. Deploy the function.
 
 Supabase supplies `SUPABASE_URL` and `SUPABASE_ANON_KEY` to hosted Edge Functions.
 
@@ -28,6 +29,7 @@ Supabase supplies `SUPABASE_URL` and `SUPABASE_ANON_KEY` to hosted Edge Function
 4. Ask about another contractor and confirm the assistant does not reveal any other company.
 5. Inspect `index.html` and confirm it contains no OpenAI secret.
 6. Rotate the OpenAI key in Supabase if it is ever exposed.
+7. Send a browser request from an unapproved origin and confirm the function returns HTTP 403 without contacting the AI provider.
 
 ## Functional checks
 
