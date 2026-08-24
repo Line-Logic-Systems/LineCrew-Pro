@@ -24,6 +24,7 @@ The large `training-videos` bucket is excluded from the daily package and includ
 2. A PostgreSQL custom-format logical dump of the `auth`, `public`, and `storage` schemas.
 3. A Git bundle containing the complete repository history and branches.
 4. The integrity manifest and `pg_restore` archive inventory.
+5. A separately hashed post-restore SQL bootstrap and verification script for the global Data API security gate.
 
 The package is retained in GitHub for 30 days and copied to Azure Blob Storage. Either destination can survive loss of Supabase; Azure also protects against loss of GitHub.
 
@@ -37,6 +38,8 @@ The package is retained in GitHub for 30 days and copied to Azure Blob Storage. 
 4. Restores the records in dependency order and restores the file at its original path.
 5. Signs users in, checks the restored content and SHA-256 hash, and confirms the second company cannot read either item.
 6. Removes all drill data.
+
+The drill also performs a real PostgreSQL 17 `pg_restore` between disposable local databases. It proves that `pg_restore` does not preserve `pgrst.db_pre_request`, then applies `post-restore-security.sql` and fails unless `verify-post-restore-security.sql` confirms the gate is active.
 
 Production records and production files are never modified by this test.
 
@@ -68,11 +71,26 @@ Never commit credentials or database URLs.
 1. Download the newest successful weekly package from Azure and compare it with the GitHub copy when both are available.
 2. Extract the package and run `node scripts/verify-backup.mjs backup-output/<timestamp>` before importing anything.
 3. Create a new, empty Supabase recovery project. Never restore over the damaged production project before validation.
-4. Restore the PostgreSQL archive with a PostgreSQL 17 client. Review `linecrew-postgres.list`, then use `pg_restore --no-owner --no-acl --dbname <recovery-url> linecrew-postgres.dump`.
-5. Upload files under `storage/<bucket>/` to the matching private buckets while preserving their complete paths.
-6. Apply any repository migrations newer than the backup timestamp.
-7. Verify login, company isolation, jobs, price books, daily reports, JSAs, attachments, billing exports, timekeeping, and audit history.
-8. Change application environment variables only after recovery validation passes. Keep the former environment read-only until the recovery owner approves retirement.
+4. Restore the PostgreSQL archive with a PostgreSQL 17 client. Review `linecrew-postgres.list`, confirm the referenced Supabase roles exist in the recovery project, then use `pg_restore --no-owner --dbname <recovery-url> linecrew-postgres.dump`. Do not use `--no-acl`; function GRANT/REVOKE entries are part of the security boundary.
+5. Apply any repository migrations newer than the backup timestamp.
+6. Run `psql <recovery-url> -f post-restore-security.sql`, then `psql <recovery-url> -f verify-post-restore-security.sql`. Stop recovery if either command fails. This restores the `authenticator` role setting that `pg_dump` and `pg_restore` do not capture, and verifies that privileged function ACLs remain closed to anonymous callers.
+7. Upload files under `storage/<bucket>/` to the matching private buckets while preserving their complete paths.
+8. Verify login, MFA enforcement, suspended-account denial, expired-company denial, company isolation, jobs, price books, daily reports, JSAs, attachments, billing exports, timekeeping, and audit history.
+9. Change application environment variables only after recovery validation passes. Keep the former environment read-only until the recovery owner approves retirement.
+
+## Privileged-account recovery
+
+Owner, Admin and platform-support accounts must complete authenticator MFA before company or support data is available. There is no calendar deadline and no bypass in the application.
+
+If a privileged user loses every authenticator device:
+
+1. Keep the account blocked. Verify the person's identity and authority outside LineCrew Pro using the company's established contact information.
+2. A LineCrew platform operator uses Supabase's server-only Admin MFA `deleteFactor` operation from a secured environment. Never place the service-role key in the browser, a ticket, chat or source control.
+3. Deleting a verified factor signs the user out of all active sessions. Require a password reset if compromise is possible.
+4. Record the user ID, factor ID, approver, reason and time in the recovery incident record.
+5. The user signs in again and must enroll a new authenticator before privileged data becomes available.
+
+Whenever practical, configure the authenticator on two separately secured devices during initial enrollment so loss of one device does not require break-glass recovery.
 
 ## Operational response
 

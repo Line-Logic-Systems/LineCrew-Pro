@@ -1,6 +1,12 @@
 name: Disposable Disaster Restore Test
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/test-disaster-restore.yml'
+      - 'scripts/post-restore-security.sql'
+      - 'scripts/test-post-restore-security-gate.sh'
+      - 'scripts/verify-post-restore-security.sql'
   schedule:
     - cron: '41 9 1 * *'
   workflow_dispatch:
@@ -14,7 +20,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  security-gate-restore-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Restore and verify the global Data API security gate
+        run: bash scripts/test-post-restore-security-gate.sh
+      - name: Open immediate recovery alert
+        if: failure() && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/manage-recovery-alert.sh failure "Disposable Disaster Restore Test"
+
   restore-test:
+    if: github.event_name != 'pull_request'
+    needs: security-gate-restore-test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: isolation-test

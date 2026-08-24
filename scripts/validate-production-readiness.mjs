@@ -31,11 +31,15 @@ const mustExist = [
   'supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql',
   'supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql',
   'supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql',
+  'supabase/migrations/20260824190000_enforce_privileged_mfa_without_deadline.sql',
   'supabase/migrations/20260824070000_append_only_job_closeout_history.sql',
   'supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql',
   'number-input-polish.js',
   'scripts/generate-production-drift-repair.mjs',
-  'scripts/verify-production-schema.sql'
+  'scripts/verify-production-schema.sql',
+  'scripts/post-restore-security.sql',
+  'scripts/verify-post-restore-security.sql',
+  'scripts/test-post-restore-security-gate.sh'
 ];
 for (const file of mustExist) assert(fs.existsSync(file), `Missing ${file}`);
 
@@ -60,7 +64,8 @@ const employeeRosterAssignment = fs.readFileSync('supabase/migrations/2026082303
 const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
 const manHourRateTarget = fs.readFileSync('supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
 const dailyReportReadScope = fs.readFileSync('supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
-const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
+const privilegedMfaFoundation = fs.readFileSync('supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
+const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824190000_enforce_privileged_mfa_without_deadline.sql', 'utf8');
 const jobCloseoutHistory = fs.readFileSync('supabase/migrations/20260824070000_append_only_job_closeout_history.sql', 'utf8');
 const dailyReportScaleIntegrity = fs.readFileSync('supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
@@ -70,6 +75,11 @@ const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
 const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
+const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
+const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
+const postRestoreSecurity = fs.readFileSync('scripts/post-restore-security.sql', 'utf8');
+const verifyPostRestoreSecurity = fs.readFileSync('scripts/verify-post-restore-security.sql', 'utf8');
+const testPostRestoreSecurity = fs.readFileSync('scripts/test-post-restore-security-gate.sh', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
@@ -205,19 +215,38 @@ for (const marker of [
   'create or replace function public.enforce_linecrew_company_access()',
   "auth.jwt() ->> 'aal'",
   "v_request_path = '/rpc/linecrew_mfa_bootstrap_identity'",
-  "timestamptz '2026-08-31 05:00:00+00'",
   "v_role in ('owner', 'admin')",
+  "set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"
+]) assert(privilegedMfaServer.includes(marker), `Server-enforced privileged MFA marker missing: ${marker}`);
+for (const marker of [
   'linecrew_privileged_mfa_storage_select',
   'linecrew_privileged_mfa_storage_insert',
   'linecrew_privileged_mfa_storage_update',
-  'linecrew_privileged_mfa_storage_delete',
-  'on storage.objects as restrictive',
-  "set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"
-]) assert(privilegedMfaServer.includes(marker), `Server-enforced privileged MFA marker missing: ${marker}`);
+  'linecrew_privileged_mfa_storage_delete'
+]) assert(privilegedMfaFoundation.includes(marker), `Restrictive Storage MFA policy missing: ${marker}`);
+assert(!privilegedMfaServer.includes('2026-08-31'), 'Privileged MFA must not depend on a fixed calendar deadline.');
+assert(!index.includes('MFA_ENFORCEMENT_DATE'), 'The app must not postpone privileged MFA to a calendar deadline.');
+assert(!index.includes('postponeMfaBtn'), 'The privileged MFA screen must not provide an application bypass.');
 
 assert(index.includes("sb.rpc('linecrew_mfa_bootstrap_identity')"), 'The app must complete the narrow MFA bootstrap before other Data API requests.');
 assert(index.indexOf("sb.rpc('linecrew_mfa_bootstrap_identity')") < index.indexOf("sb.rpc('is_my_profile_suspended')"), 'The MFA bootstrap must run before protected profile checks.');
 assert(support.includes("rpc('linecrew_mfa_bootstrap_identity')"), 'The support console must complete the narrow MFA bootstrap before protected support RPCs.');
+for (const marker of [
+  'post-restore-security.sql',
+  'verify-post-restore-security.sql',
+  'security-files.sha256',
+  'sha256sum --check'
+]) assert(independentBackup.includes(marker), `Independent backup is missing recovery-security marker: ${marker}`);
+assert(disasterRestoreWorkflow.includes('bash scripts/test-post-restore-security-gate.sh'), 'The disposable restore workflow must run an actual pg_restore security-gate drill.');
+assert(testPostRestoreSecurity.includes('pg_restore') && testPostRestoreSecurity.includes('pg_db_role_setting'), 'The recovery-security drill must prove pg_restore omits the role setting before restoring it.');
+assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl'), 'Independent backups must preserve function ACLs.');
+assert(!testPostRestoreSecurity.includes('--no-acl'), 'The recovery drill must restore and verify function ACLs.');
+assert(postRestoreSecurity.includes("alter role authenticator\n  set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"), 'The recovery bootstrap must restore the PostgREST pre-request gate.');
+assert(verifyPostRestoreSecurity.includes('pg_db_role_setting') && verifyPostRestoreSecurity.includes("public.enforce_linecrew_company_access"), 'The recovery verifier must inspect the live authenticator role setting.');
+assert(verifyPostRestoreSecurity.includes("'authenticated'") && verifyPostRestoreSecurity.includes("'service_role'"), 'The recovery verifier must match the live API-role grants for the pre-request gate.');
+assert(!verifyPostRestoreSecurity.includes("has_function_privilege(\n    'authenticator'"), 'The recovery verifier must not require the NOINHERIT authenticator role to execute the gate directly.');
+assert(verifyPostRestoreSecurity.includes("has_function_privilege('anon', proc.oid, 'EXECUTE')"), 'The recovery verifier must reject anonymously executable SECURITY DEFINER functions.');
+assert(verifyPostRestoreSecurity.includes("public.admin_update_user(uuid,text,boolean)"), 'The recovery verifier must keep the legacy role-escalation RPC closed after restore.');
 assert(packetParser.includes('if (origin && !allowedOrigins.has(origin))'), 'Job-packet parsing must reject unapproved browser origins.');
 assert(!packetParser.includes('"Access-Control-Allow-Origin": "*"'), 'Job-packet parsing must not allow every browser origin.');
 assert(appPolish.includes("tile.setAttribute('role','link')") && appPolish.includes("tile.addEventListener('keydown'"), 'Dashboard tiles must support keyboard and screen-reader navigation.');
