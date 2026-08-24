@@ -1454,7 +1454,7 @@ Read-only job records and exports
 <div class="metric" id="productionTile">
 <strong>Production</strong>
 <span class="muted">
-Daily reporting coming next
+Create, review and report daily production
 </span>
 </div>
 <div class="metric" id="priceBooksTile">
@@ -3451,19 +3451,19 @@ const APP_PAGE_IDS = new Set([
 'priceBooksPage'
 ]);
 const SUPERINTENDENT_CAPABILITIES = [
-['company_settings','Company Settings'],
-['team_management','Team Access'],
-['role_management','Role Management'],
-['customers_contracts','Customers & Contracts'],
-['price_books','Price Books'],
-['jobs','Jobs'],
-['job_packages','Utility Job Packages'],
-['production_review','Production Review'],
-['reporting','Reporting'],
-['storm_mode','Storm Mode'],
-['safety_records','Safety Records'],
-['actual_pricing','Actual Contract Pricing'],
-['exports','Exports']
+['company_settings','Company Settings','Edit company setup and operating policies.'],
+['team_management','Team Access','Invite, suspend and restore team-member access.'],
+['role_management','Role Management','Change eligible GF and Foreman roles.'],
+['customers_contracts','Customers & Contracts','Create and maintain customer and contract records.'],
+['price_books','Price Books','Manage contract unit pricing.'],
+['jobs','Jobs','Create, edit, assign, close and reopen jobs.'],
+['job_packages','Utility Job Packages','Upload packets and manage authorized units.'],
+['production_review','Production Review','Approve or return submitted Daily Reports.'],
+['reporting','Reporting','View company reports; billing exports also require Actual Contract Pricing.'],
+['storm_mode','Storm Mode','Configure storm events and participating crews.'],
+['safety_records','Safety Records','View and manage company JSA records.'],
+['actual_pricing','Actual Contract Pricing','See contract dollars; billing exports also require Reporting.'],
+['exports','Exports','Download permitted reports; dollar exports still require pricing access.']
 ];
 function currentUserRole(){
 return String(currentProfile?.role || 'foreman').toLowerCase();
@@ -4494,14 +4494,16 @@ intro.className = 'muted';
 intro.textContent = 'Checked permissions are available to this Superintendent. Owner/Admin can change them at any time.';
 details.appendChild(intro);
 const checks = new Map();
-SUPERINTENDENT_CAPABILITIES.forEach(([key,labelText]) => {
+SUPERINTENDENT_CAPABILITIES.forEach(([key,labelText,helpText]) => {
 const label = document.createElement('label');
 label.className = 'checkbox-row';
 const input = document.createElement('input');
 input.type = 'checkbox';
 input.checked = member.role_permissions?.[key] !== false;
 checks.set(key,input);
-label.append(input, document.createTextNode(labelText));
+const text=document.createElement('span');
+text.innerHTML='<strong>'+escapeHtml(labelText)+'</strong><br><span class="muted">'+escapeHtml(helpText)+'</span>';
+label.append(input,text);
 details.appendChild(label);
 });
 const save = document.createElement('button');
