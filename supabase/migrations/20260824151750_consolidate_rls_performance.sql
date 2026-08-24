@@ -161,7 +161,16 @@ alter policy profiles_same_company_select on public.profiles using ((company_id 
 alter policy reports_foreman_insert on public.daily_reports with check (company_id = (select public.my_company_id()) and foreman_id = (select auth.uid()));
 alter policy daily_report_jsas_role_scoped_select on public.daily_report_jsas using (company_id = (select public.my_company_id()) and (created_by = (select auth.uid()) or lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf']) or (lower(coalesce((select public.my_role()), '')) = 'superintendent' and (select public.linecrew_has_capability('safety_records')))));
 alter policy job_leader_assignments_role_scoped_select on public.job_leader_assignments using (company_id = (select public.my_company_id()) and (select public.current_user_has_active_profile()) and (member_id = (select auth.uid()) or lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf']) or (lower(coalesce((select public.my_role()), '')) = 'superintendent' and (select public.linecrew_has_capability('jobs')))));
-alter policy "jsa attachment role scoped read" on public.jsa_upload_attachments using (company_id = (select public.my_company_id()) and exists (select 1 from public.daily_report_jsas j where j.id = jsa_upload_attachments.jsa_id and j.company_id = jsa_upload_attachments.company_id and (j.created_by = (select auth.uid()) or lower(coalesce((select public.my_role()), '')) = any (array['owner','admin','gf']) or (lower(coalesce((select public.my_role()), '')) = 'superintendent' and (select public.linecrew_has_capability('safety_records')))));
+alter policy "jsa attachment role scoped read" on public.jsa_upload_attachments
+using (
+  company_id = (select public.my_company_id())
+  and exists (
+    select 1
+    from public.daily_report_jsas j
+    where j.id = jsa_upload_attachments.jsa_id
+      and j.company_id = jsa_upload_attachments.company_id
+  )
+);
 
 alter policy training_progress_read_own_company on public.training_progress using (user_id = (select auth.uid()) or exists (select 1 from public.profiles p where p.id = (select auth.uid()) and p.company_id = training_progress.company_id and lower(coalesce(p.role, '')) = any (array['owner','admin']) and coalesce(p.active, true)));
 alter policy training_progress_update_own on public.training_progress using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
