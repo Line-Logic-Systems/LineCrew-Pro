@@ -1,6 +1,13 @@
 name: Test platform billing isolation
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/test-platform-billing-isolation.mjs'
+      - '.github/workflows/test-platform-billing-isolation.yml'
   workflow_dispatch:
     inputs:
       confirmation:
@@ -11,8 +18,13 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: isolation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   billing-isolation:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: isolation-test
@@ -22,7 +34,7 @@ jobs:
       SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
       SUPABASE_TEST_PROJECT_REF: ${{ secrets.SUPABASE_TEST_PROJECT_REF }}
       SUPABASE_PRODUCTION_PROJECT_REF: ${{ secrets.SUPABASE_PRODUCTION_PROJECT_REF }}
-      LINECREW_ISOLATION_TEST_CONFIRM: ${{ inputs.confirmation }}
+      LINECREW_ISOLATION_TEST_CONFIRM: ${{ github.event_name == 'workflow_dispatch' && inputs.confirmation || 'DISPOSABLE_ONLY' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
