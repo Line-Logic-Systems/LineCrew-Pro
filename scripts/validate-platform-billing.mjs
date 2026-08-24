@@ -8,6 +8,7 @@ const requiredFiles = [
   'supabase/migrations/20260818_platform_owner_and_billing.sql',
   'supabase/migrations/20260818_crew_tier_usage_policy.sql',
   'supabase/migrations/20260818_crew_tier_automation_and_visibility.sql',
+  'supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql',
   'supabase/functions/create-billing-checkout/index.ts',
   'supabase/functions/create-billing-portal/index.ts',
   'supabase/functions/stripe-webhook/index.ts',
@@ -26,6 +27,7 @@ const app = fs.readFileSync('index.html', 'utf8');
 const migration = fs.readFileSync('supabase/migrations/20260818_platform_owner_and_billing.sql', 'utf8');
 const crewPolicy = fs.readFileSync('supabase/migrations/20260818_crew_tier_usage_policy.sql', 'utf8');
 const crewAutomation = fs.readFileSync('supabase/migrations/20260818_crew_tier_automation_and_visibility.sql', 'utf8');
+const crewLimitMigration = fs.readFileSync('supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql', 'utf8');
 const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/index.ts', 'utf8');
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
 const webhook = fs.readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
@@ -96,6 +98,14 @@ for (const marker of [
 
 for (const marker of ['company_crew_usage_daily','starter','business','pro','enterprise','rolling_overage_crew_days','current_date - 29']) {
   if (!crewPolicy.toLowerCase().includes(marker.toLowerCase())) throw new Error(`crew tier policy migration is missing ${marker}`);
+}
+
+for (const marker of ['enforce_active_crew_plan_limit','pg_advisory_xact_lock','up to % active crews','before insert or update of active, company_id']) {
+  if (!crewLimitMigration.includes(marker)) throw new Error(`Active crew plan-limit migration missing ${marker}.`);
+}
+
+for (const marker of ['planForStripePrice','BILLING_PLAN_PRICE_MAP','recalculate_company_crew_overage']) {
+  if (!webhook.includes(marker)) throw new Error(`Stripe webhook missing plan-switch synchronization marker ${marker}.`);
 }
 for (const marker of [
   'peak_billable_crews',

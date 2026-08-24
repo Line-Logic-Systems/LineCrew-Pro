@@ -75,6 +75,7 @@ For Stripe-managed accounts, Stripe remains the source of truth for price, subsc
 - starts Checkout through the `create-billing-checkout` Edge Function
 - opens Stripe Customer Portal through the `create-billing-portal` Edge Function
 - sends card/payment self-service to Stripe instead of storing payment details in LineCrew Pro
+- blocks activation of a crew beyond the paid plan limit in Postgres while retaining inactive crews and all historical records
 
 The main `index.html` is not hard-gated by billing on this branch. Linking the Billing page into Admin Controls and enforcing `my_company_subscription_access()` should be a later reviewed release after test-mode billing passes.
 
@@ -142,11 +143,26 @@ If Stripe retries an event:
 
 `checkout.session.completed` links identifiers but does not blindly mark the company active. Subscription events remain the source of truth for actual subscription state.
 
+For subscription events, the webhook resolves the LineCrew Pro plan from the subscription's current Stripe Price ID using `BILLING_PLAN_PRICE_MAP`. Customer Portal plan changes do not rewrite old subscription metadata, so metadata alone must never determine the new crew limit. An unmapped Stripe Price fails closed and is retried rather than silently assigning the wrong plan.
+
 `invoice.payment_failed` marks the account `past_due` but preserves pilot/grace access. `invoice.paid` is audit-only and does not blindly reactivate a canceled or paused subscription. `customer.subscription.updated` remains the authoritative state update.
 
 The webhook accepts both older top-level subscription period timestamps and the newer item-level period timestamps so the billing foundation is less sensitive to Stripe API-version changes.
 
-## 8. Current access policy
+## 8. Active crew enforcement
+
+Standard plans are enforced in Postgres, not only in the browser:
+
+- Starter: up to 5 active crews
+- Business: up to 10 active crews
+- Pro: up to 20 active crews
+- Enterprise: up to 40 active crews
+
+Inactive crews remain stored for job, report, employee, and audit history. When a company reaches its limit, activating another crew is rejected with an upgrade/deactivate message. A per-company transaction lock prevents two simultaneous crew inserts from taking the same final slot. Pilot and custom plans remain manually managed.
+
+If a Customer Portal downgrade leaves a company above its new limit, LineCrew Pro preserves all data and existing access, reports the over-limit state, and blocks additional crew activation until the company deactivates crews or upgrades again. Because the existing active crews are not deleted or disabled, live Customer Portal plan switching must remain off until LineCrew Pro has an upgrade-only or usage-checked plan-change flow. Payment-method changes and cancellation can remain self-service.
+
+## 9. Current access policy
 
 Current billing-foundation behavior:
 - existing companies are seeded as `pilot`, `trialing`, access enabled
@@ -161,7 +177,7 @@ The production app does **not** yet enforce this billing value. That omission is
 
 Before hard-blocking contractor sign-in, choose a grace/dunning policy for past-due accounts. A practical first-launch policy is usually a grace period rather than immediate field lockout, because crews may need continued access to safety and production records while an office payment issue is resolved.
 
-## 9. What is intentionally not automatic yet
+## 10. What is intentionally not automatic yet
 
 The branch does not silently block the existing production app. Wiring `access_enabled=false` into `index.html` should be done as a separate reviewed release only after:
 
@@ -177,7 +193,7 @@ The branch does not silently block the existing production app. Wiring `access_e
 
 This sequence prevents a billing configuration mistake from becoming a field-operations outage.
 
-## 10. Recommended B2B plan setup
+## 11. Recommended B2B plan setup
 
 LineCrew Pro can support negotiated contractor pricing without exposing raw Stripe configuration to users.
 
@@ -191,7 +207,7 @@ A simple first commercial workflow is:
 
 For customer-specific negotiated prices, create the needed Stripe Price and map an internal plan code to it server-side. No Stripe secret or Price ID needs to appear in the browser.
 
-## 11. Safe test order
+## 12. Safe test order
 
 1. Apply `20260818_platform_owner_and_billing.sql` to the disposable **LineCrew Pro Test** project only.
 2. Add one test Auth user to `platform_owners`.
@@ -209,5 +225,9 @@ For customer-specific negotiated prices, create the needed Stripe Price and map 
 14. Force a webhook-processing failure in the disposable project, retry the same Stripe event, and confirm it can recover from an unprocessed ledger row.
 15. Verify a normal Foreman cannot use `my_company_billing_summary()`.
 16. Open Stripe Customer Portal from a company Admin session.
-17. Re-run the two-company isolation test after the migration.
-18. Only after all of the above should a production rollout and app-access gate be prepared.
+17. In the sandbox Customer Portal only, temporarily enable plan switching, keep quantity changes disabled, and add the Starter, Business, Pro, and Enterprise monthly products.
+18. Switch the test subscription to another plan and confirm the billing page updates its plan, price, and active-crew limit from the new Stripe Price ID.
+19. Turn Customer Portal plan switching back off. Keep it off in live mode until a usage-checked or upgrade-only plan-change flow is shipped.
+20. Confirm Starter accepts active crews 1–5, rejects active crew 6, and still permits an inactive historical crew.
+21. Re-run the two-company isolation test after the migration.
+22. Only after all of the above should a production rollout and app-access gate be prepared.

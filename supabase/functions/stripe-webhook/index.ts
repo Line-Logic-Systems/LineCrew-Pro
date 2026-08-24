@@ -64,6 +64,29 @@ function normalizedMonthlyAmount(unitAmount: number, interval: string | null, in
   return amount;
 }
 
+function planForStripePrice(priceId: string | null, rawMap: string | undefined) {
+  if (!priceId) throw new Error("Stripe subscription price is missing.");
+  if (!rawMap) throw new Error("Billing plan mapping is not configured.");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawMap);
+  } catch {
+    throw new Error("Billing plan mapping is invalid JSON.");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Billing plan mapping must be an object.");
+  }
+
+  for (const [plan, configuredPriceId] of Object.entries(parsed as Record<string, unknown>)) {
+    if (String(configuredPriceId || "").trim() === priceId) {
+      const cleanPlan = String(plan || "").trim().toLowerCase();
+      if (["starter", "business", "pro", "enterprise"].includes(cleanPlan)) return cleanPlan;
+    }
+  }
+  throw new Error(`Stripe price ${priceId} is not mapped to a LineCrew Pro plan.`);
+}
+
 Deno.serve(async request => {
   if (request.method !== "POST") return json({ error: "POST required." }, 405);
 
@@ -180,7 +203,15 @@ Deno.serve(async request => {
         const interval = item?.price?.recurring?.interval || null;
         const intervalCount = Number(item?.price?.recurring?.interval_count || 1);
         const unitAmount = Number(item?.price?.unit_amount || 0);
-        const planCode = String(object.metadata?.plan_code || "").trim() || null;
+        const stripePriceId = String(item?.price?.id || "").trim() || null;
+        // The Customer Portal changes the subscription price but does not
+        // rewrite subscription metadata. Resolve the plan from the current
+        // Stripe Price ID so an upgrade/downgrade cannot leave LineCrew Pro on
+        // a stale crew limit.
+        const planCode = planForStripePrice(
+          stripePriceId,
+          Deno.env.get("BILLING_PLAN_PRICE_MAP"),
+        );
         const currentPeriodEndUnix = Number(object.current_period_end || item?.current_period_end || 0);
         const scheduledCancelUnix = Number(object.cancel_at || 0);
         // Stripe's newer Customer Portal can schedule an end-of-period
@@ -209,10 +240,10 @@ Deno.serve(async request => {
         const update = {
           company_id: companyId,
           provider: "stripe",
-          plan_code: planCode || prior?.plan_code || "custom",
+          plan_code: planCode,
           stripe_customer_id: customerId,
           stripe_subscription_id: object.id,
-          stripe_price_id: item?.price?.id || null,
+          stripe_price_id: stripePriceId,
           monthly_price_cents: normalizedMonthlyAmount(unitAmount, interval, intervalCount),
           currency: String(item?.price?.currency || "usd").toLowerCase(),
           billing_interval: interval,
@@ -237,6 +268,11 @@ Deno.serve(async request => {
           .from("company_subscriptions")
           .upsert(update, { onConflict: "company_id" });
         if (error) throw error;
+
+        const { error: crewLimitError } = await service.rpc("recalculate_company_crew_overage", {
+          p_company_id: companyId,
+        });
+        if (crewLimitError) throw crewLimitError;
       }
     }
 

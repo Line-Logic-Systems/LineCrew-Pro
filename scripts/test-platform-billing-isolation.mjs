@@ -140,6 +140,21 @@ async function main() {
   assert(firstRow(summaryB.data)?.plan_code === "business", "Company B did not receive its own billing plan.");
   assert(firstRow(summaryB.data)?.monthly_price_cents === 74900, "Company B billing amount is incorrect.");
 
+  // A Starter company may retain any number of inactive historical crews,
+  // but the database must reject a sixth active crew even through service/API
+  // writes. This proves the limit is not only a browser warning.
+  for (let index = 1; index <= 5; index += 1) {
+    await serviceInsert("crews", { company_id: companyA.id, name: `${runId} Active Crew ${index}`, active: true });
+  }
+  const sixthCrew = await request("/rest/v1/crews", {
+    method: "POST",
+    body: { company_id: companyA.id, name: `${runId} Active Crew 6`, active: true },
+    prefer: "return=representation",
+  });
+  assert(!sixthCrew.ok, "BILLING FAILURE: Starter company activated a sixth crew.");
+  assert(String(sixthCrew.data?.message || "").includes("up to 5 active crews"), "Crew-limit rejection did not explain the Starter limit.");
+  await serviceInsert("crews", { company_id: companyA.id, name: `${runId} Historical Crew`, active: false });
+
   const accessA = await rpc(tokenA, "my_company_subscription_access");
   const accessB = await rpc(tokenB, "my_company_subscription_access");
   assert(firstRow(accessA.data)?.company_id === companyA.id, "Company A subscription-access RPC crossed tenants.");
@@ -206,7 +221,7 @@ async function main() {
   const dashboardAfterRemoval = await rpc(tokenA, "platform_owner_company_dashboard");
   assert(!dashboardAfterRemoval.ok, "SECURITY FAILURE: removed platform owner retained dashboard access.");
 
-  console.log("PASS: billing tables stay browser-private; tenant billing is isolated; approved list pricing is server-enforced; six rolling overage crew-days are allowed while the seventh survives crew cycling and requires upgrade; Foremen cannot open Admin billing; platform-owner power requires explicit allowlisting.");
+  console.log("PASS: billing tables stay browser-private; tenant billing is isolated; approved list pricing and active crew caps are server-enforced; inactive crew history is preserved; six rolling overage crew-days are allowed while the seventh survives crew cycling and requires upgrade; Foremen cannot open Admin billing; platform-owner power requires explicit allowlisting.");
 }
 
 try { await main(); } finally { await cleanup(); }

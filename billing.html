@@ -148,10 +148,10 @@ async function load(){
   $('crewStatus').textContent=label(billing.crew_overage_status||'within_plan');
   $('crewStatus').className='badge '+String(billing.crew_overage_status||'within_plan');
   const crewStatus=String(billing.crew_overage_status||'within_plan');
-  if(crewStatus==='grace') $('crewHelp').textContent='Temporary extra crews are still inside the rolling six crew-day allowance. Removing crews does not erase crew-days already used in the last 30 days.';
-  else if(crewStatus==='upgrade_required') $('crewHelp').textContent='The rolling six crew-day allowance has been exceeded. Recommended plan: '+label(billing.recommended_plan_code)+'.';
+  if(crewStatus==='grace') $('crewHelp').textContent='This company is above its active-crew limit, usually after a plan downgrade. Existing data remains available, but another crew cannot be activated until a crew is deactivated or the plan is upgraded.';
+  else if(crewStatus==='upgrade_required') $('crewHelp').textContent='This company is above its active-crew limit. Upgrade to '+label(billing.recommended_plan_code)+' or deactivate crews; no crew history will be deleted.';
   else if(crewStatus==='custom_quote_required') $('crewHelp').textContent='Usage requires a Large Enterprise custom quote because the 30-day peak exceeded 40 billable crews.';
-  else $('crewHelp').textContent='Crew tier is within plan. Storm Mode crews designated by the company are excluded from normal billable crew usage while Storm Mode is active.';
+  else $('crewHelp').textContent='Crew tier is within plan. The database blocks another active crew at the plan limit while preserving inactive crews and their history. Storm Mode exclusions affect usage reporting, not the active-crew cap.';
 
   const period=[];
   if(billing.trial_ends_at) period.push('Trial ends '+date(billing.trial_ends_at));
