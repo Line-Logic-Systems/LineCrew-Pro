@@ -15,6 +15,7 @@ on:
       - 'supabase/migrations/20260818_crew_tier_automation_and_visibility.sql'
       - 'supabase/functions/create-billing-checkout/**'
       - 'supabase/functions/create-billing-portal/**'
+      - 'supabase/functions/create-plan-upgrade/**'
       - 'supabase/functions/stripe-webhook/**'
       - 'supabase/functions/capture-crew-usage/**'
       - 'scripts/validate-platform-billing.mjs'
@@ -41,5 +42,6 @@ jobs:
         run: |
           deno check supabase/functions/create-billing-checkout/index.ts
           deno check supabase/functions/create-billing-portal/index.ts
+          deno check supabase/functions/create-plan-upgrade/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
           deno check supabase/functions/capture-crew-usage/index.ts

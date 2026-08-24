@@ -11,6 +11,7 @@ const requiredFiles = [
   'supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql',
   'supabase/functions/create-billing-checkout/index.ts',
   'supabase/functions/create-billing-portal/index.ts',
+  'supabase/functions/create-plan-upgrade/index.ts',
   'supabase/functions/stripe-webhook/index.ts',
   'scripts/test-platform-billing-isolation.mjs',
   '.github/workflows/test-platform-billing-isolation.yml',
@@ -30,6 +31,7 @@ const crewAutomation = fs.readFileSync('supabase/migrations/20260818_crew_tier_a
 const crewLimitMigration = fs.readFileSync('supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql', 'utf8');
 const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/index.ts', 'utf8');
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
+const upgrade = fs.readFileSync('supabase/functions/create-plan-upgrade/index.ts', 'utf8');
 const webhook = fs.readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
 const isolation = fs.readFileSync('scripts/test-platform-billing-isolation.mjs', 'utf8');
 const isolationWorkflow = fs.readFileSync('.github/workflows/test-platform-billing-isolation.yml', 'utf8');
@@ -65,7 +67,7 @@ for (const [name, source] of [['index.html', app], ['owner.html', owner], ['bill
 for (const marker of ['is_platform_owner','platform_owner_company_dashboard','platform_owner_set_subscription','editAccessOverride','internal_notes','rolling_overage_crew_days','recommended_plan_code']) {
   if (!owner.includes(marker)) throw new Error(`owner.html is missing ${marker}`);
 }
-for (const marker of ['my_company_billing_summary','create-billing-checkout','create-billing-portal','stripe_subscription_linked','rolling_peak_billable_crews','crew_overage_status']) {
+for (const marker of ['my_company_billing_summary','create-billing-checkout','create-billing-portal','create-plan-upgrade','stripe_subscription_linked','rolling_peak_billable_crews','crew_overage_status']) {
   if (!billing.includes(marker)) throw new Error(`billing.html is missing ${marker}`);
 }
 for (const marker of [
@@ -76,6 +78,15 @@ for (const marker of [
   'Stripe Checkout was closed. No new subscription was created.',
 ]) {
   if (!billing.includes(marker)) throw new Error(`billing.html is missing portal return state: ${marker}`);
+}
+for (const marker of [
+  "billingResult==='upgrade-return'",
+  'Upgrade Plan',
+  'Stripe will show the prorated charge before you confirm.',
+  "{target_plan:plan.code}",
+  "billing?.provider==='stripe'",
+]) {
+  if (!billing.includes(marker)) throw new Error(`billing.html is missing safe upgrade UI state: ${marker}`);
 }
 
 for (const marker of [
@@ -131,6 +142,21 @@ if (!checkout.includes('String(profile.role).toLowerCase() !== "admin"')) throw 
 if (!checkout.includes('already has a Stripe subscription')) throw new Error('Checkout must guard against duplicate live subscriptions.');
 if (!portal.includes('String(profile.role).toLowerCase() !== "admin"')) throw new Error('Billing portal must require company Admin role.');
 if (!portal.includes('/billing.html?billing=portal-return')) throw new Error('Billing portal must return to the contractor billing page.');
+for (const marker of [
+  'STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID',
+  'BILLING_PLAN_PRICE_MAP',
+  'String(profile.role).toLowerCase() !== "admin"',
+  'subscription.customer !== stored.stripe_customer_id',
+  'items.length !== 1',
+  'planOrder.indexOf(targetPlanCode) <= planOrder.indexOf(currentPlan)',
+  'Self-service billing can only move to a higher plan.',
+  'flow_data[type]',
+  'subscription_update_confirm',
+  'flow_data[subscription_update_confirm][items][0][price]',
+  '/billing.html?billing=upgrade-return&target_plan=',
+]) {
+  if (!upgrade.includes(marker)) throw new Error(`Upgrade function is missing required safety marker: ${marker}`);
+}
 if (!webhook.includes('stripe-signature') || !webhook.includes('verifyStripeSignature')) throw new Error('Stripe webhook signature validation is missing.');
 if (!webhook.includes('eventInsertError.code !== "23505"')) throw new Error('Stripe webhook must recognize unique-event retries by PostgreSQL error code.');
 if (!webhook.includes('prior?.processed_at')) throw new Error('Stripe webhook must distinguish completed duplicates from retryable failed events.');
@@ -145,7 +171,7 @@ for (const marker of ['DISPOSABLE_ONLY','SUPABASE_PRODUCTION_PROJECT_REF','platf
 if (!isolationWorkflow.includes('environment: isolation-test')) throw new Error('billing isolation workflow must use the protected isolation-test environment.');
 if (!isolationWorkflow.includes('LINECREW_ISOLATION_TEST_CONFIRM')) throw new Error('billing isolation workflow is missing disposable-project confirmation.');
 
-const publicFiles = [owner, billing, checkout, portal, webhook].join('\n');
+const publicFiles = [owner, billing, checkout, portal, upgrade, webhook].join('\n');
 for (const pattern of [
   /STRIPE_SECRET_KEY\s*=\s*['"][^'"]+['"]/i,
   /SUPABASE_SERVICE_ROLE_KEY\s*=\s*['"][^'"]+['"]/i,

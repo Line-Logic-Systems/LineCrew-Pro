@@ -74,6 +74,7 @@ For Stripe-managed accounts, Stripe remains the source of truth for price, subsc
 - never displays a Supabase service-role key or Stripe Price ID
 - starts Checkout through the `create-billing-checkout` Edge Function
 - opens Stripe Customer Portal through the `create-billing-portal` Edge Function
+- offers only higher plans through the `create-plan-upgrade` Edge Function
 - sends card/payment self-service to Stripe instead of storing payment details in LineCrew Pro
 - blocks activation of a crew beyond the paid plan limit in Postgres while retaining inactive crews and all historical records
 
@@ -84,6 +85,7 @@ The main `index.html` is not hard-gated by billing on this branch. Linking the B
 Deploy these Edge Functions only after the database migration exists in the target project:
 - `create-billing-checkout`
 - `create-billing-portal`
+- `create-plan-upgrade`
 - `stripe-webhook`
 
 Set these Supabase Edge Function secrets/config values:
@@ -92,6 +94,7 @@ Set these Supabase Edge Function secrets/config values:
 - `STRIPE_WEBHOOK_SECRET` — signing secret for the deployed webhook endpoint.
 - `APP_URL` — LineCrew Pro base URL with no trailing slash.
 - `BILLING_PLAN_PRICE_MAP` — JSON object mapping LineCrew Pro plan codes to Stripe Price IDs.
+- `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — the dedicated Stripe Customer Portal configuration used only by the upgrade-confirmation flow.
 
 Example shape only:
 
@@ -119,6 +122,25 @@ Checkout instead:
 9. places company ID and plan code into server-generated Checkout/subscription metadata.
 
 The plan map fails closed: no configured mapping means no Checkout.
+
+### Upgrade-only Stripe Portal configuration
+
+Keep plan switching **off** in the normal Customer Portal used by the **Manage Billing** button. Create a separate Stripe Customer Portal configuration for upgrade confirmations and put its `bpc_...` ID in `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`.
+
+The dedicated configuration must enable subscription updates and include the Starter, Business, Pro, and Enterprise monthly products/prices. It is never opened as a general portal. `create-plan-upgrade` uses it only with Stripe's `subscription_update_confirm` deep-link flow, which displays the exact server-selected higher plan and its proration for confirmation.
+
+The upgrade endpoint fails closed unless all of these checks pass:
+
+1. the caller is an authenticated, active company Admin;
+2. the company has one active or trialing Stripe subscription;
+3. Stripe's customer on that subscription matches the customer stored for the company;
+4. the subscription has exactly one item;
+5. its current Stripe Price maps to a known LineCrew Pro plan;
+6. the requested plan ranks strictly above the current plan;
+7. the target Stripe Price comes from server-side `BILLING_PLAN_PRICE_MAP`; and
+8. the subscription is not already scheduled to cancel.
+
+The browser submits only a plan code such as `business`. It never submits or controls a Stripe Price ID. Stripe shows the prorated amount and handles payment authentication. Only the signed webhook changes the stored plan and active-crew limit after Stripe confirms the update.
 
 ## 7. Stripe webhook endpoint
 
@@ -160,7 +182,7 @@ Standard plans are enforced in Postgres, not only in the browser:
 
 Inactive crews remain stored for job, report, employee, and audit history. When a company reaches its limit, activating another crew is rejected with an upgrade/deactivate message. A per-company transaction lock prevents two simultaneous crew inserts from taking the same final slot. Pilot and custom plans remain manually managed.
 
-If a Customer Portal downgrade leaves a company above its new limit, LineCrew Pro preserves all data and existing access, reports the over-limit state, and blocks additional crew activation until the company deactivates crews or upgrades again. Because the existing active crews are not deleted or disabled, live Customer Portal plan switching must remain off until LineCrew Pro has an upgrade-only or usage-checked plan-change flow. Payment-method changes and cancellation can remain self-service.
+If a manually processed downgrade leaves a company above its new limit, LineCrew Pro preserves all data and existing access, reports the over-limit state, and blocks additional crew activation until the company deactivates crews or upgrades again. General Customer Portal plan switching remains off. Company Admins use the LineCrew Pro upgrade cards, which permit only a move to a higher plan; payment-method changes and cancellation remain available in the normal portal.
 
 ## 9. Current access policy
 
@@ -215,7 +237,7 @@ For customer-specific negotiated prices, create the needed Stripe Price and map 
 4. Confirm an ordinary contractor Admin is denied from `owner.html`.
 5. From the owner console, change a single test company's manual plan/status/access override and confirm no second company changes.
 6. Confirm owner audit rows are created for owner-side subscription changes.
-7. Deploy the three Edge Functions to the test Supabase project with Stripe **test-mode** keys.
+7. Deploy the four billing Edge Functions to the test Supabase project with Stripe **test-mode** keys.
 8. Set a test `BILLING_PLAN_PRICE_MAP` using test Price IDs.
 9. Assign that plan code to a test contractor.
 10. Complete Checkout from an authenticated test company Admin session.
@@ -225,9 +247,10 @@ For customer-specific negotiated prices, create the needed Stripe Price and map 
 14. Force a webhook-processing failure in the disposable project, retry the same Stripe event, and confirm it can recover from an unprocessed ledger row.
 15. Verify a normal Foreman cannot use `my_company_billing_summary()`.
 16. Open Stripe Customer Portal from a company Admin session.
-17. In the sandbox Customer Portal only, temporarily enable plan switching, keep quantity changes disabled, and add the Starter, Business, Pro, and Enterprise monthly products.
-18. Switch the test subscription to another plan and confirm the billing page updates its plan, price, and active-crew limit from the new Stripe Price ID.
-19. Turn Customer Portal plan switching back off. Keep it off in live mode until a usage-checked or upgrade-only plan-change flow is shipped.
-20. Confirm Starter accepts active crews 1–5, rejects active crew 6, and still permits an inactive historical crew.
-21. Re-run the two-company isolation test after the migration.
-22. Only after all of the above should a production rollout and app-access gate be prepared.
+17. Keep plan switching and quantity changes disabled in the normal sandbox Customer Portal.
+18. Create a dedicated sandbox Portal configuration that enables subscription updates for the Starter, Business, Pro, and Enterprise monthly products, then save its ID as `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`.
+19. Use the billing page to upgrade the test subscription and confirm Stripe shows the exact higher plan and proration before confirmation.
+20. Confirm the billing page updates its plan, price, and active-crew limit from the new Stripe Price ID after the webhook arrives.
+21. Confirm Starter accepts active crews 1–5, rejects active crew 6, and still permits an inactive historical crew.
+22. Re-run the two-company isolation test after the migration.
+23. Only after all of the above should a production rollout and app-access gate be prepared.
