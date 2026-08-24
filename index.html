@@ -1362,7 +1362,6 @@ Owners and Admins use an authenticator code in addition to their password.
 <label for="mfaCode">6-digit authenticator code</label>
 <input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000">
 <button id="verifyMfaBtn">Verify and Continue</button>
-<button id="postponeMfaBtn" class="secondary hidden">Set Up Later</button>
 <button id="mfaSignOutBtn" class="secondary">Sign Out</button>
 <p id="mfaStatus" class="muted" aria-live="polite"></p>
 </div>
@@ -3158,9 +3157,7 @@ const $ = id =>
 document.getElementById(id);
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
-const MFA_ENFORCEMENT_DATE = new Date('2026-08-31T05:00:00Z');
 let pendingMfaFactor = null;
-let pendingMfaMode = '';
 let continueAfterMfa = null;
 if(!/^[A-Za-z0-9_-]{43}$/.test(pendingInviteToken)){
 pendingInviteToken = '';
@@ -3200,13 +3197,11 @@ $('verifyMfaBtn').textContent = 'Verify and Continue';
 }
 async function showMfaChallenge(factor, onComplete){
 pendingMfaFactor = factor;
-pendingMfaMode = 'challenge';
 continueAfterMfa = onComplete;
 resetMfaScreen();
 $('mfaTitle').textContent = 'Authenticator Code Required';
 $('mfaMessage').textContent = 'Enter the current code from your authenticator app to finish signing in.';
 $('mfaEnrollPanel').classList.add('hidden');
-$('postponeMfaBtn').classList.add('hidden');
 show('mfaPage');
 $('mfaCode').focus();
 }
@@ -3224,15 +3219,11 @@ friendlyName:'LineCrew Pro'
 });
 if(error) throw error;
 pendingMfaFactor = data;
-pendingMfaMode = 'enroll';
 $('mfaTitle').textContent = 'Protect Your Admin Account';
-$('mfaMessage').textContent = Date.now() < MFA_ENFORCEMENT_DATE.getTime()
-? 'Set up an authenticator now. During the rollout, you may postpone until August 31, 2026.'
-: 'Authenticator setup is required for LineCrew Pro Owner and Admin accounts.';
+$('mfaMessage').textContent = 'Authenticator setup is required for LineCrew Pro Owner and Admin accounts.';
 $('mfaQrCode').src = data.totp.qr_code;
 $('mfaSecret').textContent = data.totp.secret;
 $('mfaEnrollPanel').classList.remove('hidden');
-$('postponeMfaBtn').classList.toggle('hidden', Date.now() >= MFA_ENFORCEMENT_DATE.getTime());
 show('mfaPage');
 $('mfaCode').focus();
 }
@@ -3277,18 +3268,6 @@ $('mfaStatus').textContent = 'That code did not work. Wait for a new code and tr
 return;
 }
 pendingMfaFactor = null;
-pendingMfaMode = '';
-const next = continueAfterMfa;
-continueAfterMfa = null;
-if(next) await next();
-};
-$('postponeMfaBtn').onclick = async () => {
-if(Date.now() >= MFA_ENFORCEMENT_DATE.getTime()) return;
-if(pendingMfaMode === 'enroll' && pendingMfaFactor?.id){
-await sb.auth.mfa.unenroll({ factorId:pendingMfaFactor.id });
-}
-pendingMfaFactor = null;
-pendingMfaMode = '';
 const next = continueAfterMfa;
 continueAfterMfa = null;
 if(next) await next();
