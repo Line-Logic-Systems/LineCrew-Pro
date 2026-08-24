@@ -243,6 +243,8 @@ assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format
 assert(!testPostRestoreSecurity.includes('--no-acl'), 'The recovery drill must restore and verify function ACLs.');
 assert(postRestoreSecurity.includes("alter role authenticator\n  set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"), 'The recovery bootstrap must restore the PostgREST pre-request gate.');
 assert(verifyPostRestoreSecurity.includes('pg_db_role_setting') && verifyPostRestoreSecurity.includes("public.enforce_linecrew_company_access"), 'The recovery verifier must inspect the live authenticator role setting.');
+assert(verifyPostRestoreSecurity.includes("'authenticated'") && verifyPostRestoreSecurity.includes("'service_role'"), 'The recovery verifier must match the live API-role grants for the pre-request gate.');
+assert(!verifyPostRestoreSecurity.includes("has_function_privilege(\n    'authenticator'"), 'The recovery verifier must not require the NOINHERIT authenticator role to execute the gate directly.');
 assert(verifyPostRestoreSecurity.includes("has_function_privilege('anon', proc.oid, 'EXECUTE')"), 'The recovery verifier must reject anonymously executable SECURITY DEFINER functions.');
 assert(verifyPostRestoreSecurity.includes("public.admin_update_user(uuid,text,boolean)"), 'The recovery verifier must keep the legacy role-escalation RPC closed after restore.');
 assert(packetParser.includes('if (origin && !allowedOrigins.has(origin))'), 'Job-packet parsing must reject unapproved browser origins.');
