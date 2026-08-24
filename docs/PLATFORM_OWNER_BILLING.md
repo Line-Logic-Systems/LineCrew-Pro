@@ -195,7 +195,7 @@ For customer-specific negotiated prices, create the needed Stripe Price and map 
 
 1. Apply `20260818_platform_owner_and_billing.sql` to the disposable **LineCrew Pro Test** project only.
 2. Add one test Auth user to `platform_owners`.
-3. Point test copies of `owner.html` and `billing.html` at the test Supabase project.
+3. Use a Vercel preview deployment. `index.html`, `owner.html`, and `billing.html` automatically select the disposable LineCrew Pro Test project on `*.vercel.app` hosts, while `app.linecrewpro.com` continues to select production. Every preview page displays a sandbox banner.
 4. Confirm an ordinary contractor Admin is denied from `owner.html`.
 5. From the owner console, change a single test company's manual plan/status/access override and confirm no second company changes.
 6. Confirm owner audit rows are created for owner-side subscription changes.

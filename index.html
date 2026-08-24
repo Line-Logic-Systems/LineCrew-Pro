@@ -3145,14 +3145,25 @@ Ask LineCrew AI
 </main>
 <script>
 /* LINECREW PRO SUPABASE */
-const SUPABASE_URL =
-'https://ldgkyxuozbozgkvwzadg.supabase.co';
-const SUPABASE_KEY =
-'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
+const IS_VERCEL_PREVIEW = /\.vercel\.app$/i.test(window.location.hostname);
+const SUPABASE_URL = IS_VERCEL_PREVIEW
+? 'https://yvuxrqrdprquxypiffpa.supabase.co'
+: 'https://ldgkyxuozbozgkvwzadg.supabase.co';
+const SUPABASE_KEY = IS_VERCEL_PREVIEW
+? 'sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx'
+: 'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
 const sb = supabase.createClient(
 SUPABASE_URL,
 SUPABASE_KEY
 );
+if (IS_VERCEL_PREVIEW) {
+  document.title = 'LineCrew Pro — Sandbox Test';
+  const sandboxBanner = document.createElement('div');
+  sandboxBanner.setAttribute('role', 'status');
+  sandboxBanner.textContent = 'SANDBOX TEST — No real companies, records, or payments';
+  sandboxBanner.style.cssText = 'position:sticky;top:0;z-index:10000;background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 14px;text-align:center;font-weight:800;font-size:13px';
+  document.body.prepend(sandboxBanner);
+}
 const $ = id =>
 document.getElementById(id);
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';

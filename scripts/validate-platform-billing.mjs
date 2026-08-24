@@ -22,6 +22,7 @@ for (const file of requiredFiles) {
 
 const owner = fs.readFileSync('owner.html', 'utf8');
 const billing = fs.readFileSync('billing.html', 'utf8');
+const app = fs.readFileSync('index.html', 'utf8');
 const migration = fs.readFileSync('supabase/migrations/20260818_platform_owner_and_billing.sql', 'utf8');
 const crewPolicy = fs.readFileSync('supabase/migrations/20260818_crew_tier_usage_policy.sql', 'utf8');
 const crewAutomation = fs.readFileSync('supabase/migrations/20260818_crew_tier_automation_and_visibility.sql', 'utf8');
@@ -52,6 +53,12 @@ parseInlineScripts('owner.html', owner);
 parseInlineScripts('billing.html', billing);
 assertUniqueIds('owner.html', owner);
 assertUniqueIds('billing.html', billing);
+
+for (const [name, source] of [['index.html', app], ['owner.html', owner], ['billing.html', billing]]) {
+  if (!source.includes("/\\.vercel\\.app$/i")) throw new Error(`${name} must recognize Vercel preview deployments.`);
+  if (!source.includes('https://yvuxrqrdprquxypiffpa.supabase.co')) throw new Error(`${name} must isolate Vercel previews in Supabase Test.`);
+  if (!source.includes('SANDBOX TEST')) throw new Error(`${name} must visibly identify the test environment.`);
+}
 
 for (const marker of ['is_platform_owner','platform_owner_company_dashboard','platform_owner_set_subscription','editAccessOverride','internal_notes','rolling_overage_crew_days','recommended_plan_code']) {
   if (!owner.includes(marker)) throw new Error(`owner.html is missing ${marker}`);
