@@ -1,0 +1,56 @@
+name: Daily Company Data Backup
+
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Export every company-data table and company upload
+        env:
+          SUPABASE_URL: ${{ secrets.BACKUP_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
+          BACKUP_EXCLUDE_BUCKETS: training-videos
+        run: node scripts/backup-supabase.mjs
+      - name: Verify table, object, and file integrity
+        run: |
+          BACKUP_PATH="$(find backup-output -mindepth 1 -maxdepth 1 -type d -print -quit)"
+          test -n "$BACKUP_PATH"
+          node scripts/verify-backup.mjs "$BACKUP_PATH"
+      - name: Package backup
+        run: tar -czf linecrew-pro-daily-data-backup.tgz backup-output
+      - name: Upload recovery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linecrew-pro-daily-data-backup-${{ github.run_number }}
+          path: linecrew-pro-daily-data-backup.tgz
+          retention-days: 30
+          if-no-files-found: error
+      - name: Copy backup outside GitHub and Supabase
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_BACKUP_CONNECTION_STRING }}
+        run: |
+          test -n "$AZURE_STORAGE_CONNECTION_STRING"
+          BLOB_NAME="daily/linecrew-pro-data-${GITHUB_RUN_NUMBER}-$(date -u +%Y%m%dT%H%M%SZ).tgz"
+          az storage blob upload \
+            --connection-string "$AZURE_STORAGE_CONNECTION_STRING" \
+            --container-name linecrew-pro-backups \
+            --name "$BLOB_NAME" \
+            --file linecrew-pro-daily-data-backup.tgz \
+            --overwrite false \
+            --only-show-errors
+          echo "Azure daily backup uploaded as $BLOB_NAME"
