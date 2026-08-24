@@ -3161,7 +3161,8 @@ $('joinCompanyCard').classList.toggle('hidden', invited);
 $('acceptInvitationCard').classList.add('hidden');
 }
 function privilegedRoleRequiresMfa(profile){
-return ['owner','admin'].includes(String(profile?.role || '').toLowerCase());
+return profile?.requires_mfa === true ||
+['owner','admin'].includes(String(profile?.role || profile?.user_role || '').toLowerCase());
 }
 async function verifiedTotpFactors(){
 const { data, error } = await sb.auth.mfa.listFactors();
@@ -3717,6 +3718,29 @@ show('authPage');
 return;
 }
 const {
+data:mfaBootstrapRows,
+error:mfaBootstrapError
+} = await sb.rpc('linecrew_mfa_bootstrap_identity');
+if(mfaBootstrapError){
+alert('Unable to verify account protection: ' + mfaBootstrapError.message);
+return;
+}
+const mfaBootstrap = mfaBootstrapRows?.[0] || null;
+if(!skipMfaCheck && privilegedRoleRequiresMfa(mfaBootstrap)){
+try{
+const mfaStoppedLoad = await enforcePrivilegedMfa(
+mfaBootstrap,
+() => loadApp(true)
+);
+if(mfaStoppedLoad) return;
+}catch(mfaError){
+alert('Unable to verify account protection: ' + mfaError.message);
+await sb.auth.signOut({ scope:'local' });
+show('authPage');
+return;
+}
+}
+const {
 data:isSuspended,
 error:accessStatusError
 } = await sb.rpc('is_my_profile_suspended');
@@ -3759,20 +3783,6 @@ return;
 window.history.replaceState(null, '', window.location.href);
 show('setupPage');
 return;
-}
-if(!skipMfaCheck){
-try{
-const mfaStoppedLoad = await enforcePrivilegedMfa(
-profile,
-() => loadApp(true)
-);
-if(mfaStoppedLoad) return;
-}catch(mfaError){
-alert('Unable to verify account protection: ' + mfaError.message);
-await sb.auth.signOut({ scope:'local' });
-show('authPage');
-return;
-}
 }
 const {
 data:company,
