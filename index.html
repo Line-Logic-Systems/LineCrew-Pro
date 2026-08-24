@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 118516)
+Total output lines: 14441
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1341,6 +1344,30 @@ This private invitation will place you directly into the correct company.
 <label>Confirm Password</label>
 <input id="signupPasswordConfirm" type="password" minlength="8" autocomplete="new-password">
 <button id="signupBtn">Create Account</button>
+</div>
+</section>
+<!-- PRIVILEGED ACCOUNT MFA -->
+<section id="mfaPage" class="hidden">
+<div class="card center">
+<h2 id="mfaTitle">Protect Your Account</h2>
+<p id="mfaMessage" class="muted">
+Owners and Admins use an authenticator code in addition to their password.
+</p>
+<div id="mfaEnrollPanel" class="hidden">
+<p>Open Microsoft Authenticator or another authenticator app, choose <strong>Other account</strong>, and scan this QR code.</p>
+<img id="mfaQrCode" alt="Authenticator setup QR code" style="display:block;max-width:260px;width:100%;margin:16px auto">
+<details>
+<summary>Can’t scan the QR code?</summary>
+<p class="muted">Enter this setup key manually in your authenticator app:</p>
+<code id="mfaSecret" style="display:block;overflow-wrap:anywhere;padding:10px;background:#eef3f7;border-radius:8px"></code>
+</details>
+</div>
+<label for="mfaCode">6-digit authenticator code</label>
+<input id="mfaCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000">
+<button id="verifyMfaBtn">Verify and Continue</button>
+<button id="postponeMfaBtn" class="secondary hidden">Set Up Later</button>
+<button id="mfaSignOutBtn" class="secondary">Sign Out</button>
+<p id="mfaStatus" class="muted" aria-live="polite"></p>
 </div>
 </section>
 <!-- COMPANY SETUP -->
@@ -3088,6 +3115,10 @@ const $ = id =>
 document.getElementById(id);
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
+const MFA_ENFORCEMENT_DATE = new Date('2026-08-31T05:00:00Z');
+let pendingMfaFactor = null;
+let pendingMfaMode = '';
+let continueAfterMfa = null;
 if(!/^[A-Za-z0-9_-]{43}$/.test(pendingInviteToken)){
 pendingInviteToken = '';
 }
@@ -3109,6 +3140,116 @@ $('createCompanyCard').classList.toggle('hidden', invited);
 $('joinCompanyCard').classList.toggle('hidden', invited);
 $('acceptInvitationCard').classList.add('hidden');
 }
+function privilegedRoleRequiresMfa(profile){
+return ['owner','admin'].includes(String(profile?.role || '').toLowerCase());
+}
+async function verifiedTotpFactors(){
+const { data, error } = await sb.auth.mfa.listFactors();
+if(error) throw error;
+return (data?.totp || []).filter(factor => factor.status === 'verified');
+}
+function resetMfaScreen(){
+$('mfaCode').value = '';
+$('mfaStatus').textContent = '';
+$('verifyMfaBtn').disabled = false;
+$('verifyMfaBtn').textContent = 'Verify and Continue';
+}
+async function showMfaChallenge(factor, onComplete){
+pendingMfaFactor = factor;
+pendingMfaMode = 'challenge';
+continueAfterMfa = onComplete;
+resetMfaScreen();
+$('mfaTitle').textContent = 'Authenticator Code Required';
+$('mfaMessage').textContent = 'Enter the current code from your authenticator app to finish signing in.';
+$('mfaEnrollPanel').classList.add('hidden');
+$('postponeMfaBtn').classList.add('hidden');
+show('mfaPage');
+$('mfaCode').focus();
+}
+async function showMfaEnrollment(onComplete){
+continueAfterMfa = onComplete;
+resetMfaScreen();
+const existing = await sb.auth.mfa.listFactors();
+if(existing.error) throw existing.error;
+for(const factor of (existing.data?.all || []).filter(item => item.status !== 'verified')){
+await sb.auth.mfa.unenroll({ factorId:factor.id });
+}
+const { data, error } = await sb.auth.mfa.enroll({
+factorType:'totp',
+friendlyName:'LineCrew Pro'
+});
+if(error) throw error;
+pendingMfaFactor = data;
+pendingMfaMode = 'enroll';
+$('mfaTitle').textContent = 'Protect Your Admin Account';
+$('mfaMessage').textContent = Date.now() < MFA_ENFORCEMENT_DATE.getTime()
+? 'Set up an authenticator now. During the rollout, you may postpone until August 31, 2026.'
+: 'Authenticator setup is required for LineCrew Pro Owner and Admin accounts.';
+$('mfaQrCode').src = data.totp.qr_code;
+$('mfaSecret').textContent = data.totp.secret;
+$('mfaEnrollPanel').classList.remove('hidden');
+$('postponeMfaBtn').classList.toggle('hidden', Date.now() >= MFA_ENFORCEMENT_DATE.getTime());
+show('mfaPage');
+$('mfaCode').focus();
+}
+async function enforcePrivilegedMfa(profile, onComplete){
+if(!privilegedRoleRequiresMfa(profile)) return false;
+const factors = await verifiedTotpFactors();
+const { data:aal, error:aalError } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+if(aalError) throw aalError;
+if(factors.length && aal?.currentLevel !== 'aal2'){
+await showMfaChallenge(factors[0], onComplete);
+return true;
+}
+if(!factors.length){
+await showMfaEnrollment(onComplete);
+return true;
+}
+return false;
+}
+$('verifyMfaBtn').onclick = async () => {
+const code = $('mfaCode').value.replace(/\D/g, '');
+if(code.length !== 6) return alert('Enter the 6-digit code from your authenticator app.');
+const button = $('verifyMfaBtn');
+button.disabled = true;
+button.textContent = 'Verifying...';
+$('mfaStatus').textContent = '';
+const challenge = await sb.auth.mfa.challenge({ factorId:pendingMfaFactor.id });
+if(challenge.error){
+button.disabled = false;
+button.textContent = 'Verify and Continue';
+$('mfaStatus').textContent = challenge.error.message;
+return;
+}
+const verified = await sb.auth.mfa.verify({
+factorId:pendingMfaFactor.id,
+challengeId:challenge.data.id,
+code
+});
+if(verified.error){
+button.disabled = false;
+button.textContent = 'Verify and Continue';
+$('mfaStatus').textContent = 'That code did not work. Wait for a new code and try again.';
+return;
+}
+pendingMfaFactor = null;
+pendingMfaMode = '';
+const next = continueAfterMfa;
+continueAfterMfa = null;
+if(next) await next();
+};
+$('postponeMfaBtn').onclick = async () => {
+if(Date.now() >= MFA_ENFORCEMENT_DATE.getTime()) return;
+if(pendingMfaMode === 'enroll' && pendingMfaFactor?.id){
+await sb.auth.mfa.unenroll({ factorId:pendingMfaFactor.id });
+}
+pendingMfaFactor = null;
+pendingMfaMode = '';
+const next = continueAfterMfa;
+continueAfterMfa = null;
+if(next) await next();
+};
+$('mfaSignOutBtn').onclick = signOut;
 async function invitationTokenHash(){
 const digest = await crypto.subtle.digest(
 'SHA-256',
@@ -3432,6 +3573,7 @@ document.querySelectorAll('.storm-crew-assignment:checked')
 /* PAGE NAVIGATION */
 function show(page){
 $('authPage').classList.add('hidden');
+$('mfaPage').classList.add('hidden');
 $('setupPage').classList.add('hidden');
 $('dashboardPage').classList.add('hidden');
 $('teamPage').classList.add('hidden');
@@ -3528,7 +3670,7 @@ await displayAppPage(state.lineCrewPage, state);
 }
 });
 /* LOAD APP */
-async function loadApp(){
+async function loadApp(skipMfaCheck = false){
 const {
 data:{session}
 } = await sb.auth.getSession();
@@ -3585,6 +3727,20 @@ return;
 window.history.replaceState(null, '', window.location.href);
 show('setupPage');
 return;
+}
+if(!skipMfaCheck){
+try{
+const mfaStoppedLoad = await enforcePrivilegedMfa(
+profile,
+() => loadApp(true)
+);
+if(mfaStoppedLoad) return;
+}catch(mfaError){
+alert('Unable to verify account protection: ' + mfaError.message);
+await sb.auth.signOut({ scope:'local' });
+show('authPage');
+return;
+}
 }
 const {
 data:company,
@@ -6207,1373 +6363,7 @@ const paidFinal=(batchesResult.data||[]).some(batch=>batch.job_id===job.id && ba
 const blockers=[];
 if(!paidFinal) blockers.push('No paid Final Bill');
 if(Number(rec.approved_unbilled_value)>0.01) blockers.push(formatCurrency(rec.approved_unbilled_value)+' approved production still unbilled');
-if(Number(rec.awaiting_review_count)>0) blockers.push(rec.awaiting_review_count+' report(s) awaiting review');
-if(Number(rec.draft_report_count)>0) blockers.push(rec.draft_report_count+' draft/returned report(s)');
-if(blockers.length){
-reason=prompt('Job closeout check found:\n\n• '+blockers.join('\n• ')+'\n\nEnter an override reason to close anyway, or Cancel.');
-if(reason===null) return;
-if(!reason.trim()) return alert('An override reason is required.');
-}else if(!confirm('Close job '+job.job_number+'?\n\nThe Final Bill is paid and no approved production is waiting to be billed.')) return;
-}
-const { error }=await sb.rpc('set_job_closeout',{
-p_job_id:job.id,p_close:!reopening,p_reason:reason
-});
-if(error) return alert('Unable to '+(reopening?'reopen':'close')+' job: '+error.message);
-await loadJobs();
-alert('Job '+(reopening?'reopened. Foremen can report against it again.':'closed and locked against new Daily Reports.'));
-}
-/* DELETE JOB */
-async function deleteJob(job){
-const confirmed =
-confirm(
-`Delete job ${job.job_number} permanently?\n\nThis cannot be undone.`
-);
-if(!confirmed){
-return;
-}
-const {error} =
-await sb.rpc(
-'delete_job',
-{
-p_job_id:job.id
-}
-);
-if(error){
-return alert(error.message);
-}
-await loadJobs();
-}
-/* JOB SEARCH AND REFRESH */
-function getJobProgressExportJobs(){
-const search = String($('jobProgressSearch').value || '').trim().toLowerCase();
-const attention = $('jobProgressAttention').value;
-const sort = $('jobProgressSort').value;
-const jobs = currentJobsCatalog.filter(job => {
-if(job.active !== true) return false;
-if(
-search &&
-!String(job.job_number || '').toLowerCase().includes(search) &&
-!String(job.job_name || '').toLowerCase().includes(search)
-) return false;
-const summary = currentJobProgressSummaries.get(job.id) || {};
-if(attention === 'redline') return Number(summary.redline_count || 0) > 0;
-if(attention === 'pending') return Number(summary.pending_packet_count || 0) > 0;
-if(attention === 'incomplete') return Number(summary.reported_percent || 0) < 100;
-if(attention === 'complete') return Number(summary.reported_percent || 0) >= 100;
-return true;
-});
-return jobs.sort((first, second) => {
-const firstSummary = currentJobProgressSummaries.get(first.id) || {};
-const secondSummary = currentJobProgressSummaries.get(second.id) || {};
-if(sort === 'progress_low') return Number(firstSummary.reported_percent || 0) - Number(secondSummary.reported_percent || 0);
-if(sort === 'progress_high') return Number(secondSummary.reported_percent || 0) - Number(firstSummary.reported_percent || 0);
-if(sort === 'redlines') return Number(secondSummary.redline_count || 0) - Number(firstSummary.redline_count || 0);
-if(sort === 'pending') return Number(secondSummary.pending_packet_count || 0) - Number(firstSummary.pending_packet_count || 0);
-return String(first.job_number || '').localeCompare(String(second.job_number || ''), undefined, { numeric:true, sensitivity:'base' });
-});
-}
-function exportJobProgressCsv(){
-const jobs = getJobProgressExportJobs();
-if(jobs.length === 0){
-alert('There are no matching active jobs to export.');
-return;
-}
-const headers = [
-'Job Number','Job Name','Customer','Utility','Contract','Contract Number',
-'Authorized Value','Reported Value','Reported Percent','Approved Value',
-'Approved Percent','Remaining Value','Packages','Work Points',
-'Daily Reports','Redlines','Pending Job Units'
-];
-const rows = jobs.map(job => {
-const summary = currentJobProgressSummaries.get(job.id) || {};
-const contract = job.contracts || {};
-return [
-job.job_number || '',job.job_name || '',
-contract.customers?.name || job.customer_name || '',
-job.utility_name || '',contract.contract_name || '',contract.contract_number || '',
-Number(summary.authorized_value || 0).toFixed(2),
-Number(summary.reported_value || 0).toFixed(2),
-Number(summary.reported_percent || 0).toFixed(1),
-Number(summary.approved_value || 0).toFixed(2),
-Number(summary.approved_percent || 0).toFixed(1),
-Number(summary.remaining_value || 0).toFixed(2),
-Number(summary.package_count || 0),Number(summary.work_point_count || 0),
-Number(summary.report_count || 0),Number(summary.redline_count || 0),
-Number(summary.pending_packet_count || 0)
-];
-});
-const csv = '\uFEFF' + [headers, ...rows]
-.map(row => row.map(csvCell).join(','))
-.join('\r\n');
-const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
-const link = document.createElement('a');
-link.href = URL.createObjectURL(blob);
-link.download = 'linecrew-job-progress-' + new Date().toISOString().slice(0, 10) + '.csv';
-document.body.appendChild(link);
-link.click();
-link.remove();
-URL.revokeObjectURL(link.href);
-}
-$('jobProgressSearch').oninput = () => {
-currentJobProgressVisibleCount = 25;
-renderJobProgressDashboard(currentJobsCatalog, true);
-};
-$('jobProgressAttention').onchange = () => {
-currentJobProgressVisibleCount = 25;
-renderJobProgressDashboard(currentJobsCatalog, true);
-};
-$('jobProgressSort').onchange = () => {
-currentJobProgressVisibleCount = 25;
-renderJobProgressDashboard(currentJobsCatalog, true);
-};
-$('clearJobProgressFilters').onclick = () => {
-$('jobProgressSearch').value = '';
-$('jobProgressAttention').value = '';
-$('jobProgressSort').value = 'job_number';
-currentJobProgressVisibleCount = 25;
-renderJobProgressDashboard(currentJobsCatalog, true);
-};
-$('jobProgressShowMore').onclick = () => {
-currentJobProgressVisibleCount += 25;
-renderJobProgressDashboard(currentJobsCatalog, true);
-};
-$('exportJobProgressCsvBtn').onclick = exportJobProgressCsv;
-function populateBillingExportJobs(){
-const selected = $('billingExportJob').value;
-$('billingExportJob').innerHTML = '<option value="">Select a job</option>';
-[...currentJobsCatalog]
-.sort((a,b) =>
-Number(b.active === true) - Number(a.active === true) ||
-String(a.job_number || '').localeCompare(String(b.job_number || ''), undefined, { numeric:true })
-)
-.forEach(job => {
-const option = document.createElement('option');
-option.value = job.id;
-option.textContent =
-(job.job_number || 'No Job Number') + ' — ' + (job.job_name || 'Unnamed Job') +
-(job.active === true ? '' : ' (Closed)');
-$('billingExportJob').appendChild(option);
-});
-if(currentJobsCatalog.some(job => String(job.id) === String(selected))){
-$('billingExportJob').value = selected;
-}
-}
-async function openBillingExportCenter(){
-if(!userCanUseBillingExports()){
-alert('Billing Exports require Admin/Owner access or Superintendent Reporting and Actual Pricing permissions.');
-return;
-}
-populateBillingExportJobs();
-$('billingExportCenter').classList.remove('hidden');
-$('billingBatchDetail').classList.add('hidden');
-$('billingBatchCreateForm').classList.remove('hidden');
-$('billingExportIsFinal').checked = false;
-$('billingBatchArchiveFilter').value='active';
-await loadBillingExportBatches();
-await loadBillingReconciliation();
-$('billingExportCenter').scrollIntoView({ behavior:'smooth', block:'start' });
-}
-function closeBillingExportCenter(){
-$('billingExportCenter').classList.add('hidden');
-currentBillingBatch = null;
-currentBillingBatchLines = [];
-}
-async function loadBillingExportBatches(){
-const archiveFilter=userIsCompanyAdmin() ? ($('billingBatchArchiveFilter')?.value || 'active') : 'active';
-$('billingBatchArchiveFilterWrap')?.classList.toggle('hidden',!userIsCompanyAdmin());
-const { data,error } = await sb.rpc('get_billing_export_batches_v4',{p_archive_filter:archiveFilter});
-if(error){
-alert('Unable to load billing batches: ' + error.message);
-return;
-}
-currentBillingBatches = data || [];
-renderBillingBatchHistory();
-}
-async function loadBillingReconciliation(jobId = $('billingExportJob').value){
-const panel=$('billingReconciliationPanel');
-currentBillingReconciliation=null;
-if(!jobId){ panel.classList.add('hidden'); panel.innerHTML=''; return null; }
-panel.classList.remove('hidden');
-panel.innerHTML='<span class="muted">Loading job billing reconciliation...</span>';
-const { data,error }=await sb.rpc('get_job_billing_reconciliation',{ p_job_id:jobId });
-if(error){ panel.innerHTML='<span class="danger-text">Unable to load reconciliation: '+escapeHtml(error.message)+'</span>'; return null; }
-currentBillingReconciliation=data?.[0] || null;
-const item=currentBillingReconciliation;
-if(!item){ panel.innerHTML='<span class="muted">No job billing information is available.</span>'; return null; }
-panel.innerHTML=
-'<span><strong>'+escapeHtml(formatCurrency(item.authorized_value))+'</strong><br>Authorized</span>'+
-'<span><strong>'+escapeHtml(formatCurrency(item.approved_value))+'</strong><br>Approved</span>'+
-'<span><strong>'+escapeHtml(formatCurrency(item.billed_value))+'</strong><br>Previously Billed</span>'+
-'<span><strong>'+escapeHtml(formatCurrency(item.credit_value))+'</strong><br>Billing Adjustments</span>'+
-'<span><strong>'+escapeHtml(formatCurrency(item.approved_unbilled_value))+'</strong><br>Approved Unbilled</span>'+
-'<span><strong>'+escapeHtml(formatCurrency(item.remaining_authorized_value))+'</strong><br>Remaining Authorized</span>'+
-'<span><strong>'+escapeHtml(item.awaiting_review_count)+'</strong><br>Awaiting Review</span>'+
-'<span><strong>'+escapeHtml(item.draft_report_count)+'</strong><br>Draft / Returned</span>';
-return item;
-}
-function billingFinalBlockers(reconciliation){
-if(!reconciliation) return [];
-const blockers=[];
-if(Number(reconciliation.remaining_authorized_value)>0.01) blockers.push(formatCurrency(reconciliation.remaining_authorized_value)+' authorized work remaining');
-if(Number(reconciliation.awaiting_review_count)>0) blockers.push(reconciliation.awaiting_review_count+' report(s) awaiting review');
-if(Number(reconciliation.draft_report_count)>0) blockers.push(reconciliation.draft_report_count+' draft/returned report(s)');
-if(Number(reconciliation.pending_packet_count)>0) blockers.push(reconciliation.pending_packet_count+' pending job unit(s)');
-return blockers;
-}
-function billingStatusLabel(status){
-return String(status || 'draft').replaceAll('_',' ').toUpperCase();
-}
-function billingStageLabel(batch){
-if(String(batch?.billing_type || '').toLowerCase() === 'credit') return 'Billing Adjustment';
-if(String(batch?.billing_type || 'partial').toLowerCase() === 'final') return 'Final Bill';
-return 'Partial Bill ' + Number(batch?.billing_sequence || 1);
-}
-function renderBillingBatchHistory(){
-const container = $('billingBatchHistory');
-container.innerHTML = '';
-if(currentBillingBatches.length === 0){
-const archiveFilter=$('billingBatchArchiveFilter')?.value || 'active';
-container.innerHTML = '<p class="muted">'+(archiveFilter==='archived'?'No archived billing batches.':'No billing batches in this view.')+'</p>';
-return;
-}
-currentBillingBatches.forEach(batch => {
-const card = document.createElement('div');
-card.className = 'billing-batch-card';
-card.innerHTML =
-'<div class="section-header"><div><strong>' + escapeHtml(batch.batch_number) +
-'</strong><br><span>' + escapeHtml(batch.job_number) + ' — ' +
-escapeHtml(batch.job_name || 'Unnamed Job') + '</span><br><span class="muted">' +
-escapeHtml(billingStageLabel(batch)) + ' · ' +
-escapeHtml(batch.created_at ? new Date(batch.created_at).toLocaleString() : '') +
-' · ' + Number(batch.authorized_line_count || 0) + ' authorized · ' +
-Number(batch.redline_line_count || 0) + ' redline' +
-(batch.utility_invoice_number ? ' · Ref: '+escapeHtml(batch.utility_invoice_number) : '') +
-(batch.parent_batch_number ? ' · Corrects: '+escapeHtml(batch.parent_batch_number) : '') +
-(batch.archived_at ? ' · Archived '+escapeHtml(new Date(batch.archived_at).toLocaleString()) : '') +
-'</span></div><div><span class="billing-status ' +
-escapeHtml(String(batch.status || 'draft').toLowerCase()) + '">' +
-escapeHtml(billingStatusLabel(batch.status)) + '</span><br><strong>' +
-escapeHtml(formatCurrency(batch.total_value)) + '</strong></div></div>';
-const button = document.createElement('button');
-button.className = 'secondary small';
-button.textContent = 'Open Batch';
-button.onclick = () => openBillingBatch(batch);
-card.appendChild(button);
-if(userIsCompanyAdmin() && String(batch.status || '').toLowerCase() === 'void'){
-const archiveButton = document.createElement('button');
-archiveButton.className = batch.archived_at ? 'secondary small' : 'warning small';
-archiveButton.textContent = batch.archived_at ? 'Restore to Active View' : 'Archive Batch';
-archiveButton.onclick = () => setVoidedBillingBatchArchived(batch,!batch.archived_at,archiveButton);
-card.appendChild(archiveButton);
-}
-container.appendChild(card);
-});
-}
-async function setVoidedBillingBatchArchived(batch,archived,button){
-if(!confirm(archived?'Archive this voided batch? It will be hidden from the normal list but kept for records.':'Restore this voided batch to the normal list?')) return;
-button.disabled = true;
-button.textContent = archived?'Archiving...':'Restoring...';
-const { error } = await sb.rpc('set_void_billing_batch_archived', {
-p_batch_id:batch.batch_id,p_archived:archived
-});
-if(error){
-button.disabled = false;
-button.textContent = archived?'Archive Batch':'Restore to Active View';
-alert('Unable to update archived billing batch: ' + error.message);
-return;
-}
-if(currentBillingBatch?.batch_id === batch.batch_id){
-currentBillingBatch = null;
-currentBillingBatchLines = [];
-$('billingBatchDetail').classList.add('hidden');
-$('billingBatchCreateForm').classList.remove('hidden');
-}
-await loadBillingExportBatches();
-alert(archived?'Voided batch archived.':'Voided batch restored to the active view.');
-}
-async function createBillingExportBatch(){
-const jobId = $('billingExportJob').value;
-if(!jobId){
-alert('Select the job to prepare for billing.');
-return;
-}
-const dateFrom = $('billingExportDateFrom').value || null;
-const dateTo = $('billingExportDateTo').value || null;
-if(dateFrom && dateTo && dateFrom > dateTo){
-alert('From Date cannot be after Through Date.');
-return;
-}
-const separateRedlineSummary = $('billingExportIncludeRedlines').checked;
-const isFinal = $('billingExportIsFinal').checked;
-const reconciliation=await loadBillingReconciliation(jobId);
-let finalOverrideReason=null;
-const blockers=isFinal ? billingFinalBlockers(reconciliation) : [];
-if(blockers.length){
-finalOverrideReason=prompt(
-'Final Bill check found:\n\n• '+blockers.join('\n• ')+
-'\n\nIf the utility reduced the design or this is otherwise correct, enter the override reason. Cancel to stop.'
-);
-if(finalOverrideReason===null) return;
-if(!finalOverrideReason.trim()) return alert('An override reason is required while Final Bill checks are unresolved.');
-}
-const confirmed = confirm(
-'Create ' + (isFinal ? 'the Final Bill' : 'the next Partial Bill') +
-' from approved, unbilled production?' +
-(isFinal ? '\n\nOnly choose Final Bill when the job is complete.' : '') +
-'\n\nApproved redlines will be included with their work points.' +
-(separateRedlineSummary ? '\nA separate redline summary will also be added to the export.' : '')
-);
-if(!confirmed) return;
-const button = $('createBillingExportBatchBtn');
-button.disabled = true;
-button.textContent = 'Creating Billing Batch...';
-const { data:batchId,error } = await sb.rpc('create_billing_export_batch_v3', {
-p_job_id:jobId,
-p_date_from:dateFrom,
-p_date_to:dateTo,
-p_separate_redline_summary:separateRedlineSummary,
-p_notes:$('billingExportNotes').value.trim() || null,
-p_is_final:isFinal,
-p_final_override_reason:finalOverrideReason
-});
-button.disabled = false;
-button.textContent = 'Create Billing Batch';
-if(error){
-alert('Unable to create billing batch: ' + error.message);
-return;
-}
-$('billingExportNotes').value = '';
-$('billingExportIsFinal').checked = false;
-$('billingBatchArchiveFilter').value='active';
-await loadBillingExportBatches();
-const batch = currentBillingBatches.find(item => String(item.batch_id) === String(batchId));
-if(batch) await openBillingBatch(batch);
-}
-async function openBillingBatch(batch){
-const { data,error } = await sb.rpc('get_billing_export_batch_lines', {
-p_batch_id:batch.batch_id
-});
-if(error){
-alert('Unable to load billing batch: ' + error.message);
-return;
-}
-currentBillingBatch = batch;
-currentBillingBatchLines = [...(data || [])].sort((first,second) =>
-String(first.work_point || '').localeCompare(
-String(second.work_point || ''),
-undefined,
-{ numeric:true, sensitivity:'base' }
-) ||
-String(first.report_date || '').localeCompare(String(second.report_date || '')) ||
-String(first.unit_code || '').localeCompare(String(second.unit_code || ''), undefined, {
-numeric:true,
-sensitivity:'base'
-}) ||
-String(first.work_type || '').localeCompare(String(second.work_type || ''))
-);
-$('billingBatchCreateForm').classList.add('hidden');
-$('billingBatchDetail').classList.remove('hidden');
-renderBillingBatchDetail();
-await loadBillingAttachments();
-$('billingBatchDetail').scrollIntoView({ behavior:'smooth', block:'start' });
-}
-function renderBillingBatchDetail(){
-const batch = currentBillingBatch;
-if(!batch) return;
-const authorized = currentBillingBatchLines.filter(line => line.authorization_status === 'authorized');
-const redlines = currentBillingBatchLines.filter(line => line.authorization_status === 'redline');
-$('billingBatchSummary').innerHTML =
-'<span><strong>' + escapeHtml(batch.batch_number) + '</strong><br>Batch</span>' +
-'<span><strong>' + escapeHtml(billingStageLabel(batch)) + '</strong><br>Billing Stage</span>' +
-'<span><strong>' + escapeHtml(batch.job_number) + '</strong><br>Job</span>' +
-'<span><strong>' + authorized.length + '</strong><br>Authorized Lines</span>' +
-'<span><strong>' + redlines.length + '</strong><br>Redline Lines</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(batch.total_value)) + '</strong><br>Total Value</span>' +
-'<span><strong>' + escapeHtml(billingStatusLabel(batch.status)) + '</strong><br>Status</span>' +
-(batch.parent_batch_number ? '<span><strong>'+escapeHtml(batch.parent_batch_number)+'</strong><br>Corrects Batch</span>' : '') +
-(batch.correction_reason ? '<span><strong>'+escapeHtml(batch.correction_reason)+'</strong><br>Correction Reason</span>' : '');
-$('billingUtilityInvoiceNumber').value=batch.utility_invoice_number || '';
-$('billingPaymentReference').value=batch.payment_reference || '';
-$('billingDetailNotes').value=batch.notes || '';
-const status = String(batch.status || 'draft').toLowerCase();
-$('markBillingSubmittedBtn').classList.toggle('hidden', !['draft','exported'].includes(status));
-$('markBillingPaidBtn').classList.toggle('hidden', status !== 'submitted');
-$('voidBillingBatchBtn').classList.toggle('hidden', ['paid','void'].includes(status));
-$('createBillingCreditBtn').classList.toggle('hidden', status!=='paid' || !userIsCompanyAdmin() || batch.billing_type==='credit');
-['exportBillingExcelBtn','exportBillingCsvBtn','exportBillingPdfBtn'].forEach(id =>
-$(id).disabled = status === 'void'
-);
-const rows = currentBillingBatchLines.map(line =>
-'<tr class="' + (line.authorization_status === 'redline' ? 'billing-redline-row' : '') + '">' +
-'<td>' + escapeHtml(line.report_date || '') + '</td>' +
-'<td>' + escapeHtml(line.work_point || '') + '</td>' +
-'<td><strong>' + escapeHtml(line.unit_code || '') + '</strong></td>' +
-'<td>' + escapeHtml(line.work_type || '') + '</td>' +
-'<td class="quantity">' + escapeHtml(Number(line.quantity || 0).toFixed(2)) + '</td>' +
-'<td class="currency">' + escapeHtml(formatCurrency(line.unit_price)) + '</td>' +
-'<td class="currency"><strong>' + escapeHtml(formatCurrency(line.extended_value)) + '</strong></td>' +
-'<td>' + escapeHtml(String(line.authorization_status || '').toUpperCase()) + '</td>' +
-'<td>' + escapeHtml(line.foreman_name || '') + '</td></tr>'
-).join('');
-$('billingBatchLinePreview').innerHTML =
-'<div class="billing-preview-scroll"><table class="billing-preview-table"><thead><tr>' +
-'<th>Report Date</th><th>Work Point</th><th>Unit</th><th>Work Type</th>' +
-'<th>Quantity</th><th>Unit Price</th><th>Extended</th><th>Authorization</th><th>Foreman</th>' +
-'</tr></thead><tbody>' + rows + '</tbody></table></div>';
-}
-function billingExportRows(lines){
-return lines.map(line => ({
-'Batch Number':line.batch_number,
-'Billing Stage':billingStageLabel(currentBillingBatch),
-'Utility Invoice / Reference':currentBillingBatch?.utility_invoice_number || '',
-'Payment Reference':currentBillingBatch?.payment_reference || '',
-'Job Number':line.job_number,
-'Job Name':line.job_name || '',
-'Customer':line.customer_name || '',
-'Utility':line.utility_name || '',
-'Report Date':line.report_date || '',
-'Work Point':line.work_point || '',
-'Authorization':String(line.authorization_status || '').toUpperCase(),
-'Contractor Unit':line.unit_code || '',
-'Unit Description':line.unit_description || line.unit_name || '',
-'Work Type':line.work_type || '',
-'Approved Quantity':Number(line.quantity || 0),
-'Unit Price':Number(line.unit_price || 0),
-'Extended Value':Number(line.extended_value || 0),
-'Foreman':line.foreman_name || '',
-'Crew':line.crew_name || ''
-}));
-}
-function billingFileBase(){
-return 'linecrew-billing-' +
-String(currentBillingBatch?.job_number || 'job').replace(/[^a-z0-9_-]/gi,'-') + '-' +
-String(currentBillingBatch?.batch_number || 'batch').replace(/[^a-z0-9_-]/gi,'-');
-}
-async function recordBillingBatchExported(){
-if(!currentBillingBatch || String(currentBillingBatch.status).toLowerCase() !== 'draft') return;
-const { error } = await sb.rpc('set_billing_export_batch_status_v2', {
-p_batch_id:currentBillingBatch.batch_id,p_status:'exported',p_reason:null
-});
-if(error){
-alert('The file downloaded, but LineCrew Pro could not mark the batch Exported: ' + error.message);
-return;
-}
-currentBillingBatch.status = 'exported';
-await loadBillingExportBatches();
-renderBillingBatchDetail();
-}
-async function exportBillingExcel(){
-if(typeof XLSX === 'undefined'){
-alert('Excel export is unavailable because the spreadsheet library did not load.');
-return;
-}
-const workbook = XLSX.utils.book_new();
-const summaryRows = [
-['Billing Batch',currentBillingBatch.batch_number],
-['Billing Stage',billingStageLabel(currentBillingBatch)],
-['Utility Invoice / Reference',currentBillingBatch.utility_invoice_number || ''],
-['Payment Reference',currentBillingBatch.payment_reference || ''],
-['Job Number',currentBillingBatch.job_number],
-['Job Name',currentBillingBatch.job_name || ''],
-['From Date',currentBillingBatch.date_from || 'All approved production'],
-['Through Date',currentBillingBatch.date_to || 'All approved production'],
-['Status',billingStatusLabel(currentBillingBatch.status)],
-['Authorized Lines',Number(currentBillingBatch.authorized_line_count || 0)],
-['Redline Lines',Number(currentBillingBatch.redline_line_count || 0)],
-['Total Value',Number(currentBillingBatch.total_value || 0)]
-];
-const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
-summarySheet['!cols'] = [{wch:22},{wch:32}];
-const workPointRows = billingExportRows(currentBillingBatchLines);
-const workPointSheet = XLSX.utils.json_to_sheet(workPointRows);
-workPointSheet['!cols'] = [18,16,24,20,15,24,20,20,14,14,16,18,60,14,18,14,18,24,20].map(wch => ({wch}));
-XLSX.utils.book_append_sheet(workbook,workPointSheet,'Work Points + Redlines');
-XLSX.utils.book_append_sheet(workbook,summarySheet,'Billing Summary');
-const redlines = billingExportRows(currentBillingBatchLines.filter(line => line.authorization_status === 'redline'));
-if(redlines.length && currentBillingBatch.include_redlines){
-const redlineSheet = XLSX.utils.json_to_sheet(redlines);
-redlineSheet['!cols'] = workPointSheet['!cols'];
-XLSX.utils.book_append_sheet(workbook,redlineSheet,'Redlines');
-}
-XLSX.writeFile(workbook,billingFileBase() + '.xlsx');
-await recordBillingBatchExported();
-}
-async function exportBillingCsv(){
-const rows = billingExportRows(currentBillingBatchLines);
-const headers = Object.keys(rows[0] || {});
-if(headers.length === 0){
-alert('This billing batch has no unit lines.');
-return;
-}
-const csv = '\uFEFF' + [headers,...rows.map(row => headers.map(header => row[header]))]
-.map(row => row.map(csvCell).join(','))
-.join('\r\n');
-const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
-const link = document.createElement('a');
-link.href = URL.createObjectURL(blob);
-link.download = billingFileBase() + '.csv';
-document.body.appendChild(link);
-link.click();
-link.remove();
-URL.revokeObjectURL(link.href);
-await recordBillingBatchExported();
-}
-async function exportBillingPdf(){
-const popup = window.open('','_blank');
-if(!popup){
-alert('Allow pop-ups to print or save the billing PDF.');
-return;
-}
-const section = (title,lines) =>
-'<h2>' + escapeHtml(title) + '</h2><table><thead><tr><th>Date</th><th>Work Point</th>' +
-'<th>Unit</th><th>Type</th><th>Qty</th><th>Unit Price</th><th>Extended</th></tr></thead><tbody>' +
-lines.map(line => '<tr><td>' + escapeHtml(line.report_date || '') + '</td><td>' +
-escapeHtml(line.work_point || '') + '</td><td>' + escapeHtml(line.unit_code || '') +
-'</td><td>' + escapeHtml(line.work_type || '') + '</td><td>' +
-escapeHtml(Number(line.quantity || 0).toFixed(2)) + '</td><td>' +
-escapeHtml(formatCurrency(line.unit_price)) + '</td><td>' +
-escapeHtml(formatCurrency(line.extended_value)) + '</td></tr>').join('') +
-'</tbody></table>';
-const redlines = currentBillingBatchLines.filter(line => line.authorization_status === 'redline');
-popup.document.write('<!doctype html><html><head><title>' + escapeHtml(currentBillingBatch.batch_number) +
-'</title><style>body{font-family:Arial,sans-serif;margin:28px;color:#10243a}h1{margin-bottom:4px}' +
-'.muted{color:#52677d}table{width:100%;border-collapse:collapse;margin:12px 0 24px;font-size:11px}' +
-'th,td{border:1px solid #ccd8e3;padding:6px;text-align:left}th{background:#eef4f8}' +
-'.total{font-size:18px;font-weight:bold;margin:14px 0}@media print{button{display:none}}</style></head><body>' +
-'<h1>' + escapeHtml(billingStageLabel(currentBillingBatch)) + '</h1><p class="muted">Billing Export ' +
-escapeHtml(currentBillingBatch.batch_number) + '</p><p>' +
-escapeHtml(currentBillingBatch.job_number) + ' — ' + escapeHtml(currentBillingBatch.job_name || '') +
-(currentBillingBatch.utility_invoice_number ? '<br>Utility Reference: '+escapeHtml(currentBillingBatch.utility_invoice_number) : '') +
-(currentBillingBatch.payment_reference ? '<br>Payment Reference: '+escapeHtml(currentBillingBatch.payment_reference) : '') +
-'</p><p class="total">Total: ' + escapeHtml(formatCurrency(currentBillingBatch.total_value)) + '</p>' +
-section('Work Point Production',currentBillingBatchLines) +
-(redlines.length && currentBillingBatch.include_redlines ? section('Redline Summary',redlines) : '') +
-'<p class="muted">Generated by LineCrew Pro on ' + escapeHtml(new Date().toLocaleString()) +
-'. This is a production billing export, not a utility-system invoice.</p>' +
-'<script>window.onload=function(){window.print()}<\/script></body></html>');
-popup.document.close();
-await recordBillingBatchExported();
-}
-async function saveBillingBatchDetails(){
-if(!currentBillingBatch) return;
-const button=$('saveBillingBatchDetailsBtn'); button.disabled=true;
-const { error }=await sb.rpc('save_billing_export_batch_details',{
-p_batch_id:currentBillingBatch.batch_id,
-p_utility_invoice_number:$('billingUtilityInvoiceNumber').value.trim() || null,
-p_payment_reference:$('billingPaymentReference').value.trim() || null,
-p_notes:$('billingDetailNotes').value.trim() || null
-});
-button.disabled=false;
-if(error) return alert('Unable to save billing details: '+error.message);
-await loadBillingExportBatches();
-const refreshed=currentBillingBatches.find(item=>item.batch_id===currentBillingBatch.batch_id);
-if(refreshed){ currentBillingBatch=refreshed; renderBillingBatchDetail(); }
-alert('Billing details saved.');
-}
-async function createBillingCredit(){
-if(!currentBillingBatch || currentBillingBatch.status!=='paid') return;
-const reason=prompt('Why is this paid batch being adjusted?');
-if(reason===null) return;
-if(!reason.trim()) return alert('A billing-adjustment reason is required.');
-if(!confirm('Create a full billing adjustment for '+currentBillingBatch.batch_number+'?\n\nThe paid batch remains locked. A negative adjustment will be recorded, and its units will return to Approved Unbilled so they can be billed again.')) return;
-const { data,error }=await sb.rpc('create_billing_credit_batch',{
-p_paid_batch_id:currentBillingBatch.batch_id,p_reason:reason.trim()
-});
-if(error) return alert('Unable to create billing adjustment: '+error.message);
-await loadBillingExportBatches();
-const credit=currentBillingBatches.find(item=>item.batch_id===data);
-if(credit) await openBillingBatch(credit);
-alert('Billing adjustment created. The original units are now available for rebilling.');
-}
-async function loadBillingAttachments(){
-const list=$('billingAttachmentList');
-if(!currentBillingBatch){ list.innerHTML='<p class="muted">No batch selected.</p>'; return; }
-list.innerHTML='<p class="muted">Loading attachments...</p>';
-const { data,error }=await sb.rpc('get_billing_export_attachments',{p_batch_id:currentBillingBatch.batch_id});
-if(error){ list.innerHTML='<p class="danger-text">'+escapeHtml(error.message)+'</p>'; return; }
-if(!data?.length){ list.innerHTML='<p class="muted">No attachments added yet.</p>'; return; }
-list.replaceChildren();
-data.forEach(attachment=>{
-const row=document.createElement('div'); row.className='daily-history-event';
-row.innerHTML='<strong>'+escapeHtml(attachment.original_filename)+'</strong>'+
-(attachment.caption?'<br>'+escapeHtml(attachment.caption):'')+
-'<br><span class="muted">'+escapeHtml(new Date(attachment.created_at).toLocaleString())+'</span>';
-const open=document.createElement('button'); open.className='secondary small'; open.textContent='Open';
-open.onclick=async()=>{ const signed=await sb.storage.from('billing-export-attachments').createSignedUrl(attachment.storage_path,300); if(signed.error) return alert(signed.error.message); window.open(signed.data.signedUrl,'_blank','noopener'); };
-const del=document.createElement('button'); del.className='danger small'; del.textContent='Delete';
-del.onclick=async()=>{ if(!confirm('Delete this billing attachment?')) return; const result=await sb.rpc('delete_billing_export_attachment',{p_attachment_id:attachment.id}); if(result.error) return alert(result.error.message); await sb.storage.from('billing-export-attachments').remove([result.data]); await loadBillingAttachments(); };
-row.append(open,del); list.appendChild(row);
-});
-}
-function billingSafeStorageFilename(filename){
-const parts=String(filename || 'billing-attachment').split('.');
-const extension=parts.length>1
-? '.'+parts.pop().replace(/[^a-z0-9]/gi,'').slice(0,12).toLowerCase()
-: '';
-const base=parts.join('.')
-.replace(/[^a-z0-9_-]+/gi,'-')
-.replace(/^-+|-+$/g,'')
-.slice(0,80) || 'billing-attachment';
-return base+extension;
-}
-async function uploadBillingAttachment(){
-const button=$('uploadBillingAttachmentBtn');
-const status=$('billingAttachmentStatus');
-try{
-if(!currentBillingBatch) throw new Error('Open a billing batch before uploading.');
-const file=$('billingAttachmentFile').files?.[0];
-if(!file) throw new Error('Choose a billing attachment first.');
-if(file.size>15728640) throw new Error('Billing attachments must be 15 MB or smaller.');
-const allowed=['application/pdf','image/jpeg','image/png','image/webp','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv'];
-if(file.type && !allowed.includes(file.type)) throw new Error('Use PDF, JPG, PNG, WEBP, XLSX or CSV.');
-const unique=globalThis.crypto?.randomUUID?.() || String(Date.now());
-const path=currentProfile.company_id+'/'+currentBillingBatch.batch_id+'/'+unique+'-'+billingSafeStorageFilename(file.name);
-button.disabled=true; button.textContent='Uploading...'; status.textContent='Uploading '+file.name+'...';
-const upload=await sb.storage.from('billing-export-attachments').upload(path,file,{upsert:false,contentType:file.type || 'application/octet-stream'});
-if(upload.error) throw new Error('Upload failed: '+upload.error.message);
-const registered=await sb.rpc('register_billing_export_attachment',{
-p_batch_id:currentBillingBatch.batch_id,p_storage_path:path,p_original_filename:file.name,
-p_mime_type:file.type || null,p_file_size_bytes:file.size,
-p_caption:$('billingAttachmentCaption').value.trim() || null
-});
-if(registered.error){ await sb.storage.from('billing-export-attachments').remove([path]); throw new Error('Unable to register attachment: '+registered.error.message); }
-$('billingAttachmentFile').value=''; $('billingAttachmentCaption').value='';
-status.textContent='Attachment uploaded successfully.';
-await loadBillingAttachments(); await loadBillingExportBatches();
-}catch(error){
-status.textContent=error?.message || String(error);
-alert(status.textContent);
-}finally{
-button.disabled=false; button.textContent='Upload Attachment';
-}
-}
-async function setBillingBatchStatus(status){
-if(!currentBillingBatch) return;
-const labels = {submitted:'submitted to the utility',paid:'paid',void:'void'};
-if(!confirm('Mark billing batch ' + currentBillingBatch.batch_number + ' as ' + labels[status] + '?')) return;
-let reason=null;
-if(status==='void' && String(currentBillingBatch.status).toLowerCase()==='submitted'){
-reason=prompt('Why is this submitted batch being voided?');
-if(reason===null) return;
-if(!reason.trim()) return alert('A correction reason is required.');
-}
-const { error } = await sb.rpc('set_billing_export_batch_status_v2', {
-p_batch_id:currentBillingBatch.batch_id,p_status:status,p_reason:reason
-});
-if(error){
-alert('Unable to update billing batch: ' + error.message);
-return;
-}
-await loadBillingExportBatches();
-const refreshed = currentBillingBatches.find(item => item.batch_id === currentBillingBatch.batch_id);
-if(refreshed){
-currentBillingBatch = refreshed;
-renderBillingBatchDetail();
-}
-alert('Billing batch marked ' + labels[status] + '.');
-}
-function completeBillingRows(batch,lines){
-return (lines || []).map(line => ({
-'Batch Number':batch.batch_number || line.batch_number || '',
-'Billing Stage':billingStageLabel(batch),'Batch Status':billingStatusLabel(batch.status),
-'Utility Invoice / Reference':batch.utility_invoice_number || '','Payment Reference':batch.payment_reference || '',
-'Job Number':line.job_number || batch.job_number || '','Job Name':line.job_name || batch.job_name || '',
-'Customer':line.customer_name || '','Utility':line.utility_name || '','Report Date':line.report_date || '',
-'Work Point':line.work_point || '','Authorization':String(line.authorization_status || '').toUpperCase(),
-'Contractor Unit':line.unit_code || '','Unit Description':line.unit_description || line.unit_name || '',
-'Work Type':line.work_type || '','Approved Quantity':Number(line.quantity || 0),
-'Unit Price':Number(line.unit_price || 0),'Extended Value':Number(line.extended_value || 0),
-'Foreman':line.foreman_name || '','Crew':line.crew_name || ''
-}));
-}
-function completeBillingSafeName(value,fallback='record'){
-return String(value || fallback).replace(/[^a-z0-9._-]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,110) || fallback;
-}
-function completeBillingCsv(rows){
-const headers=Object.keys(rows[0] || {});
-if(!headers.length) return '';
-return '\uFEFF'+[headers,...rows.map(row=>headers.map(header=>row[header]))]
-.map(row=>row.map(csvCell).join(',')).join('\r\n');
-}
-function completeBillingSheetName(label,used){
-let base=String(label || 'Batch').replace(/[\\/?*\[\]:]/g,' ').trim().slice(0,31) || 'Batch';
-let name=base;
-let sequence=2;
-while(used.has(name)){
-const suffix=' '+sequence++;
-name=base.slice(0,31-suffix.length)+suffix;
-}
-used.add(name);
-return name;
-}
-function downloadGeneratedBlob(blob,filename){
-const link=document.createElement('a');
-link.href=URL.createObjectURL(blob); link.download=filename;
-document.body.appendChild(link); link.click(); link.remove();
-setTimeout(()=>URL.revokeObjectURL(link.href),1000);
-}
-async function downloadCompleteJobBillingRecord(exportType='archive'){
-const jobId=$('billingExportJob').value;
-if(!jobId) return alert('Select the job whose complete billing record you want to download.');
-if(typeof XLSX==='undefined' || typeof PDFLib==='undefined' || (exportType==='archive' && typeof JSZip==='undefined')) return alert('The export libraries did not load. Refresh the page and try again.');
-const job=currentJobsCatalog.find(item=>String(item.id)===String(jobId));
-const buttons={
-excel:$('exportCompleteBillingExcelBtn'),
-pdf:$('exportCompleteBillingPdfBtn'),
-archive:$('downloadCompleteBillingArchiveBtn')
-};
-const button=buttons[exportType] || buttons.archive;
-const status=$('completeBillingRecordStatus');
-Object.values(buttons).forEach(item=>item.disabled=true);
-const setProgress=text=>{ button.textContent=text; status.textContent=text; };
-try{
-setProgress('Loading complete billing history...');
-const batchesResult=await sb.rpc('get_billing_export_batches_v4',{p_archive_filter:'all'});
-if(batchesResult.error) throw batchesResult.error;
-const batches=(batchesResult.data || []).filter(batch=>String(batch.job_id)===String(jobId));
-if(!batches.length) throw new Error('No billing batches exist for this job yet.');
-const hasFinal=batches.some(batch=>String(batch.billing_type).toLowerCase()==='final' && String(batch.status).toLowerCase()!=='void');
-if(!hasFinal && !confirm('This job does not have a retained Final Bill yet. Download the current billing record anyway?')) return;
-const [reconciliationResult,packagesResult]=await Promise.all([
-sb.rpc('get_job_billing_reconciliation',{p_job_id:jobId}),sb.rpc('get_job_packages_v2',{p_job_id:jobId})
-]);
-if(reconciliationResult.error) throw reconciliationResult.error;
-if(packagesResult.error) throw packagesResult.error;
-const reconciliation=reconciliationResult.data?.[0] || {};
-const packages=packagesResult.data || [];
-const batchRecords=[];
-for(let index=0;index<batches.length;index++){
-const batch=batches[index]; setProgress('Collecting batch '+(index+1)+' of '+batches.length+'...');
-const [linesResult,attachmentsResult]=await Promise.all([
-sb.rpc('get_billing_export_batch_lines',{p_batch_id:batch.batch_id}),
-sb.rpc('get_billing_export_attachments',{p_batch_id:batch.batch_id})
-]);
-if(linesResult.error) throw linesResult.error;
-if(attachmentsResult.error) throw attachmentsResult.error;
-batchRecords.push({batch,lines:linesResult.data || [],attachments:attachmentsResult.data || []});
-}
-const zip=exportType==='archive' ? new JSZip() : null;
-const workbook=XLSX.utils.book_new();
-const usedSheets=new Set();
-const batchHistory=batches.map(batch=>({
-'Batch Number':batch.batch_number || '','Billing Stage':billingStageLabel(batch),'Status':billingStatusLabel(batch.status),
-'Created':batch.created_at || '','Submitted':batch.submitted_at || '','Paid':batch.paid_at || '',
-'Utility Invoice / Reference':batch.utility_invoice_number || '','Payment Reference':batch.payment_reference || '',
-'Authorized Lines':Number(batch.authorized_line_count || 0),'Redline Lines':Number(batch.redline_line_count || 0),
-'Total Value':Number(batch.total_value || 0),'Corrects Batch':batch.parent_batch_number || '',
-'Correction / Void Reason':batch.correction_reason || '','Notes':batch.notes || '','Attachments':Number(batch.attachment_count || 0)
-}));
-const summary=[['LineCrew Pro Complete Job Billing Record'],['Job Number',job?.job_number || batches[0]?.job_number || ''],
-['Job Name',job?.job_name || batches[0]?.job_name || ''],['Generated',new Date().toLocaleString()],
-['Authorized',Number(reconciliation.authorized_value || 0)],['Approved',Number(reconciliation.approved_value || 0)],
-['Previously Billed',Number(reconciliation.billed_value || 0)],['Billing Adjustments',Number(reconciliation.credit_value || 0)],
-['Adjusted Billed Total',Number(reconciliation.net_billed_value ?? (Number(reconciliation.billed_value || 0)-Number(reconciliation.credit_value || 0)))],
-['Approved Unbilled',Number(reconciliation.approved_unbilled_value || 0)],
-['Remaining Authorized',Number(reconciliation.remaining_authorized_value || 0)],
-['Awaiting Review',Number(reconciliation.awaiting_review_count || 0)],['Draft / Returned',Number(reconciliation.draft_report_count || 0)],
-['Billing Batches',batches.length],['Packet Revisions',packages.length]];
-const summarySheet=XLSX.utils.aoa_to_sheet(summary); summarySheet['!cols']=[{wch:28},{wch:42}];
-XLSX.utils.book_append_sheet(workbook,summarySheet,completeBillingSheetName('Job Summary',usedSheets));
-const historySheet=XLSX.utils.json_to_sheet(batchHistory); historySheet['!cols']=[18,18,14,22,22,22,26,24,16,14,16,20,32,40,12].map(wch=>({wch}));
-XLSX.utils.book_append_sheet(workbook,historySheet,completeBillingSheetName('Batch History',usedSheets));
-const revisionRows=packages.map(item=>({'Revision':Number(item.revision_number || 1),'Package Name':item.package_name || '',
-'Package / Reference Number':item.package_number || '','Status':String(item.status || '').toUpperCase(),
-'Received Date':item.received_date || '','Source File':item.source_filename || '',
-'Supersedes Package ID':item.supersedes_package_id || '','Created':item.created_at || '','Notes':item.notes || ''}));
-XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(revisionRows.length?revisionRows:[{'Revision':'No packet revisions found'}]),completeBillingSheetName('Packet Revisions',usedSheets));
-batchRecords.forEach(({batch,lines})=>{
-const rows=completeBillingRows(batch,lines);
-XLSX.utils.book_append_sheet(workbook,XLSX.utils.json_to_sheet(rows.length?rows:[{'Batch Number':batch.batch_number,'Status':'No unit lines'}]),completeBillingSheetName(billingStageLabel(batch),usedSheets));
-if(zip) zip.file('Batches/'+completeBillingSafeName(billingStageLabel(batch)+'-'+batch.batch_number)+'.csv',completeBillingCsv(rows));
-});
-const workbookBytes=XLSX.write(workbook,{bookType:'xlsx',type:'array'});
-const fileStem='linecrew-complete-billing-record-'+completeBillingSafeName(job?.job_number || batches[0]?.job_number || 'job')+'-'+new Date().toISOString().slice(0,10);
-if(exportType==='excel'){
-downloadGeneratedBlob(new Blob([workbookBytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),fileStem+'.xlsx');
-status.textContent='Complete Excel billing record downloaded.';
-return;
-}
-zip.file('LineCrew-Pro-Complete-Billing-Record.xlsx',workbookBytes);
-setProgress('Creating combined PDF record...');
-const pdf=await PDFLib.PDFDocument.create();
-const regular=await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
-const bold=await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
-let page,y;
-const addPage=()=>{ page=pdf.addPage([612,792]); y=756; };
-const pdfLine=(value,options={})=>{
-const size=options.size || 9; if(y<42) addPage();
-const safe=String(value ?? '').replace(/[^\x20-\x7E]/g,' ');
-page.drawText(safe.slice(0,options.limit || 112),{x:36,y,size,font:options.bold?bold:regular,color:PDFLib.rgb(0.05,0.14,0.23)});
-y-=options.gap || size+4;
-};
-addPage();
-pdfLine('LineCrew Pro - Complete Job Billing Record',{bold:true,size:16,gap:24,limit:80});
-pdfLine('Job: '+(job?.job_number || batches[0]?.job_number || '')+' - '+(job?.job_name || batches[0]?.job_name || ''),{bold:true,size:11});
-pdfLine('Generated: '+new Date().toLocaleString());
-pdfLine('Authorized: '+formatCurrency(reconciliation.authorized_value)+'   Approved: '+formatCurrency(reconciliation.approved_value));
-pdfLine('Previously billed: '+formatCurrency(reconciliation.billed_value)+'   Billing adjustments: '+formatCurrency(reconciliation.credit_value));
-pdfLine('Adjusted billed total: '+formatCurrency(reconciliation.net_billed_value ?? (Number(reconciliation.billed_value || 0)-Number(reconciliation.credit_value || 0))));
-pdfLine('Approved unbilled: '+formatCurrency(reconciliation.approved_unbilled_value)+'   Remaining authorized: '+formatCurrency(reconciliation.remaining_authorized_value),{gap:20});
-pdfLine('Billing Batch History',{bold:true,size:12,gap:18});
-batchRecords.forEach(({batch,lines,attachments})=>{
-pdfLine(billingStageLabel(batch)+' | '+batch.batch_number+' | '+billingStatusLabel(batch.status)+' | '+formatCurrency(batch.total_value),{bold:true,limit:100});
-pdfLine('Created '+(batch.created_at?new Date(batch.created_at).toLocaleString():'')+' | Utility Ref: '+(batch.utility_invoice_number || '-')+' | Payment Ref: '+(batch.payment_reference || '-'),{size:8});
-if(batch.parent_batch_number) pdfLine('Corrects '+batch.parent_batch_number+' | Reason: '+(batch.correction_reason || '-'),{size:8});
-lines.forEach(item=>pdfLine((item.report_date || '')+' | WP '+(item.work_point || '-')+' | '+(item.unit_code || '')+' '+(item.work_type || '')+' | Qty '+Number(item.quantity || 0).toFixed(2)+' | '+formatCurrency(item.extended_value)+' | '+String(item.authorization_status || '').toUpperCase(),{size:7,gap:10}));
-if(attachments.length) pdfLine('Attachments: '+attachments.map(item=>item.original_filename).join(', '),{size:8,gap:14});
-y-=6;
-});
-pdfLine('Utility Packet Revision History',{bold:true,size:12,gap:18});
-packages.forEach(item=>pdfLine('Revision '+Number(item.revision_number || 1)+' | '+(item.package_name || item.package_number || 'Utility Job Packet')+' | '+String(item.status || '').toUpperCase()+' | '+(item.source_filename || 'No source filename'),{size:8}));
-const pdfBytes=await pdf.save();
-if(exportType==='pdf'){
-downloadGeneratedBlob(new Blob([pdfBytes],{type:'application/pdf'}),fileStem+'.pdf');
-status.textContent='Complete PDF billing record downloaded.';
-return;
-}
-zip.file('LineCrew-Pro-Complete-Billing-Record.pdf',pdfBytes);
-const attachmentErrors=[];
-let attachmentNumber=0;
-const attachmentTotal=batchRecords.reduce((sum,item)=>sum+item.attachments.length,0);
-for(const record of batchRecords){
-const folder='Attachments/'+completeBillingSafeName(billingStageLabel(record.batch)+'-'+record.batch.batch_number)+'/';
-for(const attachment of record.attachments){
-attachmentNumber++; setProgress('Downloading attachment '+attachmentNumber+' of '+attachmentTotal+'...');
-try{
-const stored=await sb.storage.from('billing-export-attachments').download(attachment.storage_path);
-if(stored.error) throw stored.error;
-zip.file(folder+completeBillingSafeName(attachment.original_filename,'attachment-'+attachmentNumber),await stored.data.arrayBuffer());
-}catch(error){ attachmentErrors.push(record.batch.batch_number+' / '+attachment.original_filename+': '+(error.message || error)); }
-}
-}
-zip.file('Billing-Record-Manifest.txt',['LineCrew Pro Complete Job Billing Record',
-'Job: '+(job?.job_number || batches[0]?.job_number || '')+' - '+(job?.job_name || batches[0]?.job_name || ''),
-'Generated: '+new Date().toLocaleString(),'Batches: '+batches.length,'Packet revisions: '+packages.length,'Attachments: '+attachmentTotal,'',
-'Batch history:',...batches.map(batch=>billingStageLabel(batch)+' | '+batch.batch_number+' | '+billingStatusLabel(batch.status)+' | '+formatCurrency(batch.total_value)),'',
-attachmentErrors.length?'Attachment download issues:\n'+attachmentErrors.join('\n'):'All stored billing attachments were included successfully.'].join('\n'));
-setProgress('Compressing complete billing record...');
-const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
-downloadGeneratedBlob(blob,fileStem+'.zip');
-status.textContent='Complete billing record downloaded'+(attachmentErrors.length?' with '+attachmentErrors.length+' attachment warning(s) listed in the manifest.':'.');
-}catch(error){
-status.textContent='Unable to create complete billing record: '+(error?.message || error); alert(status.textContent);
-}finally{
-buttons.excel.disabled=false; buttons.excel.textContent='Export Complete Excel';
-buttons.pdf.disabled=false; buttons.pdf.textContent='Export Complete PDF';
-buttons.archive.disabled=false; buttons.archive.textContent='Download Full Archive';
-}
-}
-$('openBillingExportCenterBtn').onclick = openBillingExportCenter;
-$('closeBillingExportCenterBtn').onclick = closeBillingExportCenter;
-$('createBillingExportBatchBtn').onclick = createBillingExportBatch;
-$('exportBillingExcelBtn').onclick = exportBillingExcel;
-$('exportBillingCsvBtn').onclick = exportBillingCsv;
-$('exportBillingPdfBtn').onclick = exportBillingPdf;
-$('markBillingSubmittedBtn').onclick = () => setBillingBatchStatus('submitted');
-$('markBillingPaidBtn').onclick = () => setBillingBatchStatus('paid');
-$('voidBillingBatchBtn').onclick = () => setBillingBatchStatus('void');
-$('saveBillingBatchDetailsBtn').onclick = saveBillingBatchDetails;
-$('createBillingCreditBtn').onclick = createBillingCredit;
-$('exportCompleteBillingExcelBtn').onclick = () => downloadCompleteJobBillingRecord('excel');
-$('exportCompleteBillingPdfBtn').onclick = () => downloadCompleteJobBillingRecord('pdf');
-$('downloadCompleteBillingArchiveBtn').onclick = () => downloadCompleteJobBillingRecord('archive');
-$('billingExportJob').addEventListener('change',()=>loadBillingReconciliation());
-$('billingBatchArchiveFilter').addEventListener('change',loadBillingExportBatches);
-$('backToBillingHistoryBtn').onclick = () => {
-currentBillingBatch = null;
-currentBillingBatchLines = [];
-$('billingBatchDetail').classList.add('hidden');
-$('billingBatchCreateForm').classList.remove('hidden');
-};
-$('refreshJobsBtn').onclick =
-loadJobs;
-/* SAFE DISPLAY */
-function escapeHtml(value){
-return String(value ?? '')
-.replaceAll('&','&amp;')
-.replaceAll('<','&lt;')
-.replaceAll('>','&gt;')
-.replaceAll('"','&quot;')
-.replaceAll("'","&#039;");
-}
-/* LINECREW ASSISTANT */
-const assistantBuiltInHelp = [
-{
-terms:['invite team','invite member','team invitation','send invite','automatic company enrollment','join company invitation'],
-answer:'Preferred team onboarding: an authorized leader opens Team and chooses Invite Team Member, enters the person’s email, and sends the invitation. The email-bound one-time link opens Create Account & Join Company with the email locked. The invited person enters and confirms a password and is enrolled directly in the inviting company as a Foreman—no Company Code and no company-creation choice. Company Code is only a manual fallback when no invitation is being used.'
-},
-{
-terms:['desktop view','desktop mode','mobile view','phone layout','wide layout'],
-answer:'Every LineCrew Pro role can choose Desktop View from the profile card on the Dashboard. The choice is saved on that device and applies to the entire app. Choose Return to Mobile View in the same location to restore the normal responsive phone layout.'
-},
-{
-terms:['add job','new job','create job','start job','job setup','import jobs','upload jobs','bulk jobs'],
-answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General Foreman and a Superintendent with Jobs permission use Jobs & Crew Progress. Choose + Create Job, enter the job number/name and correct Contract, then save. There is no separate bulk Job-file import in this release. Utility Job Package authorized-unit import belongs to an existing Job and does not create Jobs. Foremen use Assigned Jobs and see only active jobs assigned to them.'
-},
-{
-terms:['add admin','more admins','new admin','promote admin','make admin'],
-answer:'Only an Owner can add, remove, promote, or demote an Admin. Open Team, find the member, choose Admin in the Role dropdown, and Save Role. Admins cannot change Owners or other Admins. Keep at least one active Owner at all times.'
-},
-{
-terms:['promote foreman','make general foreman','promote to general','change role','save role'],
-answer:'Open Team and find the Foreman. Owner/Admin can change the role to General Foreman or Superintendent; a Superintendent with Role Management permission can promote/demote Foremen and General Foremen only. Choose Save Role and have the user refresh or sign out and back in.'
-},
-{
-terms:['price book','pricing','units','import price','upload unit pricing','spreadsheet pricing','excel pricing'],
-answer:'To upload pricing for a new Price Book: open Price Books, choose + Add Price Book, select the Contract, enter the name/effective date, choose the CSV/Excel file, then Save Price Book & Continue. Select the worksheet, map Unit Code, Description, Install and Retirement/Remove price columns, review the preview and confirm. For an existing book, open it and choose Import CSV / Excel. Duplicate the current book as a new version before revised utility pricing so history is preserved.'
-},
-{
-terms:['job packet','utility packet','work point','pole packet','authorized units','normal units','import package','percent complete'],
-answer:'Open Jobs, select the existing job, choose + Add Utility Package, enter the package details, then choose Save & Import Authorized Units. The saved package opens its CSV/Excel import immediately. Select the file/worksheet; map work point, description, unit code, work type and authorized quantities; preview and confirm. Imported authorized units define normal/authorized production, identify excess or unlisted redlines, reconcile Pending Job Units and calculate reported/approved job completion percentage.'
-},
-{
-terms:['billing export','bill job','billing batch','excel billing','csv billing','pdf billing','mark submitted','mark paid','duplicate billing'],
-answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. The reconciliation panel shows Authorized, Approved, Previously Billed, Billing Adjustments, Approved Unbilled and Remaining. Billing Adjustments are correcting entries, not utility payments; the Adjusted Billed Total is Previously Billed minus those adjustments. A full adjustment keeps the paid batch locked, records a separate negative entry and returns its units to Approved Unbilled for later rebilling. Leave Final Bill unchecked while the job is active; batches become Partial Bill 1, 2 and so on. Final Bill checks remaining work and pending reports and requires an override reason when unresolved. Approved redlines always stay beside their work points; the summary checkbox only adds an extra Redlines sheet or PDF section. Save the utility invoice/reference, payment reference, notes and attachments on the batch. Submitted batches require a correction reason before voiding.'
-},
-{
-terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
-answer:'A Foreman creates and edits field reports. Submitted reports appear in Production Review for General Foremen and leadership with Production Review permission. Review crew hours, units, poles and exceptions, then Approve or Return Report with correction notes. The owning Foreman opens the returned draft, makes the requested correction and submits it again. Supervisors review but do not directly edit the Foreman’s draft. If GF redline approval is required, leadership override requires a recorded reason.'
-},
-{
-terms:['redline','not authorized','extra unit'],
-answer:'A redline is production reported for a unit or quantity not authorized at that utility work point. It stays visible for deliberate review. A General Foreman or leadership user with Production Review permission should verify the field change and approve or return the report according to company policy.'
-},
-{
-terms:['pending packet','packet pending','no packet'],
-answer:'Pending Job Units means production was reported before a utility job packet was loaded. This is allowed. After Owner/Admin or a Superintendent with Job Packages permission imports the packet, LineCrew Pro reconciles matching pole/location and unit codes; unmatched work remains visible for review.'
-},
-{
-terms:['team','foreman','general foreman','role','permissions','superintendent permissions','change role'],
-answer:'Open Team for login accounts and role controls. Hierarchy: Owner > Admin > Superintendent > General Foreman > Foreman. Only Owner manages Owner/Admin roles; Admin manages Superintendent/GF/Foreman; a Superintendent with Role Management may manage GF/Foreman only. Owner/Admin can set each Superintendent capability. Role changes may require refresh or sign-out/sign-in.'
-},
-{
-terms:['assign job','job assignment','multiple foremen','more than one foreman','assignment history','who assigned'],
-answer:'Owner/Admin, General Foreman, or a Superintendent with Jobs permission opens Jobs and the job detail. In Assigned Foremen / Job Leaders, select a Foreman or General Foreman and choose Assign Another Foreman / Leader; repeat for multiple assignees. Supervisory progress rows show the assignees. View Assignment History records who assigned or unassigned each leader and when. A Foreman sees only active jobs assigned to that Foreman.'
-},
-{
-terms:['add employee','upload employees','employee roster','assign crew','crew member','foreman crew','extra man'],
-answer:'Non-login field employees are managed in Timekeeping > Manage Foreman Crews. Owner/Admin can add employees or upload a CSV/Excel roster; leadership assigns each active employee to a Foreman. A new Foreman Daily Report auto-populates that assigned crew in Crew Time. Use + Add Extra Man for another active company employee helping that crew that day. Foremen cannot permanently reassign the company roster.'
-},
-{
-terms:['jsa','job safety','morning safety','safety briefing','crew signature'],
-answer:'Safety / JSA supports the LineCrew Pro digital JSA, uploading an existing company/paper JSA, or both depending on Company Settings. Uploaded JSAs can contain a PDF or multiple photos and are stored with job, date, crew and Foreman information. A JSA is not required by LineCrew Pro before a Daily Report can be created or submitted; follow the contractor safety program and applicable requirements.'
-},
-{
-terms:['storm mode','storm event','storm crew','storm report'],
-answer:'Owner/Admin or a Superintendent with Storm Mode permission can create or activate a storm event and select participating crews. New reports from those crews are tagged automatically; all other crews remain in normal mode. Storm Mode organizes records and does not automatically change pricing or payroll.'
-},
-{
-terms:['create daily','enter daily','add daily','save units','manage units','submit report','crew time','regular hours','ot hours','timekeeping'],
-answer:'Foreman workflow: Production > Create Daily Report; choose an assigned job/date; verify the auto-populated Crew Time roster; enter Regular and OT per employee and add any Extra Man; enter weather/delay and notes; save the draft. Crew Time saves into Timekeeping for that report/job/date. In Manage Units, enter one pole/location and its completed units, Save Pole & Add Next, repeat, then Done Adding Units. Review details/attachments and Submit Report. A Foreman may delete only their own draft.'
-},
-{
-terms:['adjustment','adjusted price','field value','foreman price','percentage'],
-answer:'Owner/Admin or an authorized Superintendent edits the Contract and sets the Foreman field-value adjustment percentage. Foremen see the permitted field value. Owner/Admin/GF and a Superintendent with Actual Contract Pricing permission can see actual values. Verify the percentage and contract before field rollout.'
-},
-{
-terms:['job progress','percentage complete','completion','authorized value','remaining value','man hour rate','mh rate','burn rate','red yellow green','rate target'],
-answer:'Supervisors open Jobs & Crew Progress or Production for progress and Field MH Run Rate. Authorized value comes from imported utility-package units; reported and approved percentages use eligible production against that baseline. Field MH Run Rate is field unit value divided by weighted hours (Regular + 1.5 × OT). Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Red is below 95% of target, yellow is 95% up to but not including the exact target, and green is at or above target. It is an operational rate, not payroll cost or guaranteed profit.'
-},
-{
-terms:['attachment','photo','print','pdf','save pdf'],
-answer:'Open the Daily Report and use Attachments to add supporting files. Use Print / Save PDF for a printable report copy. Review the report, units and attachments before approval; stored files and report records remain scoped to the signed-in contractor company.'
-},
-{
-terms:['export','csv','reporting','filter reports','production report'],
-answer:'Open Production and choose Show Filters. Filter by status, dates, job, Foreman, exception/completion state, crew or storm context when available. Production Reporting recalculates for those results. Choose Export Filtered CSV to download the matching report summary. Price Books and setup lists have their own CSV exports.'
-},
-{
-terms:['company settings','logo','brand color','time zone','company name'],
-answer:'Admin steps: open Admin Controls > Company Settings, enter the display name, time zone, email, phone, logo image URL and brand color, then choose Save Company Settings. Confirm the branding and company details on the dashboard and printed reports.'
-},
-{
-terms:['delete job','cannot delete','foreign key','archive'],
-answer:'Commercial history should normally be closed or archived, not deleted. Close Job runs a closeout check for a paid Final Bill, approved unbilled production and pending Daily Reports. A clean job closes and locks against new Daily Reports. Unresolved closeout requires a recorded override reason. Reopen Job also requires a reason and restores field reporting. Jobs with commercial history should remain preserved for audit.'
-},
-{
-terms:['packet revision','revised packet','change order','revision changes','supersede packet'],
-answer:'Each additional Utility Job Packet on the same job is versioned as Revision 1, Revision 2 and so on. Open View Revision Changes to compare authorized install/remove quantities by work point and Contractor Unit. When a newer revision is activated, it supersedes and closes the prior active packet so authorized quantities are not doubled; the prior packet remains in history.'
-},
-{
-terms:['password','forgot','login','sign in'],
-answer:'On the Sign In screen, enter the account email and choose Forgot Password. Open the recovery email on the same device, enter matching passwords with at least eight characters, and save.'
-},
-{
-terms:['customer','utility','contract'],
-answer:'Open Price Books to manage Customers / Utilities and Contracts. Create the customer first, create its contract second, then create a Price Book tied to that contract. Every record remains scoped to the signed-in contractor company.'
-}
-];
-let assistantConversation = [];
-function addAssistantMessage(role, text, remember = true){
-const message = document.createElement('div');
-message.className = 'assistant-message ' + role;
-message.textContent = text;
-$('assistantMessages').appendChild(message);
-message.scrollIntoView({block:'nearest'});
-if(remember && (role === 'user' || role === 'assistant')){
-assistantConversation.push({ role, content:String(text || '').slice(0, 1600) });
-assistantConversation = assistantConversation.slice(-10);
-}
-}
-function findBuiltInAssistantAnswer(question){
-const normalized = String(question || '')
-.toLowerCase()
-.replace(/\b(gf|general foremen)\b/g, 'general foreman')
-.replace(/\b(mh|manhour|manhours)\b/g, 'man hour')
-.replace(/\b(xlsx|xls|spreadsheet)\b/g, 'excel')
-.replace(/\b(upload|load)\b/g, 'import')
-.replace(/[^a-z0-9]+/g, ' ')
-.trim();
-let best = null;
-let bestScore = 0;
-assistantBuiltInHelp.forEach(article => {
-const score = article.terms.reduce((total, term) => {
-const normalizedTerm = String(term).toLowerCase();
-if(normalized.includes(normalizedTerm)) return total + 3;
-const words = normalizedTerm.split(/\s+/).filter(word => word.length > 2);
-const matches = words.filter(word => normalized.includes(word)).length;
-return total + (words.length && matches === words.length ? 2 : matches * 0.25);
-}, 0);
-if(score > bestScore){
-best = article;
-bestScore = score;
-}
-});
-return best?.answer ||
-'I could not match that question to an offline help article. Try naming the screen and action, such as “create a job,” “promote a Foreman,” “import a Price Book,” or “approve a Daily Report.”';
-}
-function setAssistantOpen(open){
-$('assistantPanel').classList.toggle('hidden', !open);
-$('assistantLauncher').setAttribute('aria-expanded', String(open));
-if(open && !$('assistantMessages').children.length){
-addAssistantMessage(
-'assistant',
-'How can I help? Ask about any LineCrew Pro workflow or problem.',
-false
-);
-}
-if(open) $('assistantQuestion').focus();
-}
-$('assistantLauncher').onclick = () => setAssistantOpen(true);
-$('closeAssistant').onclick = () => setAssistantOpen(false);
-document.querySelectorAll('[data-assistant-question]').forEach(button => {
-button.onclick = () => {
-$('assistantQuestion').value = button.dataset.assistantQuestion || '';
-$('sendAssistantQuestion').click();
-};
-});
-$('sendAssistantQuestion').onclick = async () => {
-const question = $('assistantQuestion').value.trim();
-if(!question) return;
-const history = assistantConversation.slice(-10);
-addAssistantMessage('user', question);
-$('assistantQuestion').value = '';
-const button = $('sendAssistantQuestion');
-button.disabled = true;
-button.textContent = 'Thinking...';
-try{
-const { data, error } = await sb.functions.invoke('linecrew-assistant', {
-body:{ question, history, page:window.history.state?.lineCrewPage || 'dashboardPage' }
-});
-if(error) throw error;
-const answer = String(data?.answer || '').trim();
-if(!answer) throw new Error('No answer returned');
-addAssistantMessage('assistant', answer);
-}catch(error){
-console.warn('Secure assistant unavailable; using built-in help.', error);
-addAssistantMessage(
-'assistant',
-'Secure AI is currently unavailable, so I am using built-in LineCrew Pro help.\n\n' +
-findBuiltInAssistantAnswer(question)
-);
-}finally{
-button.disabled = false;
-button.textContent = 'Ask Assistant';
-}
-};
-$('assistantQuestion').addEventListener('keydown', event => {
-if(event.key === 'Enter' && (event.ctrlKey || event.metaKey)){
-event.preventDefault();
-$('sendAssistantQuestion').click();
-}
-});
-/* AUTH CHANGE */
-sb.auth.onAuthStateChange((event)=>{
-if(event === 'PASSWORD_RECOVERY'){
-show('authPage');
-$('passwordRecoveryCard').classList.remove('hidden');
-$('recoveryPassword').focus();
-return;
-}
-if(event === 'SIGNED_OUT'){
-$('assistantLauncher').classList.add('hidden');
-$('assistantPanel').classList.add('hidden');
-$('assistantMessages').innerHTML = '';
-$('assistantQuestion').value = '';
-assistantConversation = [];
-currentProfile = null;
-currentCompany = null;
-if(!pendingInviteToken){
-window.history.replaceState(null, '', window.location.href);
-}
-applyInvitationMode();
-show('authPage');
-return;
-}
-if(
-event === 'SIGNED_IN' &&
-!currentProfile
-){
-setTimeout(
-loadApp,
-0
-);
-}
-});
-/* PRODUCTION PAGE */
-function onboardingStatusRow(label, complete, actionLabel, action){
-const row = document.createElement('div');
-row.className = 'job-card';
-row.innerHTML =
-'<div class="section-header"><div>' +
-'<strong>' + escapeHtml(label) + '</strong><br>' +
-'<span class="' + (complete ? 'authorized' : 'pending') + '">' +
-(complete ? 'Complete' : 'Needs setup') +
-'</span>' +
-'</div></div>';
-if(!complete){
-const button = document.createElement('button');
-button.className = 'secondary small';
-button.textContent = actionLabel;
-button.onclick = action;
-row.querySelector('.section-header').appendChild(button);
-}
-return row;
-}
-async function loadCompanyOnboarding(){
-const card = $('companyOnboarding');
-if(!userHasAnyCompanyControls()){
-card.classList.add('hidden');
-return;
-}
-const companyId = currentProfile.company_id;
-const [team, customers, contracts, priceBooks, jobs, reports] =
-await Promise.all([
-sb.from('profiles').select('id', { count:'exact', head:true })
-.eq('company_id', companyId),
-sb.from('customers').select('id', { count:'exact', head:true })
-.eq('company_id', companyId).eq('active', true),
-sb.from('contracts').select('id', { count:'exact', head:true })
-.eq('company_id', companyId).eq('active', true),
-sb.from('price_books').select('id', { count:'exact', head:true })
-.eq('company_id', companyId).eq('active', true),
-sb.from('jobs').select('id', { count:'exact', head:true })
-.eq('company_id', companyId).eq('active', true),
-sb.from('daily_reports').select('id', { count:'exact', head:true })
-.eq('company_id', companyId)
-]);
-const results = [team, customers, contracts, priceBooks, jobs, reports];
-if(results.some(result => result.error)){
-card.classList.add('hidden');
-return;
-}
-const companyContactComplete = Boolean(
-String(currentCompany?.name || '').trim() &&
-String(currentCompany?.contact_email || '').trim() &&
-String(currentCompany?.contact_phone || '').trim() &&
-String(currentCompany?.timezone || '').trim()
-);
-const steps = [
-{
-label:'Complete company contact settings',
-complete:companyContactComplete,
-actionLabel:'Open Admin Controls',
-action:() => {
-$('adminNotice').open = true;
-$('adminNotice').scrollIntoView({ behavior:'smooth', block:'start' });
-}
-},
-{
-label:'Invite at least one team member',
-complete:Number(team.count || 0) > 1,
-actionLabel:'Open Team',
-action:() => navigateToAppPage('teamPage')
-},
-{
-label:'Add an active customer or utility',
-complete:Number(customers.count || 0) > 0,
-actionLabel:'Open Company Pricing',
-action:() => navigateToAppPage('priceBooksPage')
-},
-{
-label:'Create an active contract',
-complete:Number(contracts.count || 0) > 0,
-actionLabel:'Open Contracts',
-action:() => navigateToAppPage('priceBooksPage')
-},
-{
-label:'Create and activate a Price Book',
-complete:Number(priceBooks.count || 0) > 0,
-actionLabel:'Open Price Books',
-action:() => navigateToAppPage('priceBooksPage')
-},
-{
-label:'Create the first active job',
-complete:Number(jobs.count || 0) > 0,
-actionLabel:'Open Jobs',
-action:() => navigateToAppPage('jobsPage')
-},
-{
-label:'Save the first daily report',
-complete:Number(reports.count || 0) > 0,
-actionLabel:'Open Production',
-action:() => navigateToAppPage('productionPage')
-}
-];
-const completed = steps.filter(step => step.complete).length;
-$('companyOnboardingSummary').textContent =
-completed + ' of ' + steps.length + ' setup steps complete.';
-const list = $('companyOnboardingList');
-list.innerHTML = '';
-steps.forEach(step => list.appendChild(
-onboardingStatusRow(
-step.label, step.complete, step.actionLabel, step.action
-)
-));
-card.classList.remove('hidden');
-}
-async function loadDashboardReviewAlert(){
-const alertCard = $('dashboardReviewAlert');
-const canReview = userCanReviewProduction();
-if(!canReview){
-alertCard.classList.add('hidden');
-return;
-}
-const { count, error } = await sb
-.from('daily_reports')
-.select('id', { count:'exact', head:true })
-.eq('company_id', currentProfile.company_id)
-.eq('status', 'submitted');
-if(error || !count){
-alertCard.classList.add('hidden');
-return;
-}
-$('dashboardReviewAlertText').textContent =
-count + ' submitted daily report' + (count === 1 ? '' : 's') +
-' waiting for GF/Admin review.';
-alertCard.classList.remove('hidden');
-}
-$('openProductionReview').onclick = async () => {
-await navigateToAppPage('productionPage');
-};
-$('productionTile').onclick = async () => {
-await navigateToAppPage('productionPage');
-};
-function desktopViewEnabled(){
-try{
-return localStorage.getItem('linecrew-pro-desktop-view') === '1';
-}catch(error){
-return document.documentElement.classList.contains('desktop-view');
-}
-}
-function updateDesktopViewToggle(){
-const button = $('desktopViewToggle');
-if(!button) return;
-const enabled = desktopViewEnabled();
-button.textContent = enabled ? 'Return to Mobile View' : 'Desktop View';
-button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-button.title = enabled
-? 'Use the normal responsive mobile layout on this device'
-: 'Use the full desktop layout on this device';
-}
-$('desktopViewToggle').onclick = () => {
-const enable = !desktopViewEnabled();
-try{
-localStorage.setItem('linecrew-pro-desktop-view', enable ? '1' : '0');
-}catch(error){
-alert('This device did not allow LineCrew Pro to save the view preference.');
-return;
-}
-window.location.reload();
-};
-updateDesktopViewToggle();
-$('toggleMyProfile').onclick = () => {
-$('myProfileEditor').classList.remove('hidden');
-$('myProfileName').focus();
-};
-$('cancelMyProfile').onclick = () => {
-$('myProfileName').value = currentProfile?.full_name || '';
-$('myProfileEditor').classList.add('hidden');
-};
-$('saveMyProfile').onclick = async () => {
-const fullName = $('myProfileName').value.trim();
-if(fullName.length < 2){
-alert('Enter your full name.');
-return;
-}
-const button = $('saveMyProfile');
-button.disabled = true;
-button.textContent = 'Saving...';
-const { data, error } = await sb.rpc('update_my_profile_name', {
-p_full_name:fullName
-});
-button.disabled = false;
-button.textContent = 'Save My Profile';
-if(error){
-alert('Unable to update your profile: ' + error.message);
-return;
-}
-currentProfile.full_name =
-(Array.isArray(data) ? data[0]?.full_name : data?.full_name) || fullName;
-$('userName').textContent = currentProfile.full_name;
-$('dailyForemanName').value = currentProfile.full_name;
-$('myProfileEditor').classList.add('hidden');
-alert('Your profile name was updated.');
-};
-function applyCompanyBranding(company){
-const primaryColor =
-/^#[0-9a-f]{6}$/i.test(company?.primary_color || '')
-? company.primary_color
-: '#0b2d4d';
-document.documentElement.style.setProperty('--navy', primaryColor);
-document.querySelector('meta[name="theme-color"]')
-?.setAttribute('content', primaryColor);
-}
-$('saveCompanySettings').onclick = async () => {
-if(!userCanManageCompanySettings()) return;
-const name = $('companyDisplayName').value.trim();
-if(!name){
-alert('Company Display Name is required.');
-return;
-}
-const button = $('saveCompanySettings');
-button.disabled = true;
-button.textContent = 'Saving...';
-const { data, error } = await sb.rpc('update_company_settings', {
-p_name:name,
-p_contact_email:$('companyContactEmail').value.trim() || null,
-p_contact_phone:$('companyContactPhone').value.trim() || null,
-p_logo_url:$('companyLogoUrl').value.trim() || null,
-p_primary_color:$('companyPrimaryColor').value,
-p_timezone:$('companyTimezone').value
-});
-button.disabled = false;
-button.textContent = 'Save Company Settings';
-if(error){
-alert('Unable to save company settings: ' + error.message);
-return;
-}
-currentCompany = {
-...currentCompany,
-...(Array.isArray(data) ? data[0] : data)
-};
-$('companyName').textContent = currentCompany.name || 'LineCrew Pro';
-applyCompanyBranding(currentCompany);
-alert('Company settings saved.');
-};
-$('saveCompanyMhRate').onclick = async () => {
-if(!userIsCompanyAdmin()) return;
-const raw = $('companyRequiredMhRate').value.trim();
+if(Number(rec.awaiting_review_count)>0) blockers.p…18516 tokens truncated… = $('companyRequiredMhRate').value.trim();
 const rate = raw === '' ? null : Number(raw);
 if(rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 1000000)){
 alert('Enter a target between 0 and 1,000,000. Use 0 or leave blank to turn target colors off.');
