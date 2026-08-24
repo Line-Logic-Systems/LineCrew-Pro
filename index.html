@@ -4662,18 +4662,14 @@ if(openJobId && completedJobsCatalog.some(job=>String(job.id)===String(openJobId
 async function collectCompletedJobRecord(job){
 const reportsResult=await sb.from('daily_reports').select('id,job_id,work_date,foreman_name,crew_name,regular_hours,overtime_hours,weather_conditions,delay_hours,delay_reason,notes,status,archived,review_notes,storm_mode,storm_event_name,created_at,updated_at').eq('company_id',currentProfile.company_id).eq('job_id',job.id).order('work_date',{ascending:true});
 if(reportsResult.error) throw reportsResult.error;
-const [packagesResult,jsasResult,closeoutResult]=await Promise.all([sb.rpc('get_job_packages_v2',{p_job_id:job.id}),sb.rpc('get_company_jsas'),sb.rpc('get_job_closeout_history',{p_job_id:job.id})]);
+const [packagesResult,jsasResult,closeoutResult,exportDetailsResult]=await Promise.all([sb.rpc('get_job_packages_v2',{p_job_id:job.id}),sb.rpc('get_company_jsas'),sb.rpc('get_job_closeout_history',{p_job_id:job.id}),sb.rpc('get_completed_job_export_details_v1',{p_job_id:job.id})]);
 if(packagesResult.error) throw packagesResult.error;
 if(jsasResult.error) throw jsasResult.error;
 if(closeoutResult.error) throw closeoutResult.error;
-const units=[];
-const audit=[];
-for(const report of (reportsResult.data||[])){
-const [result,historyResult]=await Promise.all([sb.rpc('get_daily_report_unit_locations_v2',{p_report_id:report.id}),sb.rpc('get_daily_report_audit_history',{p_report_id:report.id})]);
-if(result.error) throw result.error;if(historyResult.error) throw historyResult.error;
-(result.data||[]).forEach(unit=>units.push({...unit,report_id:report.id,work_date:report.work_date,foreman_name:report.foreman_name,crew_name:report.crew_name}));
-(historyResult.data||[]).forEach(event=>audit.push({...event,report_id:report.id,work_date:report.work_date}));
-}
+if(exportDetailsResult.error) throw exportDetailsResult.error;
+const exportDetails=exportDetailsResult.data||{};
+const units=Array.isArray(exportDetails.units)?exportDetails.units:[];
+const audit=Array.isArray(exportDetails.audit)?exportDetails.audit:[];
 let attachments=[];
 const reportIds=(reportsResult.data||[]).map(report=>report.id);
 if(reportIds.length){
@@ -7291,24 +7287,23 @@ const batches=(batchesResult.data || []).filter(batch=>String(batch.job_id)===St
 if(!batches.length) throw new Error('No billing batches exist for this job yet.');
 const hasFinal=batches.some(batch=>String(batch.billing_type).toLowerCase()==='final' && String(batch.status).toLowerCase()!=='void');
 if(!hasFinal && !confirm('This job does not have a retained Final Bill yet. Download the current billing record anyway?')) return;
-const [reconciliationResult,packagesResult]=await Promise.all([
-sb.rpc('get_job_billing_reconciliation',{p_job_id:jobId}),sb.rpc('get_job_packages_v2',{p_job_id:jobId})
+const [reconciliationResult,packagesResult,detailsResult]=await Promise.all([
+sb.rpc('get_job_billing_reconciliation',{p_job_id:jobId}),sb.rpc('get_job_packages_v2',{p_job_id:jobId}),
+sb.rpc('get_complete_job_billing_export_details_v1',{p_job_id:jobId})
 ]);
 if(reconciliationResult.error) throw reconciliationResult.error;
 if(packagesResult.error) throw packagesResult.error;
+if(detailsResult.error) throw detailsResult.error;
 const reconciliation=reconciliationResult.data?.[0] || {};
 const packages=packagesResult.data || [];
-const batchRecords=[];
-for(let index=0;index<batches.length;index++){
-const batch=batches[index]; setProgress('Collecting batch '+(index+1)+' of '+batches.length+'...');
-const [linesResult,attachmentsResult]=await Promise.all([
-sb.rpc('get_billing_export_batch_lines',{p_batch_id:batch.batch_id}),
-sb.rpc('get_billing_export_attachments',{p_batch_id:batch.batch_id})
-]);
-if(linesResult.error) throw linesResult.error;
-if(attachmentsResult.error) throw attachmentsResult.error;
-batchRecords.push({batch,lines:linesResult.data || [],attachments:attachmentsResult.data || []});
-}
+const details=detailsResult.data||{};
+const allLines=Array.isArray(details.lines)?details.lines:[];
+const allAttachments=Array.isArray(details.attachments)?details.attachments:[];
+const linesByBatch=new Map();
+const attachmentsByBatch=new Map();
+allLines.forEach(line=>{const key=String(line.batch_id||'');const rows=linesByBatch.get(key)||[];rows.push(line);linesByBatch.set(key,rows);});
+allAttachments.forEach(attachment=>{const key=String(attachment.batch_id||'');const rows=attachmentsByBatch.get(key)||[];rows.push(attachment);attachmentsByBatch.set(key,rows);});
+const batchRecords=batches.map(batch=>({batch,lines:linesByBatch.get(String(batch.batch_id))||[],attachments:attachmentsByBatch.get(String(batch.batch_id))||[]}));
 const zip=exportType==='archive' ? new JSZip() : null;
 const workbook=XLSX.utils.book_new();
 const usedSheets=new Set();
