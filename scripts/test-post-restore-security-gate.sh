@@ -31,7 +31,7 @@ start_postgres() {
 start_postgres "$source_container"
 start_postgres "$target_container"
 
-docker exec "$source_container" psql --username postgres --dbname linecrew --set ON_ERROR_STOP=1 <<'SQL'
+docker exec --interactive "$source_container" psql --username postgres --dbname linecrew --set ON_ERROR_STOP=1 <<'SQL'
 create role authenticator noinherit;
 create or replace function public.enforce_linecrew_company_access()
 returns void language plpgsql as $$ begin return; end; $$;
