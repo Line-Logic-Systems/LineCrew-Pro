@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 env:
   NODE_VERSION: '22'
@@ -54,3 +55,13 @@ jobs:
             --overwrite false \
             --only-show-errors
           echo "Azure daily backup uploaded as $BLOB_NAME"
+      - name: Resolve prior recovery alert
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/manage-recovery-alert.sh success "Daily Company Data Backup"
+      - name: Open immediate recovery alert
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/manage-recovery-alert.sh failure "Daily Company Data Backup"
