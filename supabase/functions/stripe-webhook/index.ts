@@ -181,6 +181,19 @@ Deno.serve(async request => {
         const intervalCount = Number(item?.price?.recurring?.interval_count || 1);
         const unitAmount = Number(item?.price?.unit_amount || 0);
         const planCode = String(object.metadata?.plan_code || "").trim() || null;
+        const currentPeriodEndUnix = Number(object.current_period_end || item?.current_period_end || 0);
+        const scheduledCancelUnix = Number(object.cancel_at || 0);
+        // Stripe's newer Customer Portal can schedule an end-of-period
+        // cancellation with cancel_at=<resolved period end> while leaving the
+        // legacy cancel_at_period_end flag false. Treat both representations
+        // as the same LineCrew Pro state.
+        const cancelsAtPeriodEnd = object.cancel_at_period_end === true || (
+          Number.isFinite(scheduledCancelUnix) &&
+          scheduledCancelUnix > 0 &&
+          Number.isFinite(currentPeriodEndUnix) &&
+          currentPeriodEndUnix > 0 &&
+          scheduledCancelUnix === currentPeriodEndUnix
+        );
 
         const { data: prior, error: priorError } = await service
           .from("company_subscriptions")
@@ -212,13 +225,11 @@ Deno.serve(async request => {
             : item?.current_period_start
               ? new Date(item.current_period_start * 1000).toISOString()
               : null,
-          current_period_end: object.current_period_end
-            ? new Date(object.current_period_end * 1000).toISOString()
-            : item?.current_period_end
-              ? new Date(item.current_period_end * 1000).toISOString()
-              : null,
+          current_period_end: currentPeriodEndUnix
+            ? new Date(currentPeriodEndUnix * 1000).toISOString()
+            : null,
           trial_ends_at: object.trial_end ? new Date(object.trial_end * 1000).toISOString() : null,
-          cancel_at_period_end: object.cancel_at_period_end === true,
+          cancel_at_period_end: cancelsAtPeriodEnd,
           updated_at: new Date().toISOString(),
         };
 
