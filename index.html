@@ -2093,7 +2093,7 @@ button:disabled{
         <button id="markBillingSubmittedBtn" class="secondary">Mark Submitted</button>
         <button id="markBillingPaidBtn" class="success">Mark Paid</button>
         <button id="voidBillingBatchBtn" class="danger">Void Batch</button>
-        <button id="createBillingCreditBtn" class="warning hidden">Create Credit / Adjustment</button>
+        <button id="createBillingCreditBtn" class="warning hidden">Create Billing Adjustment</button>
         <button id="backToBillingHistoryBtn" class="secondary">Back to Batches</button>
       </div>
       <div class="daily-report-history">
@@ -7569,7 +7569,7 @@ async function loadBillingReconciliation(jobId = $('billingExportJob').value){
     '<span><strong>'+escapeHtml(formatCurrency(item.authorized_value))+'</strong><br>Authorized</span>'+
     '<span><strong>'+escapeHtml(formatCurrency(item.approved_value))+'</strong><br>Approved</span>'+
     '<span><strong>'+escapeHtml(formatCurrency(item.billed_value))+'</strong><br>Previously Billed</span>'+
-    '<span><strong>'+escapeHtml(formatCurrency(item.credit_value))+'</strong><br>Credits</span>'+
+    '<span><strong>'+escapeHtml(formatCurrency(item.credit_value))+'</strong><br>Billing Adjustments</span>'+
     '<span><strong>'+escapeHtml(formatCurrency(item.approved_unbilled_value))+'</strong><br>Approved Unbilled</span>'+
     '<span><strong>'+escapeHtml(formatCurrency(item.remaining_authorized_value))+'</strong><br>Remaining Authorized</span>'+
     '<span><strong>'+escapeHtml(item.awaiting_review_count)+'</strong><br>Awaiting Review</span>'+
@@ -7592,7 +7592,7 @@ function billingStatusLabel(status){
 }
 
 function billingStageLabel(batch){
-  if(String(batch?.billing_type || '').toLowerCase() === 'credit') return 'Credit / Adjustment';
+  if(String(batch?.billing_type || '').toLowerCase() === 'credit') return 'Billing Adjustment';
   if(String(batch?.billing_type || 'partial').toLowerCase() === 'final') return 'Final Bill';
   return 'Partial Bill ' + Number(batch?.billing_sequence || 1);
 }
@@ -7962,14 +7962,14 @@ async function saveBillingBatchDetails(){
 
 async function createBillingCredit(){
   if(!currentBillingBatch || currentBillingBatch.status!=='paid') return;
-  const reason=prompt('Why is this paid batch being credited or adjusted?');
+  const reason=prompt('Why is this paid batch being adjusted?');
   if(reason===null) return;
-  if(!reason.trim()) return alert('A credit reason is required.');
-  if(!confirm('Create a full credit for '+currentBillingBatch.batch_number+'?\n\nThe paid batch remains locked and this creates a separate negative adjustment.')) return;
+  if(!reason.trim()) return alert('A billing-adjustment reason is required.');
+  if(!confirm('Create a full billing adjustment for '+currentBillingBatch.batch_number+'?\n\nThe paid batch remains locked and this creates a separate negative correcting entry.')) return;
   const { data,error }=await sb.rpc('create_billing_credit_batch',{
     p_paid_batch_id:currentBillingBatch.batch_id,p_reason:reason.trim()
   });
-  if(error) return alert('Unable to create credit batch: '+error.message);
+  if(error) return alert('Unable to create billing adjustment: '+error.message);
   await loadBillingExportBatches();
   const credit=currentBillingBatches.find(item=>item.batch_id===data);
   if(credit) await openBillingBatch(credit);
@@ -8166,8 +8166,8 @@ async function downloadCompleteJobBillingRecord(exportType='archive'){
     const summary=[['LineCrew Pro Complete Job Billing Record'],['Job Number',job?.job_number || batches[0]?.job_number || ''],
       ['Job Name',job?.job_name || batches[0]?.job_name || ''],['Generated',new Date().toLocaleString()],
       ['Authorized',Number(reconciliation.authorized_value || 0)],['Approved',Number(reconciliation.approved_value || 0)],
-      ['Previously Billed',Number(reconciliation.billed_value || 0)],['Credits',Number(reconciliation.credit_value || 0)],
-      ['Net Billed',Number(reconciliation.billed_value || 0)+Number(reconciliation.credit_value || 0)],
+      ['Previously Billed',Number(reconciliation.billed_value || 0)],['Billing Adjustments',Number(reconciliation.credit_value || 0)],
+      ['Adjusted Billed Total',Number(reconciliation.net_billed_value ?? (Number(reconciliation.billed_value || 0)-Number(reconciliation.credit_value || 0)))],
       ['Approved Unbilled',Number(reconciliation.approved_unbilled_value || 0)],
       ['Remaining Authorized',Number(reconciliation.remaining_authorized_value || 0)],
       ['Awaiting Review',Number(reconciliation.awaiting_review_count || 0)],['Draft / Returned',Number(reconciliation.draft_report_count || 0)],
@@ -8212,7 +8212,8 @@ async function downloadCompleteJobBillingRecord(exportType='archive'){
     pdfLine('Job: '+(job?.job_number || batches[0]?.job_number || '')+' - '+(job?.job_name || batches[0]?.job_name || ''),{bold:true,size:11});
     pdfLine('Generated: '+new Date().toLocaleString());
     pdfLine('Authorized: '+formatCurrency(reconciliation.authorized_value)+'   Approved: '+formatCurrency(reconciliation.approved_value));
-    pdfLine('Previously billed: '+formatCurrency(reconciliation.billed_value)+'   Credits: '+formatCurrency(reconciliation.credit_value));
+    pdfLine('Previously billed: '+formatCurrency(reconciliation.billed_value)+'   Billing adjustments: '+formatCurrency(reconciliation.credit_value));
+    pdfLine('Adjusted billed total: '+formatCurrency(reconciliation.net_billed_value ?? (Number(reconciliation.billed_value || 0)-Number(reconciliation.credit_value || 0))));
     pdfLine('Approved unbilled: '+formatCurrency(reconciliation.approved_unbilled_value)+'   Remaining authorized: '+formatCurrency(reconciliation.remaining_authorized_value),{gap:20});
     pdfLine('Billing Batch History',{bold:true,size:12,gap:18});
     batchRecords.forEach(({batch,lines,attachments})=>{
@@ -8337,7 +8338,7 @@ const assistantBuiltInHelp = [
   },
   {
     terms:['billing export','bill job','billing batch','excel billing','csv billing','pdf billing','mark submitted','mark paid','duplicate billing'],
-    answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. The reconciliation panel shows Authorized, Approved, Previously Billed, Credits, Approved Unbilled and Remaining. Leave Final Bill unchecked while the job is active; batches become Partial Bill 1, 2 and so on. Final Bill checks remaining work and pending reports and requires an override reason when unresolved. Approved redlines always stay beside their work points; the summary checkbox only adds an extra Redlines sheet or PDF section. Save the utility invoice/reference, payment reference, notes and attachments on the batch. Submitted batches require a correction reason before voiding. Paid batches stay locked; Admin/Owner uses Create Credit / Adjustment for a separate negative correcting batch.'
+    answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. The reconciliation panel shows Authorized, Approved, Previously Billed, Billing Adjustments, Approved Unbilled and Remaining. Billing Adjustments are correcting entries, not utility payments; the Adjusted Billed Total is Previously Billed minus those adjustments. Leave Final Bill unchecked while the job is active; batches become Partial Bill 1, 2 and so on. Final Bill checks remaining work and pending reports and requires an override reason when unresolved. Approved redlines always stay beside their work points; the summary checkbox only adds an extra Redlines sheet or PDF section. Save the utility invoice/reference, payment reference, notes and attachments on the batch. Submitted batches require a correction reason before voiding. Paid batches stay locked; Admin/Owner uses Create Billing Adjustment for a separate negative correcting entry.'
   },
   {
     terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
