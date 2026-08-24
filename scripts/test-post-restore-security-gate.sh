@@ -44,7 +44,7 @@ docker exec "$source_container" pg_dump \
 docker cp "$source_container:/tmp/linecrew-security-test.dump" "$work_dir/linecrew-security-test.dump" >/dev/null
 
 docker exec "$target_container" psql --username postgres --dbname linecrew --set ON_ERROR_STOP=1 \
-  --command 'create role authenticator noinherit;'
+  --command 'create role authenticator noinherit; drop schema public cascade;'
 docker cp "$work_dir/linecrew-security-test.dump" "$target_container:/tmp/linecrew-security-test.dump" >/dev/null
 docker exec "$target_container" pg_restore \
   --username postgres --dbname linecrew --no-owner --no-acl \
