@@ -78,6 +78,11 @@ assert(assistant.includes('.eq("company_id", companyId)'), 'AI assistant company
 assert(!assistant.includes('Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")'), 'AI assistant should not use a service-role key for user-scoped reads.');
 assert(assistant.includes('store: false'), 'AI responses must disable OpenAI application-state storage.');
 assert(assistant.includes('history.slice(-10)'), 'AI assistant must bound conversational history.');
+assert(!assistant.includes('"Access-Control-Allow-Origin": "*"'), 'AI assistant must not allow every browser origin.');
+assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must allow the production app origin.');
+assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
+assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
+assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
 assert(assistant.includes('2026-08-23-workflows-v2'), 'AI assistant knowledge version marker must track the current workflow release.');
 for (const marker of [
   'Save & Import Authorized Units',

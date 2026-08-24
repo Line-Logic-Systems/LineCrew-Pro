@@ -2,10 +2,30 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const KNOWLEDGE_VERSION = "2026-08-23-workflows-v2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+const allowedOrigins = new Set([
+  "https://app.linecrewpro.com",
+  ...(Deno.env.get("CORS_ALLOWED_ORIGINS") || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+]);
+
+function corsHeaders(request: Request) {
+  const origin = request.headers.get("Origin") || "";
+  return {
+    "Access-Control-Allow-Origin": allowedOrigins.has(origin) ? origin : "https://app.linecrewpro.com",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Vary": "Origin",
+  };
+}
+
+function jsonResponse(request: Request, body: Record<string, unknown>, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders(request), "Content-Type": "application/json" },
+  });
+}
 
 const knowledge = `
 You are the LineCrew Assistant inside LineCrew Pro, a multi-tenant SaaS for powerline contractors.
@@ -124,8 +144,16 @@ Never invent contract, billing, payroll, safety, legal or utility requirements. 
 `;
 
 Deno.serve(async (request) => {
+  const origin = request.headers.get("Origin");
+  if (origin && !allowedOrigins.has(origin)) {
+    return jsonResponse(request, { error: "Origin not allowed." }, 403);
+  }
+
   if (request.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders(request) });
+  }
+  if (request.method !== "POST") {
+    return jsonResponse(request, { error: "Method not allowed." }, 405);
   }
 
   try {
@@ -156,10 +184,7 @@ Deno.serve(async (request) => {
 
     const role = String(profile.role || "").toLowerCase();
     if (!["admin", "owner"].includes(role) || profile.active !== true) {
-      return new Response(
-        JSON.stringify({ error: "The LineCrew Assistant is not enabled for your role." }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
+      return jsonResponse(request, { error: "The LineCrew Assistant is not enabled for your role." }, 403);
     }
 
     const body = await request.json();
@@ -238,16 +263,12 @@ Deno.serve(async (request) => {
     const answer = String(result.output_text || outputText || "").trim();
     if (!answer) throw new Error("AI service returned an empty answer.");
 
-    return new Response(JSON.stringify({ answer }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(request, { answer });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unable to answer." }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      },
+    return jsonResponse(
+      request,
+      { error: error instanceof Error ? error.message : "Unable to answer." },
+      400,
     );
   }
 });
