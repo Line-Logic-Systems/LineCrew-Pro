@@ -71,9 +71,9 @@ Never commit credentials or database URLs.
 1. Download the newest successful weekly package from Azure and compare it with the GitHub copy when both are available.
 2. Extract the package and run `node scripts/verify-backup.mjs backup-output/<timestamp>` before importing anything.
 3. Create a new, empty Supabase recovery project. Never restore over the damaged production project before validation.
-4. Restore the PostgreSQL archive with a PostgreSQL 17 client. Review `linecrew-postgres.list`, then use `pg_restore --no-owner --no-acl --dbname <recovery-url> linecrew-postgres.dump`.
+4. Restore the PostgreSQL archive with a PostgreSQL 17 client. Review `linecrew-postgres.list`, confirm the referenced Supabase roles exist in the recovery project, then use `pg_restore --no-owner --dbname <recovery-url> linecrew-postgres.dump`. Do not use `--no-acl`; function GRANT/REVOKE entries are part of the security boundary.
 5. Apply any repository migrations newer than the backup timestamp.
-6. Run `psql <recovery-url> -f post-restore-security.sql`, then `psql <recovery-url> -f verify-post-restore-security.sql`. Stop recovery if either command fails. This restores the `authenticator` role setting that `pg_dump` and `pg_restore` do not capture.
+6. Run `psql <recovery-url> -f post-restore-security.sql`, then `psql <recovery-url> -f verify-post-restore-security.sql`. Stop recovery if either command fails. This restores the `authenticator` role setting that `pg_dump` and `pg_restore` do not capture, and verifies that privileged function ACLs remain closed to anonymous callers.
 7. Upload files under `storage/<bucket>/` to the matching private buckets while preserving their complete paths.
 8. Verify login, MFA enforcement, suspended-account denial, expired-company denial, company isolation, jobs, price books, daily reports, JSAs, attachments, billing exports, timekeeping, and audit history.
 9. Change application environment variables only after recovery validation passes. Keep the former environment read-only until the recovery owner approves retirement.
