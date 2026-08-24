@@ -6777,7 +6777,7 @@ if(!currentBillingBatch || currentBillingBatch.status!=='paid') return;
 const reason=prompt('Why is this paid batch being adjusted?');
 if(reason===null) return;
 if(!reason.trim()) return alert('A billing-adjustment reason is required.');
-if(!confirm('Create a full billing adjustment for '+currentBillingBatch.batch_number+'?\n\nThe paid batch remains locked and this creates a separate negative correcting entry.')) return;
+if(!confirm('Create a full billing adjustment for '+currentBillingBatch.batch_number+'?\n\nThe paid batch remains locked. A negative adjustment will be recorded, and its units will return to Approved Unbilled so they can be billed again.')) return;
 const { data,error }=await sb.rpc('create_billing_credit_batch',{
 p_paid_batch_id:currentBillingBatch.batch_id,p_reason:reason.trim()
 });
@@ -6785,6 +6785,7 @@ if(error) return alert('Unable to create billing adjustment: '+error.message);
 await loadBillingExportBatches();
 const credit=currentBillingBatches.find(item=>item.batch_id===data);
 if(credit) await openBillingBatch(credit);
+alert('Billing adjustment created. The original units are now available for rebilling.');
 }
 async function loadBillingAttachments(){
 const list=$('billingAttachmentList');
@@ -7128,7 +7129,7 @@ answer:'Open Jobs, select the existing job, choose + Add Utility Package, enter 
 },
 {
 terms:['billing export','bill job','billing batch','excel billing','csv billing','pdf billing','mark submitted','mark paid','duplicate billing'],
-answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. The reconciliation panel shows Authorized, Approved, Previously Billed, Billing Adjustments, Approved Unbilled and Remaining. Billing Adjustments are correcting entries, not utility payments; the Adjusted Billed Total is Previously Billed minus those adjustments. Leave Final Bill unchecked while the job is active; batches become Partial Bill 1, 2 and so on. Final Bill checks remaining work and pending reports and requires an override reason when unresolved. Approved redlines always stay beside their work points; the summary checkbox only adds an extra Redlines sheet or PDF section. Save the utility invoice/reference, payment reference, notes and attachments on the batch. Submitted batches require a correction reason before voiding. Paid batches stay locked; Admin/Owner uses Create Billing Adjustment for a separate negative correcting entry.'
+answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Progress. A Superintendent needs Reporting and Actual Contract Pricing permissions. The reconciliation panel shows Authorized, Approved, Previously Billed, Billing Adjustments, Approved Unbilled and Remaining. Billing Adjustments are correcting entries, not utility payments; the Adjusted Billed Total is Previously Billed minus those adjustments. A full adjustment keeps the paid batch locked, records a separate negative entry and returns its units to Approved Unbilled for later rebilling. Leave Final Bill unchecked while the job is active; batches become Partial Bill 1, 2 and so on. Final Bill checks remaining work and pending reports and requires an override reason when unresolved. Approved redlines always stay beside their work points; the summary checkbox only adds an extra Redlines sheet or PDF section. Save the utility invoice/reference, payment reference, notes and attachments on the batch. Submitted batches require a correction reason before voiding.'
 },
 {
 terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
