@@ -35,10 +35,11 @@ docker exec --interactive "$source_container" psql --username postgres --dbname 
 create role anon noinherit;
 create role authenticated noinherit;
 create role authenticator noinherit;
+create role service_role noinherit;
 create or replace function public.enforce_linecrew_company_access()
 returns void language plpgsql security definer as 'begin return; end;';
 revoke all on function public.enforce_linecrew_company_access() from public, anon, authenticated;
-grant execute on function public.enforce_linecrew_company_access() to authenticator;
+grant execute on function public.enforce_linecrew_company_access() to authenticated, service_role;
 alter role authenticator set pgrst.db_pre_request = 'public.enforce_linecrew_company_access';
 SQL
 
@@ -48,7 +49,7 @@ docker exec "$source_container" pg_dump \
 docker cp "$source_container:/tmp/linecrew-security-test.dump" "$work_dir/linecrew-security-test.dump" >/dev/null
 
 docker exec "$target_container" psql --username postgres --dbname linecrew --set ON_ERROR_STOP=1 \
-  --command 'create role anon noinherit; create role authenticated noinherit; create role authenticator noinherit; drop schema public cascade;'
+  --command 'create role anon noinherit; create role authenticated noinherit; create role authenticator noinherit; create role service_role noinherit; drop schema public cascade;'
 docker cp "$work_dir/linecrew-security-test.dump" "$target_container:/tmp/linecrew-security-test.dump" >/dev/null
 docker exec "$target_container" pg_restore \
   --username postgres --dbname linecrew --no-owner \
