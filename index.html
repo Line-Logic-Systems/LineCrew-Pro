@@ -11013,7 +11013,10 @@ renderPriceBookItems();
 };
 });
 function csvCell(value){
-const text = String(value ?? '');
+let text = String(value ?? '');
+if(typeof value === 'string' && (/^[\t\r\n]/.test(text) || /^\s*[=+\-@]/.test(text))){
+text = "'" + text;
+}
 return '"' + text.replace(/"/g, '""') + '"';
 }
 $('exportPriceBookItemsBtn').onclick = () => {
@@ -14241,7 +14244,7 @@ await loadApp();
 }
 startApp();
 </script>
-<script src="expanded-jsa.js?v=20260823g"></script>
+<script src="expanded-jsa.js?v=20260823h"></script>
 <script>
 (function () {
 var installPrompt = null;
