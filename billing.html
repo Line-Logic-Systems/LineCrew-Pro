@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LineCrew Pro Billing</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--card:#fff;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754;--red:#b83232;--orange:#d97706}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:var(--navy);color:white;padding:24px 20px}header h1{margin:0;font-size:28px}header p{margin:6px 0 0;opacity:.86}main{max-width:820px;margin:auto;padding:24px 16px 90px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.hidden{display:none!important}.muted{color:var(--muted)}button,a.button{display:inline-block;border:0;border-radius:9px;padding:11px 15px;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;margin:4px 6px 4px 0}button.secondary,a.secondary{background:#e8eef4;color:var(--text)}input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin:5px 0 12px;font:inherit}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.metric{border:1px solid var(--border);border-radius:12px;padding:15px;background:#f8fafc}.metric strong{display:block;font-size:21px;margin-top:5px}.badge{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700;background:#e8eef4}.badge.active,.badge.within_plan{background:#d1fae5;color:#065f46}.badge.trialing,.badge.grace{background:#fef3c7;color:#92400e}.badge.past_due,.badge.paused,.badge.canceled,.badge.upgrade_required,.badge.custom_quote_required{background:#fee2e2;color:#991b1b}.notice{border-left:4px solid var(--blue);padding:12px 14px;background:#eff6ff;border-radius:8px}.notice.warn{border-left-color:var(--orange);background:#fff7ed}.notice.success{border-left-color:var(--green);background:#ecfdf5}@media(max-width:620px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>LineCrew Pro</h1><p>Company Billing</p></header>
+<main>
+<section id="authCard" class="card">
+  <h2>Company Admin Sign In</h2>
+  <p class="muted">Billing is available only to an active company Admin.</p>
+  <label>Email</label><input id="email" type="email" autocomplete="username">
+  <label>Password</label><input id="password" type="password" autocomplete="current-password">
+  <button id="signInBtn">Sign In</button>
+  <a class="button secondary" href="./">Back to LineCrew Pro</a>
+  <p id="authStatus" class="muted"></p>
+</section>
+
+<section id="billingCard" class="card hidden">
+  <div style="display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap">
+    <div><h2 id="companyName" style="margin:0">Company Billing</h2><p id="companyContact" class="muted"></p></div>
+    <div><a class="button secondary" href="./">Back to App</a><button id="signOutBtn" class="secondary">Sign Out</button></div>
+  </div>
+
+  <div id="returnNotice" class="notice hidden"></div>
+
+  <div class="grid" style="margin-top:16px">
+    <div class="metric"><span class="muted">Plan</span><strong id="plan">—</strong></div>
+    <div class="metric"><span class="muted">Monthly Price</span><strong id="price">—</strong></div>
+    <div class="metric"><span class="muted">Status</span><strong><span id="status" class="badge">—</span></strong></div>
+    <div class="metric"><span class="muted">App Access</span><strong id="access">—</strong></div>
+  </div>
+
+  <div class="card" style="margin-top:18px;margin-bottom:0;box-shadow:none">
+    <h3 style="margin-top:0">Crew Plan Usage</h3>
+    <div class="grid">
+      <div class="metric"><span class="muted">Included Crews</span><strong id="crewLimit">—</strong></div>
+      <div class="metric"><span class="muted">30-Day Peak Billable Crews</span><strong id="crewPeak">0</strong></div>
+      <div class="metric"><span class="muted">30-Day Overage Crew-Days</span><strong id="crewDays">0 / 6</strong></div>
+      <div class="metric"><span class="muted">Crew Tier Status</span><strong><span id="crewStatus" class="badge">—</span></strong></div>
+    </div>
+    <p id="crewHelp" class="muted"></p>
+  </div>
+
+  <div class="card" style="margin-top:18px;margin-bottom:0;box-shadow:none">
+    <h3 style="margin-top:0">Subscription</h3>
+    <p id="period" class="muted"></p>
+    <p id="billingHelp" class="muted"></p>
+    <button id="checkoutBtn" class="hidden">Start Stripe Billing</button>
+    <button id="portalBtn" class="hidden">Manage Billing</button>
+    <button id="refreshBtn" class="secondary">Refresh</button>
+    <p id="actionStatus" class="muted"></p>
+  </div>
+</section>
+</main>
+<script>
+const SUPABASE_URL='https://ldgkyxuozbozgkvwzadg.supabase.co';
+const SUPABASE_KEY='sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const $=id=>document.getElementById(id);
+let billing=null;
+
+const money=(cents,currency='usd')=>new Intl.NumberFormat('en-US',{style:'currency',currency:String(currency||'usd').toUpperCase()}).format((Number(cents)||0)/100);
+const date=value=>value?new Date(value).toLocaleDateString():'—';
+const label=v=>String(v||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+
+async function requireAdmin(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session) throw new Error('Sign in with a company Admin account.');
+  const {data:profile,error}=await sb.from('profiles').select('company_id,role,active').eq('id',session.user.id).single();
+  if(error||!profile) throw new Error('Company profile not found.');
+  if(profile.active===false||String(profile.role||'').toLowerCase()!=='admin') throw new Error('An active company Admin account is required.');
+  const {data:company,error:companyError}=await sb.from('companies').select('name,contact_email').eq('id',profile.company_id).single();
+  if(companyError||!company) throw new Error('Company not found.');
+  return company;
+}
+
+async function load(){
+  const company=await requireAdmin();
+  const {data,error}=await sb.rpc('my_company_billing_summary');
+  if(error) throw error;
+  billing=Array.isArray(data)?data[0]:data;
+  if(!billing) throw new Error('Billing summary is unavailable.');
+
+  $('companyName').textContent=company.name+' Billing';
+  $('companyContact').textContent=company.contact_email||'No billing contact email is saved in Company Settings.';
+  $('plan').textContent=label(billing.plan_code||'pilot');
+  $('price').textContent=money(billing.monthly_price_cents,billing.currency);
+  $('status').textContent=label(billing.status||'trialing');
+  $('status').className='badge '+String(billing.status||'');
+  $('access').textContent=billing.access_enabled?'Enabled':'Blocked';
+
+  $('crewLimit').textContent=billing.included_crew_limit==null?'Custom / Pilot':String(billing.included_crew_limit);
+  $('crewPeak').textContent=String(Number(billing.rolling_peak_billable_crews)||0);
+  $('crewDays').textContent=(Number(billing.rolling_overage_crew_days)||0)+' / 6';
+  $('crewStatus').textContent=label(billing.crew_overage_status||'within_plan');
+  $('crewStatus').className='badge '+String(billing.crew_overage_status||'within_plan');
+  const crewStatus=String(billing.crew_overage_status||'within_plan');
+  if(crewStatus==='grace') $('crewHelp').textContent='Temporary extra crews are still inside the rolling six crew-day allowance. Removing crews does not erase crew-days already used in the last 30 days.';
+  else if(crewStatus==='upgrade_required') $('crewHelp').textContent='The rolling six crew-day allowance has been exceeded. Recommended plan: '+label(billing.recommended_plan_code)+'.';
+  else if(crewStatus==='custom_quote_required') $('crewHelp').textContent='Usage requires a Large Enterprise custom quote because the 30-day peak exceeded 40 billable crews.';
+  else $('crewHelp').textContent='Crew tier is within plan. Storm Mode crews designated by the company are excluded from normal billable crew usage while Storm Mode is active.';
+
+  const period=[];
+  if(billing.trial_ends_at) period.push('Trial ends '+date(billing.trial_ends_at));
+  if(billing.current_period_end) period.push('Current billing period ends '+date(billing.current_period_end));
+  if(billing.cancel_at_period_end) period.push('Cancellation is scheduled for period end');
+  $('period').textContent=period.join(' · ')||'No Stripe billing period is recorded yet.';
+
+  $('portalBtn').classList.toggle('hidden',!billing.stripe_customer_linked);
+  $('checkoutBtn').classList.toggle('hidden',billing.stripe_subscription_linked&&billing.status!=='canceled');
+  $('billingHelp').textContent=billing.stripe_customer_linked
+    ? 'Stripe manages payment methods, invoices and subscription self-service through the secure Customer Portal.'
+    : 'LineCrew Pro support must assign a Stripe-enabled plan before Checkout can begin. No card information is stored in LineCrew Pro.';
+
+  $('authCard').classList.add('hidden');
+  $('billingCard').classList.remove('hidden');
+}
+
+async function invokeAndRedirect(name){
+  $('actionStatus').textContent='Opening secure billing...';
+  $('checkoutBtn').disabled=true;$('portalBtn').disabled=true;
+  try{
+    const {data,error}=await sb.functions.invoke(name,{body:{}});
+    if(error) throw error;
+    if(data?.error) throw new Error(data.error);
+    if(!data?.url) throw new Error('Billing service did not return a secure URL.');
+    location.assign(data.url);
+  }catch(e){
+    $('actionStatus').textContent=e.message||'Unable to open billing.';
+    $('checkoutBtn').disabled=false;$('portalBtn').disabled=false;
+  }
+}
+
+$('checkoutBtn').onclick=()=>invokeAndRedirect('create-billing-checkout');
+$('portalBtn').onclick=()=>invokeAndRedirect('create-billing-portal');
+$('refreshBtn').onclick=()=>load().catch(e=>$('actionStatus').textContent=e.message);
+$('signInBtn').onclick=async()=>{try{$('authStatus').textContent='Signing in...';const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;await load();$('authStatus').textContent=''}catch(e){$('authStatus').textContent=e.message||'Unable to sign in.'}};
+$('signOutBtn').onclick=async()=>{await sb.auth.signOut();location.reload()};
+
+const billingResult=new URLSearchParams(location.search).get('billing');
+if(billingResult){
+  $('returnNotice').textContent=billingResult==='success'?'Stripe Checkout completed. Billing status may take a few seconds to update from Stripe.':'Checkout was canceled. No subscription change was confirmed.';
+  $('returnNotice').classList.remove('hidden');
+  $('returnNotice').classList.add(billingResult==='success'?'success':'warn');
+}
+
+(async()=>{const {data:{session}}=await sb.auth.getSession();if(session){try{await load()}catch(e){$('authStatus').textContent=e.message||'Unable to load billing.'}}})();
+</script>
+</body>
+</html>
