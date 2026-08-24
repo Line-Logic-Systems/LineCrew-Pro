@@ -1790,7 +1790,7 @@ Final Bill — this job is complete
 </div>
 <div id="billingBatchLinePreview"></div>
 </div>
-<h3>Billing Batch History</h3>
+<div class="section-header"><h3>Billing Batch History</h3><label id="billingBatchArchiveFilterWrap">Show <select id="billingBatchArchiveFilter"><option value="active">Active Batches</option><option value="archived">Archived Batches</option><option value="all">All Batches</option></select></label></div>
 <div id="billingBatchHistory"><p class="muted">No billing batches created yet.</p></div>
 </div>
 <!-- CREATE JOB FORM -->
@@ -6368,6 +6368,7 @@ $('billingExportCenter').classList.remove('hidden');
 $('billingBatchDetail').classList.add('hidden');
 $('billingBatchCreateForm').classList.remove('hidden');
 $('billingExportIsFinal').checked = false;
+$('billingBatchArchiveFilter').value='active';
 await loadBillingExportBatches();
 await loadBillingReconciliation();
 $('billingExportCenter').scrollIntoView({ behavior:'smooth', block:'start' });
@@ -6378,7 +6379,9 @@ currentBillingBatch = null;
 currentBillingBatchLines = [];
 }
 async function loadBillingExportBatches(){
-const { data,error } = await sb.rpc('get_billing_export_batches_v3');
+const archiveFilter=userIsCompanyAdmin() ? ($('billingBatchArchiveFilter')?.value || 'active') : 'active';
+$('billingBatchArchiveFilterWrap')?.classList.toggle('hidden',!userIsCompanyAdmin());
+const { data,error } = await sb.rpc('get_billing_export_batches_v4',{p_archive_filter:archiveFilter});
 if(error){
 alert('Unable to load billing batches: ' + error.message);
 return;
@@ -6429,7 +6432,8 @@ function renderBillingBatchHistory(){
 const container = $('billingBatchHistory');
 container.innerHTML = '';
 if(currentBillingBatches.length === 0){
-container.innerHTML = '<p class="muted">No billing batches created yet.</p>';
+const archiveFilter=$('billingBatchArchiveFilter')?.value || 'active';
+container.innerHTML = '<p class="muted">'+(archiveFilter==='archived'?'No archived billing batches.':'No billing batches in this view.')+'</p>';
 return;
 }
 currentBillingBatches.forEach(batch => {
@@ -6445,6 +6449,7 @@ escapeHtml(batch.created_at ? new Date(batch.created_at).toLocaleString() : '') 
 Number(batch.redline_line_count || 0) + ' redline' +
 (batch.utility_invoice_number ? ' · Ref: '+escapeHtml(batch.utility_invoice_number) : '') +
 (batch.parent_batch_number ? ' · Corrects: '+escapeHtml(batch.parent_batch_number) : '') +
+(batch.archived_at ? ' · Archived '+escapeHtml(new Date(batch.archived_at).toLocaleString()) : '') +
 '</span></div><div><span class="billing-status ' +
 escapeHtml(String(batch.status || 'draft').toLowerCase()) + '">' +
 escapeHtml(billingStatusLabel(batch.status)) + '</span><br><strong>' +
@@ -6455,34 +6460,26 @@ button.textContent = 'Open Batch';
 button.onclick = () => openBillingBatch(batch);
 card.appendChild(button);
 if(userIsCompanyAdmin() && String(batch.status || '').toLowerCase() === 'void'){
-const deleteButton = document.createElement('button');
-deleteButton.className = 'danger small';
-deleteButton.textContent = 'Delete Voided Batch';
-deleteButton.onclick = () => deleteVoidedBillingBatch(batch,deleteButton);
-card.appendChild(deleteButton);
+const archiveButton = document.createElement('button');
+archiveButton.className = batch.archived_at ? 'secondary small' : 'warning small';
+archiveButton.textContent = batch.archived_at ? 'Restore to Active View' : 'Archive Batch';
+archiveButton.onclick = () => setVoidedBillingBatchArchived(batch,!batch.archived_at,archiveButton);
+card.appendChild(archiveButton);
 }
 container.appendChild(card);
 });
 }
-async function deleteVoidedBillingBatch(batch,button){
-const confirmation = prompt(
-'Permanently delete this voided batch?\n\n' +
-'Type DELETE to confirm:'
-);
-if(confirmation === null) return;
-if(confirmation.trim().toUpperCase() !== 'DELETE'){
-alert('DELETE was not entered. Nothing was deleted.');
-return;
-}
+async function setVoidedBillingBatchArchived(batch,archived,button){
+if(!confirm(archived?'Archive this voided batch? It will be hidden from the normal list but kept for records.':'Restore this voided batch to the normal list?')) return;
 button.disabled = true;
-button.textContent = 'Deleting...';
-const { error } = await sb.rpc('delete_void_billing_export_batch', {
-p_batch_id:batch.batch_id
+button.textContent = archived?'Archiving...':'Restoring...';
+const { error } = await sb.rpc('set_void_billing_batch_archived', {
+p_batch_id:batch.batch_id,p_archived:archived
 });
 if(error){
 button.disabled = false;
-button.textContent = 'Delete Voided Batch';
-alert('Unable to delete voided billing batch: ' + error.message);
+button.textContent = archived?'Archive Batch':'Restore to Active View';
+alert('Unable to update archived billing batch: ' + error.message);
 return;
 }
 if(currentBillingBatch?.batch_id === batch.batch_id){
@@ -6492,7 +6489,7 @@ $('billingBatchDetail').classList.add('hidden');
 $('billingBatchCreateForm').classList.remove('hidden');
 }
 await loadBillingExportBatches();
-alert('Voided billing batch permanently deleted.');
+alert(archived?'Voided batch archived.':'Voided batch restored to the active view.');
 }
 async function createBillingExportBatch(){
 const jobId = $('billingExportJob').value;
@@ -6547,6 +6544,7 @@ return;
 }
 $('billingExportNotes').value = '';
 $('billingExportIsFinal').checked = false;
+$('billingBatchArchiveFilter').value='active';
 await loadBillingExportBatches();
 const batch = currentBillingBatches.find(item => String(item.batch_id) === String(batchId));
 if(batch) await openBillingBatch(batch);
@@ -6930,7 +6928,7 @@ Object.values(buttons).forEach(item=>item.disabled=true);
 const setProgress=text=>{ button.textContent=text; status.textContent=text; };
 try{
 setProgress('Loading complete billing history...');
-const batchesResult=await sb.rpc('get_billing_export_batches_v3');
+const batchesResult=await sb.rpc('get_billing_export_batches_v4',{p_archive_filter:'all'});
 if(batchesResult.error) throw batchesResult.error;
 const batches=(batchesResult.data || []).filter(batch=>String(batch.job_id)===String(jobId));
 if(!batches.length) throw new Error('No billing batches exist for this job yet.');
@@ -7080,6 +7078,7 @@ $('exportCompleteBillingExcelBtn').onclick = () => downloadCompleteJobBillingRec
 $('exportCompleteBillingPdfBtn').onclick = () => downloadCompleteJobBillingRecord('pdf');
 $('downloadCompleteBillingArchiveBtn').onclick = () => downloadCompleteJobBillingRecord('archive');
 $('billingExportJob').addEventListener('change',()=>loadBillingReconciliation());
+$('billingBatchArchiveFilter').addEventListener('change',loadBillingExportBatches);
 $('backToBillingHistoryBtn').onclick = () => {
 currentBillingBatch = null;
 currentBillingBatchLines = [];
