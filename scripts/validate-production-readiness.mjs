@@ -24,6 +24,7 @@ const mustExist = [
   'supabase/migrations/20260823030000_company_employee_roster_assignment.sql',
   'supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql',
   'supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql',
+  'supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql',
   'number-input-polish.js',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
@@ -49,6 +50,7 @@ const supervisorJobAssignees = fs.readFileSync('supabase/migrations/202608230247
 const employeeRosterAssignment = fs.readFileSync('supabase/migrations/20260823030000_company_employee_roster_assignment.sql', 'utf8');
 const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
 const manHourRateTarget = fs.readFileSync('supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
+const dailyReportReadScope = fs.readFileSync('supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
@@ -168,6 +170,20 @@ for (const marker of [
   'daily_report_jsas_foreman_assigned_job',
   'revoke all on table public.job_assignment_audit_events from anon, authenticated'
 ]) assert(foremanJobAssignments.includes(marker), `Foreman job-assignment security marker missing: ${marker}`);
+
+for (const marker of [
+  'drop policy if exists "company members read daily reports"',
+  'drop policy if exists reports_company_select',
+  'drop policy if exists linecrew_owner_daily_reports_select',
+  'create policy daily_reports_role_scoped_select',
+  "in ('owner', 'admin', 'gf')",
+  "linecrew_has_capability('production_review')",
+  "linecrew_has_capability('reporting')",
+  "= 'foreman'",
+  'foreman_id = (select auth.uid())',
+  'created_by = (select auth.uid())',
+  'current_user_has_active_profile()'
+]) assert(dailyReportReadScope.includes(marker), `Daily Report read-scope security marker missing: ${marker}`);
 
 for (const marker of [
   'create or replace function public.get_job_leader_assignments()',
