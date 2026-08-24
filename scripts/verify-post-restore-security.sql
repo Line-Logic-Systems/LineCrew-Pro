@@ -22,11 +22,15 @@ begin
   end if;
 
   if not has_function_privilege(
-    'authenticator',
+    'authenticated',
+    'public.enforce_linecrew_company_access()',
+    'EXECUTE'
+  ) or not has_function_privilege(
+    'service_role',
     'public.enforce_linecrew_company_access()',
     'EXECUTE'
   ) then
-    raise exception 'Authenticator cannot execute the recovery security gate.';
+    raise exception 'The production API roles cannot execute the recovery security gate.';
   end if;
 
   select array_agg(proc.oid::regprocedure::text order by proc.oid::regprocedure::text)
