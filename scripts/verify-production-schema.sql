@@ -54,6 +54,8 @@ select
     as legacy_admin_update_disabled,
   not has_function_privilege('authenticated', 'public.review_daily_report(uuid,boolean,text)', 'execute')
     as legacy_report_review_disabled,
+  to_regprocedure('public.set_job_active(uuid,boolean)') is null
+    as legacy_set_job_active_removed,
   not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_admin_update'

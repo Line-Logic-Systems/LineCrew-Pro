@@ -36,6 +36,10 @@ Deno.serve(async (request) => {
     return jsonResponse(request, { error: "Origin not allowed." }, 403);
   }
 
+  if (!request.headers.get("Authorization")) {
+    return jsonResponse(request, { error: "Authorization is required." }, 401);
+  }
+
   try {
     const body = await request.json().catch(() => ({}));
     const email = String(body?.email || "").trim().toLowerCase();
@@ -67,8 +71,27 @@ Deno.serve(async (request) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    const { data: invitation, error: invitationError } = await admin
+      .from("team_invitations")
+      .select("email, expires_at, accepted_at")
+      .eq("token_hash", tokenHash)
+      .maybeSingle();
+
+    const invitationEmail = String(invitation?.email || "").trim().toLowerCase();
+    const invitationExpiry = Date.parse(String(invitation?.expires_at || ""));
+    if (
+      invitationError ||
+      !invitation ||
+      invitation.accepted_at !== null ||
+      !Number.isFinite(invitationExpiry) ||
+      invitationExpiry <= Date.now() ||
+      invitationEmail !== email
+    ) {
+      return jsonResponse(request, { error: "Invalid invitation signup." }, 400);
+    }
+
     const { data, error } = await admin.auth.admin.createUser({
-      email,
+      email: invitationEmail,
       password,
       email_confirm: true,
       user_metadata: { team_invitation_token_hash: tokenHash },
