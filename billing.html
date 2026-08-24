@@ -67,6 +67,9 @@ const SUPABASE_KEY=IS_VERCEL_PREVIEW?'sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7b
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 let billing=null;
+const billingResult=new URLSearchParams(location.search).get('billing');
+let portalSyncAttempts=0;
+const MAX_PORTAL_SYNC_ATTEMPTS=5;
 
 if(IS_VERCEL_PREVIEW){
   document.title='LineCrew Pro Billing — Sandbox Test';
@@ -80,6 +83,38 @@ if(IS_VERCEL_PREVIEW){
 const money=(cents,currency='usd')=>new Intl.NumberFormat('en-US',{style:'currency',currency:String(currency||'usd').toUpperCase()}).format((Number(cents)||0)/100);
 const date=value=>value?new Date(value).toLocaleDateString():'—';
 const label=v=>String(v||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+
+function showReturnNotice(message,tone=''){
+  $('returnNotice').textContent=message;
+  $('returnNotice').className='notice';
+  if(tone) $('returnNotice').classList.add(tone);
+}
+
+function renderReturnNotice(){
+  if(!billingResult){
+    $('returnNotice').classList.add('hidden');
+    return;
+  }
+  if(billingResult==='success'){
+    showReturnNotice('Stripe Checkout completed. Billing status may take a few seconds to update from Stripe.','success');
+    return;
+  }
+  if(billingResult==='canceled'){
+    showReturnNotice('Stripe Checkout was closed. No new subscription was created.','warn');
+    return;
+  }
+  if(billingResult==='portal-return'){
+    if(billing?.cancel_at_period_end){
+      showReturnNotice('Cancellation scheduled for '+date(billing.current_period_end)+'. App access remains enabled until then.','warn');
+    }else if(portalSyncAttempts<MAX_PORTAL_SYNC_ATTEMPTS){
+      showReturnNotice('Returned from Stripe Billing. Checking for subscription updates...');
+    }else{
+      showReturnNotice('Returned from Stripe Billing. No scheduled cancellation is currently recorded.');
+    }
+    return;
+  }
+  $('returnNotice').classList.add('hidden');
+}
 
 async function requireAdmin(){
   const {data:{session}}=await sb.auth.getSession();
@@ -120,9 +155,15 @@ async function load(){
 
   const period=[];
   if(billing.trial_ends_at) period.push('Trial ends '+date(billing.trial_ends_at));
-  if(billing.current_period_end) period.push('Current billing period ends '+date(billing.current_period_end));
-  if(billing.cancel_at_period_end) period.push('Cancellation is scheduled for period end');
+  if(billing.current_period_end){
+    period.push(billing.cancel_at_period_end
+      ? 'Cancellation scheduled for '+date(billing.current_period_end)+'; app access remains enabled until then'
+      : 'Current billing period ends '+date(billing.current_period_end));
+  }else if(billing.cancel_at_period_end){
+    period.push('Cancellation is scheduled for the end of the billing period');
+  }
   $('period').textContent=period.join(' · ')||'No Stripe billing period is recorded yet.';
+  renderReturnNotice();
 
   $('portalBtn').classList.toggle('hidden',!billing.stripe_customer_linked);
   $('checkoutBtn').classList.toggle('hidden',billing.stripe_subscription_linked&&billing.status!=='canceled');
@@ -155,14 +196,17 @@ $('refreshBtn').onclick=()=>load().catch(e=>$('actionStatus').textContent=e.mess
 $('signInBtn').onclick=async()=>{try{$('authStatus').textContent='Signing in...';const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;await load();$('authStatus').textContent=''}catch(e){$('authStatus').textContent=e.message||'Unable to sign in.'}};
 $('signOutBtn').onclick=async()=>{await sb.auth.signOut();location.reload()};
 
-const billingResult=new URLSearchParams(location.search).get('billing');
-if(billingResult){
-  $('returnNotice').textContent=billingResult==='success'?'Stripe Checkout completed. Billing status may take a few seconds to update from Stripe.':'Checkout was canceled. No subscription change was confirmed.';
-  $('returnNotice').classList.remove('hidden');
-  $('returnNotice').classList.add(billingResult==='success'?'success':'warn');
+async function syncPortalReturn(){
+  while(billingResult==='portal-return'&&!billing?.cancel_at_period_end&&portalSyncAttempts<MAX_PORTAL_SYNC_ATTEMPTS){
+    portalSyncAttempts+=1;
+    renderReturnNotice();
+    await new Promise(resolve=>setTimeout(resolve,2000));
+    await load();
+  }
+  renderReturnNotice();
 }
 
-(async()=>{const {data:{session}}=await sb.auth.getSession();if(session){try{await load()}catch(e){$('authStatus').textContent=e.message||'Unable to load billing.'}}})();
+(async()=>{const {data:{session}}=await sb.auth.getSession();if(session){try{await load();await syncPortalReturn()}catch(e){$('authStatus').textContent=e.message||'Unable to load billing.'}}})();
 </script>
 </body>
 </html>
