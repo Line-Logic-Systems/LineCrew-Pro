@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 124869)
-Total output lines: 14637
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6873,7 +6870,365 @@ const confirmed = confirm(
 ' from approved, unbilled production?' +
 (isFinal ? '\n\nOnly choose Final Bill when the job is complete.' : '') +
 '\n\nApproved redlines will be included with their work points.' +
-(separateRedlineSummary …4869 tokens truncated…thorization':String(line.authorization_status || '').toUpperCase(),
+(separateRedlineSummary ? '\nA separate redline summary will also be added to the export.' : '')
+);
+if(!confirmed) return;
+const button = $('createBillingExportBatchBtn');
+button.disabled = true;
+button.textContent = 'Creating Billing Batch...';
+const { data:batchId,error } = await sb.rpc('create_billing_export_batch_v3', {
+p_job_id:jobId,
+p_date_from:dateFrom,
+p_date_to:dateTo,
+p_separate_redline_summary:separateRedlineSummary,
+p_notes:$('billingExportNotes').value.trim() || null,
+p_is_final:isFinal,
+p_final_override_reason:finalOverrideReason
+});
+button.disabled = false;
+button.textContent = 'Create Billing Batch';
+if(error){
+alert('Unable to create billing batch: ' + error.message);
+return;
+}
+$('billingExportNotes').value = '';
+$('billingExportIsFinal').checked = false;
+$('billingBatchArchiveFilter').value='active';
+await loadBillingExportBatches();
+const batch = currentBillingBatches.find(item => String(item.batch_id) === String(batchId));
+if(batch) await openBillingBatch(batch);
+}
+async function openBillingBatch(batch){
+const { data,error } = await sb.rpc('get_billing_export_batch_lines', {
+p_batch_id:batch.batch_id
+});
+if(error){
+alert('Unable to load billing batch: ' + error.message);
+return;
+}
+currentBillingBatch = batch;
+currentBillingBatchLines = [...(data || [])].sort((first,second) =>
+String(first.work_point || '').localeCompare(
+String(second.work_point || ''),
+undefined,
+{ numeric:true, sensitivity:'base' }
+) ||
+String(first.report_date || '').localeCompare(String(second.report_date || '')) ||
+String(first.unit_code || '').localeCompare(String(second.unit_code || ''), undefined, {
+numeric:true,
+sensitivity:'base'
+}) ||
+String(first.work_type || '').localeCompare(String(second.work_type || ''))
+);
+$('billingBatchCreateForm').classList.add('hidden');
+$('billingBatchDetail').classList.remove('hidden');
+renderBillingBatchDetail();
+await loadBillingAttachments();
+$('billingBatchDetail').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function renderBillingBatchDetail(){
+const batch = currentBillingBatch;
+if(!batch) return;
+const authorized = currentBillingBatchLines.filter(line => line.authorization_status === 'authorized');
+const redlines = currentBillingBatchLines.filter(line => line.authorization_status === 'redline');
+$('billingBatchSummary').innerHTML =
+'<span><strong>' + escapeHtml(batch.batch_number) + '</strong><br>Batch</span>' +
+'<span><strong>' + escapeHtml(billingStageLabel(batch)) + '</strong><br>Billing Stage</span>' +
+'<span><strong>' + escapeHtml(batch.job_number) + '</strong><br>Job</span>' +
+'<span><strong>' + authorized.length + '</strong><br>Authorized Lines</span>' +
+'<span><strong>' + redlines.length + '</strong><br>Redline Lines</span>' +
+'<span><strong>' + escapeHtml(formatCurrency(batch.total_value)) + '</strong><br>Total Value</span>' +
+'<span><strong>' + escapeHtml(billingStatusLabel(batch.status)) + '</strong><br>Status</span>' +
+(batch.parent_batch_number ? '<span><strong>'+escapeHtml(batch.parent_batch_number)+'</strong><br>Corrects Batch</span>' : '') +
+(batch.correction_reason ? '<span><strong>'+escapeHtml(batch.correction_reason)+'</strong><br>Correction Reason</span>' : '');
+$('billingUtilityInvoiceNumber').value=batch.utility_invoice_number || '';
+$('billingPaymentReference').value=batch.payment_reference || '';
+$('billingDetailNotes').value=batch.notes || '';
+const status = String(batch.status || 'draft').toLowerCase();
+$('markBillingSubmittedBtn').classList.toggle('hidden', !['draft','exported'].includes(status));
+$('markBillingPaidBtn').classList.toggle('hidden', status !== 'submitted');
+$('voidBillingBatchBtn').classList.toggle('hidden', ['paid','void'].includes(status));
+$('createBillingCreditBtn').classList.toggle('hidden', status!=='paid' || !userIsCompanyAdmin() || batch.billing_type==='credit');
+['exportBillingExcelBtn','exportBillingCsvBtn','exportBillingPdfBtn'].forEach(id =>
+$(id).disabled = status === 'void'
+);
+const rows = currentBillingBatchLines.map(line =>
+'<tr class="' + (line.authorization_status === 'redline' ? 'billing-redline-row' : '') + '">' +
+'<td>' + escapeHtml(line.report_date || '') + '</td>' +
+'<td>' + escapeHtml(line.work_point || '') + '</td>' +
+'<td><strong>' + escapeHtml(line.unit_code || '') + '</strong></td>' +
+'<td>' + escapeHtml(line.work_type || '') + '</td>' +
+'<td class="quantity">' + escapeHtml(Number(line.quantity || 0).toFixed(2)) + '</td>' +
+'<td class="currency">' + escapeHtml(formatCurrency(line.unit_price)) + '</td>' +
+'<td class="currency"><strong>' + escapeHtml(formatCurrency(line.extended_value)) + '</strong></td>' +
+'<td>' + escapeHtml(String(line.authorization_status || '').toUpperCase()) + '</td>' +
+'<td>' + escapeHtml(line.foreman_name || '') + '</td></tr>'
+).join('');
+$('billingBatchLinePreview').innerHTML =
+'<div class="billing-preview-scroll"><table class="billing-preview-table"><thead><tr>' +
+'<th>Report Date</th><th>Work Point</th><th>Unit</th><th>Work Type</th>' +
+'<th>Quantity</th><th>Unit Price</th><th>Extended</th><th>Authorization</th><th>Foreman</th>' +
+'</tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+function billingExportRows(lines){
+return lines.map(line => ({
+'Batch Number':line.batch_number,
+'Billing Stage':billingStageLabel(currentBillingBatch),
+'Utility Invoice / Reference':currentBillingBatch?.utility_invoice_number || '',
+'Payment Reference':currentBillingBatch?.payment_reference || '',
+'Job Number':line.job_number,
+'Job Name':line.job_name || '',
+'Customer':line.customer_name || '',
+'Utility':line.utility_name || '',
+'Report Date':line.report_date || '',
+'Work Point':line.work_point || '',
+'Authorization':String(line.authorization_status || '').toUpperCase(),
+'Contractor Unit':line.unit_code || '',
+'Unit Description':line.unit_description || line.unit_name || '',
+'Work Type':line.work_type || '',
+'Approved Quantity':Number(line.quantity || 0),
+'Unit Price':Number(line.unit_price || 0),
+'Extended Value':Number(line.extended_value || 0),
+'Foreman':line.foreman_name || '',
+'Crew':line.crew_name || ''
+}));
+}
+function billingFileBase(){
+return 'linecrew-billing-' +
+String(currentBillingBatch?.job_number || 'job').replace(/[^a-z0-9_-]/gi,'-') + '-' +
+String(currentBillingBatch?.batch_number || 'batch').replace(/[^a-z0-9_-]/gi,'-');
+}
+async function recordBillingBatchExported(){
+if(!currentBillingBatch || String(currentBillingBatch.status).toLowerCase() !== 'draft') return;
+const { error } = await sb.rpc('set_billing_export_batch_status_v2', {
+p_batch_id:currentBillingBatch.batch_id,p_status:'exported',p_reason:null
+});
+if(error){
+alert('The file downloaded, but LineCrew Pro could not mark the batch Exported: ' + error.message);
+return;
+}
+currentBillingBatch.status = 'exported';
+await loadBillingExportBatches();
+renderBillingBatchDetail();
+}
+async function exportBillingExcel(){
+if(typeof XLSX === 'undefined'){
+alert('Excel export is unavailable because the spreadsheet library did not load.');
+return;
+}
+const workbook = XLSX.utils.book_new();
+const summaryRows = [
+['Billing Batch',currentBillingBatch.batch_number],
+['Billing Stage',billingStageLabel(currentBillingBatch)],
+['Utility Invoice / Reference',currentBillingBatch.utility_invoice_number || ''],
+['Payment Reference',currentBillingBatch.payment_reference || ''],
+['Job Number',currentBillingBatch.job_number],
+['Job Name',currentBillingBatch.job_name || ''],
+['From Date',currentBillingBatch.date_from || 'All approved production'],
+['Through Date',currentBillingBatch.date_to || 'All approved production'],
+['Status',billingStatusLabel(currentBillingBatch.status)],
+['Authorized Lines',Number(currentBillingBatch.authorized_line_count || 0)],
+['Redline Lines',Number(currentBillingBatch.redline_line_count || 0)],
+['Total Value',Number(currentBillingBatch.total_value || 0)]
+];
+const summarySheet = XLSX.utils.aoa_to_sheet(summaryRows);
+summarySheet['!cols'] = [{wch:22},{wch:32}];
+const workPointRows = billingExportRows(currentBillingBatchLines);
+const workPointSheet = XLSX.utils.json_to_sheet(workPointRows);
+workPointSheet['!cols'] = [18,16,24,20,15,24,20,20,14,14,16,18,60,14,18,14,18,24,20].map(wch => ({wch}));
+XLSX.utils.book_append_sheet(workbook,workPointSheet,'Work Points + Redlines');
+XLSX.utils.book_append_sheet(workbook,summarySheet,'Billing Summary');
+const redlines = billingExportRows(currentBillingBatchLines.filter(line => line.authorization_status === 'redline'));
+if(redlines.length && currentBillingBatch.include_redlines){
+const redlineSheet = XLSX.utils.json_to_sheet(redlines);
+redlineSheet['!cols'] = workPointSheet['!cols'];
+XLSX.utils.book_append_sheet(workbook,redlineSheet,'Redlines');
+}
+XLSX.writeFile(workbook,billingFileBase() + '.xlsx');
+await recordBillingBatchExported();
+}
+async function exportBillingCsv(){
+const rows = billingExportRows(currentBillingBatchLines);
+const headers = Object.keys(rows[0] || {});
+if(headers.length === 0){
+alert('This billing batch has no unit lines.');
+return;
+}
+const csv = '\uFEFF' + [headers,...rows.map(row => headers.map(header => row[header]))]
+.map(row => row.map(csvCell).join(','))
+.join('\r\n');
+const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+const link = document.createElement('a');
+link.href = URL.createObjectURL(blob);
+link.download = billingFileBase() + '.csv';
+document.body.appendChild(link);
+link.click();
+link.remove();
+URL.revokeObjectURL(link.href);
+await recordBillingBatchExported();
+}
+async function exportBillingPdf(){
+const popup = window.open('','_blank');
+if(!popup){
+alert('Allow pop-ups to print or save the billing PDF.');
+return;
+}
+const section = (title,lines) =>
+'<h2>' + escapeHtml(title) + '</h2><table><thead><tr><th>Date</th><th>Work Point</th>' +
+'<th>Unit</th><th>Type</th><th>Qty</th><th>Unit Price</th><th>Extended</th></tr></thead><tbody>' +
+lines.map(line => '<tr><td>' + escapeHtml(line.report_date || '') + '</td><td>' +
+escapeHtml(line.work_point || '') + '</td><td>' + escapeHtml(line.unit_code || '') +
+'</td><td>' + escapeHtml(line.work_type || '') + '</td><td>' +
+escapeHtml(Number(line.quantity || 0).toFixed(2)) + '</td><td>' +
+escapeHtml(formatCurrency(line.unit_price)) + '</td><td>' +
+escapeHtml(formatCurrency(line.extended_value)) + '</td></tr>').join('') +
+'</tbody></table>';
+const redlines = currentBillingBatchLines.filter(line => line.authorization_status === 'redline');
+popup.document.write('<!doctype html><html><head><title>' + escapeHtml(currentBillingBatch.batch_number) +
+'</title><style>body{font-family:Arial,sans-serif;margin:28px;color:#10243a}h1{margin-bottom:4px}' +
+'.muted{color:#52677d}table{width:100%;border-collapse:collapse;margin:12px 0 24px;font-size:11px}' +
+'th,td{border:1px solid #ccd8e3;padding:6px;text-align:left}th{background:#eef4f8}' +
+'.total{font-size:18px;font-weight:bold;margin:14px 0}@media print{button{display:none}}</style></head><body>' +
+'<h1>' + escapeHtml(billingStageLabel(currentBillingBatch)) + '</h1><p class="muted">Billing Export ' +
+escapeHtml(currentBillingBatch.batch_number) + '</p><p>' +
+escapeHtml(currentBillingBatch.job_number) + ' — ' + escapeHtml(currentBillingBatch.job_name || '') +
+(currentBillingBatch.utility_invoice_number ? '<br>Utility Reference: '+escapeHtml(currentBillingBatch.utility_invoice_number) : '') +
+(currentBillingBatch.payment_reference ? '<br>Payment Reference: '+escapeHtml(currentBillingBatch.payment_reference) : '') +
+'</p><p class="total">Total: ' + escapeHtml(formatCurrency(currentBillingBatch.total_value)) + '</p>' +
+section('Work Point Production',currentBillingBatchLines) +
+(redlines.length && currentBillingBatch.include_redlines ? section('Redline Summary',redlines) : '') +
+'<p class="muted">Generated by LineCrew Pro on ' + escapeHtml(new Date().toLocaleString()) +
+'. This is a production billing export, not a utility-system invoice.</p>' +
+'<script>window.onload=function(){window.print()}<\/script></body></html>');
+popup.document.close();
+await recordBillingBatchExported();
+}
+async function saveBillingBatchDetails(){
+if(!currentBillingBatch) return;
+const button=$('saveBillingBatchDetailsBtn'); button.disabled=true;
+const { error }=await sb.rpc('save_billing_export_batch_details',{
+p_batch_id:currentBillingBatch.batch_id,
+p_utility_invoice_number:$('billingUtilityInvoiceNumber').value.trim() || null,
+p_payment_reference:$('billingPaymentReference').value.trim() || null,
+p_notes:$('billingDetailNotes').value.trim() || null
+});
+button.disabled=false;
+if(error) return alert('Unable to save billing details: '+error.message);
+await loadBillingExportBatches();
+const refreshed=currentBillingBatches.find(item=>item.batch_id===currentBillingBatch.batch_id);
+if(refreshed){ currentBillingBatch=refreshed; renderBillingBatchDetail(); }
+alert('Billing details saved.');
+}
+async function createBillingCredit(){
+if(!currentBillingBatch || currentBillingBatch.status!=='paid') return;
+const reason=prompt('Why is this paid batch being adjusted?');
+if(reason===null) return;
+if(!reason.trim()) return alert('A billing-adjustment reason is required.');
+if(!confirm('Create a full billing adjustment for '+currentBillingBatch.batch_number+'?\n\nThe paid batch remains locked. A negative adjustment will be recorded, and its units will return to Approved Unbilled so they can be billed again.')) return;
+const { data,error }=await sb.rpc('create_billing_credit_batch',{
+p_paid_batch_id:currentBillingBatch.batch_id,p_reason:reason.trim()
+});
+if(error) return alert('Unable to create billing adjustment: '+error.message);
+await loadBillingExportBatches();
+const credit=currentBillingBatches.find(item=>item.batch_id===data);
+if(credit) await openBillingBatch(credit);
+alert('Billing adjustment created. The original units are now available for rebilling.');
+}
+async function loadBillingAttachments(){
+const list=$('billingAttachmentList');
+if(!currentBillingBatch){ list.innerHTML='<p class="muted">No batch selected.</p>'; return; }
+list.innerHTML='<p class="muted">Loading attachments...</p>';
+const { data,error }=await sb.rpc('get_billing_export_attachments',{p_batch_id:currentBillingBatch.batch_id});
+if(error){ list.innerHTML='<p class="danger-text">'+escapeHtml(error.message)+'</p>'; return; }
+if(!data?.length){ list.innerHTML='<p class="muted">No attachments added yet.</p>'; return; }
+list.replaceChildren();
+data.forEach(attachment=>{
+const row=document.createElement('div'); row.className='daily-history-event';
+row.innerHTML='<strong>'+escapeHtml(attachment.original_filename)+'</strong>'+
+(attachment.caption?'<br>'+escapeHtml(attachment.caption):'')+
+'<br><span class="muted">'+escapeHtml(new Date(attachment.created_at).toLocaleString())+'</span>';
+const open=document.createElement('button'); open.className='secondary small'; open.textContent='Open';
+open.onclick=async()=>{ const signed=await sb.storage.from('billing-export-attachments').createSignedUrl(attachment.storage_path,300); if(signed.error) return alert(signed.error.message); window.open(signed.data.signedUrl,'_blank','noopener'); };
+const del=document.createElement('button'); del.className='danger small'; del.textContent='Delete';
+del.onclick=async()=>{ if(!confirm('Delete this billing attachment?')) return; const result=await sb.rpc('delete_billing_export_attachment',{p_attachment_id:attachment.id}); if(result.error) return alert(result.error.message); await sb.storage.from('billing-export-attachments').remove([result.data]); await loadBillingAttachments(); };
+row.append(open,del); list.appendChild(row);
+});
+}
+function billingSafeStorageFilename(filename){
+const parts=String(filename || 'billing-attachment').split('.');
+const extension=parts.length>1
+? '.'+parts.pop().replace(/[^a-z0-9]/gi,'').slice(0,12).toLowerCase()
+: '';
+const base=parts.join('.')
+.replace(/[^a-z0-9_-]+/gi,'-')
+.replace(/^-+|-+$/g,'')
+.slice(0,80) || 'billing-attachment';
+return base+extension;
+}
+async function uploadBillingAttachment(){
+const button=$('uploadBillingAttachmentBtn');
+const status=$('billingAttachmentStatus');
+try{
+if(!currentBillingBatch) throw new Error('Open a billing batch before uploading.');
+const file=$('billingAttachmentFile').files?.[0];
+if(!file) throw new Error('Choose a billing attachment first.');
+if(file.size>15728640) throw new Error('Billing attachments must be 15 MB or smaller.');
+const allowed=['application/pdf','image/jpeg','image/png','image/webp','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','text/csv'];
+if(file.type && !allowed.includes(file.type)) throw new Error('Use PDF, JPG, PNG, WEBP, XLSX or CSV.');
+const unique=globalThis.crypto?.randomUUID?.() || String(Date.now());
+const path=currentProfile.company_id+'/'+currentBillingBatch.batch_id+'/'+unique+'-'+billingSafeStorageFilename(file.name);
+button.disabled=true; button.textContent='Uploading...'; status.textContent='Uploading '+file.name+'...';
+const upload=await sb.storage.from('billing-export-attachments').upload(path,file,{upsert:false,contentType:file.type || 'application/octet-stream'});
+if(upload.error) throw new Error('Upload failed: '+upload.error.message);
+const registered=await sb.rpc('register_billing_export_attachment',{
+p_batch_id:currentBillingBatch.batch_id,p_storage_path:path,p_original_filename:file.name,
+p_mime_type:file.type || null,p_file_size_bytes:file.size,
+p_caption:$('billingAttachmentCaption').value.trim() || null
+});
+if(registered.error){ await sb.storage.from('billing-export-attachments').remove([path]); throw new Error('Unable to register attachment: '+registered.error.message); }
+$('billingAttachmentFile').value=''; $('billingAttachmentCaption').value='';
+status.textContent='Attachment uploaded successfully.';
+await loadBillingAttachments(); await loadBillingExportBatches();
+}catch(error){
+status.textContent=error?.message || String(error);
+alert(status.textContent);
+}finally{
+button.disabled=false; button.textContent='Upload Attachment';
+}
+}
+async function setBillingBatchStatus(status){
+if(!currentBillingBatch) return;
+const labels = {submitted:'submitted to the utility',paid:'paid',void:'void'};
+if(!confirm('Mark billing batch ' + currentBillingBatch.batch_number + ' as ' + labels[status] + '?')) return;
+let reason=null;
+if(status==='void' && String(currentBillingBatch.status).toLowerCase()==='submitted'){
+reason=prompt('Why is this submitted batch being voided?');
+if(reason===null) return;
+if(!reason.trim()) return alert('A correction reason is required.');
+}
+const { error } = await sb.rpc('set_billing_export_batch_status_v2', {
+p_batch_id:currentBillingBatch.batch_id,p_status:status,p_reason:reason
+});
+if(error){
+alert('Unable to update billing batch: ' + error.message);
+return;
+}
+await loadBillingExportBatches();
+const refreshed = currentBillingBatches.find(item => item.batch_id === currentBillingBatch.batch_id);
+if(refreshed){
+currentBillingBatch = refreshed;
+renderBillingBatchDetail();
+}
+alert('Billing batch marked ' + labels[status] + '.');
+}
+function completeBillingRows(batch,lines){
+return (lines || []).map(line => ({
+'Batch Number':batch.batch_number || line.batch_number || '',
+'Billing Stage':billingStageLabel(batch),'Batch Status':billingStatusLabel(batch.status),
+'Utility Invoice / Reference':batch.utility_invoice_number || '','Payment Reference':batch.payment_reference || '',
+'Job Number':line.job_number || batch.job_number || '','Job Name':line.job_name || batch.job_name || '',
+'Customer':line.customer_name || '','Utility':line.utility_name || '','Report Date':line.report_date || '',
+'Work Point':line.work_point || '','Authorization':String(line.authorization_status || '').toUpperCase(),
 'Contractor Unit':line.unit_code || '','Unit Description':line.unit_description || line.unit_name || '',
 'Work Type':line.work_type || '','Approved Quantity':Number(line.quantity || 0),
 'Unit Price':Number(line.unit_price || 0),'Extended Value':Number(line.extended_value || 0),
