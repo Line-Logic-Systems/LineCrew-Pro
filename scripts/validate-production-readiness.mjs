@@ -32,6 +32,7 @@ const mustExist = [
   'supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql',
   'supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql',
   'supabase/migrations/20260824070000_append_only_job_closeout_history.sql',
+  'supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql',
   'number-input-polish.js',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
@@ -61,6 +62,7 @@ const manHourRateTarget = fs.readFileSync('supabase/migrations/20260823053000_ad
 const dailyReportReadScope = fs.readFileSync('supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
 const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
 const jobCloseoutHistory = fs.readFileSync('supabase/migrations/20260824070000_append_only_job_closeout_history.sql', 'utf8');
+const dailyReportScaleIntegrity = fs.readFileSync('supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
@@ -226,6 +228,16 @@ for (const marker of [
   "'reopened'",
   'grant execute on function public.get_job_closeout_history(uuid) to authenticated, service_role'
 ]) assert(jobCloseoutHistory.includes(marker), `Job closeout audit marker missing: ${marker}`);
+for (const marker of [
+  'enforce_active_job_for_daily_unit_mutation',
+  'Units cannot be changed after the parent job is closed.',
+  'prevent_duplicate_daily_report',
+  'pg_advisory_xact_lock',
+  'A Daily Report already exists for this Foreman, job, and work date.'
+]) assert(dailyReportScaleIntegrity.includes(marker), `Daily Report integrity marker missing: ${marker}`);
+assert(index.includes('let currentProductionServerLimit = 250;'), 'Production history must start with a bounded server-side report window.');
+assert(index.includes(".range(fetched,through)"), 'Production history must fetch explicit server-side pages.');
+assert(index.includes('Load 250 Older Reports'), 'Production history must provide deliberate load-more access.');
 assert(index.includes("sb.rpc('get_job_closeout_history',{p_job_id:job.id})"), 'Completed Jobs must load permanent closeout history.');
 assert(index.includes("Only the company Owner can authorize this override closeout."), 'The closeout UI must explain Owner-only unresolved-work approval.');
 assert(index.includes("'Closeout History'"), 'Completed-job Excel exports must include closeout history.');
@@ -287,7 +299,7 @@ assert(index.includes("doneButton.textContent = canEditDraft ? 'Done Adding Unit
 assert(index.includes("$('dailyUnitEntryControls').classList.toggle('hidden', !canEditDraft);"), 'Daily unit entry controls must be hidden from read-only reviewers.');
 assert(index.includes("if(reportStatus === 'draft' && canEditDraft)"), 'Edit and Submit controls must render only for users allowed to edit that draft.');
 assert(index.includes("[report?.created_by, report?.foreman_id]"), 'Returned Foreman drafts must recognize both the report creator and assigned Foreman ownership fields.');
-assert(/\.from\('daily_reports'\)[\s\S]{0,250}\.select\(`[^`]*\bcreated_by,\s*work_date,/m.test(index), 'Production report loading must include the creator used to restore returned-draft editing.');
+assert(/const reportSelect = `[^`]*\bcreated_by,\s*work_date,/m.test(index) && index.includes(".select(reportSelect,{count:fetched===0?'exact':undefined})"), 'Production report loading must include the creator used to restore returned-draft editing.');
 assert(expandedJsa.includes('id,job_id,foreman_id,created_by,work_date,status'), 'The returned-report correction loader must preserve Foreman ownership fields for unit editing.');
 assert(hasVersionedAsset(index, 'expanded-jsa.js'), 'The current workflow release must use a cache-busted script version.');
 assert(index.includes("Importing the package's authorized units lets LineCrew Pro distinguish") && index.includes('normal authorized production from redlines, reconcile Pending Job Units'), 'Job-package setup must explain why authorized-unit import matters.');
