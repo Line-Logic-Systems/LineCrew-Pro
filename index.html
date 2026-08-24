@@ -2443,6 +2443,10 @@ Save Pole &amp; Add Next
 <div id="productionPaginationTop" class="production-pagination hidden"></div>
 <div id="productionList"></div>
 <div id="productionPaginationBottom" class="production-pagination hidden"></div>
+<div id="productionHistoryLoader" class="card center hidden">
+<p id="productionHistoryLoaderStatus" class="muted"></p>
+<button id="loadOlderProductionReports" class="secondary">Load 250 Older Reports</button>
+</div>
 </section>
 <!-- PRICE BOOKS PAGE -->
 <section id="priceBooksPage" class="hidden">
@@ -3357,6 +3361,8 @@ let currentDailyAuthorizationSummaries = new Map();
 let currentProductionExportRows = [];
 let currentProductionPage = 1;
 let currentProductionPageSize = 10;
+let currentProductionServerLimit = 250;
+let currentProductionServerTotal = 0;
 let productionSearchTimer = null;
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
@@ -8024,6 +8030,11 @@ returnToDashboard();
 $('refreshProductionBtn').onclick = async () => {
 await loadProductionReports();
 };
+$('loadOlderProductionReports').onclick = async () => {
+currentProductionServerLimit += 250;
+currentProductionPage = 1;
+await loadProductionReports();
+};
 function resetProductionPageAndLoad(){
 currentProductionPage = 1;
 return loadProductionReports();
@@ -12277,12 +12288,7 @@ $('productionPageDescription').textContent = foremanEntryWorkspace
 $('productionLoading').classList.remove('hidden');
 $('productionEmpty').classList.add('hidden');
 $('productionList').innerHTML = '';
-const {
-data: reports,
-error
-} = await sb
-.from('daily_reports')
-.select(`
+const reportSelect = `
 id,
 job_id,
 foreman_id,
@@ -12311,10 +12317,26 @@ name
 )
 )
 )
-`)
-.eq('company_id', currentProfile.company_id)
-.order('work_date', { ascending:false })
-.order('created_at', { ascending:false });
+`;
+const reports=[];
+let error=null;
+let fetched=0;
+const serverPageSize=250;
+while(fetched<currentProductionServerLimit){
+const through=Math.min(fetched+serverPageSize,currentProductionServerLimit)-1;
+const result=await sb.from('daily_reports')
+.select(reportSelect,{count:fetched===0?'exact':undefined})
+.eq('company_id',currentProfile.company_id)
+.order('work_date',{ascending:false})
+.order('created_at',{ascending:false})
+.range(fetched,through);
+if(result.error){error=result.error;break;}
+if(fetched===0) currentProductionServerTotal=Number(result.count||0);
+const page=result.data||[];
+reports.push(...page);
+fetched+=page.length;
+if(page.length<(through-(fetched-page.length)+1)) break;
+}
 $('productionLoading').classList.add('hidden');
 if(error){
 alert(
@@ -12323,6 +12345,8 @@ error.message
 );
 return;
 }
+$('productionHistoryLoader').classList.toggle('hidden',reports.length>=currentProductionServerTotal);
+$('productionHistoryLoaderStatus').textContent='Showing the newest '+reports.length+' of '+currentProductionServerTotal+' reports. Load older history only when needed.';
 const {
 data:valueSummaries,
 error:valueSummaryError
