@@ -31,6 +31,7 @@ const mustExist = [
   'supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql',
   'supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql',
   'supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql',
+  'supabase/migrations/20260824070000_append_only_job_closeout_history.sql',
   'number-input-polish.js',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
@@ -59,6 +60,7 @@ const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008
 const manHourRateTarget = fs.readFileSync('supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
 const dailyReportReadScope = fs.readFileSync('supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
 const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
+const jobCloseoutHistory = fs.readFileSync('supabase/migrations/20260824070000_append_only_job_closeout_history.sql', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
@@ -212,6 +214,21 @@ for (const marker of [
 assert(index.includes("sb.rpc('linecrew_mfa_bootstrap_identity')"), 'The app must complete the narrow MFA bootstrap before other Data API requests.');
 assert(index.indexOf("sb.rpc('linecrew_mfa_bootstrap_identity')") < index.indexOf("sb.rpc('is_my_profile_suspended')"), 'The MFA bootstrap must run before protected profile checks.');
 assert(support.includes("rpc('linecrew_mfa_bootstrap_identity')"), 'The support console must complete the narrow MFA bootstrap before protected support RPCs.');
+
+for (const marker of [
+  'create table if not exists public.job_closeout_history',
+  "action in ('closed', 'override_closed', 'reopened')",
+  'create policy server_only_no_direct_access',
+  'create or replace function public.get_job_closeout_history',
+  "v_role <> 'owner'",
+  'Only the company Owner can approve closeout with unresolved billing or production.',
+  "'override_closed'",
+  "'reopened'",
+  'grant execute on function public.get_job_closeout_history(uuid) to authenticated, service_role'
+]) assert(jobCloseoutHistory.includes(marker), `Job closeout audit marker missing: ${marker}`);
+assert(index.includes("sb.rpc('get_job_closeout_history',{p_job_id:job.id})"), 'Completed Jobs must load permanent closeout history.');
+assert(index.includes("Only the company Owner can authorize this override closeout."), 'The closeout UI must explain Owner-only unresolved-work approval.');
+assert(index.includes("'Closeout History'"), 'Completed-job Excel exports must include closeout history.');
 
 for (const marker of [
   'create or replace function public.get_job_leader_assignments()',
