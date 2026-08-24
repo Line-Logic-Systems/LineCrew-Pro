@@ -1739,6 +1739,25 @@ class="success hidden"
 <div id="jobProgressList" class="job-progress-list"></div>
 <button id="jobProgressShowMore" class="secondary hidden">Show 25 More Jobs</button>
 </div>
+<div id="simpleJobBrowser" class="card hidden">
+<h3>Find Jobs</h3>
+<p class="muted">Search active or closed jobs without loading one long list.</p>
+<div class="job-progress-filters">
+<div>
+<label for="simpleJobSearch">Job number or name</label>
+<input id="simpleJobSearch" placeholder="Search jobs">
+</div>
+<div>
+<label for="simpleJobStatus">Status</label>
+<select id="simpleJobStatus">
+<option value="active">Active jobs</option>
+<option value="closed">Closed jobs</option>
+<option value="all">All jobs</option>
+</select>
+</div>
+</div>
+<p id="simpleJobCount" class="muted"></p>
+</div>
 <div id="billingExportCenter" class="card hidden">
 <div class="section-header">
 <div>
@@ -3346,6 +3365,7 @@ let currentBillingBatchLines = [];
 let currentBillingReconciliation = null;
 let currentOpenJobId = null;
 let currentJobProgressVisibleCount = 25;
+let currentSimpleJobVisibleCount = 25;
 let currentOpenJobPackage = null;
 let currentJobPackageImportWorkbook = null;
 let currentJobPackageImportRows = [];
@@ -4879,6 +4899,8 @@ async function loadJobs(){
 $('jobsLoading')
 .classList
 .remove('hidden');
+$('jobProgressDashboard').classList.add('hidden');
+$('simpleJobBrowser').classList.add('hidden');
 $('jobsEmpty')
 .classList
 .add('hidden');
@@ -4999,7 +5021,38 @@ $('jobsList').innerHTML = '';
 $('jobProgressDashboard').classList.remove('hidden');
 }
 }else{
-jobs.forEach(renderJob);
+renderSimpleJobBrowser();
+}
+}
+function renderSimpleJobBrowser(){
+const browser = $('simpleJobBrowser');
+browser.classList.remove('hidden');
+const search = String($('simpleJobSearch').value || '').trim().toLowerCase();
+const status = $('simpleJobStatus').value || 'active';
+const matching = currentJobsCatalog.filter(job => {
+if(status === 'active' && job.active !== true) return false;
+if(status === 'closed' && job.active === true) return false;
+return !search ||
+String(job.job_number || '').toLowerCase().includes(search) ||
+String(job.job_name || '').toLowerCase().includes(search);
+});
+$('jobsList').innerHTML = '';
+matching.slice(0, currentSimpleJobVisibleCount).forEach(renderJob);
+$('simpleJobCount').textContent =
+'Showing ' + Math.min(matching.length, currentSimpleJobVisibleCount) +
+' of ' + matching.length + ' matching jobs.';
+if(matching.length > currentSimpleJobVisibleCount){
+const more = document.createElement('button');
+more.className = 'secondary';
+more.textContent = 'Show 25 More Jobs';
+more.onclick = () => {
+currentSimpleJobVisibleCount += 25;
+renderSimpleJobBrowser();
+};
+$('jobsList').appendChild(more);
+}
+if(!matching.length){
+$('jobsList').innerHTML = '<div class="card center muted">No jobs match these filters.</div>';
 }
 }
 function renderJobProgressDashboard(jobs, canView){
@@ -5188,7 +5241,11 @@ return;
 currentOpenJobId = null;
 setAppHistory({ lineCrewPage:'jobsPage' });
 $('jobsList').innerHTML = '';
+if(userCanUseReporting() || userCanManageJobPackages()){
 $('jobProgressDashboard').classList.remove('hidden');
+}else{
+renderSimpleJobBrowser();
+}
 $('showCreateJobBtn').classList.toggle(
 'hidden',
 !userCanManageJobs()
@@ -6690,6 +6747,14 @@ $('jobProgressShowMore').onclick = () => {
 currentJobProgressVisibleCount += 25;
 renderJobProgressDashboard(currentJobsCatalog, true);
 };
+$('simpleJobSearch').oninput = () => {
+currentSimpleJobVisibleCount = 25;
+renderSimpleJobBrowser();
+};
+$('simpleJobStatus').onchange = () => {
+currentSimpleJobVisibleCount = 25;
+renderSimpleJobBrowser();
+};
 $('exportJobProgressCsvBtn').onclick = exportJobProgressCsv;
 function populateBillingExportJobs(){
 const selected = $('billingExportJob').value;
@@ -7798,7 +7863,27 @@ async function loadDashboardReviewAlert(){
 const alertCard = $('dashboardReviewAlert');
 const canReview = userCanReviewProduction();
 if(!canReview){
+if(currentUserRole() !== 'foreman'){
 alertCard.classList.add('hidden');
+return;
+}
+const { count, error } = await sb
+.from('daily_reports')
+.select('id', { count:'exact', head:true })
+.eq('company_id', currentProfile.company_id)
+.eq('foreman_id', currentProfile.id)
+.eq('status', 'draft')
+.not('review_notes', 'is', null);
+if(error || !count){
+alertCard.classList.add('hidden');
+return;
+}
+alertCard.querySelector('h3').textContent = 'Daily Report Returned';
+$('dashboardReviewAlertText').textContent =
+count + ' daily report' + (count === 1 ? ' needs' : 's need') +
+' your corrections before resubmission.';
+$('openProductionReview').textContent = 'Open My Reports';
+alertCard.classList.remove('hidden');
 return;
 }
 const { count, error } = await sb
@@ -7813,6 +7898,8 @@ return;
 $('dashboardReviewAlertText').textContent =
 count + ' submitted daily report' + (count === 1 ? '' : 's') +
 ' waiting for GF/Admin review.';
+alertCard.querySelector('h3').textContent = 'Production Needs Review';
+$('openProductionReview').textContent = 'Review Reports';
 alertCard.classList.remove('hidden');
 }
 $('openProductionReview').onclick = async () => {
