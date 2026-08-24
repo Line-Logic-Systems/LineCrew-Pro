@@ -66,6 +66,15 @@ for (const marker of ['is_platform_owner','platform_owner_company_dashboard','pl
 for (const marker of ['my_company_billing_summary','create-billing-checkout','create-billing-portal','stripe_subscription_linked','rolling_peak_billable_crews','crew_overage_status']) {
   if (!billing.includes(marker)) throw new Error(`billing.html is missing ${marker}`);
 }
+for (const marker of [
+  "billingResult==='portal-return'",
+  'Returned from Stripe Billing. Checking for subscription updates...',
+  'Cancellation scheduled for ',
+  'App access remains enabled until then.',
+  'Stripe Checkout was closed. No new subscription was created.',
+]) {
+  if (!billing.includes(marker)) throw new Error(`billing.html is missing portal return state: ${marker}`);
+}
 
 for (const marker of [
   'create table if not exists public.platform_owners',
@@ -116,6 +125,9 @@ if (!webhook.includes('stripe-signature') || !webhook.includes('verifyStripeSign
 if (!webhook.includes('eventInsertError.code !== "23505"')) throw new Error('Stripe webhook must recognize unique-event retries by PostgreSQL error code.');
 if (!webhook.includes('prior?.processed_at')) throw new Error('Stripe webhook must distinguish completed duplicates from retryable failed events.');
 if (!webhook.includes('invoice.paid is intentionally audit-only')) throw new Error('Stripe invoice.paid must not blindly reactivate a subscription.');
+if (!webhook.includes('scheduledCancelUnix') || !webhook.includes('scheduledCancelUnix === currentPeriodEndUnix')) {
+  throw new Error('Stripe webhook must recognize cancel_at resolved to the current period end.');
+}
 
 for (const marker of ['DISPOSABLE_ONLY','SUPABASE_PRODUCTION_PROJECT_REF','platform_owner_company_dashboard','my_company_billing_summary','my_company_subscription_access','company_subscriptions','platform_owners','Foreman accessed company Admin billing summary']) {
   if (!isolation.includes(marker)) throw new Error(`billing isolation harness is missing ${marker}`);
