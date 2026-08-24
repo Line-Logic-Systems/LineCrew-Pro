@@ -36,7 +36,7 @@ create role anon noinherit;
 create role authenticated noinherit;
 create role authenticator noinherit;
 create or replace function public.enforce_linecrew_company_access()
-returns void language plpgsql security definer as $ begin return; end; $;
+returns void language plpgsql security definer as 'begin return; end;';
 revoke all on function public.enforce_linecrew_company_access() from public, anon, authenticated;
 grant execute on function public.enforce_linecrew_company_access() to authenticator;
 alter role authenticator set pgrst.db_pre_request = 'public.enforce_linecrew_company_access';
