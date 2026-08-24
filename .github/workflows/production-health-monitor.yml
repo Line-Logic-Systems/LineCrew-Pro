@@ -1,0 +1,41 @@
+name: Production Health Monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-health-monitor
+  cancel-in-progress: false
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check production without reading company records
+        env:
+          SUPABASE_URL: ${{ secrets.BACKUP_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.BACKUP_SUPABASE_SERVICE_ROLE_KEY }}
+          ERROR_WINDOW_MINUTES: '15'
+          ERROR_THRESHOLD: '10'
+        run: node scripts/check-production-health.mjs
+      - name: Resolve prior production-health alert
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/manage-recovery-alert.sh success "Production Health Monitor"
+      - name: Open immediate production-health alert
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/manage-recovery-alert.sh failure "Production Health Monitor"
