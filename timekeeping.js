@@ -288,7 +288,8 @@
   }
 
   function csvCell(value){
-    const s=String(value??'');
+    let s=String(value??'');
+    if(typeof value==='string' && (/^[\t\r\n]/.test(s) || /^\s*[=+\-@]/.test(s))) s="'"+s;
     return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
   }
 
