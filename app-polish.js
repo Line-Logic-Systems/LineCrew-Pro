@@ -93,6 +93,24 @@
     };
   }
 
+  function makeDashboardTilesAccessible(){
+    const dashboard=byId('dashboardPage');
+    if(!dashboard) return;
+    dashboard.querySelectorAll('.metric').forEach(tile=>{
+      if(typeof tile.onclick!=='function' || tile.dataset.lcKeyboardReady==='1') return;
+      tile.dataset.lcKeyboardReady='1';
+      tile.setAttribute('role','link');
+      tile.tabIndex=0;
+      const title=tile.querySelector('strong')?.textContent?.trim();
+      if(title && !tile.getAttribute('aria-label')) tile.setAttribute('aria-label',title);
+      tile.addEventListener('keydown',event=>{
+        if(event.key!=='Enter' && event.key!==' ') return;
+        event.preventDefault();
+        tile.click();
+      });
+    });
+  }
+
   // Unsaved-change guard for the two highest-risk field forms.
   let dirty=false;let dirtyScope=null;
   const tracked=['dailyReportForm','safetyJsaForm'];
@@ -107,6 +125,7 @@
   function harden(){
     ensureTopSignOut();
     hardenProductionLoader();
+    makeDashboardTilesAccessible();
   }
 
   function init(){
