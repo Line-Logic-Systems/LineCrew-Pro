@@ -5,6 +5,7 @@ const assert = (condition, message) => { if (!condition) failures.push(message);
 
 const mustExist = [
   'index.html',
+  'support.html',
   'vercel.json',
   'scripts/validate-app.mjs',
   'supabase/functions/linecrew-assistant/index.ts',
@@ -25,6 +26,7 @@ const mustExist = [
   'supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql',
   'supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql',
   'supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql',
+  'supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql',
   'number-input-polish.js',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql'
@@ -32,6 +34,7 @@ const mustExist = [
 for (const file of mustExist) assert(fs.existsSync(file), `Missing ${file}`);
 
 const index = fs.readFileSync('index.html', 'utf8');
+const support = fs.readFileSync('support.html', 'utf8');
 const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
 const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts', 'utf8');
 const teamInvitation = fs.readFileSync('supabase/functions/send-team-invitation/index.ts', 'utf8');
@@ -51,6 +54,7 @@ const employeeRosterAssignment = fs.readFileSync('supabase/migrations/2026082303
 const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
 const manHourRateTarget = fs.readFileSync('supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
 const dailyReportReadScope = fs.readFileSync('supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
+const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
@@ -184,6 +188,26 @@ for (const marker of [
   'created_by = (select auth.uid())',
   'current_user_has_active_profile()'
 ]) assert(dailyReportReadScope.includes(marker), `Daily Report read-scope security marker missing: ${marker}`);
+
+for (const marker of [
+  'create or replace function public.linecrew_mfa_bootstrap_identity()',
+  'create or replace function public.linecrew_privileged_mfa_satisfied()',
+  'create or replace function public.enforce_linecrew_company_access()',
+  "auth.jwt() ->> 'aal'",
+  "v_request_path = '/rpc/linecrew_mfa_bootstrap_identity'",
+  "timestamptz '2026-08-31 05:00:00+00'",
+  "v_role in ('owner', 'admin')",
+  'linecrew_privileged_mfa_storage_select',
+  'linecrew_privileged_mfa_storage_insert',
+  'linecrew_privileged_mfa_storage_update',
+  'linecrew_privileged_mfa_storage_delete',
+  'on storage.objects as restrictive',
+  "set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"
+]) assert(privilegedMfaServer.includes(marker), `Server-enforced privileged MFA marker missing: ${marker}`);
+
+assert(index.includes("sb.rpc('linecrew_mfa_bootstrap_identity')"), 'The app must complete the narrow MFA bootstrap before other Data API requests.');
+assert(index.indexOf("sb.rpc('linecrew_mfa_bootstrap_identity')") < index.indexOf("sb.rpc('is_my_profile_suspended')"), 'The MFA bootstrap must run before protected profile checks.');
+assert(support.includes("rpc('linecrew_mfa_bootstrap_identity')"), 'The support console must complete the narrow MFA bootstrap before protected support RPCs.');
 
 for (const marker of [
   'create or replace function public.get_job_leader_assignments()',
