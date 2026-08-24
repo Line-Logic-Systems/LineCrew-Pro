@@ -138,7 +138,19 @@ async function expectForeignHidden(token, table, id) {
 }
 
 async function cleanup() {
-  const tableOrder = ["daily_reports", "jobs", "price_books", "customers", "profiles", "companies"];
+  const tableOrder = [
+    "job_package_authorized_units",
+    "job_package_work_points",
+    "job_packages",
+    "price_book_items",
+    "daily_reports",
+    "jobs",
+    "contracts",
+    "price_books",
+    "customers",
+    "profiles",
+    "companies",
+  ];
   for (const table of tableOrder) {
     const ids = created.rows.filter((row) => row.table === table).map((row) => row.id).reverse();
     for (const id of ids) {
@@ -165,8 +177,21 @@ async function main() {
   const customerB = await serviceInsert("customers", { company_id: companyB.id, name: `${runId} Customer B` });
   const priceBookA = await serviceInsert("price_books", { company_id: companyA.id, name: `${runId} Price Book A` });
   const priceBookB = await serviceInsert("price_books", { company_id: companyB.id, name: `${runId} Price Book B` });
+  const priceBookItemA = await serviceInsert("price_book_items", { company_id: companyA.id, price_book_id: priceBookA.id, item_code: `${runId}-UNIT-A`, item_name: "Isolation Unit A" });
+  const priceBookItemB = await serviceInsert("price_book_items", { company_id: companyB.id, price_book_id: priceBookB.id, item_code: `${runId}-UNIT-B`, item_name: "Isolation Unit B" });
   const jobA = await serviceInsert("jobs", { company_id: companyA.id, job_number: `${runId}-A`, job_name: "Isolation Job A", created_by: userA.id, price_book_id: priceBookA.id });
   const jobB = await serviceInsert("jobs", { company_id: companyB.id, job_number: `${runId}-B`, job_name: "Isolation Job B", created_by: userB.id, price_book_id: priceBookB.id });
+  const contractA = await serviceInsert("contracts", { company_id: companyA.id, customer_id: customerA.id, contract_name: "Isolation Contract A" });
+  const contractB = await serviceInsert("contracts", { company_id: companyB.id, customer_id: customerB.id, contract_name: "Isolation Contract B" });
+  const priorPackageA = await serviceInsert("job_packages", { company_id: companyA.id, job_id: jobA.id, contract_id: contractA.id, package_name: "Isolation Package A revision 1", created_by: userA.id });
+  const currentPackageA = await serviceInsert("job_packages", { company_id: companyA.id, job_id: jobA.id, contract_id: contractA.id, package_name: "Isolation Package A revision 2", created_by: userA.id });
+  const packageB = await serviceInsert("job_packages", { company_id: companyB.id, job_id: jobB.id, contract_id: contractB.id, package_name: "Isolation Package B", created_by: userB.id });
+  const priorWorkPointA = await serviceInsert("job_package_work_points", { company_id: companyA.id, job_package_id: priorPackageA.id, job_id: jobA.id, work_point_code: "WP-1", created_by: userA.id });
+  const currentWorkPointA = await serviceInsert("job_package_work_points", { company_id: companyA.id, job_package_id: currentPackageA.id, job_id: jobA.id, work_point_code: "WP-1", created_by: userA.id });
+  const workPointB = await serviceInsert("job_package_work_points", { company_id: companyB.id, job_package_id: packageB.id, job_id: jobB.id, work_point_code: "PRIVATE-WP-B", created_by: userB.id });
+  await serviceInsert("job_package_authorized_units", { company_id: companyA.id, job_package_id: priorPackageA.id, work_point_id: priorWorkPointA.id, price_book_item_id: priceBookItemA.id, unit_code: "UNIT-A", authorized_install_quantity: 1, created_by: userA.id });
+  await serviceInsert("job_package_authorized_units", { company_id: companyA.id, job_package_id: currentPackageA.id, work_point_id: currentWorkPointA.id, price_book_item_id: priceBookItemA.id, unit_code: "UNIT-A", authorized_install_quantity: 2, created_by: userA.id });
+  await serviceInsert("job_package_authorized_units", { company_id: companyB.id, job_package_id: packageB.id, work_point_id: workPointB.id, price_book_item_id: priceBookItemB.id, unit_code: "PRIVATE-UNIT-B", authorized_install_quantity: 99, created_by: userB.id });
   const reportA = await serviceInsert("daily_reports", { company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id, report_date: new Date().toISOString().slice(0, 10), foreman_name: "Isolation Admin A" });
   const reportB = await serviceInsert("daily_reports", { company_id: companyB.id, job_id: jobB.id, foreman_id: userB.id, report_date: new Date().toISOString().slice(0, 10), foreman_name: "Isolation Admin B" });
 
@@ -178,6 +203,25 @@ async function main() {
   for (const [table, row] of Object.entries(resourcesB)) await expectOwnRow(tokenB, table, row.id);
   for (const [table, row] of Object.entries(resourcesB)) await expectForeignHidden(tokenA, table, row.id);
   for (const [table, row] of Object.entries(resourcesA)) await expectForeignHidden(tokenB, table, row.id);
+
+  const ownRevisionDelta = await userRest(tokenA, "rpc/get_job_package_revision_delta", "", {
+    method: "POST",
+    body: { p_package_id: currentPackageA.id },
+  });
+  assert(ownRevisionDelta.ok, `Same-company package revision delta failed: ${JSON.stringify(ownRevisionDelta.data)}`);
+  assert(
+    Array.isArray(ownRevisionDelta.data) && ownRevisionDelta.data.length === 1 && ownRevisionDelta.data[0].install_change === 1,
+    `Same-company package revision delta was incorrect: ${JSON.stringify(ownRevisionDelta.data)}`,
+  );
+
+  const foreignRevisionDelta = await userRest(tokenA, "rpc/get_job_package_revision_delta", "", {
+    method: "POST",
+    body: { p_package_id: packageB.id },
+  });
+  assert(
+    !foreignRevisionDelta.ok && foreignRevisionDelta.data?.code === "P0002",
+    `SECURITY FAILURE: cross-company package revision delta was not denied: ${JSON.stringify(foreignRevisionDelta.data)}`,
+  );
 
   const ownInsert = await userRest(tokenA, "customers", "", {
     method: "POST",
