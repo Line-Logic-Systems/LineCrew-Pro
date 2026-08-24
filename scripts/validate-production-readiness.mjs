@@ -239,8 +239,12 @@ for (const marker of [
 ]) assert(independentBackup.includes(marker), `Independent backup is missing recovery-security marker: ${marker}`);
 assert(disasterRestoreWorkflow.includes('bash scripts/test-post-restore-security-gate.sh'), 'The disposable restore workflow must run an actual pg_restore security-gate drill.');
 assert(testPostRestoreSecurity.includes('pg_restore') && testPostRestoreSecurity.includes('pg_db_role_setting'), 'The recovery-security drill must prove pg_restore omits the role setting before restoring it.');
+assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl'), 'Independent backups must preserve function ACLs.');
+assert(!testPostRestoreSecurity.includes('--no-acl'), 'The recovery drill must restore and verify function ACLs.');
 assert(postRestoreSecurity.includes("alter role authenticator\n  set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"), 'The recovery bootstrap must restore the PostgREST pre-request gate.');
 assert(verifyPostRestoreSecurity.includes('pg_db_role_setting') && verifyPostRestoreSecurity.includes("public.enforce_linecrew_company_access"), 'The recovery verifier must inspect the live authenticator role setting.');
+assert(verifyPostRestoreSecurity.includes("has_function_privilege('anon', proc.oid, 'EXECUTE')"), 'The recovery verifier must reject anonymously executable SECURITY DEFINER functions.');
+assert(verifyPostRestoreSecurity.includes("public.admin_update_user(uuid,text,boolean)"), 'The recovery verifier must keep the legacy role-escalation RPC closed after restore.');
 assert(packetParser.includes('if (origin && !allowedOrigins.has(origin))'), 'Job-packet parsing must reject unapproved browser origins.');
 assert(!packetParser.includes('"Access-Control-Allow-Origin": "*"'), 'Job-packet parsing must not allow every browser origin.');
 assert(appPolish.includes("tile.setAttribute('role','link')") && appPolish.includes("tile.addEventListener('keydown'"), 'Dashboard tiles must support keyboard and screen-reader navigation.');
