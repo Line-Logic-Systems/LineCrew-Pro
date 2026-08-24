@@ -41,6 +41,15 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function isInactiveProfileDenial(result) {
+  return (
+    !result.ok &&
+    [401, 403].includes(result.status) &&
+    result.data?.code === "42501" &&
+    result.data?.message === "LineCrew profile access is inactive."
+  );
+}
+
 async function request(path, { method = "GET", token = serviceKey, apikey = serviceKey, body, prefer } = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
@@ -213,7 +222,7 @@ async function main() {
     body: {},
   });
   assert(
-    inactiveGate.ok && inactiveGate.data === false,
+    (inactiveGate.ok && inactiveGate.data === false) || isInactiveProfileDenial(inactiveGate),
     `SECURITY FAILURE: active-profile gate remained open after suspension: ${JSON.stringify(inactiveGate.data)}`,
   );
 
@@ -222,13 +231,14 @@ async function main() {
     body: {},
   });
   assert(
-    inactiveTenant.ok && inactiveTenant.data === null,
-    "SECURITY FAILURE: inactive profile still resolved tenant context.",
+    (inactiveTenant.ok && inactiveTenant.data === null) || isInactiveProfileDenial(inactiveTenant),
+    `SECURITY FAILURE: inactive profile still resolved tenant context: ${JSON.stringify(inactiveTenant.data)}`,
   );
 
   const inactiveRead = await userRest(tokenA, "customers", `id=eq.${customerA.id}&select=id`);
   assert(
-    inactiveRead.ok && Array.isArray(inactiveRead.data) && inactiveRead.data.length === 0,
+    (inactiveRead.ok && Array.isArray(inactiveRead.data) && inactiveRead.data.length === 0) ||
+      isInactiveProfileDenial(inactiveRead),
     `SECURITY FAILURE: inactive profile retained tenant access: ${JSON.stringify(inactiveRead.data)}`,
   );
   await servicePatch("profiles", userA.id, { active: true });
