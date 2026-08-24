@@ -43,7 +43,7 @@ jobs:
             --env SUPABASE_DB_URL \
             --volume "$PWD/backup-output/postgres:/backup" \
             postgres:17-alpine \
-            sh -ceu 'pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl --schema=auth --schema=public --schema=storage --file=/backup/linecrew-postgres.dump && pg_restore --list /backup/linecrew-postgres.dump > /backup/linecrew-postgres.list'
+            sh -ceu 'pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --schema=auth --schema=public --schema=storage --file=/backup/linecrew-postgres.dump && pg_restore --list /backup/linecrew-postgres.dump > /backup/linecrew-postgres.list'
       - name: Package and verify the post-restore security gate
         run: |
           cp scripts/post-restore-security.sql backup-output/postgres/post-restore-security.sql
