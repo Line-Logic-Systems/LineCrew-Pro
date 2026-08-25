@@ -21,4 +21,60 @@ grant execute on function public.recalculate_company_crew_overage(uuid) to servi
 alter table public.company_subscriptions
   add column if not exists last_stripe_event_created bigint not null default 0;
 
+-- Every company needs a subscription row so daily crew usage and future billing
+-- never stop on a newly created or historically imported company. Pilot keeps
+-- access unchanged until LineCrew Pro assigns a paid plan.
+create or replace function public.ensure_company_subscription()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  insert into public.company_subscriptions (
+    company_id,
+    plan_code,
+    monthly_price_cents,
+    status,
+    access_enabled,
+    provider
+  ) values (
+    new.id,
+    'pilot',
+    0,
+    'trialing',
+    true,
+    'manual'
+  )
+  on conflict (company_id) do nothing;
+  return new;
+end;
+$;
+
+revoke all on function public.ensure_company_subscription()
+  from public, anon, authenticated;
+
+drop trigger if exists linecrew_ensure_company_subscription on public.companies;
+create trigger linecrew_ensure_company_subscription
+after insert on public.companies
+for each row execute function public.ensure_company_subscription();
+
+insert into public.company_subscriptions (
+  company_id,
+  plan_code,
+  monthly_price_cents,
+  status,
+  access_enabled,
+  provider
+)
+select
+  company.id,
+  'pilot',
+  0,
+  'trialing',
+  true,
+  'manual'
+from public.companies company
+on conflict (company_id) do nothing;
+
 commit;
