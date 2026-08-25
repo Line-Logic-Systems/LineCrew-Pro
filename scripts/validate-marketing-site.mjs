@@ -57,7 +57,7 @@ for (const file of htmlFiles) {
     if (!html.includes('mailto:sales@linecrewpro.com?subject=LineCrew%20Pro%20Demo%20Request')) {
       fail(file, 'demo actions must address sales@linecrewpro.com with the approved subject');
     }
-    if (!html.includes('personalized%20demo') || !html.includes('Approximate%20active%20crews')) {
+    if (!html.includes('personalized%20demo') || !html.includes('Number%20of%20active%20crews')) {
       fail(file, 'demo email must include informative copy and qualification fields');
     }
   }
@@ -71,6 +71,9 @@ for (const [file, html] of [['index.html', home], ['pricing.html', pricing]]) {
   }
   if (!html.includes('LineCrew%20Pro%2041%2B%20Crew%20Information')) {
     fail(file, '41+ crew action must open its dedicated prewritten sales email');
+  }
+  if (!html.includes('operates%20more%20than%2040%20active%20crews') || !html.includes('Active%20crew%20count')) {
+    fail(file, '41+ crew email must use the approved concise custom-plan message');
   }
 }
 
