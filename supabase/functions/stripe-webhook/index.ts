@@ -70,6 +70,17 @@ function stripeId(value: unknown, prefix: string) {
   return clean.startsWith(prefix) ? clean : null;
 }
 
+async function stripeGet(path: string, stripeKey: string) {
+  const response = await fetch(`https://api.stripe.com/v1${path}`, {
+    headers: { Authorization: `Bearer ${stripeKey}` },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message || "Stripe request failed.");
+  }
+  return data;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "POST required." }, 405);
   let service: any = null;
@@ -78,7 +89,8 @@ Deno.serve(async (request) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-    if (!supabaseUrl || !serviceKey || !webhookSecret) {
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!supabaseUrl || !serviceKey || !webhookSecret || !stripeKey) {
       throw new Error("Webhook service is not fully configured.");
     }
 
@@ -95,7 +107,7 @@ Deno.serve(async (request) => {
       event.livemode,
       expectedLivemode(
         Deno.env.get("STRIPE_ENVIRONMENT"),
-        Deno.env.get("STRIPE_SECRET_KEY"),
+        stripeKey,
       ),
     );
 
@@ -147,10 +159,16 @@ Deno.serve(async (request) => {
       ).select("id").eq("id", companyId).maybeSingle();
       if (companyError) throw companyError;
       if (!company) throw new Error("Checkout company does not exist.");
+      const subscriptionId = stripeId(object.subscription, "sub_");
+      if (!customerId || !subscriptionId) {
+        throw new Error("Checkout Stripe identity is invalid.");
+      }
       const { data: prior, error: priorError } = await service.from(
         "company_subscriptions",
-      ).select("id,stripe_customer_id").eq("company_id", companyId)
-        .maybeSingle();
+      ).select("id,stripe_customer_id,stripe_subscription_id").eq(
+        "company_id",
+        companyId,
+      ).maybeSingle();
       if (priorError) throw priorError;
       if (
         prior?.stripe_customer_id && prior.stripe_customer_id !== customerId
@@ -159,17 +177,25 @@ Deno.serve(async (request) => {
           "Checkout customer does not own this company subscription.",
         );
       }
-      const subscriptionId = stripeId(object.subscription, "sub_");
-      // Checkout completion only links Stripe identities. Subscription events
-      // are the sole source of plan, price, status, and crew-limit changes, so
-      // a delayed Checkout event cannot roll newer subscription state back.
+      // Checkout completion links identifiers only when it cannot replace a
+      // different subscription. A delayed completion for an older Checkout
+      // must never roll the company back from a newer Stripe subscription.
       const link = {
         provider: "stripe",
         stripe_customer_id: customerId,
         stripe_subscription_id: subscriptionId,
         updated_at: new Date().toISOString(),
       };
-      if (prior) {
+      if (
+        prior?.stripe_subscription_id &&
+        prior.stripe_subscription_id !== subscriptionId
+      ) {
+        console.warn(
+          "Ignoring superseded Checkout subscription link",
+          prior.stripe_subscription_id,
+          subscriptionId,
+        );
+      } else if (prior) {
         const { error } = await service.from("company_subscriptions").update(
           link,
         ).eq("company_id", companyId);
@@ -191,73 +217,118 @@ Deno.serve(async (request) => {
       "customer.subscription.deleted",
     ].includes(event.type);
     if (subscriptionEvent) {
+      const subscriptionId = stripeId(object.id, "sub_");
+      if (!subscriptionId) {
+        throw new Error("Stripe subscription identity is invalid.");
+      }
+
+      // Stripe does not guarantee webhook delivery order, and Event.created has
+      // only one-second precision. Read the current canonical Subscription so
+      // two events created in the same second cannot roll plan/status backward.
+      const subscription = await stripeGet(
+        `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+        stripeKey,
+      );
+      const canonicalCustomerId = stripeId(subscription.customer, "cus_");
+      if (!canonicalCustomerId) {
+        throw new Error("Stripe subscription customer identity is invalid.");
+      }
+      if (customerId && canonicalCustomerId !== customerId) {
+        throw new Error(
+          "Webhook subscription customer changed between event and retrieval.",
+        );
+      }
+      const canonicalCompanyId = resolveCompanyId({
+        metadataCompanyId: subscription.metadata?.company_id,
+        customerOwnerCompanyId,
+      });
+      if (companyId && canonicalCompanyId && companyId !== canonicalCompanyId) {
+        throw new Error(
+          "Canonical Stripe subscription company does not match the event.",
+        );
+      }
+      companyId = canonicalCompanyId || companyId;
       if (!companyId) {
         throw new Error(
           "Stripe subscription is not linked to a LineCrew Pro company.",
         );
       }
-      const subscriptionId = stripeId(object.id, "sub_");
-      if (!customerId || !subscriptionId) {
-        throw new Error("Stripe subscription identity is invalid.");
-      }
+
       const { data: prior, error: priorError } = await service.from(
         "company_subscriptions",
       )
         .select(
-          "company_id,plan_code,past_due_since,stripe_customer_id,stripe_subscription_id,last_stripe_event_created",
+          "company_id,plan_code,status,past_due_since,stripe_customer_id,stripe_subscription_id,last_stripe_event_created",
         )
         .eq("company_id", companyId).maybeSingle();
       if (priorError) throw priorError;
       if (
-        prior?.stripe_customer_id && prior.stripe_customer_id !== customerId
+        prior?.stripe_customer_id &&
+        prior.stripe_customer_id !== canonicalCustomerId
       ) throw new Error("Stripe customer ownership changed unexpectedly.");
-      if (
-        prior?.stripe_subscription_id &&
-        prior.stripe_subscription_id !== subscriptionId
-      ) throw new Error("Stripe subscription ownership changed unexpectedly.");
 
-      if (!isStaleEvent(eventCreated, prior?.last_stripe_event_created)) {
-        const deleted = event.type === "customer.subscription.deleted";
-        const item = object.items?.data?.[0];
+      const differentStoredSubscription = Boolean(
+        prior?.stripe_subscription_id &&
+          prior.stripe_subscription_id !== subscriptionId,
+      );
+      const canReplaceCanceledSubscription = differentStoredSubscription &&
+        String(prior?.status || "").toLowerCase() === "canceled";
+
+      if (differentStoredSubscription && !canReplaceCanceledSubscription) {
+        // This signed event belongs to an older or duplicate subscription for
+        // the same customer. Keep it in the audit ledger without replacing the
+        // company's current subscription link or billing state.
+        console.warn(
+          "Ignoring superseded Stripe subscription event",
+          prior?.stripe_subscription_id,
+          subscriptionId,
+        );
+      } else if (
+        !isStaleEvent(eventCreated, prior?.last_stripe_event_created)
+      ) {
+        const deleted = String(subscription.status || "") === "canceled";
+        const item = subscription.items?.data?.[0];
         const priceId = stripeId(item?.price, "price_");
         const planCode = planForSubscriptionEvent(
-          event.type,
+          deleted
+            ? "customer.subscription.deleted"
+            : "customer.subscription.updated",
           priceId,
           Deno.env.get("BILLING_PLAN_PRICE_MAP"),
           prior?.plan_code,
         );
         const status = mapStatus(
-          String(object.status || (deleted ? "canceled" : "incomplete")),
+          String(subscription.status || (deleted ? "canceled" : "incomplete")),
         );
         const currentPeriodEndUnix = Number(
-          object.current_period_end || item?.current_period_end || 0,
+          subscription.current_period_end || item?.current_period_end || 0,
         );
-        const scheduledCancelUnix = Number(object.cancel_at || 0);
+        const scheduledCancelUnix = Number(subscription.cancel_at || 0);
         const cancelsAtPeriodEnd = !deleted &&
-          (object.cancel_at_period_end === true ||
+          (subscription.cancel_at_period_end === true ||
             (scheduledCancelUnix > 0 && currentPeriodEndUnix > 0 &&
               scheduledCancelUnix === currentPeriodEndUnix));
         const common = {
           company_id: companyId,
           provider: "stripe",
           plan_code: planCode,
-          stripe_customer_id: customerId,
+          stripe_customer_id: canonicalCustomerId,
           stripe_subscription_id: subscriptionId,
           status,
           access_enabled: accessForStatus(status),
           past_due_since: status === "past_due"
             ? (prior?.past_due_since || new Date().toISOString())
             : null,
-          current_period_start: object.current_period_start
-            ? new Date(object.current_period_start * 1000).toISOString()
+          current_period_start: subscription.current_period_start
+            ? new Date(subscription.current_period_start * 1000).toISOString()
             : item?.current_period_start
             ? new Date(item.current_period_start * 1000).toISOString()
             : null,
           current_period_end: currentPeriodEndUnix
             ? new Date(currentPeriodEndUnix * 1000).toISOString()
             : null,
-          trial_ends_at: object.trial_end
-            ? new Date(object.trial_end * 1000).toISOString()
+          trial_ends_at: subscription.trial_end
+            ? new Date(subscription.trial_end * 1000).toISOString()
             : null,
           cancel_at_period_end: cancelsAtPeriodEnd,
           last_stripe_event_created: eventCreated,
@@ -306,36 +377,9 @@ Deno.serve(async (request) => {
       }
     }
 
-    if (event.type === "invoice.payment_failed") {
-      if (!companyId) {
-        throw new Error(
-          "Failed invoice is not linked to a LineCrew Pro company.",
-        );
-      }
-      const { data: prior, error: priorError } = await service.from(
-        "company_subscriptions",
-      ).select("past_due_since,last_stripe_event_created").eq(
-        "company_id",
-        companyId,
-      ).maybeSingle();
-      if (priorError) throw priorError;
-      if (
-        prior && !isStaleEvent(eventCreated, prior.last_stripe_event_created)
-      ) {
-        const { error } = await service.from("company_subscriptions").update({
-          status: "past_due",
-          access_enabled: true,
-          past_due_since: prior.past_due_since || new Date().toISOString(),
-          last_stripe_event_created: eventCreated,
-          updated_at: new Date().toISOString(),
-        })
-          .eq("company_id", companyId).lte(
-            "last_stripe_event_created",
-            eventCreated,
-          );
-        if (error) throw error;
-      }
-    }
+    // Invoice events are audit-only. The latest canonical Subscription fetched
+    // for customer.subscription events is the only source of plan/status/access
+    // truth, so an out-of-order invoice cannot reactivate or mark an account due.
 
     // invoice.paid is intentionally audit-only. Subscription events remain the
     // source of truth so a final invoice cannot reactivate a canceled account.
