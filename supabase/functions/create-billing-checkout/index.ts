@@ -157,7 +157,14 @@ Deno.serve(async (request) => {
     params.set("subscription_data[metadata][plan_code]", planCode);
     params.set("allow_promotion_codes", "true");
 
-    const session = await stripeRequest("/checkout/sessions", params, stripeKey);
+    // Reuse the same Stripe response for retries or double-clicks so one
+    // company/plan cannot accidentally open two simultaneous subscriptions.
+    const session = await stripeRequest(
+      "/checkout/sessions",
+      params,
+      stripeKey,
+      `linecrew-checkout-${company.id}-${planCode}`,
+    );
     if (!session?.url) throw new Error("Stripe did not return a Checkout URL.");
     return json({ url: session.url, plan_code: planCode });
   } catch (error) {
