@@ -109,7 +109,12 @@ assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must a
 assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
 assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
 assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
-assert(assistant.includes('2026-08-23-workflows-v2'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('2026-08-25-admin-operations-v3'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('ADMIN OPERATIONS COACH'), 'AI assistant must include Admin operations-coach guidance.');
+assert(assistant.includes('ROLE OPERATING MODEL'), 'AI assistant must describe the complete company role model.');
+assert(assistant.includes('BILLING BATCHES AND JOB CLOSEOUT'), 'AI assistant must distinguish operational billing and closeout.');
+assert(assistant.includes('LINECREW PRO SUBSCRIPTION BILLING'), 'AI assistant must explain company subscription billing separately.');
+assert(assistant.includes('submitted_reports'), 'AI assistant context must include company-scoped review-queue signals.');
 for (const marker of [
   'Save & Import Authorized Units',
   'email-bound, one-time link',
