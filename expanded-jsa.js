@@ -59,6 +59,29 @@
     });
   }
 
+  // Supabase emits SIGNED_IN after signInWithPassword. Let that event perform
+  // the single app load so privileged accounts cannot race two MFA enrollments.
+  const loginButton = document.getElementById('loginBtn');
+  if (loginButton && typeof sb !== 'undefined') {
+    loginButton.onclick = async () => {
+      if (loginButton.disabled) return;
+      const email = document.getElementById('loginEmail')?.value.trim() || '';
+      const password = document.getElementById('loginPassword')?.value || '';
+      if (!email || !password) {
+        alert('Enter email and password.');
+        return;
+      }
+      loginButton.disabled = true;
+      loginButton.textContent = 'Signing In...';
+      const { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) {
+        loginButton.disabled = false;
+        loginButton.textContent = 'Sign In';
+        alert(error.message);
+      }
+    };
+  }
+
   const productionTile = document.getElementById('productionTile');
   const productionDescription = productionTile?.querySelector('.muted');
   if (productionDescription) {
