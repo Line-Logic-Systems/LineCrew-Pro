@@ -126,7 +126,7 @@ Deno.serve(async (request) => {
       throw new Error("Authentication required.");
     }
 
-    const { data: profile, error: profileError } = await userClient
+    const { data: profile, error: profileError } = await service
       .from("profiles")
       .select("company_id,role,active")
       .eq("id", userData.user.id)
@@ -134,8 +134,8 @@ Deno.serve(async (request) => {
     if (profileError || !profile || profile.active === false) {
       throw new Error("Active company profile required.");
     }
-    if (String(profile.role).toLowerCase() !== "admin") {
-      return json({ error: "Company Admin access required." }, 403);
+    if (!["owner", "admin"].includes(String(profile.role).toLowerCase())) {
+      return json({ error: "Company Owner or Admin access required." }, 403);
     }
 
     const { data: subscription, error: subscriptionError } = await service

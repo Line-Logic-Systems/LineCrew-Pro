@@ -1,12 +1,12 @@
 # LineCrew Pro Weekend Pilot Test
 
-Use this checklist for a clean-company, multi-person test. Record every failure with the role, screen, action, device and exact error text.
+Use this checklist only against the disposable LineCrew Pro Test environment. Never use it against production. Record every failure with the role, screen, action, device and exact error text.
 
 ## Before testers arrive
 
-- Confirm `https://app.linecrewpro.com` loads on desktop and mobile.
-- Confirm the latest `Independent Disaster Backup` succeeded and the Azure copy exists.
-- Confirm the production Supabase project is `ldgkyxuozbozgkvwzadg`.
+- Start the app from a non-production hostname or local test build and confirm it loads on desktop and mobile.
+- Confirm the browser connects only to the Test Supabase project `yvuxrqrdprquxypiffpa`.
+- Stop immediately if the browser connects to production project `ldgkyxuozbozgkvwzadg` or if the hostname is `app.linecrewpro.com`.
 - Use a fresh company/test dataset if the test is intended to simulate first-time onboarding.
 - Have separate test email accounts available for Owner, Admin, Superintendent, General Foreman and at least two Foremen.
 - Test at least one iPhone/Android-class phone and one desktop browser.

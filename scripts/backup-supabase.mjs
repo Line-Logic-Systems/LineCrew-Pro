@@ -9,34 +9,11 @@ const outRoot = process.env.BACKUP_DIR || 'backup-output';
 const excludedBuckets = new Set((process.env.BACKUP_EXCLUDE_BUCKETS || '').split(',').map((v) => v.trim()).filter(Boolean));
 if (!url || !secretKey) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
 
-export const REQUIRED_PUBLIC_TABLES = [
-  'app_error_events', 'audit_log', 'billing_export_attachments', 'billing_export_batches',
-  'billing_export_lines', 'companies', 'company_settings', 'contract_field_settings', 'contracts',
-  'crews', 'customers', 'daily_production_items', 'daily_production_unit_locations',
-  'daily_production_units', 'daily_report_attachments', 'daily_report_audit_events',
-  'daily_report_jsas', 'daily_report_units', 'daily_reports', 'employees',
-  'job_assignment_audit_events', 'job_leader_assignments', 'job_package_authorized_units',
-  'job_package_work_points', 'job_packages', 'jobs', 'jsa_upload_attachments', 'pilot_feedback',
-  'platform_support_users', 'price_book_items', 'price_books', 'profiles', 'report_units',
-  'storm_mode_assignments', 'support_access_requests', 'support_audit_events', 'team_invitations',
-  'timekeeping_employees', 'timekeeping_entries', 'timekeeping_entry_history',
-  'timekeeping_pay_period_audit', 'timekeeping_pay_periods', 'training_progress', 'training_videos',
-  'unit_prices', 'utility_packet_import_rows', 'utility_packet_imports', 'work_points',
-];
-
 const headers = { apikey: secretKey, Authorization: `Bearer ${secretKey}` };
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const out = path.join(outRoot, stamp);
 await fs.mkdir(out, { recursive: true });
 const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
-const manifest = {
-  format_version: 2,
-  created_at: new Date().toISOString(),
-  source_project: new URL(url).hostname.split('.')[0],
-  required_public_tables: REQUIRED_PUBLIC_TABLES,
-  excluded_storage_buckets: [...excludedBuckets].sort(),
-  tables: {}, storage: {}, errors: [],
-};
 
 async function responseBody(response) {
   const text = await response.text();
@@ -51,6 +28,28 @@ async function jsonRequest(base, pathname, options = {}) {
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${JSON.stringify(body)}`);
   return body;
 }
+
+const inventoryRows = await jsonRequest(url, '/rest/v1/rpc/backup_public_table_inventory', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+});
+if (!Array.isArray(inventoryRows) || !inventoryRows.length) {
+  throw new Error('The server returned no public-table backup inventory');
+}
+export const REQUIRED_PUBLIC_TABLES = [...new Set(inventoryRows.map((row) => row.table_name))]
+  .filter((name) => typeof name === 'string' && /^[a-z0-9_]+$/.test(name))
+  .sort();
+if (REQUIRED_PUBLIC_TABLES.length !== inventoryRows.length) {
+  throw new Error('The public-table backup inventory contained an invalid or duplicate table name');
+}
+
+const manifest = {
+  format_version: 2,
+  created_at: new Date().toISOString(),
+  source_project: new URL(url).hostname.split('.')[0],
+  required_public_tables: REQUIRED_PUBLIC_TABLES,
+  excluded_storage_buckets: [...excludedBuckets].sort(),
+  tables: {}, storage: {}, errors: [],
+};
 
 for (const table of REQUIRED_PUBLIC_TABLES) {
   try {

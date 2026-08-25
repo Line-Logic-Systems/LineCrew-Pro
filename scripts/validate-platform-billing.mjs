@@ -10,6 +10,7 @@ const requiredFiles = [
   'supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql',
   'supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql',
   'supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql',
+  'supabase/migrations/20260825133736_harden_subscription_entitlements.sql',
   'supabase/functions/create-billing-checkout/index.ts',
   'supabase/functions/create-billing-portal/index.ts',
   'supabase/functions/create-plan-upgrade/index.ts',
@@ -36,6 +37,7 @@ const crewPolicy = fs.readFileSync('supabase/migrations/20260818020000_crew_tier
 const crewAutomation = fs.readFileSync('supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql', 'utf8');
 const crewRpcLockdown = fs.readFileSync('supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql', 'utf8');
 const crewLimitMigration = fs.readFileSync('supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql', 'utf8');
+const entitlementHardening = fs.readFileSync('supabase/migrations/20260825133736_harden_subscription_entitlements.sql', 'utf8');
 const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/index.ts', 'utf8');
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
 const upgrade = fs.readFileSync('supabase/functions/create-plan-upgrade/index.ts', 'utf8');
@@ -196,9 +198,9 @@ for (const marker of [
 if (!checkout.includes('BILLING_PLAN_PRICE_MAP')) throw new Error('Checkout must use the server-side BILLING_PLAN_PRICE_MAP.');
 if (checkout.includes('BILLING_ALLOWED_PRICE_IDS')) throw new Error('Checkout still contains the older client-selected Price ID allowlist path.');
 if (!checkout.includes('planPriceMap.get(planCode)')) throw new Error('Checkout must bind the company assigned plan to its Stripe Price server-side.');
-if (!checkout.includes('String(profile.role).toLowerCase() !== "admin"')) throw new Error('Checkout must require company Admin role.');
+if (!checkout.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner or Admin role.');
 if (!checkout.includes('already has a Stripe subscription')) throw new Error('Checkout must guard against duplicate live subscriptions.');
-if (!portal.includes('String(profile.role).toLowerCase() !== "admin"')) throw new Error('Billing portal must require company Admin role.');
+if (!portal.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Billing portal must require company Owner or Admin role.');
 if (!portal.includes('/billing.html?billing=portal-return')) throw new Error('Billing portal must return to the contractor billing page.');
 for (const marker of ['STRIPE_MANAGE_PORTAL_CONFIGURATION_ID','linecrew_manage_only_v1','subscription_update','update?.enabled !== true','params.set("configuration", portalConfiguration)']) {
   if (!portal.includes(marker)) throw new Error(`Manage Billing portal is missing required safety marker: ${marker}`);
@@ -210,7 +212,7 @@ for (const marker of [
   'update?.proration_behavior === "always_invoice"',
   'Exactly one active Stripe upgrade-only Portal configuration must be provisioned.',
   'BILLING_PLAN_PRICE_MAP',
-  'String(profile.role).toLowerCase() !== "admin"',
+  '["owner", "admin"].includes(String(profile.role).toLowerCase())',
   'subscription.customer !== stored.stripe_customer_id',
   'items.length !== 1',
   'planOrder.indexOf(targetPlanCode) <= planOrder.indexOf(currentPlan)',
@@ -238,9 +240,30 @@ if (!webhookTests.includes('older events are stale')) throw new Error('Out-of-or
 if (!webhookTests.includes('customer-metadata mismatch rejects')) throw new Error('Stripe customer/company ownership regression coverage is missing.');
 if (!webhookTests.includes('mismatched livemode rejects')) throw new Error('Stripe live/test separation regression coverage is missing.');
 if (!upgrade.includes('if (configuredId)') || !upgrade.includes('configuration ID is invalid')) throw new Error('Upgrade portal must reject a malformed explicit configuration ID.');
-const authCheckPosition = upgrade.indexOf('String(profile.role).toLowerCase() !== "admin"');
+const authCheckPosition = upgrade.indexOf('["owner", "admin"].includes(String(profile.role).toLowerCase())');
 const portalResolutionPosition = upgrade.indexOf('const portalConfiguration = await resolveUpgradePortalConfiguration');
 if (authCheckPosition < 0 || portalResolutionPosition < authCheckPosition) throw new Error('Upgrade portal contacts Stripe before verifying the company Admin.');
+
+for (const marker of [
+  'revoke all on function public.set_billing_export_batch_status(uuid,text)',
+  'revoke update on table public.companies from authenticated',
+  "when 'pilot' then 5",
+  "now() + interval '14 days'",
+  'v_subscription_found',
+  "v_status = 'past_due'",
+  "now() - interval '7 days'",
+  "v_role not in ('owner','admin')",
+]) {
+  if (!entitlementHardening.toLowerCase().includes(marker.toLowerCase())) {
+    throw new Error(`Subscription entitlement hardening is missing ${marker}`);
+  }
+}
+if (!webhookLogic.includes('return ["active", "trialing", "past_due"].includes(status)')) {
+  throw new Error('Stripe access helper must deny incomplete and terminal statuses.');
+}
+if (!webhookTests.includes('incomplete access is disabled')) {
+  throw new Error('Stripe incomplete-access regression coverage is missing.');
+}
 
 for (const [name, verifyJwt] of [
   ['stripe-webhook', false],

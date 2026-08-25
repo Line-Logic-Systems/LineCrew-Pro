@@ -205,7 +205,7 @@ Deno.serve(async (request) => {
           company_id: companyId,
           ...link,
           status: "incomplete",
-          access_enabled: true,
+          access_enabled: false,
         });
         if (error) throw error;
       }
@@ -368,6 +368,26 @@ Deno.serve(async (request) => {
           applied = true;
         }
         if (applied) {
+          // companies.subscription_status is retained for UI/backward
+          // compatibility only. company_subscriptions is the access source of
+          // truth enforced by the database pre-request hook.
+          const projectedCompanyStatus = status === "active"
+            ? "active"
+            : status === "trialing"
+            ? "trial"
+            : status === "past_due"
+            ? "active"
+            : "suspended";
+          const { error: projectionError } = await service.from("companies")
+            .update({
+              subscription_status: projectedCompanyStatus,
+              subscription_expires_at: status === "trialing"
+                ? common.trial_ends_at
+                : null,
+            })
+            .eq("id", companyId);
+          if (projectionError) throw projectionError;
+
           const { error: crewLimitError } = await service.rpc(
             "recalculate_company_crew_overage",
             { p_company_id: companyId },

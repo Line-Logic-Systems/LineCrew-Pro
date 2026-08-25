@@ -34,6 +34,10 @@ const mustExist = [
   'supabase/migrations/20260824190000_enforce_privileged_mfa_without_deadline.sql',
   'supabase/migrations/20260824070000_append_only_job_closeout_history.sql',
   'supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql',
+  'supabase/migrations/20260825143000_harden_report_and_final_billing_controls.sql',
+  'supabase/migrations/20260825150000_close_direct_rest_authorization_gaps.sql',
+  'supabase/migrations/20260825151500_dynamic_backup_table_inventory.sql',
+  'supabase/migrations/20260825152000_restore_owner_job_rpc_access.sql',
   'number-input-polish.js',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
@@ -68,6 +72,11 @@ const privilegedMfaFoundation = fs.readFileSync('supabase/migrations/20260824063
 const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824190000_enforce_privileged_mfa_without_deadline.sql', 'utf8');
 const jobCloseoutHistory = fs.readFileSync('supabase/migrations/20260824070000_append_only_job_closeout_history.sql', 'utf8');
 const dailyReportScaleIntegrity = fs.readFileSync('supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql', 'utf8');
+const reportAndFinalBillingHardening = fs.readFileSync('supabase/migrations/20260825143000_harden_report_and_final_billing_controls.sql', 'utf8');
+const directRestHardening = fs.readFileSync('supabase/migrations/20260825150000_close_direct_rest_authorization_gaps.sql', 'utf8');
+const dynamicBackupInventory = fs.readFileSync('supabase/migrations/20260825151500_dynamic_backup_table_inventory.sql', 'utf8');
+const ownerJobAccess = fs.readFileSync('supabase/migrations/20260825152000_restore_owner_job_rpc_access.sql', 'utf8');
+const backupScript = fs.readFileSync('scripts/backup-supabase.mjs', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const appPolish = fs.readFileSync('app-polish.js', 'utf8');
 const packetParser = fs.readFileSync('supabase/functions/parse-utility-job-packet/index.ts', 'utf8');
@@ -386,6 +395,29 @@ for (const marker of [
   'revoke all on function public.delete_draft_daily_report(uuid) from public, anon'
 ]) assert(foremanDraftDeletion.includes(marker), `Foreman draft-deletion marker missing: ${marker}`);
 assert(index.includes("currentUserRole() === 'foreman' && report.foreman_id === currentProfile.id"), 'Foremen must see Delete Draft only on their own reports.');
+for (const marker of [
+  'auth.uid() = v_report_creator',
+  'report.submitted_at is null',
+  'get_daily_report_unit_locations_v2',
+  "'TRANSFER'::text",
+  "b.status not in ('void', 'draft')",
+  'Only the Company Owner can override unresolved Final Bill blockers.'
+]) assert(reportAndFinalBillingHardening.includes(marker), `Report/final-billing hardening is missing: ${marker}`);
+assert(!reportAndFinalBillingHardening.includes('right(upper'), 'Transfer reconciliation must not infer transfers from a unit-code suffix.');
+for (const marker of [
+  'price_book_items_actual_pricing_select',
+  'unit_prices_actual_pricing_select',
+  'daily_report_units_actual_pricing_select',
+  'revoke update, delete on public.jobs from authenticated',
+  "linecrew_has_capability('job_packages')",
+  'linecrew_foreman_has_job_assignment(package.job_id)'
+]) assert(directRestHardening.includes(marker), `Direct REST/RPC hardening is missing: ${marker}`);
+assert(dynamicBackupInventory.includes('backup_public_table_inventory'), 'Backups need a server-generated public-table inventory.');
+assert(dynamicBackupInventory.includes('to service_role'), 'Only service_role may enumerate the backup table inventory.');
+assert(backupScript.includes("/rest/v1/rpc/backup_public_table_inventory"), 'The backup job must request its table inventory from the database.');
+assert(!backupScript.includes("'app_error_events', 'audit_log'"), 'The backup job must not rely on a hardcoded table list.');
+assert(ownerJobAccess.includes("not in ('owner', 'admin', 'gf')"), 'Owner must retain update_job access after direct REST writes are revoked.');
+assert(ownerJobAccess.includes("not in ('owner', 'admin')"), 'Owner must retain delete_job access after direct REST writes are revoked.');
 
 for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert(roleMigration.includes(`'${role}'`), `Role migration is missing ${role}.`);
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');

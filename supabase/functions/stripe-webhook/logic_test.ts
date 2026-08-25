@@ -132,9 +132,13 @@ Deno.test("mismatched livemode rejects", () =>
     () => assertEventEnvironment(true, false),
     "live event accepted in test",
   ));
-Deno.test("unpaid maps to past_due", () =>
-  equal(mapStatus("unpaid"), "past_due"));
+Deno.test("unpaid maps to a non-access status", () =>
+  equal(mapStatus("unpaid"), "paused"));
 Deno.test("canceled access is disabled", () =>
   equal(accessForStatus("canceled"), false));
+Deno.test("incomplete access is disabled", () =>
+  equal(accessForStatus("incomplete"), false));
+Deno.test("past due remains eligible only for the database grace window", () =>
+  equal(accessForStatus("past_due"), true));
 Deno.test("yearly amount normalizes monthly", () =>
   equal(normalizedMonthlyAmount(120000, "year", 1), 10000));

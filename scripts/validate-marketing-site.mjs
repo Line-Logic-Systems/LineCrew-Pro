@@ -4,6 +4,7 @@ import { extname, join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const docsDir = join(root, 'docs');
 const htmlFiles = readdirSync(docsDir).filter((file) => extname(file) === '.html').sort();
+const markdownFiles = readdirSync(docsDir).filter((file) => extname(file) === '.md').sort();
 const failures = [];
 
 const requiredCanonical = new Set([
@@ -18,6 +19,18 @@ const requiredCanonical = new Set([
 ]);
 
 const fail = (file, message) => failures.push(`${file}: ${message}`);
+
+if (existsSync(join(docsDir, '.nojekyll'))) {
+  fail('.nojekyll', 'must not bypass the Jekyll exclusions that protect internal runbooks');
+}
+const pagesConfig = existsSync(join(docsDir, '_config.yml'))
+  ? readFileSync(join(docsDir, '_config.yml'), 'utf8')
+  : '';
+for (const file of markdownFiles) {
+  if (!pagesConfig.includes(`- ${file}`)) {
+    fail('_config.yml', `must exclude internal Markdown from the public site: ${file}`);
+  }
+}
 
 for (const file of htmlFiles) {
   const html = readFileSync(join(docsDir, file), 'utf8');
