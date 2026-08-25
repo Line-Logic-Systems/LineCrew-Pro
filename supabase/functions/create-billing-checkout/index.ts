@@ -56,6 +56,13 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "POST required." }, 405);
 
   try {
+    const payload = await request.json().catch(() => ({})) as Record<string, unknown>;
+    const requestedPlan = String(payload.requested_plan || "").trim().toLowerCase();
+    const allowedRequestedPlans = new Set(["starter", "business", "pro", "enterprise"]);
+    if (requestedPlan && !allowedRequestedPlans.has(requestedPlan)) {
+      return json({ error: "Choose a valid LineCrew Pro plan." }, 400);
+    }
+
     const auth = request.headers.get("Authorization");
     if (!auth) throw new Error("Authentication required.");
 
@@ -102,7 +109,14 @@ Deno.serve(async (request) => {
       .maybeSingle();
     if (existingError) throw existingError;
 
-    const planCode = String(existing?.plan_code || "").trim().toLowerCase();
+    if (
+      requestedPlan && existing?.stripe_subscription_id &&
+      !["canceled"].includes(String(existing.status || "").toLowerCase())
+    ) {
+      return json({ error: "This company already has a Stripe subscription. Use Manage Billing instead." }, 409);
+    }
+
+    const planCode = requestedPlan || String(existing?.plan_code || "").trim().toLowerCase();
     const priceId = planPriceMap.get(planCode);
     if (!planCode || !priceId) {
       throw new Error("This company does not yet have a Stripe-enabled plan assigned by LineCrew Pro support.");
@@ -137,10 +151,19 @@ Deno.serve(async (request) => {
         provider: "stripe",
         stripe_customer_id: customerId,
         status: "incomplete",
-        access_enabled: true,
+        access_enabled: requestedPlan ? false : true,
         updated_at: new Date().toISOString(),
       }, { onConflict: "company_id" });
       if (saveCustomerError) throw saveCustomerError;
+    } else if (requestedPlan) {
+      const { error: pendingPlanError } = await serviceClient.from("company_subscriptions").update({
+        plan_code: planCode,
+        provider: "stripe",
+        status: "incomplete",
+        access_enabled: false,
+        updated_at: new Date().toISOString(),
+      }).eq("company_id", company.id);
+      if (pendingPlanError) throw pendingPlanError;
     }
 
     const params = new URLSearchParams();
