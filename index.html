@@ -1475,6 +1475,12 @@ Owners, Admins, Superintendents, GFs and Foremen
 Morning job safety briefings
 </span>
 </div>
+<div class="metric hidden" id="billingTile">
+<strong>Company Billing</strong>
+<span class="muted">
+Manage plans, payment methods and subscription status
+</span>
+</div>
 </div>
 <div id="dashboardReviewAlert" class="card hidden" role="status">
 <div class="section-header">
@@ -3172,9 +3178,16 @@ const $ = id =>
 document.getElementById(id);
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
+const requestedBillingReturn = new URLSearchParams(window.location.search).get('billing') === '1';
 const PAID_SIGNUP_PLANS = Object.freeze({starter:'Starter',business:'Business',pro:'Pro',enterprise:'Enterprise'});
 let requestedSignupPlan = String(new URLSearchParams(window.location.search).get('plan') || '').trim().toLowerCase();
+if(!requestedSignupPlan){
+try{ requestedSignupPlan = String(sessionStorage.getItem('linecrew_requested_plan') || '').trim().toLowerCase(); }catch{}
+}
 if(!Object.prototype.hasOwnProperty.call(PAID_SIGNUP_PLANS, requestedSignupPlan)) requestedSignupPlan = '';
+if(requestedSignupPlan){
+try{ sessionStorage.setItem('linecrew_requested_plan', requestedSignupPlan); }catch{}
+}
 let pendingMfaFactor = null;
 let continueAfterMfa = null;
 if(!/^[A-Za-z0-9_-]{43}$/.test(pendingInviteToken)){
@@ -3768,6 +3781,10 @@ show('authPage');
 return;
 }
 }
+if(requestedBillingReturn && ['owner','admin'].includes(String(mfaBootstrap?.role || mfaBootstrap?.user_role || '').toLowerCase())){
+window.location.replace('/billing.html');
+return;
+}
 const {
 data:isSuspended,
 error:accessStatusError
@@ -3814,17 +3831,18 @@ return;
 }
 if(requestedSignupPlan){
 const selectedPlan = requestedSignupPlan;
-requestedSignupPlan = '';
-const cleanSignupUrl = new URL(window.location.href);
-cleanSignupUrl.searchParams.delete('plan');
-window.history.replaceState(null, '', cleanSignupUrl.pathname + cleanSignupUrl.search + cleanSignupUrl.hash);
 const {data:checkout,error:checkoutError}=await sb.functions.invoke(
 'create-billing-checkout',
 {body:{requested_plan:selectedPlan}}
 );
 if(checkoutError || checkout?.error || !checkout?.url){
-alert('Your company is ready, but secure checkout could not be opened. Open Billing to try again.');
+alert('Your company is ready, but secure checkout could not be opened. Use Company Billing on the dashboard to try again.');
 }else{
+requestedSignupPlan = '';
+try{ sessionStorage.removeItem('linecrew_requested_plan'); }catch{}
+const cleanSignupUrl = new URL(window.location.href);
+cleanSignupUrl.searchParams.delete('plan');
+window.history.replaceState(null, '', cleanSignupUrl.pathname + cleanSignupUrl.search + cleanSignupUrl.hash);
 window.location.assign(checkout.url);
 return;
 }
@@ -3907,6 +3925,7 @@ String(profile.role || 'foreman').toLowerCase() === 'employee'
 ? 'foreman'
 : profile.role;
 $('completedJobsTile').classList.toggle('hidden', !userCanViewCompletedJobs());
+$('billingTile').classList.toggle('hidden', !userIsCompanyAdmin());
 $('assistantLauncher').classList.toggle('hidden', !userCanUseAssistant());
 if(!userCanUseAssistant()) $('assistantPanel').classList.add('hidden');
 $('adminNotice').classList.toggle('hidden', !userHasAnyCompanyControls());
@@ -3914,6 +3933,10 @@ await Promise.all([
 loadDashboardReviewAlert(),
 loadCompanyOnboarding()
 ]);
+if(requestedBillingReturn && userIsCompanyAdmin()){
+window.location.replace('/billing.html');
+return;
+}
 const savedState = window.history.state;
 if(
 savedState?.lineCrewApp &&
@@ -4167,6 +4190,9 @@ if(event.target === $('pilotFeedbackDialog')) closePilotFeedback();
 /* SAFETY / JSA */
 $('safetyTile').onclick = async () => {
 await navigateToAppPage('safetyPage');
+};
+$('billingTile').onclick = () => {
+window.location.assign('/billing.html');
 };
 $('backFromSafety').onclick = () => returnToDashboard();
 $('refreshSafetyBtn').onclick = loadSafetyJsas;

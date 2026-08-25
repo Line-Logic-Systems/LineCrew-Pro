@@ -219,7 +219,7 @@ Deno.serve(async (request) => {
       throw new RequestError("Authentication required.", 401);
     }
 
-    const { data: profile, error: profileError } = await userClient
+    const { data: profile, error: profileError } = await service
       .from("profiles")
       .select("company_id,role,active")
       .eq("id", userData.user.id)
@@ -227,12 +227,12 @@ Deno.serve(async (request) => {
     if (profileError || !profile || profile.active === false) {
       throw new RequestError("Active company profile required.", 403);
     }
-    if (String(profile.role).toLowerCase() !== "admin") {
-      throw new RequestError("Company Admin access required.", 403);
+    if (!["owner", "admin"].includes(String(profile.role).toLowerCase())) {
+      throw new RequestError("Company Owner or Admin access required.", 403);
     }
 
     // Do not make any Stripe request until the caller is proven to be an
-    // active company Admin. Configuration discovery can expose account state.
+    // active company Owner/Admin. Configuration discovery can expose account state.
     const portalConfiguration = await resolveUpgradePortalConfiguration(
       configuredPortalId,
       stripeKey,

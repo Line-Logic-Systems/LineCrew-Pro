@@ -85,17 +85,17 @@ Deno.serve(async (request) => {
     const { data: userData, error: userError } = await userClient.auth.getUser();
     if (userError || !userData.user) throw new Error("Authentication required.");
 
-    const { data: profile, error: profileError } = await userClient
+    const { data: profile, error: profileError } = await serviceClient
       .from("profiles")
       .select("company_id,role,active")
       .eq("id", userData.user.id)
       .single();
     if (profileError || !profile || profile.active === false) throw new Error("Active company profile required.");
-    if (String(profile.role).toLowerCase() !== "admin") {
-      return json({ error: "Company Admin access required." }, 403);
+    if (!["owner", "admin"].includes(String(profile.role).toLowerCase())) {
+      return json({ error: "Company Owner or Admin access required." }, 403);
     }
 
-    const { data: company, error: companyError } = await userClient
+    const { data: company, error: companyError } = await serviceClient
       .from("companies")
       .select("id,name,contact_email")
       .eq("id", profile.company_id)
@@ -151,7 +151,7 @@ Deno.serve(async (request) => {
         provider: "stripe",
         stripe_customer_id: customerId,
         status: "incomplete",
-        access_enabled: requestedPlan ? false : true,
+        access_enabled: false,
         updated_at: new Date().toISOString(),
       }, { onConflict: "company_id" });
       if (saveCustomerError) throw saveCustomerError;

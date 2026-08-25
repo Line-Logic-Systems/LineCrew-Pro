@@ -42,13 +42,13 @@ export function mapStatus(status: string) {
     ["active", "trialing", "past_due", "paused", "canceled", "incomplete"]
       .includes(status)
   ) return status;
-  if (status === "unpaid") return "past_due";
+  if (status === "unpaid") return "paused";
   if (status === "incomplete_expired") return "canceled";
   return "incomplete";
 }
 
 export function accessForStatus(status: string) {
-  return ["active", "trialing", "past_due", "incomplete"].includes(status);
+  return ["active", "trialing", "past_due"].includes(status);
 }
 
 export function normalizedMonthlyAmount(
