@@ -481,6 +481,9 @@ for (const marker of [
 
 assert(expandedJsa.includes("loginButton.textContent = 'Signing In...'"), 'Sign-in must prevent duplicate submissions while authentication is running.');
 assert(expandedJsa.includes("sb.auth.signInWithPassword({ email, password })"), 'The single-flight sign-in guard must authenticate through Supabase.');
+assert(expandedJsa.includes('const resetLoginFormState = () => {'), 'Auth UI must provide a shared login-state reset routine.');
+assert(expandedJsa.includes("event === 'SIGNED_OUT'"), 'The auth listener must reset the login UI after sign-out.');
+assert(index.match(/window\.resetLineCrewLoginFormState\?\.\(\);/g)?.length >= 2, 'Explicit and event-driven sign-out paths must both reset the login UI.');
 const guardedLoginHandler = expandedJsa.slice(
   expandedJsa.indexOf('loginButton.onclick = async () => {'),
   expandedJsa.indexOf('const productionTile', expandedJsa.indexOf('loginButton.onclick = async () => {'))
