@@ -95,6 +95,7 @@ Deploy these Edge Functions only after the database migration exists in the targ
 - `create-billing-portal`
 - `create-plan-upgrade`
 - `stripe-webhook`
+- `capture-crew-usage` (guarded external-scheduler fallback)
 
 Set these Supabase Edge Function secrets/config values:
 
@@ -105,6 +106,7 @@ Set these Supabase Edge Function secrets/config values:
 - `BILLING_PLAN_PRICE_MAP` — JSON object mapping LineCrew Pro plan codes to Stripe Price IDs.
 - `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated normal Manage Billing Portal. If omitted, the server discovers exactly one active configuration labeled `linecrew_purpose=linecrew_manage_only_v1`.
 - `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated Stripe Customer Portal configuration used only by the upgrade-confirmation flow. If omitted, the server discovers exactly one active configuration labeled with metadata `linecrew_purpose=linecrew_upgrade_only_v1` and otherwise fails closed.
+- `CREW_USAGE_CRON_SECRET` — a separate random secret required by the optional `capture-crew-usage` Edge Function in addition to its Supabase JWT gateway check.
 
 Example shape only:
 
@@ -179,13 +181,32 @@ If Stripe retries an event:
 
 `checkout.session.completed` links identifiers but does not blindly mark the company active. Subscription events remain the source of truth for actual subscription state.
 
-For subscription events, the webhook resolves the LineCrew Pro plan from the subscription's current Stripe Price ID using `BILLING_PLAN_PRICE_MAP`. Customer Portal plan changes do not rewrite old subscription metadata, so metadata alone must never determine the new crew limit. An unmapped Stripe Price fails closed and is retried rather than silently assigning the wrong plan.
+For every subscription event, the webhook retrieves the current canonical Subscription from Stripe and resolves the LineCrew Pro plan from that current Stripe Price ID using `BILLING_PLAN_PRICE_MAP`. This is required because Stripe does not guarantee delivery order and Event `created` timestamps have only one-second precision. Customer Portal plan changes do not rewrite old subscription metadata, so metadata alone must never determine the new crew limit. An unmapped Stripe Price fails closed and is retried rather than silently assigning the wrong plan.
 
-`invoice.payment_failed` marks the account `past_due` but preserves pilot/grace access. `invoice.paid` is audit-only and does not blindly reactivate a canceled or paused subscription. `customer.subscription.updated` remains the authoritative state update.
+Invoice events are audit-only and cannot change stored plan, status, or access. `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted` all reconcile from Stripe's latest Subscription state. This prevents a delayed invoice or same-second event from reactivating, canceling, or downgrading the wrong state.
 
 The webhook accepts both older top-level subscription period timestamps and the newer item-level period timestamps so the billing foundation is less sensitive to Stripe API-version changes.
 
-## 8. Active crew enforcement
+## 8. Daily crew-usage schedule
+
+The database triggers capture every in-day crew or Storm Mode change. A trusted daily job is still required so a company that leaves the same over-limit crews active for several days accumulates one crew-usage row per UTC date.
+
+Before production billing is enabled:
+
+1. In Supabase, enable the Cron integration (`pg_cron`).
+2. Create a SQL Cron job named `linecrew-daily-crew-usage`.
+3. Schedule it for `50 23 * * *` (23:50 UTC daily).
+4. Use this SQL command:
+
+```sql
+select public.capture_all_company_crew_usage(current_date);
+```
+
+5. Run it once manually and confirm the Cron history succeeds and today's `company_crew_usage_daily` rows exist.
+
+The job runs inside Postgres as a trusted database job. Do not grant the three crew-usage maintenance RPCs back to `authenticated`; company users must never be able to supply another company's UUID. The `capture-crew-usage` Edge Function is only a guarded fallback for an external scheduler and requires both a valid Supabase JWT and `x-linecrew-cron-secret`.
+
+## 13. Active crew enforcement
 
 Standard plans are enforced in Postgres, not only in the browser:
 
@@ -198,7 +219,7 @@ Inactive crews remain stored for job, report, employee, and audit history. When 
 
 If a manually processed downgrade leaves a company above its new limit, LineCrew Pro preserves all data and existing access, reports the over-limit state, and blocks additional crew activation until the company deactivates crews or upgrades again. General Customer Portal plan switching remains off. Company Admins use the LineCrew Pro upgrade cards, which permit only a move to a higher plan; payment-method changes and cancellation remain available in the normal portal.
 
-## 9. Current access policy
+## 13. Current access policy
 
 Current billing-foundation behavior:
 - existing companies are seeded as `pilot`, `trialing`, access enabled
@@ -213,7 +234,7 @@ The production app does **not** yet enforce this billing value. That omission is
 
 Before hard-blocking contractor sign-in, choose a grace/dunning policy for past-due accounts. A practical first-launch policy is usually a grace period rather than immediate field lockout, because crews may need continued access to safety and production records while an office payment issue is resolved.
 
-## 10. What is intentionally not automatic yet
+## 13. What is intentionally not automatic yet
 
 The branch does not silently block the existing production app. Wiring `access_enabled=false` into `index.html` should be done as a separate reviewed release only after:
 
@@ -229,7 +250,7 @@ The branch does not silently block the existing production app. Wiring `access_e
 
 This sequence prevents a billing configuration mistake from becoming a field-operations outage.
 
-## 11. Recommended B2B plan setup
+## 13. Recommended B2B plan setup
 
 LineCrew Pro can support negotiated contractor pricing without exposing raw Stripe configuration to users.
 
@@ -243,7 +264,7 @@ A simple first commercial workflow is:
 
 For customer-specific negotiated prices, create the needed Stripe Price and map an internal plan code to it server-side. No Stripe secret or Price ID needs to appear in the browser.
 
-## 12. Safe test order
+## 13. Safe test order
 
 1. Apply all five billing migrations listed in section 1, in filename order, to the disposable **LineCrew Pro Test** project only.
 2. Add one test Auth user to `platform_owners`.
@@ -265,6 +286,7 @@ For customer-specific negotiated prices, create the needed Stripe Price and map 
 18. Create a dedicated sandbox Portal configuration labeled `linecrew_purpose=linecrew_upgrade_only_v1` that permits price changes only, uses `always_invoice` proration, and includes the Starter, Business, Pro, and Enterprise monthly products. Optionally save its ID as `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`.
 19. Use the billing page to upgrade the test subscription and confirm Stripe shows the exact higher plan and proration before confirmation.
 20. Confirm the billing page updates its plan, price, and active-crew limit from the new Stripe Price ID after the webhook arrives.
+21. In Test, run `select public.capture_all_company_crew_usage(current_date);` as a trusted database/service job and confirm today's crew-usage rows are created; do not grant the RPCs to company users.
 21. Confirm Starter accepts active crews 1–5, rejects active crew 6, and still permits an inactive historical crew.
 22. Re-run the two-company isolation test after the migration.
 23. Only after all of the above should a production rollout and app-access gate be prepared.
