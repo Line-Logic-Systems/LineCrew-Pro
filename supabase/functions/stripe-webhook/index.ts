@@ -177,7 +177,7 @@ Deno.serve(async (request) => {
           "Checkout customer does not own this company subscription.",
         );
       }
-      // Checkout completion links identifiers only when it cannot replace a
+      // Checkout completion only links Stripe identities when it cannot replace a
       // different subscription. A delayed completion for an older Checkout
       // must never roll the company back from a newer Stripe subscription.
       const link = {
