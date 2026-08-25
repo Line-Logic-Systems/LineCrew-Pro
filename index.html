@@ -1376,6 +1376,7 @@ Create a new company or join an existing company.
 </div>
 <div id="createCompanyCard" class="card">
 <h2>Create Company</h2>
+<p id="selectedPlanNotice" class="muted hidden"></p>
 <label>Your Name</label>
 <input id="createAdminName">
 <label>Company Name</label>
@@ -3171,6 +3172,9 @@ const $ = id =>
 document.getElementById(id);
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
+const PAID_SIGNUP_PLANS = Object.freeze({starter:'Starter',business:'Business',pro:'Pro',enterprise:'Enterprise'});
+let requestedSignupPlan = String(new URLSearchParams(window.location.search).get('plan') || '').trim().toLowerCase();
+if(!Object.prototype.hasOwnProperty.call(PAID_SIGNUP_PLANS, requestedSignupPlan)) requestedSignupPlan = '';
 let pendingMfaFactor = null;
 let continueAfterMfa = null;
 if(!/^[A-Za-z0-9_-]{43}$/.test(pendingInviteToken)){
@@ -3193,6 +3197,11 @@ $('signupEmail').value = pendingInviteEmail;
 $('createCompanyCard').classList.toggle('hidden', invited);
 $('joinCompanyCard').classList.toggle('hidden', invited);
 $('acceptInvitationCard').classList.add('hidden');
+const planNotice = $('selectedPlanNotice');
+planNotice.classList.toggle('hidden', !requestedSignupPlan || invited);
+if(requestedSignupPlan && !invited){
+planNotice.textContent = PAID_SIGNUP_PLANS[requestedSignupPlan] + ' selected. After creating your company, you will continue to secure Stripe Checkout.';
+}
 }
 function privilegedRoleRequiresMfa(profile){
 return profile?.requires_mfa === true ||
@@ -3803,6 +3812,23 @@ window.history.replaceState(null, '', window.location.href);
 show('setupPage');
 return;
 }
+if(requestedSignupPlan){
+const selectedPlan = requestedSignupPlan;
+requestedSignupPlan = '';
+const cleanSignupUrl = new URL(window.location.href);
+cleanSignupUrl.searchParams.delete('plan');
+window.history.replaceState(null, '', cleanSignupUrl.pathname + cleanSignupUrl.search + cleanSignupUrl.hash);
+const {data:checkout,error:checkoutError}=await sb.functions.invoke(
+'create-billing-checkout',
+{body:{requested_plan:selectedPlan}}
+);
+if(checkoutError || checkout?.error || !checkout?.url){
+alert('Your company is ready, but secure checkout could not be opened. Open Billing to try again.');
+}else{
+window.location.assign(checkout.url);
+return;
+}
+}
 const {
 data:company,
 error:companyError
@@ -4030,7 +4056,10 @@ error
 } =
 await sb.auth.signUp({
 email,
-password
+password,
+options: requestedSignupPlan ? {
+emailRedirectTo: window.location.origin + '/?plan=' + encodeURIComponent(requestedSignupPlan)
+} : undefined
 });
 if(error){
 return alert(error.message);
