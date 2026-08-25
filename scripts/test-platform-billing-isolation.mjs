@@ -114,6 +114,26 @@ async function main() {
 
   const [tokenA, tokenB] = await Promise.all([signIn(userA.email), signIn(userB.email)]);
 
+  // These maintenance RPCs accept an explicit company UUID and must remain
+  // service-role only. A company token must not be able to inspect or poison a
+  // different company's rolling billing usage.
+  const injectedDate = isoDateOffset(-20);
+  const deniedCapture = await rpc(tokenA, "capture_company_crew_usage", {
+    p_company_id: companyB.id,
+    p_usage_date: injectedDate,
+  });
+  assert(!deniedCapture.ok, "SECURITY FAILURE: company A captured company B crew usage.");
+  const deniedRecalc = await rpc(tokenA, "recalculate_company_crew_overage", {
+    p_company_id: companyB.id,
+  });
+  assert(!deniedRecalc.ok, "SECURITY FAILURE: company A recalculated company B billing state.");
+  const deniedCaptureAll = await rpc(tokenA, "capture_all_company_crew_usage", {
+    p_usage_date: injectedDate,
+  });
+  assert(!deniedCaptureAll.ok, "SECURITY FAILURE: a company token ran the platform-wide usage job.");
+  const injectedUsage = await request(`/rest/v1/company_crew_usage_daily?company_id=eq.${companyB.id}&usage_date=eq.${injectedDate}&select=company_id`);
+  assert(injectedUsage.ok && injectedUsage.data.length === 0, "SECURITY FAILURE: denied crew-usage call still injected a victim usage row.");
+
   const ownerA = await rpc(tokenA, "is_platform_owner");
   const ownerB = await rpc(tokenB, "is_platform_owner");
   assert(ownerA.ok && ownerA.data === false, "SECURITY FAILURE: ordinary company Admin A became a platform owner.");
@@ -139,6 +159,21 @@ async function main() {
   assert(firstRow(summaryA.data)?.monthly_price_cents === 49900, "Company A billing amount is incorrect.");
   assert(firstRow(summaryB.data)?.plan_code === "business", "Company B did not receive its own billing plan.");
   assert(firstRow(summaryB.data)?.monthly_price_cents === 74900, "Company B billing amount is incorrect.");
+
+  // A Starter company may retain any number of inactive historical crews,
+  // but the database must reject a sixth active crew even through service/API
+  // writes. This proves the limit is not only a browser warning.
+  for (let index = 1; index <= 5; index += 1) {
+    await serviceInsert("crews", { company_id: companyA.id, name: `${runId} Active Crew ${index}`, active: true });
+  }
+  const sixthCrew = await request("/rest/v1/crews", {
+    method: "POST",
+    body: { company_id: companyA.id, name: `${runId} Active Crew 6`, active: true },
+    prefer: "return=representation",
+  });
+  assert(!sixthCrew.ok, "BILLING FAILURE: Starter company activated a sixth crew.");
+  assert(String(sixthCrew.data?.message || "").includes("up to 5 active crews"), "Crew-limit rejection did not explain the Starter limit.");
+  await serviceInsert("crews", { company_id: companyA.id, name: `${runId} Historical Crew`, active: false });
 
   const accessA = await rpc(tokenA, "my_company_subscription_access");
   const accessB = await rpc(tokenB, "my_company_subscription_access");
@@ -206,7 +241,7 @@ async function main() {
   const dashboardAfterRemoval = await rpc(tokenA, "platform_owner_company_dashboard");
   assert(!dashboardAfterRemoval.ok, "SECURITY FAILURE: removed platform owner retained dashboard access.");
 
-  console.log("PASS: billing tables stay browser-private; tenant billing is isolated; approved list pricing is server-enforced; six rolling overage crew-days are allowed while the seventh survives crew cycling and requires upgrade; Foremen cannot open Admin billing; platform-owner power requires explicit allowlisting.");
+  console.log("PASS: billing tables stay browser-private; tenant billing is isolated; approved list pricing and active crew caps are server-enforced; inactive crew history is preserved; six rolling overage crew-days are allowed while the seventh survives crew cycling and requires upgrade; Foremen cannot open Admin billing; platform-owner power requires explicit allowlisting.");
 }
 
 try { await main(); } finally { await cleanup(); }

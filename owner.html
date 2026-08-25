@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LineCrew Pro Platform Owner</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--card:#fff;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754;--red:#b83232;--orange:#d97706}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:var(--navy);color:white;padding:22px}header h1{margin:0;font-size:28px}header p{margin:6px 0 0;opacity:.85}main{max-width:1450px;margin:auto;padding:22px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.hidden{display:none!important}.muted{color:var(--muted)}button{border:0;border-radius:9px;padding:10px 14px;background:var(--blue);color:#fff;font-weight:700;cursor:pointer}button.secondary{background:#e8eef4;color:var(--text)}button:disabled{opacity:.55;cursor:not-allowed}input,select,textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin:5px 0 12px;font:inherit}.toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.toolbar>div{min-width:180px;flex:1}.summary{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px;margin-bottom:18px}.metric{background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:14px}.metric strong{display:block;font-size:24px}.table-wrap{overflow:auto}.company-table{width:100%;border-collapse:collapse;min-width:1420px}.company-table th,.company-table td{padding:10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}.company-table th{font-size:12px;text-transform:uppercase;color:var(--muted)}.badge{display:inline-block;border-radius:999px;padding:4px 8px;font-size:12px;font-weight:700;background:#e8eef4}.badge.active,.badge.within_plan{background:#d1fae5;color:#065f46}.badge.past_due,.badge.canceled,.badge.paused,.badge.upgrade_required,.badge.custom_quote_required{background:#fee2e2;color:#991b1b}.badge.trialing,.badge.grace{background:#fef3c7;color:#92400e}.actions{display:flex;gap:6px;flex-wrap:wrap}.actions button{padding:7px 10px;font-size:12px}.modal{position:fixed;inset:0;background:rgba(8,23,38,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:10}.modal-card{width:min(660px,100%);max-height:90vh;overflow:auto;background:white;border-radius:14px;padding:20px}.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}.notice{border-left:4px solid var(--blue);background:#eff6ff;border-radius:8px;padding:12px 14px;margin:10px 0}.access-blocked{color:var(--red);font-weight:700}.access-enabled{color:var(--green);font-weight:700}@media(max-width:1000px){.summary{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}.toolbar{display:block}}@media(max-width:520px){.summary{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>LineCrew Pro</h1><p>Platform Owner Console</p></header>
+<main>
+<section id="authCard" class="card">
+  <h2>Platform Owner Sign In</h2>
+  <p class="muted">This console is separate from contractor Admin access. Only Auth users explicitly allowlisted as platform owners can open it.</p>
+  <label>Email</label><input id="email" type="email" autocomplete="username">
+  <label>Password</label><input id="password" type="password" autocomplete="current-password">
+  <button id="signInBtn">Sign In</button><p id="authStatus" class="muted"></p>
+</section>
+
+<section id="console" class="hidden">
+  <div class="card toolbar">
+    <div><h2 style="margin:0">Contractor Companies</h2><p class="muted" style="margin:5px 0 0">Account health, crew-tier usage and billing metadata only. This console does not display contractor production details.</p></div>
+    <div><label>Search</label><input id="search" placeholder="Company, email, plan or status"></div>
+    <div><label>Status</label><select id="statusFilter"><option value="">All</option><option>trialing</option><option>active</option><option>past_due</option><option>paused</option><option>canceled</option><option>incomplete</option></select></div>
+    <div style="flex:0"><button id="refreshBtn" class="secondary">Refresh</button></div><div style="flex:0"><button id="signOutBtn" class="secondary">Sign Out</button></div>
+  </div>
+
+  <div class="summary">
+    <div class="metric"><span class="muted">Companies</span><strong id="mCompanies">0</strong></div>
+    <div class="metric"><span class="muted">Active / Trial</span><strong id="mActive">0</strong></div>
+    <div class="metric"><span class="muted">Monthly Contract Value</span><strong id="mMrr">$0</strong></div>
+    <div class="metric"><span class="muted">Active Users</span><strong id="mUsers">0</strong></div>
+    <div class="metric"><span class="muted">Past Due</span><strong id="mPastDue">0</strong></div>
+    <div class="metric"><span class="muted">Crew Tier Attention</span><strong id="mCrewAttention">0</strong></div>
+  </div>
+
+  <div class="card table-wrap"><table class="company-table"><thead><tr><th>Company</th><th>Usage / Activity</th><th>Crew Tier</th><th>Plan</th><th>Price</th><th>Status</th><th>Access</th><th>Period / Trial</th><th>Billing</th><th>Actions</th></tr></thead><tbody id="rows"></tbody></table><p id="empty" class="muted hidden">No companies match the current filters.</p></div>
+</section>
+</main>
+
+<div id="editModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editTitle"><div class="modal-card">
+  <h2 id="editTitle">Edit Subscription</h2><input id="editCompanyId" type="hidden"><p id="editProviderNote" class="notice hidden"></p>
+  <div class="split"><div><label>Plan</label><select id="editPlan"><option value="pilot">Pilot</option><option value="starter">Starter · 1–5 crews · $499</option><option value="business">Business · 6–10 crews · $749</option><option value="pro">Pro · 11–20 crews · $1,199</option><option value="enterprise">Enterprise · 21–40 crews · $1,799</option><option value="custom">Large Enterprise · 41+ · Custom</option></select></div><div><label>Monthly Price ($)</label><input id="editPrice" type="number" min="0" step="0.01"></div></div>
+  <p class="muted">Approved tier pricing is enforced server-side. Only a Custom plan may use a custom manual price.</p>
+  <div class="split"><div><label>Status</label><select id="editStatus"><option>trialing</option><option>active</option><option>past_due</option><option>paused</option><option>canceled</option><option>incomplete</option></select></div><div><label>Trial Ends</label><input id="editTrial" type="datetime-local"></div></div>
+  <label>App Access Override</label><select id="editAccessOverride"><option value="">Automatic from subscription status</option><option value="true">Force enabled</option><option value="false">Force blocked</option></select>
+  <p class="muted">An owner override is separate from Stripe status, so later webhooks cannot silently undo a deliberate support block or temporary allow.</p>
+  <label>Internal Notes</label><textarea id="editNotes" rows="3" placeholder="Optional LineCrew Pro support note"></textarea>
+  <div class="actions"><button id="saveEditBtn">Save</button><button id="cancelEditBtn" class="secondary">Cancel</button></div><p id="editStatusText" class="muted"></p>
+</div></div>
+
+<script>
+const LINECREW_PRODUCTION_HOSTS=new Set(['linecrewpro.com','www.linecrewpro.com','app.linecrewpro.com']);
+const LINECREW_SANDBOX_HOSTS=new Set(['localhost','127.0.0.1']);
+const IS_LINECREW_PRODUCTION=LINECREW_PRODUCTION_HOSTS.has(window.location.hostname.toLowerCase());
+const IS_LINECREW_SANDBOX=!IS_LINECREW_PRODUCTION;
+const SUPABASE_URL=IS_LINECREW_PRODUCTION?'https://ldgkyxuozbozgkvwzadg.supabase.co':'https://yvuxrqrdprquxypiffpa.supabase.co';
+const SUPABASE_KEY=IS_LINECREW_PRODUCTION?'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF':'sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);const $=id=>document.getElementById(id);let companies=[];
+if(IS_LINECREW_SANDBOX){
+  document.title='LineCrew Pro Owner — Sandbox Test';
+  const sandboxBanner=document.createElement('div');
+  sandboxBanner.setAttribute('role','status');
+  sandboxBanner.textContent=`SANDBOX TEST — No real companies or payments${LINECREW_SANDBOX_HOSTS.has(location.hostname)?'':' (unrecognised host)'}`;
+  sandboxBanner.style.cssText='background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 14px;text-align:center;font-weight:800;font-size:13px';
+  document.body.prepend(sandboxBanner);
+}
+const PLAN_PRICES={pilot:0,starter:49900,business:74900,pro:119900,enterprise:179900};
+const money=cents=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format((Number(cents)||0)/100);const fmtDate=value=>value?new Date(value).toLocaleDateString():'—';const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));const label=v=>String(v||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());
+async function verifyOwner(){const {data,error}=await sb.rpc('is_platform_owner');if(error||data!==true)throw new Error('This account is not authorized as a LineCrew Pro platform owner.');}
+async function load(){await verifyOwner();const {data,error}=await sb.rpc('platform_owner_company_dashboard');if(error)throw error;companies=data||[];$('authCard').classList.add('hidden');$('console').classList.remove('hidden');render();}
+function filtered(){const q=$('search').value.trim().toLowerCase(),s=$('statusFilter').value;return companies.filter(c=>(!s||c.subscription_status===s)&&(!q||[c.company_name,c.contact_email,c.plan_code,c.subscription_status,c.provider,c.crew_overage_status].some(v=>String(v||'').toLowerCase().includes(q))));}
+function render(){const rows=filtered();$('rows').innerHTML='';$('empty').classList.toggle('hidden',rows.length>0);rows.forEach(c=>{const override=c.access_override===true?'Force enabled':c.access_override===false?'Force blocked':'Automatic';const crewStatus=c.crew_overage_status||'within_plan';const limit=c.included_crew_limit==null?'Custom/Pilot':c.included_crew_limit;const tr=document.createElement('tr');tr.innerHTML=`<td><strong>${esc(c.company_name)}</strong><div class="muted">${esc(c.contact_email||'No contact email')}</div><div class="muted">Created ${fmtDate(c.company_created_at)}</div></td><td>${Number(c.active_users)||0} users<br>${Number(c.active_jobs)||0} active jobs<br>${Number(c.active_crews)||0} active crews<br>${Number(c.total_reports)||0} reports<div class="muted">Last report: ${fmtDate(c.last_report_at)}</div></td><td><span class="badge ${esc(crewStatus)}">${esc(label(crewStatus))}</span><div>${Number(c.rolling_peak_billable_crews)||0} peak / ${esc(limit)} included</div><div class="muted">${Number(c.rolling_overage_crew_days)||0} of 6 overage crew-days</div>${['upgrade_required','custom_quote_required'].includes(crewStatus)?`<div class="muted">Recommended: ${esc(label(c.recommended_plan_code))}</div>`:''}</td><td>${esc(label(c.plan_code||'pilot'))}</td><td>${money(c.monthly_price_cents)}</td><td><span class="badge ${esc(c.subscription_status)}">${esc(label(c.subscription_status))}</span>${c.cancel_at_period_end?'<div class="muted">Cancels at period end</div>':''}</td><td><span class="${c.access_enabled?'access-enabled':'access-blocked'}">${c.access_enabled?'Enabled':'Blocked'}</span><div class="muted">${esc(override)}</div></td><td>Trial: ${fmtDate(c.trial_ends_at)}<br>Period end: ${fmtDate(c.current_period_end)}</td><td>${esc(c.provider||'manual')}<br><span class="muted">${c.stripe_customer_linked?'Customer linked':'No Stripe customer'} · ${c.stripe_subscription_linked?'Subscription linked':'No subscription'}</span></td><td><div class="actions"><button data-edit="${esc(c.company_id)}">Edit</button></div></td>`;$('rows').appendChild(tr);});$('rows').querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));$('mCompanies').textContent=companies.length;$('mActive').textContent=companies.filter(c=>['active','trialing'].includes(c.subscription_status)&&c.access_enabled).length;$('mMrr').textContent=money(companies.filter(c=>c.subscription_status==='active'&&c.access_enabled).reduce((s,c)=>s+(Number(c.monthly_price_cents)||0),0));$('mUsers').textContent=companies.reduce((s,c)=>s+(Number(c.active_users)||0),0);$('mPastDue').textContent=companies.filter(c=>c.subscription_status==='past_due').length;$('mCrewAttention').textContent=companies.filter(c=>['grace','upgrade_required','custom_quote_required'].includes(c.crew_overage_status)).length;}
+function toLocalInput(v){if(!v)return'';const d=new Date(v),z=d.getTimezoneOffset()*60000;return new Date(d-z).toISOString().slice(0,16)}
+function syncPlanPrice(){const plan=$('editPlan').value;if(Object.prototype.hasOwnProperty.call(PLAN_PRICES,plan)){$('editPrice').value=(PLAN_PRICES[plan]/100).toFixed(2);$('editPrice').disabled=true;}else $('editPrice').disabled=false;}
+function openEdit(id){const c=companies.find(x=>x.company_id===id);if(!c)return;$('editCompanyId').value=id;$('editTitle').textContent='Edit '+c.company_name;$('editPlan').value=['pilot','starter','business','pro','enterprise','custom'].includes(c.plan_code)?c.plan_code:'custom';$('editPrice').value=((Number(c.monthly_price_cents)||0)/100).toFixed(2);$('editStatus').value=c.subscription_status||'trialing';$('editTrial').value=toLocalInput(c.trial_ends_at);$('editAccessOverride').value=c.access_override===true?'true':c.access_override===false?'false':'';$('editNotes').value=c.internal_notes||'';$('editStatusText').textContent='';const stripe=c.provider==='stripe'&&c.stripe_subscription_linked&&c.subscription_status!=='canceled';$('editPlan').disabled=stripe;$('editStatus').disabled=stripe;$('editTrial').disabled=stripe;if(stripe)$('editPrice').disabled=true;else syncPlanPrice();$('editProviderNote').classList.toggle('hidden',!stripe);$('editProviderNote').textContent=stripe?'Stripe is the source of truth for a linked live subscription. Plan, price, status and billing dates cannot be changed here; use Stripe subscription management. Notes and a LineCrew Pro access override remain available.':'';$('editModal').classList.remove('hidden');}
+async function saveEdit(){const cents=Math.round(Number($('editPrice').value||0)*100);if(!Number.isFinite(cents)||cents<0)return alert('Enter a valid monthly price.');const overrideText=$('editAccessOverride').value,accessOverride=overrideText===''?null:overrideText==='true';$('saveEditBtn').disabled=true;$('editStatusText').textContent='Saving...';const trial=$('editTrial').value?new Date($('editTrial').value).toISOString():null;const {error}=await sb.rpc('platform_owner_set_subscription',{p_company_id:$('editCompanyId').value,p_plan_code:$('editPlan').value,p_monthly_price_cents:cents,p_status:$('editStatus').value,p_access_override:accessOverride,p_trial_ends_at:trial,p_notes:$('editNotes').value.trim()||null});$('saveEditBtn').disabled=false;if(error){$('editStatusText').textContent=error.message;return}$('editModal').classList.add('hidden');await load();}
+$('editPlan').onchange=syncPlanPrice;$('signInBtn').onclick=async()=>{try{$('authStatus').textContent='Signing in...';const {error}=await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;await load();$('authStatus').textContent=''}catch(e){$('authStatus').textContent=e.message||'Unable to sign in.'}};$('signOutBtn').onclick=async()=>{await sb.auth.signOut();location.reload()};$('refreshBtn').onclick=()=>load().catch(e=>alert(e.message));$('search').oninput=render;$('statusFilter').onchange=render;$('saveEditBtn').onclick=saveEdit;$('cancelEditBtn').onclick=()=>$('editModal').classList.add('hidden');(async()=>{const {data}=await sb.auth.getSession();if(data.session){try{await load()}catch(e){$('authStatus').textContent=e.message||'Unable to load platform owner console.'}}})();
+</script>
+</body>
+</html>

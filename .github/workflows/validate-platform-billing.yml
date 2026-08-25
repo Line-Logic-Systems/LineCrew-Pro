@@ -1,0 +1,58 @@
+name: Validate platform owner and billing
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+      - chatgpt-dev
+  pull_request:
+    paths:
+      - 'owner.html'
+      - 'billing.html'
+      - 'index.html'
+      - 'support.html'
+      - 'training/index.html'
+      - 'vercel.json'
+      - 'docs/PLATFORM_OWNER_BILLING.md'
+      - 'supabase/migrations/20260818010000_platform_owner_and_billing.sql'
+      - 'supabase/migrations/20260818020000_crew_tier_usage_policy.sql'
+      - 'supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql'
+      - 'supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql'
+      - 'supabase/config.toml'
+      - 'supabase/functions/create-billing-checkout/**'
+      - 'supabase/functions/create-billing-portal/**'
+      - 'supabase/functions/create-plan-upgrade/**'
+      - 'supabase/functions/stripe-webhook/**'
+      - 'supabase/functions/capture-crew-usage/**'
+      - 'scripts/validate-platform-billing.mjs'
+      - 'scripts/test-platform-billing-isolation.mjs'
+      - '.github/workflows/validate-platform-billing.yml'
+      - '.github/workflows/test-platform-billing-isolation.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+      - name: Validate platform billing foundation
+        run: |
+          node scripts/validate-platform-billing.mjs
+          node --check scripts/test-platform-billing-isolation.mjs
+      - name: Test Stripe webhook decision logic
+        run: deno test supabase/functions/stripe-webhook/logic_test.ts
+      - name: Type-check billing Edge Functions
+        run: |
+          deno check supabase/functions/create-billing-checkout/index.ts
+          deno check supabase/functions/create-billing-portal/index.ts
+          deno check supabase/functions/create-plan-upgrade/index.ts
+          deno check supabase/functions/stripe-webhook/index.ts
+          deno check supabase/functions/capture-crew-usage/index.ts

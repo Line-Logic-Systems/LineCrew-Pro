@@ -1,0 +1,46 @@
+name: Manage test platform owner
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: Existing Auth user email in the disposable Supabase test project
+        required: true
+        type: string
+      action:
+        description: Grant or revoke test platform-owner access
+        required: true
+        type: choice
+        options:
+          - grant
+          - revoke
+      confirmation:
+        description: Type DISPOSABLE_ONLY to confirm this targets a disposable Supabase project
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  manage-test-owner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: isolation-test
+    env:
+      SUPABASE_TEST_URL: ${{ secrets.SUPABASE_TEST_URL }}
+      SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
+      SUPABASE_TEST_PROJECT_REF: ${{ secrets.SUPABASE_TEST_PROJECT_REF }}
+      SUPABASE_PRODUCTION_PROJECT_REF: ${{ secrets.SUPABASE_PRODUCTION_PROJECT_REF }}
+      PLATFORM_OWNER_EMAIL: ${{ inputs.email }}
+      PLATFORM_OWNER_ACTION: ${{ inputs.action }}
+      LINECREW_ISOLATION_TEST_CONFIRM: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Verify disposable-project confirmation
+        run: test "$LINECREW_ISOLATION_TEST_CONFIRM" = "DISPOSABLE_ONLY"
+      - name: Manage test platform-owner access
+        run: node scripts/manage-test-platform-owner.mjs
