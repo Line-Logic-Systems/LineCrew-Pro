@@ -29,7 +29,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 begin
   insert into public.company_subscriptions (
     company_id,
@@ -49,7 +49,7 @@ begin
   on conflict (company_id) do nothing;
   return new;
 end;
-$;
+$$;
 
 revoke all on function public.ensure_company_subscription()
   from public, anon, authenticated;
