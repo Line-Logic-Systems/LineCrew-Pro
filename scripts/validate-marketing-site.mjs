@@ -75,6 +75,17 @@ for (const [file, html] of [['index.html', home], ['pricing.html', pricing]]) {
   if (!html.includes('operates%20more%20than%2040%20active%20crews') || !html.includes('Active%20crew%20count')) {
     fail(file, '41+ crew email must use the approved concise custom-plan message');
   }
+  for (const plan of ['starter', 'business', 'pro', 'enterprise']) {
+    if (!html.includes(`https://app.linecrewpro.com/?plan=${plan}`)) {
+      fail(file, `pricing must provide Start Now for the ${plan} plan`);
+    }
+  }
+  for (const marker of ['Interested in becoming a Beta/Pilot company?', 'Approved pilots are free and require no card.', 'Apply for Beta/Pilot']) {
+    if (!html.includes(marker)) fail(file, `Beta/Pilot presentation is missing: ${marker}`);
+  }
+  if (!html.includes('LineCrew%20Pro%20Beta%2FPilot%20Application')) {
+    fail(file, 'Beta/Pilot action must open its dedicated prewritten sales email');
+  }
 }
 
 const signup = readFileSync(join(docsDir, 'signup.html'), 'utf8');
