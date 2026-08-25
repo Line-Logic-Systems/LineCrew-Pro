@@ -22,7 +22,7 @@ const fail = (file, message) => failures.push(`${file}: ${message}`);
 for (const file of htmlFiles) {
   const html = readFileSync(join(docsDir, file), 'utf8');
 
-  if (!html.includes('styles.css?v=site5')) fail(file, 'must use the current site stylesheet version');
+  if (!html.includes('styles.css?v=site6')) fail(file, 'must use the current site stylesheet version');
   if (!html.includes('accessibility.css?v=site5')) fail(file, 'must load the accessibility stylesheet');
   if (!html.includes('class="skip-link"')) fail(file, 'must include a keyboard skip link');
   if (!html.includes('<main id="main-content">')) fail(file, 'must identify the main content target');
@@ -50,6 +50,27 @@ for (const file of htmlFiles) {
     const target = href.split('#')[0].split('?')[0];
     if (!target) continue;
     if (!existsSync(join(docsDir, target))) fail(file, `local link target does not exist: ${target}`);
+  }
+
+  if (/Request (?:a )?Demo|Request Demo|Contact Sales/.test(html)) {
+    if (html.includes('href="demo.html"')) fail(file, 'demo actions must open a prewritten email instead of another page');
+    if (!html.includes('mailto:sales@linecrewpro.com?subject=LineCrew%20Pro%20Demo%20Request')) {
+      fail(file, 'demo actions must address sales@linecrewpro.com with the approved subject');
+    }
+    if (!html.includes('personalized%20demo') || !html.includes('Approximate%20active%20crews')) {
+      fail(file, 'demo email must include informative copy and qualification fields');
+    }
+  }
+}
+
+const home = readFileSync(join(docsDir, 'index.html'), 'utf8');
+const pricing = readFileSync(join(docsDir, 'pricing.html'), 'utf8');
+for (const [file, html] of [['index.html', home], ['pricing.html', pricing]]) {
+  for (const marker of ['$1,799', '21–40 crews', 'Running 41+ active crews?', 'Get 41+ Crew Information']) {
+    if (!html.includes(marker)) fail(file, `pricing presentation is missing: ${marker}`);
+  }
+  if (!html.includes('LineCrew%20Pro%2041%2B%20Crew%20Information')) {
+    fail(file, '41+ crew action must open its dedicated prewritten sales email');
   }
 }
 
