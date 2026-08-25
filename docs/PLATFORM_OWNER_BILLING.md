@@ -206,7 +206,7 @@ select public.capture_all_company_crew_usage(current_date);
 
 The job runs inside Postgres as a trusted database job. Do not grant the three crew-usage maintenance RPCs back to `authenticated`; company users must never be able to supply another company's UUID. The `capture-crew-usage` Edge Function is only a guarded fallback for an external scheduler and requires both a valid Supabase JWT and `x-linecrew-cron-secret`.
 
-## 13. Active crew enforcement
+## 9. Active crew enforcement
 
 Standard plans are enforced in Postgres, not only in the browser:
 
@@ -219,7 +219,7 @@ Inactive crews remain stored for job, report, employee, and audit history. When 
 
 If a manually processed downgrade leaves a company above its new limit, LineCrew Pro preserves all data and existing access, reports the over-limit state, and blocks additional crew activation until the company deactivates crews or upgrades again. General Customer Portal plan switching remains off. Company Admins use the LineCrew Pro upgrade cards, which permit only a move to a higher plan; payment-method changes and cancellation remain available in the normal portal.
 
-## 13. Current access policy
+## 10. Current access policy
 
 Current billing-foundation behavior:
 - existing companies are seeded as `pilot`, `trialing`, access enabled
@@ -234,7 +234,7 @@ The production app does **not** yet enforce this billing value. That omission is
 
 Before hard-blocking contractor sign-in, choose a grace/dunning policy for past-due accounts. A practical first-launch policy is usually a grace period rather than immediate field lockout, because crews may need continued access to safety and production records while an office payment issue is resolved.
 
-## 13. What is intentionally not automatic yet
+## 11. What is intentionally not automatic yet
 
 The branch does not silently block the existing production app. Wiring `access_enabled=false` into `index.html` should be done as a separate reviewed release only after:
 
@@ -250,7 +250,7 @@ The branch does not silently block the existing production app. Wiring `access_e
 
 This sequence prevents a billing configuration mistake from becoming a field-operations outage.
 
-## 13. Recommended B2B plan setup
+## 12. Recommended B2B plan setup
 
 LineCrew Pro can support negotiated contractor pricing without exposing raw Stripe configuration to users.
 
