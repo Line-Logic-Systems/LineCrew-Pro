@@ -44,7 +44,7 @@ Key current role/security migrations include:
 
 - Workflow: `.github/workflows/independent-backup.yml`
 - Backup script: `scripts/backup-supabase.mjs`
-- Recovery runbook: `docs/DISASTER_RECOVERY.md`
+- Recovery runbook: `internal-docs/DISASTER_RECOVERY.md`
 - Azure storage account: `linecrewprobackup`
 - Azure container: `linecrew-pro-backups`
 

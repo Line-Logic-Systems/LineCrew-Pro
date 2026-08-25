@@ -1,6 +1,7 @@
 # The Vercel project serves only the LineCrew Pro application shell.
 # Marketing pages are deployed separately from /docs by GitHub Pages.
 docs/
+internal-docs/
 supabase/
 scripts/
 .github/

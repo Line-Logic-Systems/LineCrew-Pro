@@ -16,7 +16,7 @@ on:
       - 'support.html'
       - 'training/index.html'
       - 'vercel.json'
-      - 'docs/PLATFORM_OWNER_BILLING.md'
+      - 'internal-docs/PLATFORM_OWNER_BILLING.md'
       - 'supabase/migrations/20260818010000_platform_owner_and_billing.sql'
       - 'supabase/migrations/20260818020000_crew_tier_usage_policy.sql'
       - 'supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql'
