@@ -20,7 +20,7 @@ const requiredFiles = [
   'supabase/config.toml',
   'scripts/test-platform-billing-isolation.mjs',
   '.github/workflows/test-platform-billing-isolation.yml',
-  'docs/PLATFORM_OWNER_BILLING.md',
+  'internal-docs/PLATFORM_OWNER_BILLING.md',
 ];
 
 for (const file of requiredFiles) {

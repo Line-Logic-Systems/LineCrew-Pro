@@ -1,23 +1,3 @@
-exclude:
-  - APP_POLISH_20260820.md
-  - DEPLOYMENT_NOTE.md
-  - DISASTER_RECOVERY.md
-  - FLEXIBLE_JSA.md
-  - JSA_CAMERA_CAPTURE.md
-  - JSA_SIGNATURE_NOTE.md
-  - LINECREW_ASSISTANT_SETUP.md
-  - MFA_ACCOUNT_RECOVERY.md
-  - MULTI_TENANT_SECURITY_CHECKLIST.md
-  - ONBOARDING_ACCOUNT_TEST_PLAN.md
-  - OVERNIGHT_RELEASE_TEST_PLAN.md
-  - PLATFORM_OWNER_BILLING.md
-  - PRODUCTION_MONITORING.md
-  - README_SITE.md
-  - ROLE_AUDIT.md
-  - ROLE_MODEL.md
-  - SECURITY_ACCEPTED_PLATFORM_WARNINGS.md
-  - SMART_UTILITY_PACKET_IMPORT.md
-  - TEST_PLATFORM_OWNER_ACCESS.md
-  - TRAINING_NARRATION.md
-  - WEEKEND_PILOT_TEST.md
-  - training-access.md
+# Keep operational and test runbooks in /internal-docs, outside the
+# GitHub Pages source directory. The public /docs tree contains site assets only.
+exclude: []

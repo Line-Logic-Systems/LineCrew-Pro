@@ -4,7 +4,9 @@ import { extname, join } from 'node:path';
 const root = new URL('..', import.meta.url).pathname;
 const docsDir = join(root, 'docs');
 const htmlFiles = readdirSync(docsDir).filter((file) => extname(file) === '.html').sort();
-const markdownFiles = readdirSync(docsDir).filter((file) => extname(file) === '.md').sort();
+const markdownFiles = readdirSync(docsDir, { recursive: true })
+  .filter((file) => extname(file) === '.md')
+  .sort();
 const failures = [];
 
 const requiredCanonical = new Set([
@@ -20,16 +22,11 @@ const requiredCanonical = new Set([
 
 const fail = (file, message) => failures.push(`${file}: ${message}`);
 
+if (markdownFiles.length) {
+  fail('docs/', `must contain public site assets only; move Markdown to internal-docs/: ${markdownFiles.join(', ')}`);
+}
 if (existsSync(join(docsDir, '.nojekyll'))) {
   fail('.nojekyll', 'must not bypass the Jekyll exclusions that protect internal runbooks');
-}
-const pagesConfig = existsSync(join(docsDir, '_config.yml'))
-  ? readFileSync(join(docsDir, '_config.yml'), 'utf8')
-  : '';
-for (const file of markdownFiles) {
-  if (!pagesConfig.includes(`- ${file}`)) {
-    fail('_config.yml', `must exclude internal Markdown from the public site: ${file}`);
-  }
 }
 
 for (const file of htmlFiles) {
@@ -121,7 +118,7 @@ for (const page of requiredCanonical) {
 if (sitemap.includes('/signup.html')) fail('sitemap.xml', 'must not include the noindex signup preview');
 
 const vercelIgnore = readFileSync(join(root, '.vercelignore'), 'utf8');
-for (const ignored of ['docs/', 'supabase/', 'scripts/', '.github/']) {
+for (const ignored of ['docs/', 'internal-docs/', 'supabase/', 'scripts/', '.github/']) {
   if (!vercelIgnore.split(/\r?\n/).includes(ignored)) fail('.vercelignore', `missing ${ignored}`);
 }
 

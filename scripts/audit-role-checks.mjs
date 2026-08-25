@@ -42,5 +42,5 @@ for (const file of files) {
     out += '\n';
   }
 }
-fs.writeFileSync('docs/ROLE_AUDIT.md', out);
-console.log('Wrote docs/ROLE_AUDIT.md');
+fs.writeFileSync('internal-docs/ROLE_AUDIT.md', out);
+console.log('Wrote internal-docs/ROLE_AUDIT.md');

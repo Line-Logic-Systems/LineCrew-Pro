@@ -39,7 +39,7 @@ jobs:
       - name: Audit legacy role checks
         run: |
           node scripts/audit-role-checks.mjs
-          cat docs/ROLE_AUDIT.md
+          cat internal-docs/ROLE_AUDIT.md
 
       - name: Validate Superintendent compatibility generator
         run: |
