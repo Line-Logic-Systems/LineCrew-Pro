@@ -72,6 +72,54 @@ async function signIn(email) {
   assert(result.ok && result.data?.access_token, `Unable to sign in ${email}.`);
   return result.data.access_token;
 }
+function decodeBase32(value) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  let bits = "";
+  for (const character of value.toUpperCase().replace(/=+$/u, "")) {
+    const index = alphabet.indexOf(character);
+    assert(index >= 0, "Authenticator enrollment returned an invalid TOTP secret.");
+    bits += index.toString(2).padStart(5, "0");
+  }
+  const bytes = [];
+  for (let offset = 0; offset + 8 <= bits.length; offset += 8) {
+    bytes.push(Number.parseInt(bits.slice(offset, offset + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+function totpCode(secret) {
+  const counter = Math.floor(Date.now() / 30_000);
+  const buffer = Buffer.alloc(8);
+  buffer.writeBigUInt64BE(BigInt(counter));
+  const digest = crypto.createHmac("sha1", decodeBase32(secret)).update(buffer).digest();
+  const offset = digest[digest.length - 1] & 0x0f;
+  const value = (digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000;
+  return String(value).padStart(6, "0");
+}
+async function signInAtAal2(email) {
+  const aal1Token = await signIn(email);
+  const enrolled = await request("/auth/v1/factors", {
+    method: "POST",
+    token: aal1Token,
+    apikey: anonKey,
+    body: { factor_type: "totp", friendly_name: `${runId}-ci` },
+  });
+  assert(enrolled.ok && enrolled.data?.id && enrolled.data?.totp?.secret, `Unable to enroll MFA for ${email}: ${JSON.stringify(enrolled.data)}`);
+  const challenged = await request(`/auth/v1/factors/${enrolled.data.id}/challenge`, {
+    method: "POST",
+    token: aal1Token,
+    apikey: anonKey,
+    body: {},
+  });
+  assert(challenged.ok && challenged.data?.id, `Unable to challenge MFA for ${email}: ${JSON.stringify(challenged.data)}`);
+  const verified = await request(`/auth/v1/factors/${enrolled.data.id}/verify`, {
+    method: "POST",
+    token: aal1Token,
+    apikey: anonKey,
+    body: { challenge_id: challenged.data.id, code: totpCode(enrolled.data.totp.secret) },
+  });
+  assert(verified.ok && verified.data?.access_token, `Unable to verify MFA for ${email}: ${JSON.stringify(verified.data)}`);
+  return verified.data.access_token;
+}
 async function userRest(token, table, query = "", options = {}) {
   return request(`/rest/v1/${table}${query ? `?${query}` : ""}`, { ...options, token, apikey: anonKey });
 }
@@ -112,7 +160,7 @@ async function main() {
   await serviceInsert("company_subscriptions", { company_id: companyA.id, plan_code: "starter", monthly_price_cents: 49900, status: "active", access_enabled: true, provider: "manual", included_crew_limit: 5 });
   await serviceInsert("company_subscriptions", { company_id: companyB.id, plan_code: "business", monthly_price_cents: 74900, status: "active", access_enabled: true, provider: "manual", included_crew_limit: 10 });
 
-  const [tokenA, tokenB] = await Promise.all([signIn(userA.email), signIn(userB.email)]);
+  const [tokenA, tokenB] = await Promise.all([signInAtAal2(userA.email), signInAtAal2(userB.email)]);
 
   // These maintenance RPCs accept an explicit company UUID and must remain
   // service-role only. A company token must not be able to inspect or poison a
