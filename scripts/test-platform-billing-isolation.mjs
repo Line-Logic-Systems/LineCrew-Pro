@@ -281,7 +281,7 @@ async function main() {
   const foremanBilling = await rpc(tokenB, "my_company_billing_summary");
   assert(!foremanBilling.ok, "SECURITY FAILURE: Foreman accessed company Admin billing summary.");
   const foremanAccess = await rpc(tokenB, "my_company_subscription_access");
-  assert(foremanAccess.ok && firstRow(foremanAccess.data)?.company_id === companyB.id, "Active Foreman could not receive safe own-company access state.");
+  assert(!foremanAccess.ok, "SECURITY FAILURE: force-blocked company Foreman retained application access.");
 
   await request(`/rest/v1/platform_owners?user_id=eq.${userA.id}`, { method: "DELETE" });
   const removedOwner = await rpc(tokenA, "is_platform_owner");

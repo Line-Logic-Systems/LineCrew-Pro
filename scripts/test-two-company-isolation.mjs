@@ -301,7 +301,10 @@ async function main() {
     method: "DELETE",
     prefer: "return=representation",
   });
-  assert(crossDelete.ok && crossDelete.data.length === 0, "SECURITY FAILURE: cross-company delete affected a row.");
+  assert(
+    !crossDelete.ok || (Array.isArray(crossDelete.data) && crossDelete.data.length === 0),
+    "SECURITY FAILURE: cross-company delete affected a row.",
+  );
   const verifyJobB = await request(`/rest/v1/jobs?id=eq.${jobB.id}&select=id`);
   assert(verifyJobB.ok && verifyJobB.data.length === 1, "SECURITY FAILURE: foreign job no longer exists after delete attempt.");
 
