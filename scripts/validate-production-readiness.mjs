@@ -479,6 +479,14 @@ for (const marker of [
   'Review the unit-pricing preview'
 ]) assert(marker instanceof RegExp ? marker.test(index) : index.includes(marker), `Onboarding workflow marker missing: ${marker}`);
 
+assert(expandedJsa.includes("loginButton.textContent = 'Signing In...'"), 'Sign-in must prevent duplicate submissions while authentication is running.');
+assert(expandedJsa.includes("sb.auth.signInWithPassword({ email, password })"), 'The single-flight sign-in guard must authenticate through Supabase.');
+const guardedLoginHandler = expandedJsa.slice(
+  expandedJsa.indexOf('loginButton.onclick = async () => {'),
+  expandedJsa.indexOf('const productionTile', expandedJsa.indexOf('loginButton.onclick = async () => {'))
+);
+assert(!guardedLoginHandler.includes('loadApp('), 'The guarded sign-in handler must let the SIGNED_IN listener load the app exactly once.');
+
 for (const marker of [
   'Foremen can only see and report against jobs assigned to them.',
   'assignment.assigned_by_name',
