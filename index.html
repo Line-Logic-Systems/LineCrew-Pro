@@ -4115,6 +4115,7 @@ if(result.accepted) await loadApp();
 /* SIGN OUT */
 async function signOut(){
 await sb.auth.signOut();
+window.resetLineCrewLoginFormState?.();
 currentProfile = null;
 currentCompany = null;
 updatePilotFeedbackUi();
@@ -7716,6 +7717,7 @@ $('recoveryPassword').focus();
 return;
 }
 if(event === 'SIGNED_OUT'){
+window.resetLineCrewLoginFormState?.();
 $('assistantLauncher').classList.add('hidden');
 $('assistantPanel').classList.add('hidden');
 $('assistantMessages').innerHTML = '';
@@ -14694,7 +14696,7 @@ await loadApp();
 }
 startApp();
 </script>
-<script src="expanded-jsa.js?v=20260823i"></script>
+<script src="expanded-jsa.js?v=20260825a"></script>
 <script>
 (function () {
 var installPrompt = null;

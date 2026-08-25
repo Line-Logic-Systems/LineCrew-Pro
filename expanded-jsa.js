@@ -32,11 +32,24 @@
     [0, 50, 150, 400, 900].forEach((delay) => setTimeout(forceRecoveryUi, delay));
   };
 
+  const resetLoginFormState = () => {
+    const button = document.getElementById('loginBtn');
+    if (!button) return;
+    button.disabled = false;
+    button.textContent = 'Sign In';
+  };
+
+  window.resetLineCrewLoginFormState = resetLoginFormState;
+
   if (isRecoveryUrl()) markRecovery();
   if (sessionStorage.getItem('linecrew-password-recovery') === '1') forceRecoveryUi();
 
   if (window.sb?.auth?.onAuthStateChange) {
     window.sb.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        resetLoginFormState();
+        return;
+      }
       if (event === 'PASSWORD_RECOVERY') {
         markRecovery();
         return;
@@ -75,8 +88,7 @@
       loginButton.textContent = 'Signing In...';
       const { error } = await sb.auth.signInWithPassword({ email, password });
       if (error) {
-        loginButton.disabled = false;
-        loginButton.textContent = 'Sign In';
+        resetLoginFormState();
         alert(error.message);
       }
     };
