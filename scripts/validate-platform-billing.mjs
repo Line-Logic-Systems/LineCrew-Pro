@@ -5,14 +5,18 @@ import vm from 'node:vm';
 const requiredFiles = [
   'owner.html',
   'billing.html',
-  'supabase/migrations/20260818_platform_owner_and_billing.sql',
-  'supabase/migrations/20260818_crew_tier_usage_policy.sql',
-  'supabase/migrations/20260818_crew_tier_automation_and_visibility.sql',
+  'supabase/migrations/20260818010000_platform_owner_and_billing.sql',
+  'supabase/migrations/20260818020000_crew_tier_usage_policy.sql',
+  'supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql',
+  'supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql',
   'supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql',
   'supabase/functions/create-billing-checkout/index.ts',
   'supabase/functions/create-billing-portal/index.ts',
   'supabase/functions/create-plan-upgrade/index.ts',
   'supabase/functions/stripe-webhook/index.ts',
+  'supabase/functions/stripe-webhook/logic.ts',
+  'supabase/functions/stripe-webhook/logic_test.ts',
+  'supabase/config.toml',
   'scripts/test-platform-billing-isolation.mjs',
   '.github/workflows/test-platform-billing-isolation.yml',
   'docs/PLATFORM_OWNER_BILLING.md',
@@ -25,14 +29,21 @@ for (const file of requiredFiles) {
 const owner = fs.readFileSync('owner.html', 'utf8');
 const billing = fs.readFileSync('billing.html', 'utf8');
 const app = fs.readFileSync('index.html', 'utf8');
-const migration = fs.readFileSync('supabase/migrations/20260818_platform_owner_and_billing.sql', 'utf8');
-const crewPolicy = fs.readFileSync('supabase/migrations/20260818_crew_tier_usage_policy.sql', 'utf8');
-const crewAutomation = fs.readFileSync('supabase/migrations/20260818_crew_tier_automation_and_visibility.sql', 'utf8');
+const support = fs.readFileSync('support.html', 'utf8');
+const training = fs.readFileSync('training/index.html', 'utf8');
+const migration = fs.readFileSync('supabase/migrations/20260818010000_platform_owner_and_billing.sql', 'utf8');
+const crewPolicy = fs.readFileSync('supabase/migrations/20260818020000_crew_tier_usage_policy.sql', 'utf8');
+const crewAutomation = fs.readFileSync('supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql', 'utf8');
+const crewRpcLockdown = fs.readFileSync('supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql', 'utf8');
 const crewLimitMigration = fs.readFileSync('supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql', 'utf8');
 const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/index.ts', 'utf8');
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
 const upgrade = fs.readFileSync('supabase/functions/create-plan-upgrade/index.ts', 'utf8');
 const webhook = fs.readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
+const webhookLogic = fs.readFileSync('supabase/functions/stripe-webhook/logic.ts', 'utf8');
+const webhookTests = fs.readFileSync('supabase/functions/stripe-webhook/logic_test.ts', 'utf8');
+const functionConfig = fs.readFileSync('supabase/config.toml', 'utf8');
+const vercelConfig = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
 const isolation = fs.readFileSync('scripts/test-platform-billing-isolation.mjs', 'utf8');
 const isolationWorkflow = fs.readFileSync('.github/workflows/test-platform-billing-isolation.yml', 'utf8');
 
@@ -58,10 +69,46 @@ parseInlineScripts('billing.html', billing);
 assertUniqueIds('owner.html', owner);
 assertUniqueIds('billing.html', billing);
 
-for (const [name, source] of [['index.html', app], ['owner.html', owner], ['billing.html', billing]]) {
-  if (!source.includes("/\\.vercel\\.app$/i")) throw new Error(`${name} must recognize Vercel preview deployments.`);
+for (const [name, source] of [['index.html', app], ['owner.html', owner], ['billing.html', billing], ['support.html', support], ['training/index.html', training]]) {
+  if (!source.includes("LINECREW_PRODUCTION_HOSTS")) throw new Error(`${name} must use the exact production-host allowlist.`);
+  if (source.includes("vercel\\.app$/i") || source.includes(".vercel.app$/i")) {
+    throw new Error(`${name} must not treat every Vercel alias as production-capable.`);
+  }
+  for (const host of ['linecrewpro.com','www.linecrewpro.com','app.linecrewpro.com']) {
+    if (!source.includes(host)) throw new Error(`${name} is missing production host ${host}.`);
+  }
   if (!source.includes('https://yvuxrqrdprquxypiffpa.supabase.co')) throw new Error(`${name} must isolate Vercel previews in Supabase Test.`);
   if (!source.includes('SANDBOX TEST')) throw new Error(`${name} must visibly identify the test environment.`);
+}
+
+const productionCspRule = vercelConfig.headers.find(rule =>
+  rule.has?.some(condition => condition.type === 'host' && String(condition.value).includes('linecrewpro')) &&
+  !rule.missing
+);
+const productionCsp = productionCspRule?.headers?.find(header => header.key === 'Content-Security-Policy')?.value || '';
+if (!productionCsp) throw new Error('vercel.json is missing the production-host CSP rule.');
+if (productionCsp.includes('yvuxrqrdprquxypiffpa')) throw new Error('Production CSP must not allow the Supabase Test project.');
+const sandboxCspRule = vercelConfig.headers.find(rule =>
+  rule.missing?.some(condition =>
+    condition.type === 'host' &&
+    String(condition.value).includes('linecrewpro') &&
+    String(condition.value).includes('app\\.linecrewpro\\.com')
+  )
+);
+const sandboxCsp = sandboxCspRule?.headers?.find(header =>
+  header.key === 'Content-Security-Policy'
+)?.value || '';
+if (!sandboxCsp) throw new Error('Sandbox CSP must allow the Supabase Test project.');
+if (sandboxCsp.includes('ldgkyxuozbozgkvwzadg')) throw new Error('Sandbox CSP must not allow the production Supabase project.');
+
+const migrationOrder = [
+  '20260818010000_platform_owner_and_billing.sql',
+  '20260818020000_crew_tier_usage_policy.sql',
+  '20260818030000_crew_tier_automation_and_visibility.sql',
+];
+if (migrationOrder.join('\n') !== [...migrationOrder].sort().join('\n')) throw new Error('Billing migrations are not in dependency order.');
+for (const legacy of ['20260818_platform_owner_and_billing.sql','20260818_crew_tier_usage_policy.sql','20260818_crew_tier_automation_and_visibility.sql']) {
+  if (fs.existsSync(`supabase/migrations/${legacy}`)) throw new Error(`Legacy unordered migration still exists: ${legacy}`);
 }
 
 for (const marker of ['is_platform_owner','platform_owner_company_dashboard','platform_owner_set_subscription','editAccessOverride','internal_notes','rolling_overage_crew_days','recommended_plan_code']) {
@@ -79,6 +126,17 @@ for (const marker of [
 ]) {
   if (!billing.includes(marker)) throw new Error(`billing.html is missing portal return state: ${marker}`);
 }
+for (const signature of [
+  'capture_company_crew_usage(uuid,date)',
+  'capture_all_company_crew_usage(date)',
+  'recalculate_company_crew_overage(uuid)',
+]) {
+  const escaped = signature.replace(/[()]/g, value => `\\${value}`);
+  if (!new RegExp(`revoke all on function public\\.${escaped}[^;]*from public, anon, authenticated`, 'is').test(crewRpcLockdown)) {
+    throw new Error(`Crew usage ACL lockdown is missing authenticated revoke for ${signature}.`);
+  }
+}
+if (!crewRpcLockdown.includes('last_stripe_event_created bigint')) throw new Error('Crew RPC lockdown migration must add the Stripe event ordering column.');
 for (const marker of [
   "billingResult==='upgrade-return'",
   'Upgrade Plan',
@@ -115,8 +173,8 @@ for (const marker of ['enforce_active_crew_plan_limit','pg_advisory_xact_lock','
   if (!crewLimitMigration.includes(marker)) throw new Error(`Active crew plan-limit migration missing ${marker}.`);
 }
 
-for (const marker of ['planForStripePrice','BILLING_PLAN_PRICE_MAP','recalculate_company_crew_overage']) {
-  if (!webhook.includes(marker)) throw new Error(`Stripe webhook missing plan-switch synchronization marker ${marker}.`);
+for (const marker of ['planForSubscriptionEvent','BILLING_PLAN_PRICE_MAP','recalculate_company_crew_overage','last_stripe_event_created','eventCreatedSeconds','resolveCompanyId','assertEventEnvironment']) {
+  if (!webhook.includes(marker)) throw new Error(`Stripe webhook missing hardened synchronization marker ${marker}.`);
 }
 for (const marker of [
   'peak_billable_crews',
@@ -142,6 +200,9 @@ if (!checkout.includes('String(profile.role).toLowerCase() !== "admin"')) throw 
 if (!checkout.includes('already has a Stripe subscription')) throw new Error('Checkout must guard against duplicate live subscriptions.');
 if (!portal.includes('String(profile.role).toLowerCase() !== "admin"')) throw new Error('Billing portal must require company Admin role.');
 if (!portal.includes('/billing.html?billing=portal-return')) throw new Error('Billing portal must return to the contractor billing page.');
+for (const marker of ['STRIPE_MANAGE_PORTAL_CONFIGURATION_ID','linecrew_manage_only_v1','subscription_update','update?.enabled !== true','params.set("configuration", portalConfiguration)']) {
+  if (!portal.includes(marker)) throw new Error(`Manage Billing portal is missing required safety marker: ${marker}`);
+}
 for (const marker of [
   'STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID',
   'linecrew_upgrade_only_v1',
@@ -163,10 +224,37 @@ for (const marker of [
 }
 if (!webhook.includes('stripe-signature') || !webhook.includes('verifyStripeSignature')) throw new Error('Stripe webhook signature validation is missing.');
 if (!webhook.includes('eventInsertError.code !== "23505"')) throw new Error('Stripe webhook must recognize unique-event retries by PostgreSQL error code.');
-if (!webhook.includes('prior?.processed_at')) throw new Error('Stripe webhook must distinguish completed duplicates from retryable failed events.');
+if (!webhook.includes('priorEvent?.processed_at')) throw new Error('Stripe webhook must distinguish completed duplicates from retryable failed events.');
 if (!webhook.includes('invoice.paid is intentionally audit-only')) throw new Error('Stripe invoice.paid must not blindly reactivate a subscription.');
 if (!webhook.includes('scheduledCancelUnix') || !webhook.includes('scheduledCancelUnix === currentPeriodEndUnix')) {
   throw new Error('Stripe webhook must recognize cancel_at resolved to the current period end.');
+}
+if (!webhook.includes('Checkout completion only links Stripe identities')) {
+  throw new Error('Checkout completion must not overwrite subscription plan or price state.');
+}
+if (!webhookLogic.includes('eventType === "customer.subscription.deleted"')) throw new Error('Cancellation must be handled independently of the current price map.');
+if (!webhookLogic.includes('return prior') || !webhookTests.includes('deleted event keeps prior plan without map')) throw new Error('Cancellation-with-rotated-price regression coverage is missing.');
+if (!webhookTests.includes('older events are stale')) throw new Error('Out-of-order Stripe event regression coverage is missing.');
+if (!webhookTests.includes('customer-metadata mismatch rejects')) throw new Error('Stripe customer/company ownership regression coverage is missing.');
+if (!webhookTests.includes('mismatched livemode rejects')) throw new Error('Stripe live/test separation regression coverage is missing.');
+if (!upgrade.includes('if (configuredId)') || !upgrade.includes('configuration ID is invalid')) throw new Error('Upgrade portal must reject a malformed explicit configuration ID.');
+const authCheckPosition = upgrade.indexOf('String(profile.role).toLowerCase() !== "admin"');
+const portalResolutionPosition = upgrade.indexOf('const portalConfiguration = await resolveUpgradePortalConfiguration');
+if (authCheckPosition < 0 || portalResolutionPosition < authCheckPosition) throw new Error('Upgrade portal contacts Stripe before verifying the company Admin.');
+
+for (const [name, verifyJwt] of [
+  ['stripe-webhook', false],
+  ['complete-team-invitation-signup', false],
+  ['capture-crew-usage', true],
+  ['create-billing-checkout', true],
+  ['create-billing-portal', true],
+  ['create-plan-upgrade', true],
+  ['linecrew-assistant', true],
+  ['parse-utility-job-packet', true],
+  ['send-team-invitation', true],
+]) {
+  const block = new RegExp(`\\[functions\\.${name}\\]\\s+verify_jwt\\s*=\\s*${verifyJwt}`, 'm');
+  if (!block.test(functionConfig)) throw new Error(`supabase/config.toml must explicitly set verify_jwt=${verifyJwt} for ${name}.`);
 }
 
 for (const marker of ['DISPOSABLE_ONLY','SUPABASE_PRODUCTION_PROJECT_REF','platform_owner_company_dashboard','my_company_billing_summary','my_company_subscription_access','company_subscriptions','platform_owners','Foreman accessed company Admin billing summary']) {

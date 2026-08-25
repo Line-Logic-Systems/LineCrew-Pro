@@ -114,6 +114,26 @@ async function main() {
 
   const [tokenA, tokenB] = await Promise.all([signIn(userA.email), signIn(userB.email)]);
 
+  // These maintenance RPCs accept an explicit company UUID and must remain
+  // service-role only. A company token must not be able to inspect or poison a
+  // different company's rolling billing usage.
+  const injectedDate = isoDateOffset(-20);
+  const deniedCapture = await rpc(tokenA, "capture_company_crew_usage", {
+    p_company_id: companyB.id,
+    p_usage_date: injectedDate,
+  });
+  assert(!deniedCapture.ok, "SECURITY FAILURE: company A captured company B crew usage.");
+  const deniedRecalc = await rpc(tokenA, "recalculate_company_crew_overage", {
+    p_company_id: companyB.id,
+  });
+  assert(!deniedRecalc.ok, "SECURITY FAILURE: company A recalculated company B billing state.");
+  const deniedCaptureAll = await rpc(tokenA, "capture_all_company_crew_usage", {
+    p_usage_date: injectedDate,
+  });
+  assert(!deniedCaptureAll.ok, "SECURITY FAILURE: a company token ran the platform-wide usage job.");
+  const injectedUsage = await request(`/rest/v1/company_crew_usage_daily?company_id=eq.${companyB.id}&usage_date=eq.${injectedDate}&select=company_id`);
+  assert(injectedUsage.ok && injectedUsage.data.length === 0, "SECURITY FAILURE: denied crew-usage call still injected a victim usage row.");
+
   const ownerA = await rpc(tokenA, "is_platform_owner");
   const ownerB = await rpc(tokenB, "is_platform_owner");
   assert(ownerA.ok && ownerA.data === false, "SECURITY FAILURE: ordinary company Admin A became a platform owner.");

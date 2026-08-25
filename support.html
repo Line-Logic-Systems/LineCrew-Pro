@@ -53,7 +53,17 @@
   </section>
 </main>
 <script>
-const client=supabase.createClient('https://ldgkyxuozbozgkvwzadg.supabase.co','sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF');
+const LINECREW_PRODUCTION_HOSTS=new Set(['linecrewpro.com','www.linecrewpro.com','app.linecrewpro.com']);
+const IS_LINECREW_PRODUCTION=LINECREW_PRODUCTION_HOSTS.has(window.location.hostname.toLowerCase());
+const SUPPORT_SUPABASE_URL=IS_LINECREW_PRODUCTION?'https://ldgkyxuozbozgkvwzadg.supabase.co':'https://yvuxrqrdprquxypiffpa.supabase.co';
+const SUPPORT_SUPABASE_KEY=IS_LINECREW_PRODUCTION?'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF':'sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx';
+const client=supabase.createClient(SUPPORT_SUPABASE_URL,SUPPORT_SUPABASE_KEY);
+if(!IS_LINECREW_PRODUCTION){
+  const sandboxBanner=document.createElement('div');sandboxBanner.setAttribute('role','status');
+  sandboxBanner.textContent='SANDBOX TEST — No real companies or support access';
+  sandboxBanner.style.cssText='background:#fff3cd;color:#664d03;border-bottom:1px solid #ffecb5;padding:9px 14px;text-align:center;font-weight:800;font-size:13px';
+  document.body.prepend(sandboxBanner);
+}
 const $=id=>document.getElementById(id);const esc=v=>String(v??'');
 function fail(message){$('loading').classList.add('hidden');$('error').textContent=message;$('error').classList.remove('hidden')}
 function date(value){return value?new Date(value).toLocaleString():'—'}

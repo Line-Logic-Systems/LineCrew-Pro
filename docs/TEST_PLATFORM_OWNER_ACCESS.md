@@ -4,9 +4,11 @@ This procedure is for the disposable **LineCrew Pro Test** Supabase project only
 
 ## Prerequisites
 
-- The platform-owner/billing migration has been applied to the test project.
-- `20260818_crew_tier_usage_policy.sql` has been applied.
-- `20260818_crew_tier_automation_and_visibility.sql` has been applied.
+- `20260818010000_platform_owner_and_billing.sql` has been applied to the test project.
+- `20260818020000_crew_tier_usage_policy.sql` has been applied.
+- `20260818030000_crew_tier_automation_and_visibility.sql` has been applied.
+- `20260824223848_enforce_active_crew_plan_limit.sql` has been applied.
+- `20260825000000_lock_crew_usage_rpc_execution.sql` has been applied last.
 - The GitHub `isolation-test` environment contains the disposable-project Supabase secrets already used by `Test platform billing isolation`.
 - The Auth user you want to use already exists in the LineCrew Pro Test Supabase project.
 

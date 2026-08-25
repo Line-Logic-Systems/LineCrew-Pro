@@ -6,7 +6,15 @@ Nothing in this design requires exposing a Supabase service-role key, Stripe sec
 
 ## 1. Database migration
 
-Run `supabase/migrations/20260818_platform_owner_and_billing.sql` in Supabase before deploying `owner.html`, `billing.html`, or the billing Edge Functions.
+Apply the billing migrations through the Supabase migration runner in filename order:
+
+1. `20260818010000_platform_owner_and_billing.sql`
+2. `20260818020000_crew_tier_usage_policy.sql`
+3. `20260818030000_crew_tier_automation_and_visibility.sql`
+4. `20260824223848_enforce_active_crew_plan_limit.sql`
+5. `20260825000000_lock_crew_usage_rpc_execution.sql`
+
+Do not paste or apply these out of order. The platform/subscription tables must exist before crew usage and automation are installed. The final migration runs after the repository's general SECURITY DEFINER privilege sweep and revokes authenticated access from the service-only crew-usage RPCs.
 
 The migration creates:
 - `platform_owners`: explicit LineCrew Pro platform-owner allowlist keyed to Supabase Auth user ID.
@@ -92,14 +100,16 @@ Set these Supabase Edge Function secrets/config values:
 
 - `STRIPE_SECRET_KEY` — Stripe secret key. Use a Stripe test-mode key first.
 - `STRIPE_WEBHOOK_SECRET` — signing secret for the deployed webhook endpoint.
+- `STRIPE_ENVIRONMENT` — exactly `test` or `live`; the webhook rejects events from the other Stripe mode. If omitted, the webhook derives the mode only from a recognizable `sk_test_` or `sk_live_` secret.
 - `APP_URL` — LineCrew Pro base URL with no trailing slash.
 - `BILLING_PLAN_PRICE_MAP` — JSON object mapping LineCrew Pro plan codes to Stripe Price IDs.
+- `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated normal Manage Billing Portal. If omitted, the server discovers exactly one active configuration labeled `linecrew_purpose=linecrew_manage_only_v1`.
 - `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated Stripe Customer Portal configuration used only by the upgrade-confirmation flow. If omitted, the server discovers exactly one active configuration labeled with metadata `linecrew_purpose=linecrew_upgrade_only_v1` and otherwise fails closed.
 
 Example shape only:
 
 ```json
-{"standard":"price_REPLACE_ME","pro":"price_REPLACE_ME"}
+{"starter":"price_REPLACE_ME","business":"price_REPLACE_ME","pro":"price_REPLACE_ME","enterprise":"price_REPLACE_ME"}
 ```
 
 The real Price IDs belong in the Edge Function secret/config store, not in `billing.html`, `owner.html`, `index.html`, or the repository.
@@ -125,7 +135,9 @@ The plan map fails closed: no configured mapping means no Checkout.
 
 ### Upgrade-only Stripe Portal configuration
 
-Keep plan switching **off** in the normal Customer Portal used by the **Manage Billing** button. Create a separate Stripe Customer Portal configuration for upgrade confirmations. Label it with metadata `linecrew_purpose=linecrew_upgrade_only_v1`. You may also put its `bpc_...` ID in `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`; the explicit ID takes precedence.
+Create a normal Customer Portal configuration for **Manage Billing**, keep subscription plan switching **off**, and label it with metadata `linecrew_purpose=linecrew_manage_only_v1`. You may put its `bpc_...` ID in `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID`. The function verifies the configuration on every request and fails closed if plan switching is enabled.
+
+Create a separate Stripe Customer Portal configuration for upgrade confirmations. Label it with metadata `linecrew_purpose=linecrew_upgrade_only_v1`. You may also put its `bpc_...` ID in `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`; the explicit ID takes precedence.
 
 The dedicated configuration must allow **price changes only**, use `always_invoice` proration, and include the Starter, Business, Pro, and Enterprise monthly products/prices. It is never opened as a general portal. `create-plan-upgrade` verifies the price-only and immediate-proration settings on every request; Stripe rejects a server-selected target that is not in the configuration. The endpoint uses the configuration only with Stripe's `subscription_update_confirm` deep-link flow, which displays the exact server-selected higher plan and its immediate prorated charge for confirmation.
 
@@ -145,6 +157,8 @@ The browser submits only a plan code such as `business`. It never submits or con
 ## 7. Stripe webhook endpoint
 
 Point Stripe to the deployed `stripe-webhook` Edge Function URL. The function validates `Stripe-Signature` with HMAC SHA-256 and a five-minute timestamp tolerance before processing the JSON body.
+
+`supabase/config.toml` intentionally sets `verify_jwt=false` only for the Stripe webhook and invitation-completion endpoint. Stripe authenticates with its signature, not a Supabase user JWT. All other Edge Functions are explicitly pinned to `verify_jwt=true`.
 
 Subscribe to these events:
 - `checkout.session.completed`
@@ -231,9 +245,9 @@ For customer-specific negotiated prices, create the needed Stripe Price and map 
 
 ## 12. Safe test order
 
-1. Apply `20260818_platform_owner_and_billing.sql` to the disposable **LineCrew Pro Test** project only.
+1. Apply all five billing migrations listed in section 1, in filename order, to the disposable **LineCrew Pro Test** project only.
 2. Add one test Auth user to `platform_owners`.
-3. Use a Vercel preview deployment. `index.html`, `owner.html`, and `billing.html` automatically select the disposable LineCrew Pro Test project on `*.vercel.app` hosts, while `app.linecrewpro.com` continues to select production. Every preview page displays a sandbox banner.
+3. Use a Vercel preview deployment. Only `linecrewpro.com`, `www.linecrewpro.com`, and `app.linecrewpro.com` select production; every other hostname fails safely to the disposable Test project and displays a sandbox banner.
 4. Confirm an ordinary contractor Admin is denied from `owner.html`.
 5. From the owner console, change a single test company's manual plan/status/access override and confirm no second company changes.
 6. Confirm owner audit rows are created for owner-side subscription changes.
@@ -247,7 +261,7 @@ For customer-specific negotiated prices, create the needed Stripe Price and map 
 14. Force a webhook-processing failure in the disposable project, retry the same Stripe event, and confirm it can recover from an unprocessed ledger row.
 15. Verify a normal Foreman cannot use `my_company_billing_summary()`.
 16. Open Stripe Customer Portal from a company Admin session.
-17. Keep plan switching and quantity changes disabled in the normal sandbox Customer Portal.
+17. Create a sandbox Manage Billing Portal labeled `linecrew_purpose=linecrew_manage_only_v1`, keep plan switching and quantity changes disabled, and optionally save its ID as `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID`.
 18. Create a dedicated sandbox Portal configuration labeled `linecrew_purpose=linecrew_upgrade_only_v1` that permits price changes only, uses `always_invoice` proration, and includes the Starter, Business, Pro, and Enterprise monthly products. Optionally save its ID as `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`.
 19. Use the billing page to upgrade the test subscription and confirm Stripe shows the exact higher plan and proration before confirmation.
 20. Confirm the billing page updates its plan, price, and active-crew limit from the new Stripe Price ID after the webhook arrives.

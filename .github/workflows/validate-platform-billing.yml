@@ -1,5 +1,8 @@
 name: Validate platform owner and billing
 
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -9,10 +12,16 @@ on:
     paths:
       - 'owner.html'
       - 'billing.html'
+      - 'index.html'
+      - 'support.html'
+      - 'training/index.html'
+      - 'vercel.json'
       - 'docs/PLATFORM_OWNER_BILLING.md'
-      - 'supabase/migrations/20260818_platform_owner_and_billing.sql'
-      - 'supabase/migrations/20260818_crew_tier_usage_policy.sql'
-      - 'supabase/migrations/20260818_crew_tier_automation_and_visibility.sql'
+      - 'supabase/migrations/20260818010000_platform_owner_and_billing.sql'
+      - 'supabase/migrations/20260818020000_crew_tier_usage_policy.sql'
+      - 'supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql'
+      - 'supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql'
+      - 'supabase/config.toml'
       - 'supabase/functions/create-billing-checkout/**'
       - 'supabase/functions/create-billing-portal/**'
       - 'supabase/functions/create-plan-upgrade/**'
@@ -38,6 +47,8 @@ jobs:
         run: |
           node scripts/validate-platform-billing.mjs
           node --check scripts/test-platform-billing-isolation.mjs
+      - name: Test Stripe webhook decision logic
+        run: deno test supabase/functions/stripe-webhook/logic_test.ts
       - name: Type-check billing Edge Functions
         run: |
           deno check supabase/functions/create-billing-checkout/index.ts

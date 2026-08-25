@@ -97,7 +97,11 @@ $$;
 revoke all on function public.is_platform_owner() from public, anon;
 grant execute on function public.is_platform_owner() to authenticated;
 
-create or replace function public.platform_owner_company_dashboard()
+-- This migration may be replayed after the original unversioned billing
+-- migrations. The crew-automation migration expands this return signature,
+-- and PostgreSQL cannot change a function return type with CREATE OR REPLACE.
+drop function if exists public.platform_owner_company_dashboard();
+create function public.platform_owner_company_dashboard()
 returns table (
   company_id uuid,
   company_name text,
@@ -306,7 +310,8 @@ $$;
 revoke all on function public.my_company_subscription_access() from public, anon;
 grant execute on function public.my_company_subscription_access() to authenticated;
 
-create or replace function public.my_company_billing_summary()
+drop function if exists public.my_company_billing_summary();
+create function public.my_company_billing_summary()
 returns table (
   plan_code text,
   monthly_price_cents integer,
