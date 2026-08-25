@@ -2,7 +2,9 @@
 
 ## What works immediately
 
-The Admin-only assistant includes built-in help for company setup, Team roles, Customers, Contracts, Price Books, Jobs, utility job packets, Morning JSA, daily reports, approvals, redlines, pending packets, Storm Mode, reporting, exports and password recovery. It can explain Foreman, General Foreman and Admin workflows to an Admin. If the AI service is not deployed or is unavailable, core answers remain available.
+The Owner/Admin-only assistant is an operations coach for the full LineCrew Pro role model. It understands Owner, Admin, Superintendent, General Foreman and Foreman responsibilities; role handoffs; company setup; Team roles; Customers; Contracts; Price Books; Jobs; utility job packets; Morning JSA; daily reports; timekeeping; approvals; redlines; pending packets; billing batches; job closeout; Storm Mode; reporting; company subscription billing; exports; training and password recovery. If the AI service is not deployed or is unavailable, core answers remain available.
+
+The live assistant receives only the authenticated caller's role, current app page, company name and company-scoped aggregate counts. It does not receive raw production rows, employee details, prices, attachments or another contractor's context. Aggregate report-status counts help it identify likely setup and review-queue conditions without exposing report content.
 
 ## Enable live AI answers
 
@@ -42,8 +44,13 @@ Supabase supplies `SUPABASE_URL` and `SUPABASE_ANON_KEY` to hosted Edge Function
 7. Ask: “How can I add another Admin?”
 8. Ask: “How does a Foreman complete the Morning JSA?”
 9. Ask: “How do I assign only some crews to Storm Mode?”
-10. Temporarily disable the Edge Function and confirm built-in answers still appear for the role questions.
-11. Re-enable the function and confirm live answers return.
+10. Ask: “Who handles each step from a Foreman’s Daily Report through job closeout?”
+11. Ask: “What can a Superintendent do if Price Books permission is disabled?”
+12. Ask: “What is the difference between a production Billing Batch and our LineCrew Pro Stripe subscription?”
+13. Ask: “How do I review time before payroll export?” Confirm the answer requires company/payroll verification and does not invent wage rules.
+14. Ask an ambiguous question such as “Why is this stuck?” Confirm it asks one focused question or offers the two most likely paths rather than inventing a record status.
+15. Temporarily disable the Edge Function and confirm built-in answers still appear for the role questions.
+16. Re-enable the function and confirm live answers return.
 
 ## Real-world use
 
