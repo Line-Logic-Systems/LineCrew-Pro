@@ -16,13 +16,17 @@
       .lc-unsaved-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#8a4b08;background:#fff4db;border:1px solid #f2c97d;border-radius:999px;padding:5px 9px;margin-left:8px}
       .lc-dashboard-topbar{display:flex;justify-content:flex-end;margin:0 0 12px}
       .lc-dashboard-topbar button{width:auto;margin:0;padding:10px 14px}
-      #teamList{display:grid;gap:6px}
-      #teamList .lc-team-member-row{padding:9px 12px!important;margin:0!important;border-radius:10px!important;box-shadow:none!important}
-      #teamList .lc-team-member-row strong{font-size:13px;line-height:1.2}
-      #teamList .lc-team-member-row .role{font-size:11px;line-height:1.2;margin:2px 0 6px!important}
-      #teamList .lc-team-member-row select{width:auto;min-width:130px;padding:7px 9px;font-size:12px;border-radius:8px;margin:0 5px 0 0}
-      #teamList .lc-team-member-row button{width:auto;margin:0 5px 0 0;padding:7px 9px;font-size:11px;border-radius:8px}
-      #teamList .lc-team-member-row > div{margin-top:5px!important;margin-bottom:5px!important}
+      #teamList{display:grid;gap:5px}
+      #teamList .lc-team-member-row{padding:7px 10px!important;margin:0!important;border-radius:9px!important;box-shadow:none!important}
+      #teamList .lc-team-member-row strong{font-size:12px;line-height:1.15}
+      #teamList .lc-team-member-row .role{font-size:10px;line-height:1.15;margin:2px 0 5px!important}
+      #teamList .lc-team-member-row select{width:auto;min-width:125px;padding:6px 8px;font-size:11px;border-radius:7px;margin:0 4px 0 0}
+      #teamList .lc-team-member-row button{width:auto;margin:0 4px 0 0;padding:6px 8px;font-size:10px;border-radius:7px}
+      #teamList .lc-team-member-row > div{margin-top:4px!important;margin-bottom:4px!important}
+      .lc-team-tools{display:grid;grid-template-columns:minmax(0,1fr) 190px auto;gap:8px;align-items:center;margin:8px 0 10px}
+      .lc-team-tools input,.lc-team-tools select{margin:0;padding:9px 10px;font-size:12px;border-radius:9px}
+      .lc-team-count{font-size:11px;color:#607386;white-space:nowrap;text-align:right}
+      .lc-team-empty{padding:12px;border:1px dashed #cbd7e2;border-radius:9px;color:#607386;font-size:12px;background:#f8fbfe}
       @media(max-width:720px){
         #timekeepingPage .tk-grid{grid-template-columns:1fr!important}
         #timekeepingPage .tk-summary{grid-template-columns:1fr 1fr!important}
@@ -34,7 +38,8 @@
         #timekeepingPage .tk-table td:empty{display:none}
         #timekeepingPage .tk-inline-actions button{flex:1;min-width:140px}
         .section-header{gap:10px;align-items:flex-start!important;flex-wrap:wrap}
-        #teamList .lc-team-member-row select{min-width:120px}
+        #teamList .lc-team-member-row select{min-width:115px}
+        .lc-team-tools{grid-template-columns:1fr 1fr}.lc-team-count{grid-column:1 / -1;text-align:left}
       }
     `;document.head.appendChild(s);
   }
@@ -47,7 +52,6 @@
   }
   window.LineCrewUI={...(window.LineCrewUI||{}),toast};
 
-  // Convert legacy alert calls in newer modules into non-blocking app messages.
   if(!window.__lcNativeAlert){window.__lcNativeAlert=window.alert.bind(window);window.alert=(msg)=>toast(msg,/failed|could not|error|unable/i.test(String(msg))?'error':/returned|warning|correct/i.test(String(msg))?'warning':'info',4200);}
 
   function loadingButton(btn, busyText){
@@ -64,6 +68,56 @@
     }
   }
 
+  function teamMemberRole(card){
+    const text=String(card.textContent||'').toLowerCase();
+    if(text.includes('role: general foreman')) return 'gf';
+    if(text.includes('role: superintendent')) return 'superintendent';
+    if(text.includes('role: admin')) return 'admin';
+    if(text.includes('role: owner')) return 'owner';
+    if(text.includes('role: foreman')) return 'foreman';
+    return '';
+  }
+
+  function applyTeamFilters(){
+    const list=byId('teamList');
+    if(!list) return;
+    const search=String(byId('lcTeamSearch')?.value||'').trim().toLowerCase();
+    const roleFilter=String(byId('lcTeamRoleFilter')?.value||'all');
+    let total=0,visible=0;
+    Array.from(list.children).forEach(card=>{
+      if(!card.classList.contains('lc-team-member-row')) return;
+      total++;
+      const haystack=String(card.textContent||'').toLowerCase();
+      const role=teamMemberRole(card);
+      const matchesSearch=!search || haystack.includes(search);
+      const matchesRole=roleFilter==='all' || role===roleFilter;
+      const show=matchesSearch && matchesRole;
+      card.style.display=show?'':'none';
+      if(show) visible++;
+    });
+    const count=byId('lcTeamCount');
+    if(count) count.textContent=`Showing ${visible} of ${total}`;
+    const empty=byId('lcTeamEmpty');
+    if(empty) empty.hidden=visible!==0 || total===0;
+  }
+
+  function ensureTeamTools(){
+    const list=byId('teamList');
+    if(!list) return;
+    if(!byId('lcTeamTools')){
+      const tools=document.createElement('div');
+      tools.id='lcTeamTools';
+      tools.className='lc-team-tools';
+      tools.innerHTML='<input id="lcTeamSearch" type="search" placeholder="Search team by name or role" aria-label="Search team">'+
+        '<select id="lcTeamRoleFilter" aria-label="Filter team by role"><option value="all">All roles</option><option value="foreman">Foremen</option><option value="gf">General Foremen</option><option value="superintendent">Superintendents</option><option value="admin">Admins</option><option value="owner">Owners</option></select>'+
+        '<span id="lcTeamCount" class="lc-team-count"></span>';
+      list.parentNode.insertBefore(tools,list);
+      const empty=document.createElement('div');empty.id='lcTeamEmpty';empty.className='lc-team-empty';empty.hidden=true;empty.textContent='No team members match this search.';list.parentNode.insertBefore(empty,list.nextSibling);
+      byId('lcTeamSearch').addEventListener('input',applyTeamFilters);
+      byId('lcTeamRoleFilter').addEventListener('change',applyTeamFilters);
+    }
+  }
+
   function compactTeamRoster(){
     const list=byId('teamList');
     if(!list) return;
@@ -71,9 +125,10 @@
       if(!/Role:\s*/i.test(card.textContent||'')) return;
       card.classList.add('lc-team-member-row');
     });
+    ensureTeamTools();
+    applyTeamFilters();
   }
 
-  // Put Sign Out at the top of the Dashboard for every signed-in role.
   function ensureTopSignOut(){
     const dashboard=byId('dashboardPage');
     if(!dashboard || byId('lcDashboardTopSignOut')) return;
@@ -91,7 +146,6 @@
     dashboard.insertBefore(bar,dashboard.firstChild);
   }
 
-  // Prevent two overlapping Production refreshes from rendering the same report twice.
   function hardenProductionLoader(){
     if(window.__lcProductionLoaderHardened || typeof window.loadProductionReports!=='function') return;
     window.__lcProductionLoaderHardened=true;
@@ -128,7 +182,6 @@
     });
   }
 
-  // Unsaved-change guard for the two highest-risk field forms.
   let dirty=false;let dirtyScope=null;
   const tracked=['dailyReportForm','safetyJsaForm'];
   document.addEventListener('input',e=>{const form=e.target?.closest?.('form');if(form && tracked.includes(form.id)){dirty=true;dirtyScope=form.id;form.dataset.lcDirty='1';}},true);
