@@ -277,6 +277,7 @@ assert(restoreBackupStorage.includes("['.pdf', 'application/pdf']") && restoreBa
 assert(restoreBackupStorage.includes("['.mp4', 'video/mp4']"), 'The full recovery drill must recognize backed-up training videos.');
 assert(restoreBackupStorage.includes('/storage/v1/upload/resumable') && restoreBackupStorage.includes('6 * 1024 * 1024'), 'Large Storage restores must use Supabase resumable uploads with 6 MB chunks.');
 assert(restoreBackupStorage.includes("'tus-resumable': '1.0.0'") && restoreBackupStorage.includes("'upload-offset': String(offset)"), 'Large Storage restores must implement guarded TUS offsets.');
+assert((restoreBackupStorage.match(/'x-upsert': 'true'/g) || []).length >= 3, 'Standard, resumable-create and resumable-chunk requests must all allow idempotent recovery overwrites.');
 assert(restoreBackupStorage.includes('Recovery project Storage limit is too small'), 'Recovery must clearly identify an undersized project Storage limit.');
 assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
 assert(verifyRestoredManagedCounts.includes("'auth.users'") && verifyRestoredManagedCounts.includes("'storage.objects'"), 'The full recovery drill must compare restored Auth and Storage row counts.');
