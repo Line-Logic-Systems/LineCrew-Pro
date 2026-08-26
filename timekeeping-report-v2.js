@@ -6,6 +6,8 @@
   const num=v=>Number(v||0)||0;
   const getSb=()=>{try{return typeof sb!=='undefined'?sb:(window.sb||window.supabaseClient||null);}catch(_){return window.sb||window.supabaseClient||null;}};
   const profile=()=>typeof currentProfile!=='undefined'?currentProfile:window.currentProfile;
+  const role=()=>String(profile()?.role||'').toLowerCase();
+  const canEditTime=()=>['owner','admin'].includes(role());
   let rows=[];
   let employees=new Map();
   let jobs=new Map();
@@ -18,26 +20,40 @@
     const style=document.createElement('style');
     style.id='tkReportV2Styles';
     style.textContent=`
-      .tk-report-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 12px}
-      .tk-report-toolbar button{width:auto;margin:0;padding:8px 12px}
-      .tk-employee-summary{border:1px solid #dce5ed;border-radius:12px;background:#fff;margin:8px 0;overflow:hidden}
-      .tk-employee-summary>summary{cursor:pointer;list-style:none;padding:11px 12px;display:grid;grid-template-columns:minmax(150px,1.7fr) repeat(4,minmax(74px,.75fr));gap:8px;align-items:center}
+      .tk-report-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 8px}
+      .tk-report-toolbar button{width:auto;margin:0;padding:6px 9px;font-size:12px}
+      .tk-employee-summary{border-bottom:1px solid #dce5ed;background:#fff;margin:0;overflow:hidden}
+      .tk-employee-summary:first-of-type{border-top:1px solid #dce5ed}
+      .tk-employee-summary>summary{cursor:pointer;list-style:none;padding:5px 7px;display:grid;grid-template-columns:18px minmax(150px,1.7fr) repeat(4,minmax(62px,.65fr));gap:5px;align-items:center;min-height:30px}
       .tk-employee-summary>summary::-webkit-details-marker{display:none}
-      .tk-employee-summary>summary:before{content:'▸';font-size:12px;margin-right:4px}
-      .tk-employee-summary[open]>summary:before{content:'▾'}
-      .tk-employee-name{display:flex;align-items:center;gap:4px;min-width:0;font-weight:800}
-      .tk-employee-meta{font-size:12px;color:#617284;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .tk-employee-metric{text-align:right;font-variant-numeric:tabular-nums}
-      .tk-employee-metric strong{display:block;color:#0b2d4d;font-size:14px}
-      .tk-employee-metric span{display:block;color:#617284;font-size:10px;text-transform:uppercase}
-      .tk-employee-detail{padding:0 12px 12px;background:#f8fafc;border-top:1px solid #dce5ed}
-      .tk-employee-detail .tk-table{min-width:980px;background:#fff}
+      .tk-employee-toggle{font-size:10px;color:#1677d2;text-align:center}
+      .tk-employee-summary[open] .tk-employee-toggle{transform:rotate(90deg)}
+      .tk-employee-name{display:flex;align-items:center;gap:5px;min-width:0;font-weight:800;font-size:12px}
+      .tk-employee-meta{font-size:10px;color:#617284;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .tk-employee-metric{text-align:right;font-variant-numeric:tabular-nums;line-height:1}
+      .tk-employee-metric strong{display:inline;color:#0b2d4d;font-size:12px}
+      .tk-employee-metric span{display:block;color:#617284;font-size:8px;text-transform:uppercase;margin-top:2px}
+      .tk-employee-detail{padding:6px;background:#f8fafc;border-top:1px solid #dce5ed}
+      .tk-employee-detail .tk-table{min-width:980px;background:#fff;font-size:11px}
+      .tk-employee-detail .tk-table th,.tk-employee-detail .tk-table td{padding:5px 6px}
       .tk-per-diem-yes{font-weight:800}
+      .tk-edit-time-btn{width:auto!important;margin:0!important;padding:4px 7px!important;font-size:10px!important}
+      .tk-edit-backdrop{position:fixed;inset:0;background:rgba(6,20,34,.6);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+      .tk-edit-card{background:#fff;border-radius:16px;box-shadow:0 18px 48px rgba(0,0,0,.28);width:min(720px,100%);max-height:92vh;overflow:auto;padding:16px}
+      .tk-edit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+      .tk-edit-grid label{margin:0;font-size:11px}
+      .tk-edit-grid input{padding:8px;font-size:13px}
+      .tk-edit-wide{grid-column:1/-1}
+      .tk-edit-checks{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:10px 0}
+      .tk-edit-checks label{display:flex;align-items:center;gap:6px;margin:0;font-size:12px}
+      .tk-edit-checks input{width:auto}
+      .tk-edit-actions{display:flex;gap:8px;justify-content:flex-end}
+      .tk-edit-actions button{width:auto;margin-top:8px}
       @media(max-width:760px){
-        .tk-employee-summary>summary{grid-template-columns:1fr 1fr 1fr;padding:10px}
-        .tk-employee-name{grid-column:1/-1}
-        .tk-employee-metric{text-align:left}
-        .tk-employee-summary>summary .tk-employee-metric:last-child{grid-column:3}
+        .tk-employee-summary>summary{grid-template-columns:16px minmax(120px,1fr) repeat(2,58px);padding:5px}
+        .tk-employee-metric:nth-of-type(3),.tk-employee-metric:nth-of-type(5){display:none}
+        .tk-employee-meta{display:none}
+        .tk-edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
       }
     `;
     document.head.appendChild(style);
@@ -115,11 +131,73 @@
     });
     return [...grouped.entries()].sort((a,b)=>String(employees.get(a[0])?.full_name||'').localeCompare(String(employees.get(b[0])?.full_name||'')));
   }
+
+  function openTimeEditor(row){
+    if(!canEditTime())return;
+    byId('tkEditBackdrop')?.remove();
+    const e=employees.get(row.employee_id)||{};
+    const j=jobs.get(row.job_id)||{};
+    const wrap=document.createElement('div');
+    wrap.id='tkEditBackdrop';
+    wrap.className='tk-edit-backdrop';
+    wrap.innerHTML=`<div class="tk-edit-card">
+      <h3>Edit Submitted Time</h3>
+      <p class="muted">${esc(e.full_name||'Employee')} · ${esc(row.work_date||'')} · ${esc(j.job_number||'')}</p>
+      <div class="tk-edit-grid">
+        <label>Start<input id="tkEditStart" type="time" value="${esc(timeText(row.start_time))}"></label>
+        <label>Stop<input id="tkEditStop" type="time" value="${esc(timeText(row.stop_time))}"></label>
+        <label>Lunch (min)<input id="tkEditLunch" type="number" min="0" max="720" step="1" value="${num(row.lunch_minutes)}"></label>
+        <label>Equipment<input id="tkEditEquipment" type="text" value="${esc(row.equipment_used||'')}"></label>
+        <label>Regular Hours<input id="tkEditRegular" type="number" min="0" max="24" step="0.01" value="${num(row.regular_hours).toFixed(2)}"></label>
+        <label>OT Hours<input id="tkEditOt" type="number" min="0" max="24" step="0.01" value="${num(row.overtime_hours).toFixed(2)}"></label>
+        <label class="tk-edit-wide">Reason for correction<input id="tkEditReason" type="text" placeholder="Required for audit trail"></label>
+      </div>
+      <div class="tk-edit-checks">
+        <label><input id="tkEditPerDiem" type="checkbox" ${row.per_diem?'checked':''}> Per diem</label>
+        <label><input id="tkEditEquipmentNotUsed" type="checkbox" ${row.equipment_not_used?'checked':''}> Equipment not used</label>
+      </div>
+      <p class="tk-help">The original Daily Report remains submitted/approved. This correction updates payroll time only and records who changed it, when, why, and the before/after values.</p>
+      <div class="tk-edit-actions"><button id="tkEditCancel" type="button" class="secondary">Cancel</button><button id="tkEditSave" type="button" class="success">Save Correction</button></div>
+    </div>`;
+    document.body.appendChild(wrap);
+    byId('tkEditCancel').onclick=()=>wrap.remove();
+    wrap.addEventListener('click',ev=>{if(ev.target===wrap)wrap.remove();});
+    byId('tkEditSave').onclick=async()=>{
+      const reason=(byId('tkEditReason')?.value||'').trim();
+      if(!reason){toast('Enter a reason for the time correction.','warning');byId('tkEditReason')?.focus();return;}
+      const regular=num(byId('tkEditRegular')?.value),ot=num(byId('tkEditOt')?.value),lunch=Math.round(num(byId('tkEditLunch')?.value));
+      if(regular<0||ot<0||regular+ot>24){toast('Regular plus OT must be between 0 and 24 hours.','warning');return;}
+      if(lunch<0||lunch>720){toast('Lunch must be between 0 and 720 minutes.','warning');return;}
+      const btn=byId('tkEditSave');
+      const done=window.LineCrewUI?.loadingButton?.(btn,'Saving…')||(()=>{});
+      try{
+        const {error}=await getSb().rpc('admin_update_timekeeping_entry',{
+          p_daily_report_id:row.daily_report_id,
+          p_employee_id:row.employee_id,
+          p_start_time:byId('tkEditStart')?.value||null,
+          p_stop_time:byId('tkEditStop')?.value||null,
+          p_lunch_minutes:lunch,
+          p_regular_hours:regular,
+          p_overtime_hours:ot,
+          p_per_diem:!!byId('tkEditPerDiem')?.checked,
+          p_equipment_used:(byId('tkEditEquipment')?.value||'').trim()||null,
+          p_equipment_not_used:!!byId('tkEditEquipmentNotUsed')?.checked,
+          p_reason:reason
+        });
+        if(error)throw error;
+        wrap.remove();
+        toast('Submitted time corrected and audit history saved.','success');
+        await run();
+      }catch(error){toast('Could not update submitted time: '+error.message,'error');}
+      finally{done();}
+    };
+  }
+
   function detailRows(group){
-    return [...group].sort((a,b)=>String(b.work_date||'').localeCompare(String(a.work_date||''))).map(r=>{
+    return [...group].sort((a,b)=>String(b.work_date||'').localeCompare(String(a.work_date||''))).map((r,index)=>{
       const e=employees.get(r.employee_id)||{};
       const j=jobs.get(r.job_id)||{};
-      return `<tr><td>${esc(r.work_date)}</td><td>${esc(j.job_number||'')}</td><td>${esc(r.crew_name||e.default_crew_name||'')}</td><td>${esc(timeText(r.start_time))}</td><td>${esc(timeText(r.stop_time))}</td><td>${num(r.lunch_minutes)}</td><td>${num(r.regular_hours).toFixed(2)}</td><td>${num(r.overtime_hours).toFixed(2)}</td><td>${(num(r.regular_hours)+num(r.overtime_hours)).toFixed(2)}</td><td class="${r.per_diem?'tk-per-diem-yes':''}">${r.per_diem?'Yes':'No'}</td><td>${esc(equipmentText(r,e))}</td><td>${r.storm_work?'Yes':'No'}</td></tr>`;
+      return `<tr><td>${esc(r.work_date)}</td><td>${esc(j.job_number||'')}</td><td>${esc(r.crew_name||e.default_crew_name||'')}</td><td>${esc(timeText(r.start_time))}</td><td>${esc(timeText(r.stop_time))}</td><td>${num(r.lunch_minutes)}</td><td>${num(r.regular_hours).toFixed(2)}</td><td>${num(r.overtime_hours).toFixed(2)}</td><td>${(num(r.regular_hours)+num(r.overtime_hours)).toFixed(2)}</td><td class="${r.per_diem?'tk-per-diem-yes':''}">${r.per_diem?'Yes':'No'}</td><td>${esc(equipmentText(r,e))}</td><td>${r.storm_work?'Yes':'No'}</td>${canEditTime()?`<td><button type="button" class="secondary tk-edit-time-btn" data-tk-edit-row="${index}">Edit</button></td>`:''}</tr>`;
     }).join('');
   }
 
@@ -136,18 +214,25 @@
     if(!box)return;
     if(!view.length){box.innerHTML='<div class="tk-crew-card"><strong>No time recorded for this view.</strong><p class="tk-help">Create or save a Daily Report with crew time, or change the filters.</p></div>';return;}
     const groups=employeeGroups(view);
-    box.innerHTML=`<div class="tk-report-toolbar"><span class="muted">${view.length} time segment${view.length===1?'':'s'} grouped into ${groups.length} employee${groups.length===1?'':'s'}.</span><button id="tkExpandEmployees" class="secondary small" type="button">Expand All</button><button id="tkCollapseEmployees" class="secondary small" type="button">Collapse All</button></div>`+
-      groups.map(([employeeId,group])=>{
+    box.innerHTML=`<div class="tk-report-toolbar"><span class="muted">${groups.length} employees · click a row for daily detail${canEditTime()?' and corrections':''}.</span><button id="tkExpandEmployees" class="secondary small" type="button">Expand All</button><button id="tkCollapseEmployees" class="secondary small" type="button">Collapse All</button></div>`+
+      groups.map(([employeeId,group],groupIndex)=>{
         const e=employees.get(employeeId)||{};
         const er=group.reduce((s,r)=>s+num(r.regular_hours),0);
         const eo=group.reduce((s,r)=>s+num(r.overtime_hours),0);
         const epd=new Set(group.filter(r=>r.per_diem).map(r=>r.work_date)).size;
         const crew=[...new Set(group.map(r=>r.crew_name||e.default_crew_name||'').filter(Boolean))].join(', ');
         const meta=[e.classification||'',crew].filter(Boolean).join(' · ');
-        return `<details class="tk-employee-summary"><summary><span class="tk-employee-name"><span>${esc(e.full_name||'Employee')}</span>${meta?`<span class="tk-employee-meta">${esc(meta)}</span>`:''}</span><span class="tk-employee-metric"><strong>${er.toFixed(2)}</strong><span>Regular</span></span><span class="tk-employee-metric"><strong>${eo.toFixed(2)}</strong><span>OT</span></span><span class="tk-employee-metric"><strong>${(er+eo).toFixed(2)}</strong><span>Total</span></span><span class="tk-employee-metric"><strong>${epd}</strong><span>Per Diem</span></span></summary><div class="tk-employee-detail"><div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Date</th><th>Job</th><th>Crew</th><th>Start</th><th>Stop</th><th>Lunch</th><th>Regular</th><th>OT</th><th>Total</th><th>Per Diem</th><th>Equipment</th><th>Storm</th></tr></thead><tbody>${detailRows(group)}</tbody></table></div></div></details>`;
+        return `<details class="tk-employee-summary" data-tk-group="${groupIndex}"><summary><span class="tk-employee-toggle">▶</span><span class="tk-employee-name"><span>${esc(e.full_name||'Employee')}</span>${meta?`<span class="tk-employee-meta">${esc(meta)}</span>`:''}</span><span class="tk-employee-metric"><strong>${er.toFixed(2)}</strong><span>Regular</span></span><span class="tk-employee-metric"><strong>${eo.toFixed(2)}</strong><span>OT</span></span><span class="tk-employee-metric"><strong>${(er+eo).toFixed(2)}</strong><span>Total</span></span><span class="tk-employee-metric"><strong>${epd}</strong><span>Per Diem</span></span></summary><div class="tk-employee-detail"><div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Date</th><th>Job</th><th>Crew</th><th>Start</th><th>Stop</th><th>Lunch</th><th>Regular</th><th>OT</th><th>Total</th><th>Per Diem</th><th>Equipment</th><th>Storm</th>${canEditTime()?'<th></th>':''}</tr></thead><tbody>${detailRows(group)}</tbody></table></div></div></details>`;
       }).join('');
     byId('tkExpandEmployees').onclick=()=>box.querySelectorAll('.tk-employee-summary').forEach(detail=>detail.open=true);
     byId('tkCollapseEmployees').onclick=()=>box.querySelectorAll('.tk-employee-summary').forEach(detail=>detail.open=false);
+    if(canEditTime()){
+      box.querySelectorAll('.tk-employee-summary').forEach((details,groupIndex)=>{
+        const group=groups[groupIndex]?.[1]||[];
+        const sorted=[...group].sort((a,b)=>String(b.work_date||'').localeCompare(String(a.work_date||'')));
+        details.querySelectorAll('[data-tk-edit-row]').forEach(btn=>btn.onclick=()=>openTimeEditor(sorted[Number(btn.dataset.tkEditRow)]));
+      });
+    }
   }
 
   function csvCell(value){let s=String(value??'');if(typeof value==='string'&&(/^[\t\r\n]/.test(s)||/^\s*[=+\-@]/.test(s)))s="'"+s;return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}
