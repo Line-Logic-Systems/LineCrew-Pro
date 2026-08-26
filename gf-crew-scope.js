@@ -11,7 +11,8 @@
 
   let assignmentRows = [];
   let generalForemen = [];
-  let loadedForCompany = null;
+  let loadedForScope = null;
+  let adminAssignmentInstallPromise = null;
   let loadPromise = null;
   let observerTimer = null;
 
@@ -33,8 +34,9 @@
 
   async function ensureLoaded(force=false){
     const companyId = profile()?.company_id || null;
+    const scopeKey = `${companyId || ''}:${userId() || ''}:${role() || ''}`;
     if(!companyId || !getSb()) return [];
-    if(!force && loadedForCompany === companyId && assignmentRows.length >= 0) return assignmentRows;
+    if(!force && loadedForScope === scopeKey && assignmentRows.length >= 0) return assignmentRows;
     if(loadPromise && !force) return loadPromise;
     loadPromise = (async () => {
       const [assignmentsResult, gfResult] = await Promise.all([
@@ -53,7 +55,7 @@
       }else{
         generalForemen = gfResult.data || [];
       }
-      loadedForCompany = companyId;
+      loadedForScope = scopeKey;
       return assignmentRows;
     })();
     try{return await loadPromise;}finally{loadPromise=null;}
@@ -182,13 +184,21 @@
 
   async function installAdminAssignments(){
     if(!['admin','owner'].includes(role())){
-      byId('gfAssignmentCard')?.remove();
+      document.querySelectorAll('#gfAssignmentCard').forEach(el=>el.remove());
       return;
     }
     const teamPage=byId('teamPage');
-    if(!teamPage || byId('gfAssignmentCard')) return;
-    await ensureLoaded();
-    const card=document.createElement('details');
+    if(!teamPage) return;
+    const existingCards=teamPage.querySelectorAll('#gfAssignmentCard');
+    if(existingCards.length){
+      existingCards.forEach((el,index)=>{ if(index>0) el.remove(); });
+      return;
+    }
+    if(adminAssignmentInstallPromise) return adminAssignmentInstallPromise;
+    adminAssignmentInstallPromise=(async()=>{
+      await ensureLoaded(true);
+      if(teamPage.querySelector('#gfAssignmentCard')) return;
+      const card=document.createElement('details');
     card.id='gfAssignmentCard';
     card.className='card gf-assignment-card';
     card.innerHTML=`<summary>General Foreman Crew Assignments</summary>`+
@@ -205,6 +215,9 @@
       const row=select?.closest('.gf-assignment-row');
       if(select&&row) saveAssignment(row,select);
     });
+    })();
+    try{ await adminAssignmentInstallPromise; }
+    finally{ adminAssignmentInstallPromise=null; }
   }
 
   function localIsoDate(date=new Date()){
