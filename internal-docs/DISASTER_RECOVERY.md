@@ -47,7 +47,7 @@ Production records and production files are never modified by this test.
 
 `.github/workflows/full-disaster-recovery-drill.yml` is a manually started, one-time full restore of a selected independent Azure backup. It is deliberately locked to the separately billed `LineCrew Pro Recovery Drill` project and the protected `recovery-drill` GitHub environment. The workflow refuses Production, refuses the normal Test project, refuses a non-empty recovery database, and requires the operator to type `RESTORE_RECOVERY_DRILL` exactly.
 
-The drill downloads the selected Azure package, verifies every manifest hash, confirms the package came from Production, rebuilds the application-owned `public` schema, restores data into Supabase's existing protected `auth` and `storage` schemas without dropping either managed schema, reapplies the LineCrew-specific Auth trigger and Storage policies, compares every public/Auth/Storage table count, restores and hash-verifies every Supabase Storage object, and repeats the two-company isolation test. Production and the normal Test project are not modified.
+The drill downloads the selected Azure package, verifies every manifest hash, confirms the package came from Production, restores LineCrew Pro into Supabase's existing empty `public` schema without replacing its platform-owned defaults, restores data into the existing protected `auth` and `storage` schemas, reapplies the LineCrew-specific Auth trigger and Storage policies, compares every public/Auth/Storage table count, restores and hash-verifies every Supabase Storage object, and repeats the two-company isolation test. Production and the normal Test project are not modified.
 
 ## Required GitHub configuration
 
