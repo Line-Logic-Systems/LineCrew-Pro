@@ -49,10 +49,11 @@ if((html.match(/return fillOfflineJsaJobSelect\(select,data \|\| \[\]\);/g) || [
 }
 
 for(const token of [
-  'linecrew-pro-shell-v36',
+  'linecrew-pro-shell-v37',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
-  '/offline-jsa.js?v=20260827a'
+  '/offline-jsa.js?v=20260827b',
+  '/jsa-signatures.js?v=20260827a'
 ]){
   if(!serviceWorker.includes(token)) throw new Error('Missing Offline JSA app-shell token: ' + token);
 }
@@ -60,9 +61,16 @@ for(const token of [
 for(const token of [
   'markColdStartReady',
   'Offline JSA form and device storage are ready.',
-  'window.LineCrewOfflineColdStart'
+  'window.LineCrewOfflineColdStart',
+  "toast(message, 'warning')",
+  "console.info('[offline-jsa] Digital JSA save requested.'"
 ]){
   if(!offlineJsa.includes(token)) throw new Error('Missing Offline JSA readiness token: ' + token);
+}
+
+const signatures = fs.readFileSync('jsa-signatures.js','utf8');
+if(!signatures.includes("!e.target?.closest?.('.lc-signature-wrap')")){
+  throw new Error('Signature click suppression must be limited to the signature pad.');
 }
 
 const requiredSql = [
