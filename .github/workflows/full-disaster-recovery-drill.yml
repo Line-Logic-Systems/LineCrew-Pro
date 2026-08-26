@@ -142,18 +142,32 @@ jobs:
               pg_restore --list /backup/linecrew-postgres.dump > /generated/all.list
               pg_restore --data-only --schema=auth --schema=storage \
                 --file=/generated/managed-data.sql /backup/linecrew-postgres.dump
-              awk '\''
-                /^;/ { print; next }
-                / TABLE DATA auth / && $0 !~ / TABLE DATA auth schema_migrations / { print; next }
-                / SEQUENCE SET auth / { print; next }
-                { print ";" $0 }
-              '\'' /generated/all.list > /generated/auth-data.list
-              awk '\''
-                /^;/ { print; next }
-                / TABLE DATA storage / && $0 !~ / TABLE DATA storage (migrations|buckets_vectors|vector_indexes) / { print; next }
-                / SEQUENCE SET storage / { print; next }
-                { print ";" $0 }
-              '\'' /generated/all.list > /generated/storage-data.list
+              grep "^;" /generated/all.list > /generated/auth-data.list
+              for table in \
+                audit_log_entries custom_oauth_providers flow_state instances oauth_client_states \
+                oauth_clients sso_providers users identities mfa_factors oauth_authorizations \
+                oauth_consents one_time_tokens sessions sso_domains saml_providers \
+                webauthn_challenges webauthn_credentials mfa_amr_claims mfa_challenges \
+                refresh_tokens saml_relay_states
+              do
+                grep -F " TABLE DATA auth ${table} " /generated/all.list >> /generated/auth-data.list || true
+              done
+              grep -F " SEQUENCE SET auth " /generated/all.list >> /generated/auth-data.list || true
+
+              grep "^;" /generated/all.list > /generated/storage-data.list
+              for table in buckets buckets_analytics objects s3_multipart_uploads s3_multipart_uploads_parts
+              do
+                grep -F " TABLE DATA storage ${table} " /generated/all.list >> /generated/storage-data.list || true
+              done
+              grep -F " SEQUENCE SET storage " /generated/all.list >> /generated/storage-data.list || true
+
+              expected_auth="$(grep -F " TABLE DATA auth " /generated/all.list | grep -Fv " TABLE DATA auth schema_migrations " | wc -l)"
+              selected_auth="$(grep -F " TABLE DATA auth " /generated/auth-data.list | wc -l)"
+              test "$selected_auth" -eq "$expected_auth"
+              expected_storage="$(grep -F " TABLE DATA storage " /generated/all.list \
+                | grep -Ev " TABLE DATA storage (migrations|buckets_vectors|vector_indexes) " | wc -l)"
+              selected_storage="$(grep -F " TABLE DATA storage " /generated/storage-data.list | wc -l)"
+              test "$selected_storage" -eq "$expected_storage"
               awk '\''
                 /^;/ { print; next }
                 / TRIGGER auth complete_team_invitation_signup / { print; next }
