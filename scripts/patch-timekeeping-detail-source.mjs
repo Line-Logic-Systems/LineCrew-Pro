@@ -57,3 +57,14 @@ patch('timekeeping-input-v2.js',[[
 `  function installSaveWrapper(){if(window.LineCrewCoreSavesTimekeepingDetails)return;const current=window.saveDailyReportCrewTime;if(typeof current!=='function'||current===wrappedSave||current.__lcLaunchWrapped)return;`,
   'legacy detail wrapper guard'
 ]]);
+
+patch('expanded-jsa.js',[
+  ["load('timekeeping.js?v=20260823i'", "load('timekeeping.js?v=20260826a'", 'timekeeping cache version'],
+  ["load('timekeeping-report-v2.js?v=20260823b'", "load('timekeeping-report-v2.js?v=20260826c'", 'timekeeping report cache version']
+]);
+
+patch('index.html',[[
+  'expanded-jsa.js?v=20260825b',
+  'expanded-jsa.js?v=20260826a',
+  'expanded JSA cache version'
+]]);
