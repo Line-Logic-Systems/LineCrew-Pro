@@ -282,7 +282,8 @@ assert((restoreBackupStorage.match(/'x-upsert': 'true'/g) || []).length >= 3, 'S
 assert(restoreBackupStorage.includes('Recovery project Storage limit is too small'), 'Recovery must clearly identify an undersized project Storage limit.');
 assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
 assert(verifyRestoredManagedCounts.includes("'auth.users'") && verifyRestoredManagedCounts.includes("'storage.objects'"), 'The full recovery drill must compare restored Auth and Storage row counts.');
-assert(testDisasterRestore.includes("insert('company_subscriptions'") && testDisasterRestore.includes('access_override: true'), 'Recovered tenant-isolation tests must create an active company-access subscription.');
+assert(testDisasterRestore.includes("update('company_subscriptions'") && testDisasterRestore.includes('access_override: true'), 'Recovered tenant-isolation tests must activate the automatically generated company subscription.');
+assert(testDisasterRestore.includes('removeGeneratedSubscription') && testDisasterRestore.includes("insert('company_subscriptions', snapshot.subscription)"), 'Recovered tenant-isolation tests must replace the generated subscription with the restored snapshot.');
 assert(testDisasterRestore.includes("role: 'foreman'") && !testDisasterRestore.includes("role: 'admin'"), 'Recovered tenant-isolation tests must not trigger privileged MFA enforcement.');
 assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl'), 'Independent backups must preserve function ACLs.');
 assert(!testPostRestoreSecurity.includes('--no-acl'), 'The recovery drill must restore and verify function ACLs.');
