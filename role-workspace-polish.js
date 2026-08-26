@@ -155,3 +155,13 @@
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
+
+/* Keep optional UI enhancements isolated from role/workflow logic. */
+(() => {
+  if(document.querySelector('script[data-lc-gf-theme-enhancements]')) return;
+  const script=document.createElement('script');
+  script.src='/gf-review-theme-enhancements.js';
+  script.defer=true;
+  script.dataset.lcGfThemeEnhancements='1';
+  document.head.appendChild(script);
+})();
