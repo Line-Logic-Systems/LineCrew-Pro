@@ -117,7 +117,7 @@
   load('timekeeping.js?v=20260826a', () => {
     load('timekeeping-roster.js?v=20260823f');
     load('timekeeping-report-v2.js?v=20260826f', () => {
-      load('timekeeping-polish.js?v=20260820a');
+      load('timekeeping-polish.js?v=20260826b');
       load('timekeeping-payroll.js?v=20260823b');
     });
   });
