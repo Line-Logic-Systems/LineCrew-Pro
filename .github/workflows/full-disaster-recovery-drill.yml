@@ -1,0 +1,199 @@
+name: Full Disaster Recovery Drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_run_number:
+        description: Independent Disaster Backup run number to restore
+        required: true
+        default: '9'
+        type: string
+      confirmation:
+        description: Type RESTORE_RECOVERY_DRILL exactly
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: full-disaster-recovery-drill
+  cancel-in-progress: false
+
+env:
+  RECOVERY_PROJECT_REF: wnomecqpslunswliexgs
+  RECOVERY_SUPABASE_URL: https://wnomecqpslunswliexgs.supabase.co
+  RECOVERY_DB_HOST: aws-0-us-east-2.pooler.supabase.com
+  RECOVERY_DB_USER: postgres.wnomecqpslunswliexgs
+  RECOVERY_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indub21lY3Fwc2x1bnN3bGlleGdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc3NzI1NzksImV4cCI6MjEwMzM0ODU3OX0.oReyxOYv1nzO7Jk-FnsO-S2b1P3uFNqqTZ3l5NVWrXg
+  PRODUCTION_PROJECT_REF: ldgkyxuozbozgkvwzadg
+  NORMAL_TEST_PROJECT_REF: yvuxrqrdprquxypiffpa
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: recovery-drill
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+
+      - name: Enforce disposable-target safety guard
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          RECOVERY_DRILL_DB_PASSWORD: ${{ secrets.RECOVERY_DRILL_DB_PASSWORD }}
+          RECOVERY_DRILL_SERVICE_ROLE_KEY: ${{ secrets.RECOVERY_DRILL_SERVICE_ROLE_KEY }}
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_BACKUP_CONNECTION_STRING }}
+        run: |
+          test "$CONFIRMATION" = 'RESTORE_RECOVERY_DRILL'
+          test "$RECOVERY_PROJECT_REF" != "$PRODUCTION_PROJECT_REF"
+          test "$RECOVERY_PROJECT_REF" != "$NORMAL_TEST_PROJECT_REF"
+          test "$RECOVERY_PROJECT_REF" = 'wnomecqpslunswliexgs'
+          test -n "$RECOVERY_DRILL_DB_PASSWORD"
+          test -n "$RECOVERY_DRILL_SERVICE_ROLE_KEY"
+          test -n "$AZURE_STORAGE_CONNECTION_STRING"
+
+      - name: Download the selected independent Azure backup
+        env:
+          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_BACKUP_CONNECTION_STRING }}
+          BACKUP_RUN_NUMBER: ${{ inputs.backup_run_number }}
+        run: |
+          case "$BACKUP_RUN_NUMBER" in
+            ''|*[!0-9]*) echo 'Backup run number must contain digits only.' >&2; exit 1 ;;
+          esac
+          mkdir -p recovery-input
+          BLOB_NAME="$(az storage blob list \
+            --connection-string "$AZURE_STORAGE_CONNECTION_STRING" \
+            --container-name linecrew-pro-backups \
+            --prefix "linecrew-pro-backup-${BACKUP_RUN_NUMBER}-" \
+            --query 'sort_by(@, &properties.lastModified)[-1].name' \
+            --output tsv \
+            --only-show-errors)"
+          test -n "$BLOB_NAME"
+          case "$BLOB_NAME" in
+            linecrew-pro-backup-${BACKUP_RUN_NUMBER}-*.tgz) ;;
+            *) echo "Unexpected Azure backup name: $BLOB_NAME" >&2; exit 1 ;;
+          esac
+          az storage blob download \
+            --connection-string "$AZURE_STORAGE_CONNECTION_STRING" \
+            --container-name linecrew-pro-backups \
+            --name "$BLOB_NAME" \
+            --file recovery-input/linecrew-pro-backup.tgz \
+            --overwrite false \
+            --only-show-errors
+          echo "Downloaded Azure recovery point: $BLOB_NAME"
+
+      - name: Safely extract and verify the recovery package
+        run: |
+          tar -tzf recovery-input/linecrew-pro-backup.tgz > recovery-input/archive-files.txt
+          if awk 'BEGIN { bad=0 } /(^\/|(^|\/)\.\.($|\/))/ { print "Unsafe archive path: " $0; bad=1 } END { exit bad }' recovery-input/archive-files.txt; then
+            :
+          else
+            exit 1
+          fi
+          mkdir -p recovery-input/extracted
+          tar -xzf recovery-input/linecrew-pro-backup.tgz -C recovery-input/extracted
+          MANIFEST_PATH="$(find recovery-input/extracted/backup-output -mindepth 2 -maxdepth 2 -type f -name manifest.json -print -quit)"
+          test -n "$MANIFEST_PATH"
+          test "$(find recovery-input/extracted/backup-output -mindepth 2 -maxdepth 2 -type f -name manifest.json | wc -l)" -eq 1
+          BACKUP_PATH="$(dirname "$MANIFEST_PATH")"
+          test -n "$BACKUP_PATH"
+          node scripts/verify-backup.mjs "$BACKUP_PATH"
+          test "$(node -e "const m=require('./$BACKUP_PATH/manifest.json'); process.stdout.write(m.source_project)")" = "$PRODUCTION_PROJECT_REF"
+          (cd recovery-input/extracted && sha256sum --check backup-output/postgres/security-files.sha256)
+          test -s recovery-input/extracted/backup-output/postgres/linecrew-postgres.dump
+          test -s recovery-input/extracted/backup-output/postgres/linecrew-postgres.list
+          echo "BACKUP_PATH=$BACKUP_PATH" >> "$GITHUB_ENV"
+
+      - name: Confirm the recovery database is still unused
+        env:
+          PGPASSWORD: ${{ secrets.RECOVERY_DRILL_DB_PASSWORD }}
+          PGHOST: ${{ env.RECOVERY_DB_HOST }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: ${{ env.RECOVERY_DB_USER }}
+          PGSSLMODE: require
+        run: |
+          docker run --rm \
+            --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+            postgres:17-alpine \
+            psql --set=ON_ERROR_STOP=1 --tuples-only --no-align --command \
+              "select case when to_regclass('public.companies') is null then 'EMPTY_RECOVERY_TARGET' else 'REFUSE_NONEMPTY_TARGET' end" \
+            | grep -qx 'EMPTY_RECOVERY_TARGET'
+
+      - name: Restore the full PostgreSQL archive
+        env:
+          PGPASSWORD: ${{ secrets.RECOVERY_DRILL_DB_PASSWORD }}
+          PGHOST: ${{ env.RECOVERY_DB_HOST }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: ${{ env.RECOVERY_DB_USER }}
+          PGSSLMODE: require
+        run: |
+          docker run --rm \
+            --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+            postgres:17-alpine \
+            psql --set=ON_ERROR_STOP=1 --command \
+              'drop schema if exists public cascade; drop schema if exists auth cascade; drop schema if exists storage cascade;'
+          docker run --rm \
+            --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+            --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
+            postgres:17-alpine \
+            pg_restore --exit-on-error --no-owner --dbname=postgres /backup/linecrew-postgres.dump
+
+      - name: Restore and verify the global Data API security gate
+        env:
+          PGPASSWORD: ${{ secrets.RECOVERY_DRILL_DB_PASSWORD }}
+          PGHOST: ${{ env.RECOVERY_DB_HOST }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: ${{ env.RECOVERY_DB_USER }}
+          PGSSLMODE: require
+        run: |
+          docker run --rm \
+            --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+            --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
+            postgres:17-alpine \
+            psql --file /backup/post-restore-security.sql
+          docker run --rm \
+            --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+            --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
+            postgres:17-alpine \
+            psql --file /backup/verify-post-restore-security.sql
+
+      - name: Verify restored public-table row counts
+        env:
+          SUPABASE_URL: ${{ env.RECOVERY_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RECOVERY_DRILL_SERVICE_ROLE_KEY }}
+        run: node scripts/verify-restored-table-counts.mjs "$BACKUP_PATH"
+
+      - name: Restore and hash-verify every Storage object
+        env:
+          SUPABASE_URL: ${{ env.RECOVERY_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.RECOVERY_DRILL_SERVICE_ROLE_KEY }}
+        run: node scripts/restore-backup-storage.mjs "$BACKUP_PATH"
+
+      - name: Re-test company isolation in the recovered project
+        env:
+          SUPABASE_TEST_URL: ${{ env.RECOVERY_SUPABASE_URL }}
+          SUPABASE_TEST_ANON_KEY: ${{ env.RECOVERY_ANON_KEY }}
+          SUPABASE_TEST_SERVICE_ROLE_KEY: ${{ secrets.RECOVERY_DRILL_SERVICE_ROLE_KEY }}
+          SUPABASE_TEST_PROJECT_REF: ${{ env.RECOVERY_PROJECT_REF }}
+          SUPABASE_PRODUCTION_PROJECT_REF: ${{ env.PRODUCTION_PROJECT_REF }}
+          LINECREW_RESTORE_TEST_CONFIRM: DISPOSABLE_ONLY
+        run: node scripts/test-disaster-restore.mjs
+
+      - name: Resolve prior recovery alert
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/manage-recovery-alert.sh success "Full Disaster Recovery Drill"
+
+      - name: Open immediate recovery alert
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/manage-recovery-alert.sh failure "Full Disaster Recovery Drill"
