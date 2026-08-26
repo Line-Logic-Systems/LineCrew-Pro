@@ -153,10 +153,32 @@
     // are actionable exceptions here.
     byPersonDay.forEach((segs,key)=>{
       const [employeeId,date]=key.split('|');const employee=employeeMap.get(employeeId)||{};const total=segs.reduce((s,r)=>s+num(r.regular_hours)+num(r.overtime_hours),0);const jobs=new Set(segs.map(r=>r.job_id).filter(Boolean));
-      if(total>16)out.push({type:'high',employee:employee.full_name||'',date,message:`${total.toFixed(2)} total hours recorded.`});
+      if(total>24)out.push({type:'high',employee:employee.full_name||'',date,message:`${total.toFixed(2)} total hours recorded — more than 24 hours in one day.`});
       if(jobs.size>1)out.push({type:'multijob',employee:employee.full_name||'',date,message:`Time is split across ${jobs.size} jobs.`});
       const signatures=new Map();segs.forEach(r=>{const sig=[r.job_id,r.crew_name,num(r.regular_hours).toFixed(2),num(r.overtime_hours).toFixed(2),r.storm_work?'1':'0'].join('|');signatures.set(sig,(signatures.get(sig)||0)+1);});
       if([...signatures.values()].some(v=>v>1))out.push({type:'duplicate',employee:employee.full_name||'',date,message:'Possible duplicate time segment detected.'});
+    });
+    const crewDayTotals=new Map();
+    byPersonDay.forEach((segs,key)=>{
+      const [employeeId,date]=key.split('|');
+      const employee=employeeMap.get(employeeId)||{};
+      const crew=String(segs.find(r=>r.crew_name)?.crew_name||employee.default_crew_name||'').trim();
+      if(!crew)return;
+      const total=segs.reduce((sum,r)=>sum+num(r.regular_hours)+num(r.overtime_hours),0);
+      const crewKey=`${crew.toLowerCase()}|${date}`;
+      if(!crewDayTotals.has(crewKey))crewDayTotals.set(crewKey,{crew,date,members:[]});
+      crewDayTotals.get(crewKey).members.push({employee:employee.full_name||'Employee',total});
+    });
+    crewDayTotals.forEach(group=>{
+      if(group.members.length<2)return;
+      const buckets=new Map();
+      group.members.forEach(m=>{const k=m.total.toFixed(2);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(m);});
+      if(buckets.size<=1)return;
+      const majority=[...buckets.entries()].sort((a,b)=>b[1].length-a[1].length)[0];
+      const expected=majority[0];
+      group.members.forEach(m=>{
+        if(m.total.toFixed(2)!==expected)out.push({type:'crew-hours',employee:m.employee,date:group.date,message:`${m.total.toFixed(2)} hours recorded; other members of crew ${group.crew} are at ${Number(expected).toFixed(2)} hours.`});
+      });
     });
     exceptions=out;return out;
   }
@@ -165,7 +187,7 @@
     await buildExceptions();const box=byId('tkExceptionsBox');if(!box)return;
     box.classList.toggle('hidden',!show);
     if(!show)return;
-    if(!exceptions.length){box.innerHTML='<div class="tk-empty-state"><strong>No Timekeeping exceptions found</strong>This period has no high-hour totals, multi-job review flags, or possible duplicate time segments.</div>';return;}
+    if(!exceptions.length){box.innerHTML='<div class="tk-empty-state"><strong>No Timekeeping exceptions found</strong>This period has no impossible daily-hour totals, crew-hour mismatches, multi-job review flags, or possible duplicate time segments.</div>';return;}
     box.innerHTML=`<strong>${exceptions.length} exception${exceptions.length===1?'':'s'} to review</strong><div class="tk-exception-list">${exceptions.map(x=>`<div class="tk-exception ${x.type==='high'?'high':''}"><strong>${esc(x.employee||'Employee')} — ${esc(x.date)}</strong><br>${esc(x.message)}</div>`).join('')}</div>`;
   }
 
