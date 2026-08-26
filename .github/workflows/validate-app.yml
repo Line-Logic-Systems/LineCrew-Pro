@@ -30,6 +30,9 @@ jobs:
       - name: Validate application
         run: node scripts/validate-app.mjs
 
+      - name: Validate end-to-end regression guardrails
+        run: node scripts/validate-end-to-end-regressions.mjs
+
       - name: Verify GitHub Actions are commit-pinned
         run: node scripts/validate-github-action-pins.mjs
 
