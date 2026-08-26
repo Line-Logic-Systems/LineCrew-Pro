@@ -23,6 +23,8 @@ const mimeByExtension = new Map([
   ['.webp', 'image/webp'],
   ['.heic', 'image/heic'],
   ['.heif', 'image/heif'],
+  ['.mp4', 'video/mp4'],
+  ['.mov', 'video/quicktime'],
   ['.csv', 'text/csv'],
   ['.txt', 'text/plain'],
   ['.json', 'application/json'],
@@ -70,6 +72,60 @@ async function responseError(response) {
   return `${response.status} ${response.statusText}${body ? `: ${body}` : ''}`;
 }
 
+const resumableChunkBytes = 6 * 1024 * 1024;
+const projectRef = new URL(url).hostname.split('.')[0];
+const resumableEndpoint = `https://${projectRef}.storage.supabase.co/storage/v1/upload/resumable`;
+const tusMetadata = (value) => Buffer.from(value, 'utf8').toString('base64');
+
+async function resumableUpload(bucket, objectPath, data, contentType) {
+  const create = await fetch(resumableEndpoint, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'tus-resumable': '1.0.0',
+      'upload-length': String(data.length),
+      'upload-metadata': [
+        `bucketName ${tusMetadata(bucket)}`,
+        `objectName ${tusMetadata(objectPath)}`,
+        `contentType ${tusMetadata(contentType)}`,
+        `cacheControl ${tusMetadata('3600')}`,
+      ].join(','),
+      'x-upsert': 'true',
+    },
+  });
+  if (!create.ok) {
+    const detail = await responseError(create);
+    if (create.status === 413) {
+      const requiredMb = Math.ceil(data.length / (1024 * 1024));
+      throw new Error(`Recovery project Storage limit is too small for ${bucket}/${objectPath} (${requiredMb} MB). Increase the project's global Storage file-size limit, then restart the drill. ${detail}`);
+    }
+    throw new Error(`Unable to start resumable restore for ${bucket}/${objectPath}: ${detail}`);
+  }
+
+  const location = create.headers.get('location');
+  if (!location) throw new Error(`Resumable restore returned no upload URL for ${bucket}/${objectPath}`);
+  const uploadUrl = new URL(location, resumableEndpoint).toString();
+
+  for (let offset = 0; offset < data.length; ) {
+    const end = Math.min(offset + resumableChunkBytes, data.length);
+    const chunk = data.subarray(offset, end);
+    const patch = await fetch(uploadUrl, {
+      method: 'PATCH',
+      headers: {
+        ...headers,
+        'tus-resumable': '1.0.0',
+        'upload-offset': String(offset),
+        'content-type': 'application/offset+octet-stream',
+      },
+      body: chunk,
+    });
+    if (!patch.ok) throw new Error(`Unable to continue resumable restore for ${bucket}/${objectPath}: ${await responseError(patch)}`);
+    const nextOffset = Number(patch.headers.get('upload-offset'));
+    if (nextOffset !== end) throw new Error(`Resumable restore offset mismatch for ${bucket}/${objectPath}: expected ${end}, received ${nextOffset}`);
+    offset = nextOffset;
+  }
+}
+
 let restoredObjects = 0;
 let restoredBytes = 0;
 
@@ -88,16 +144,20 @@ for (const [bucket, entry] of Object.entries(manifest.storage || {})) {
       throw new Error(`Backup object failed pre-upload verification: ${bucket}/${object.path}`);
     }
 
-    const upload = await fetch(`${url}/storage/v1/object/${bucketPath}/${objectPath}`, {
-      method: 'POST',
-      headers: {
-        ...headers,
-        'content-type': contentType,
-        'x-upsert': 'true',
-      },
-      body: data,
-    });
-    if (!upload.ok) throw new Error(`Unable to restore ${bucket}/${object.path}: ${await responseError(upload)}`);
+    if (data.length > resumableChunkBytes) {
+      await resumableUpload(bucket, object.path, data, contentType);
+    } else {
+      const upload = await fetch(`${url}/storage/v1/object/${bucketPath}/${objectPath}`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'content-type': contentType,
+          'x-upsert': 'true',
+        },
+        body: data,
+      });
+      if (!upload.ok) throw new Error(`Unable to restore ${bucket}/${object.path}: ${await responseError(upload)}`);
+    }
 
     const verify = await fetch(`${url}/storage/v1/object/authenticated/${bucketPath}/${objectPath}`, { headers });
     if (!verify.ok) throw new Error(`Unable to verify ${bucket}/${object.path}: ${await responseError(verify)}`);
