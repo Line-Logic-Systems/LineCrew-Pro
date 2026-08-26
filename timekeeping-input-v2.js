@@ -10,7 +10,7 @@
   const role=()=>String(profile()?.role||'').toLowerCase();
   const canManageEquipment=()=>['owner','admin'].includes(role());
   let employeeEquipment=new Map(),equipment=[],foremenById=new Map(),wrappedSave=null,loadedReport='';
-  let assignmentSearch='',assignmentFilter='all';
+  let assignmentSearch='',assignmentFilter='all',loadedCompanyId='',refreshingData=false;
 
   function toast(message,type='info'){if(window.LineCrewUI?.toast)window.LineCrewUI.toast(message,type);else if(type==='error')console.error(message);}
   function addStyles(){if(byId('tkLaunchDetailStyles'))return;const style=document.createElement('style');style.id='tkLaunchDetailStyles';style.textContent=`
@@ -36,21 +36,31 @@
 
   function assignedEmployeeForUnit(unit,excludeId=''){return [...employeeEquipment.values()].find(e=>e.active!==false&&e.id!==excludeId&&e.default_equipment===unit)||null;}
   async function refreshData(){
-    const c=getSb();if(!c||!companyId())return;
-    const requests=[
-      c.from('timekeeping_employees').select('id,full_name,employee_number,classification,active,default_equipment,linked_profile_id,assigned_foreman_id,default_crew_name').eq('company_id',companyId()).order('full_name'),
-      c.from('timekeeping_equipment').select('id,unit_number,description,active').eq('company_id',companyId()).order('unit_number')
-    ];
-    if(canManageEquipment())requests.push(c.from('profiles').select('id,full_name,role,active').eq('company_id',companyId()).eq('role','foreman').eq('active',true).order('full_name'));
-    const [er,qr,fr]=await Promise.all(requests);
-    if(!er.error)employeeEquipment=new Map((er.data||[]).map(e=>[e.id,e]));
-    if(!qr.error)equipment=qr.data||[];
-    if(fr&&!fr.error)foremenById=new Map((fr.data||[]).map(f=>[f.id,f]));
-    renderEquipmentManager();
-    ensureForemanRow();
-    document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(r=>{renderEquipmentSelect(r);applyDefaultEquipment(r,false);});
-    sortForemanFirst();
+    const c=getSb(),cid=companyId();
+    if(!c||!cid||refreshingData)return false;
+    refreshingData=true;
+    try{
+      const requests=[
+        c.from('timekeeping_employees').select('id,full_name,employee_number,classification,active,default_equipment,linked_profile_id,assigned_foreman_id,default_crew_name').eq('company_id',cid).order('full_name'),
+        c.from('timekeeping_equipment').select('id,unit_number,description,active').eq('company_id',cid).order('unit_number')
+      ];
+      if(canManageEquipment())requests.push(c.from('profiles').select('id,full_name,role,active').eq('company_id',cid).eq('role','foreman').eq('active',true).order('full_name'));
+      const [er,qr,fr]=await Promise.all(requests);
+      if(er.error||qr.error){console.warn('Unable to load timekeeping equipment data:',er.error?.message||qr.error?.message);return false;}
+      employeeEquipment=new Map((er.data||[]).map(e=>[e.id,e]));
+      equipment=qr.data||[];
+      if(fr&&!fr.error)foremenById=new Map((fr.data||[]).map(f=>[f.id,f]));
+      loadedCompanyId=cid;
+      renderEquipmentManager();
+      ensureForemanRow();
+      document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(r=>{renderEquipmentSelect(r);applyDefaultEquipment(r,false);});
+      sortForemanFirst();
+      return true;
+    }finally{
+      refreshingData=false;
+    }
   }
+  function ensureDataLoaded(){const cid=companyId();if(!cid||loadedCompanyId===cid)return;refreshData().then(ok=>{if(ok)scan();});}
   function equipmentOptions(selected='',employeeId='',showAssignments=false){return '<option value="">Select truck / equipment</option>'+equipment.filter(e=>e.active!==false).map(e=>{const assigned=showAssignments?assignedEmployeeForUnit(e.unit_number,employeeId):null;const label=`${e.unit_number}${e.description?' — '+e.description:''}${assigned?' — Assigned: '+(assigned.full_name||assigned.employee_number||'Employee'):''}`;return `<option value="${esc(e.unit_number)}" ${e.unit_number===selected?'selected':''} ${assigned?'style="color:#9aa6b2"':''}>${esc(label)}</option>`;}).join('');}
   function installEquipmentManager(){
     const roster=byId('timekeepingRosterCard');if(!roster||byId('tkDefaultEquipmentCard')||!canManageEquipment())return;
@@ -164,6 +174,15 @@
   }
   function updateHelp(){const p=byId('dailyCrewTimeCard')?.querySelector('.tk-help');if(p&&!p.dataset.tkLaunchHelp){p.dataset.tkLaunchHelp='1';p.textContent='Your Foreman row appears first, followed by the assigned crew. Assigned equipment fills in automatically; change the dropdown only when someone uses a different unit that day. Enter Start and Stop in 24-hour time plus Lunch; LineCrew calculates hours for payroll. Per diem defaults on.';}}
   function scan(){addStyles();installSaveWrapper();installEquipmentManager();updateHelp();ensureForemanRow();document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(enhanceRow);loadExistingDetails();sortForemanFirst();}
-  function init(){addStyles();refreshData().then(scan);scan();let timer;new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(scan,50);}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});setInterval(installSaveWrapper,1000);setInterval(()=>{const form=byId('dailyReportForm');if(form&&!form.classList.contains('hidden'))sortForemanFirst();},250);}
+  function init(){
+    addStyles();
+    scan();
+    refreshData().then(ok=>{if(ok)scan();});
+    let timer;
+    new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(scan,50);}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+    setInterval(()=>{installSaveWrapper();ensureDataLoaded();},1000);
+    setInterval(()=>{const form=byId('dailyReportForm');if(form&&!form.classList.contains('hidden'))sortForemanFirst();},250);
+    ensureDataLoaded();
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
