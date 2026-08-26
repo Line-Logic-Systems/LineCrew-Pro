@@ -1531,6 +1531,19 @@ These details appear in LineCrew Pro and on printed daily reports.
 </select>
 </div>
 <div>
+<label for="companyWeekStartDay">Workweek Starts On</label>
+<select id="companyWeekStartDay">
+<option value="1">Monday</option>
+<option value="0">Sunday</option>
+<option value="2">Tuesday</option>
+<option value="3">Wednesday</option>
+<option value="4">Thursday</option>
+<option value="5">Friday</option>
+<option value="6">Saturday</option>
+</select>
+<p class="muted" style="font-size:12px;margin-top:5px">Weekly overtime resets on this day. Default: Monday.</p>
+</div>
+<div>
 <label for="companyContactEmail">Company Email</label>
 <input id="companyContactEmail" type="email" maxlength="254">
 </div>
@@ -3908,6 +3921,7 @@ $('companyPrimaryColor').value =
 : '#0b2d4d';
 $('companyTimezone').value =
 company?.timezone || 'America/Chicago';
+$('companyWeekStartDay').value = String(Number.isInteger(Number(company?.week_start_day)) ? Number(company.week_start_day) : 1);
 $('companyMhRateSettings').classList.toggle('hidden', !userIsCompanyAdmin());
 $('companyRequiredMhRate').value =
 Number(company?.required_man_hour_rate || 0) > 0
@@ -8052,9 +8066,16 @@ if(error){
 alert('Unable to save company settings: ' + error.message);
 return;
 }
+const weekStartDay = Number($('companyWeekStartDay').value || 1);
+const { error:weekStartError } = await sb.rpc('update_company_week_start', { p_week_start_day:weekStartDay });
+if(weekStartError){
+alert('Company details saved, but the workweek start day could not be saved: ' + weekStartError.message);
+return;
+}
 currentCompany = {
 ...currentCompany,
-...(Array.isArray(data) ? data[0] : data)
+...(Array.isArray(data) ? data[0] : data),
+week_start_day:weekStartDay
 };
 $('companyName').textContent = currentCompany.name || 'LineCrew Pro';
 applyCompanyBranding(currentCompany);

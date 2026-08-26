@@ -438,6 +438,24 @@
     if(snapshot.length)staleQuery=staleQuery.not('employee_id','in','('+snapshot.map(row=>row.employee_id).join(',')+')');
     const {error:deleteError}=await staleQuery;
     if(deleteError)throw deleteError;
+    for(const row of snapshot){
+      const {error:otError}=await getSb().rpc('recalculate_timekeeping_employee_week',{p_report_id:reportId,p_employee_id:row.employee_id});
+      if(otError)throw otError;
+    }
+    if(snapshot.length){
+      const {data:recalculated,error:reloadError}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId);
+      if(reloadError)throw reloadError;
+      const byEmployee=new Map((recalculated||[]).map(entry=>[entry.employee_id,entry]));
+      document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(row=>{
+        const employeeId=row.querySelector('.tk-employee')?.value||'';
+        const saved=byEmployee.get(employeeId);
+        if(!saved)return;
+        const regular=row.querySelector('.tk-regular'),ot=row.querySelector('.tk-ot');
+        if(regular)regular.value=number(saved.regular_hours).toFixed(2);
+        if(ot)ot.value=number(saved.overtime_hours).toFixed(2);
+      });
+      syncDailyTotals();
+    }
     crewRowsLoadedForReport=reportId;
   }
 
