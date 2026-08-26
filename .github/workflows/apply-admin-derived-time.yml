@@ -1,0 +1,47 @@
+name: Apply Derived Admin Time
+on:
+  push:
+    branches: [fix/admin-time-derived-hours]
+    paths: [.github/workflows/apply-admin-derived-time.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/admin-time-derived-hours
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('timekeeping-report-v2.js')
+          s=p.read_text()
+          old='''        <label>Regular Hours<input id="tkEditRegular" type="number" min="0" max="24" step="0.01" value="${num(row.regular_hours).toFixed(2)}"></label>\n        <label>OT Hours<input id="tkEditOt" type="number" min="0" max="24" step="0.01" value="${num(row.overtime_hours).toFixed(2)}"></label>'''
+          new='''        <label>Worked Hours<input id="tkEditWorked" type="text" readonly value="${(num(row.regular_hours)+num(row.overtime_hours)).toFixed(2)}"></label>\n        <div class="tk-help">Regular and OT are calculated automatically from the employee's configured workweek.</div>'''
+          if old not in s: raise SystemExit('regular/ot editor block not found')
+          s=s.replace(old,new,1)
+          old2="""    byId('tkEditCancel').onclick=()=>wrap.remove();\n    wrap.addEventListener('click',ev=>{if(ev.target===wrap)wrap.remove();});\n    byId('tkEditSave').onclick=async()=>{"""
+          new2="""    byId('tkEditCancel').onclick=()=>wrap.remove();\n    wrap.addEventListener('click',ev=>{if(ev.target===wrap)wrap.remove();});\n    const calculateWorked=()=>{\n      const start=(byId('tkEditStart')?.value||'').trim();\n      const stop=(byId('tkEditStop')?.value||'').trim();\n      const lunch=Math.round(num(byId('tkEditLunch')?.value));\n      const military=/^(?:[01]\\d|2[0-3]):[0-5]\\d$/;\n      if(!military.test(start)||!military.test(stop)){byId('tkEditWorked').value='—';return null;}\n      const toMinutes=value=>{const [h,m]=value.split(':').map(Number);return h*60+m;};\n      let elapsed=toMinutes(stop)-toMinutes(start);\n      if(elapsed<0)elapsed+=1440;\n      const worked=(elapsed-lunch)/60;\n      if(worked<0||worked>24){byId('tkEditWorked').value='—';return null;}\n      byId('tkEditWorked').value=worked.toFixed(2);\n      return worked;\n    };\n    ['tkEditStart','tkEditStop','tkEditLunch'].forEach(id=>byId(id)?.addEventListener('input',calculateWorked));\n    calculateWorked();\n    byId('tkEditSave').onclick=async()=>{"""
+          if old2 not in s: raise SystemExit('editor setup block not found')
+          s=s.replace(old2,new2,1)
+          old3="""      const regular=num(byId('tkEditRegular')?.value),ot=num(byId('tkEditOt')?.value),lunch=Math.round(num(byId('tkEditLunch')?.value));\n      if(regular<0||ot<0||regular+ot>24){toast('Regular plus OT must be between 0 and 24 hours.','warning');return;}\n      if(lunch<0||lunch>720){toast('Lunch must be between 0 and 720 minutes.','warning');return;}"""
+          new3="""      const lunch=Math.round(num(byId('tkEditLunch')?.value));\n      if(lunch<0||lunch>720){toast('Lunch must be between 0 and 720 minutes.','warning');return;}\n      const worked=calculateWorked();\n      if(worked===null){toast('Start, Stop and Lunch must produce a valid shift between 0 and 24 hours.','warning');return;}"""
+          if old3 not in s: raise SystemExit('manual hours validation block not found')
+          s=s.replace(old3,new3,1)
+          s=s.replace("p_regular_hours:regular,\n          p_overtime_hours:ot,","p_regular_hours:worked,\n          p_overtime_hours:0,",1)
+          s=s.replace("This correction updates payroll time only and records who changed it, when, why, and the before/after values.","Worked Hours are derived from Start, Stop and Lunch. Regular/OT are recalculated across the employee's full configured workweek. The original Daily Report remains submitted/approved, and the correction audit records who changed it, when, why, and the before/after values.",1)
+          p.write_text(s)
+          p=Path('expanded-jsa.js')
+          s=p.read_text()
+          old="timekeeping-report-v2.js?v=20260826e"
+          if old not in s: raise SystemExit('report cache token not found')
+          p.write_text(s.replace(old,"timekeeping-report-v2.js?v=20260826f",1))
+          PY
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add timekeeping-report-v2.js expanded-jsa.js
+          git diff --cached --quiet && exit 0
+          git commit -m "Derive Admin corrected hours from clock times"
+          git push origin HEAD:fix/admin-time-derived-hours
