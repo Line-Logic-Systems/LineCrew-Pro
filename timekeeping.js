@@ -148,7 +148,7 @@
   async function loadEmployees(){
     if(!companyId()) return;
     const { data, error } = await getSb().from('timekeeping_employees')
-      .select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id')
+      .select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id,linked_profile_id')
       .eq('company_id', companyId())
       .order('active', { ascending:false })
       .order('full_name');
@@ -390,26 +390,38 @@
   }
 
   async function loadCrewRowsForReport(){
-    const form=byId('dailyReportForm');if(!form||form.classList.contains('hidden'))return;
-    const reportId=form.dataset.reportId||null;
-    const loadKey=reportId||'new';
-    if(crewRowsLoadedForReport===loadKey)return;
-    crewRowsLoadedForReport=loadKey;
-    if(!employees.length) await loadEmployees();
-    refreshCrewEmployeeSelects();
-    const box=byId('dailyCrewTimeRows');if(!box)return;
-    box.innerHTML='';
+  const form=byId('dailyReportForm');if(!form||form.classList.contains('hidden'))return;
+  const reportId=form.dataset.reportId||null;
+  const loadKey=reportId||'new';
+  if(crewRowsLoadedForReport===loadKey)return;
+  crewRowsLoadedForReport=loadKey;
+  if(!employees.length) await loadEmployees();
+  refreshCrewEmployeeSelects();
+  const box=byId('dailyCrewTimeRows');if(!box)return;
+  box.innerHTML='';
+  if(role()==='foreman'){
+    const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
+    const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;
     if(reportId){
       const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
-      if(!error && data?.length){data.forEach(addCrewRow);return;}
+      if(!error){
+        const saved=data||[];
+        const ownSaved=own?saved.find(x=>x.employee_id===own.id):null;
+        if(own)addCrewRow(ownSaved||{employee_id:own.id});
+        saved.filter(x=>!own||x.employee_id!==own.id).forEach(addCrewRow);
+        if(saved.length||own)return;
+      }
     }
-    if(role()==='foreman'){
-      const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
-      employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach(e=>addCrewRow({employee_id:e.id}));
-      return;
-    }
-    await loadDefaultCrewRows();
+    if(own)addCrewRow({employee_id:own.id});
+    employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId&&(!own||e.id!==own.id)).forEach(e=>addCrewRow({employee_id:e.id}));
+    return;
   }
+  if(reportId){
+    const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
+    if(!error && data?.length){data.forEach(addCrewRow);return;}
+  }
+  await loadDefaultCrewRows();
+}
 
   async function persistCrewTime(snapshot, reportId){
     if(!reportId)throw new Error('The Daily Report must be saved before its crew time can be recorded.');
