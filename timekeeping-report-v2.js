@@ -22,6 +22,11 @@
     style.textContent=`
       .tk-report-toolbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 8px}
       .tk-report-toolbar button{width:auto;margin:0;padding:6px 9px;font-size:12px}
+      #tkSummary{display:flex!important;align-items:center;gap:0!important;flex-wrap:wrap;margin:6px 0 8px!important;padding:0!important;background:#f8fafc;border:1px solid #dce5ed;border-radius:9px;overflow:hidden}
+      #tkSummary>div{display:flex!important;align-items:baseline;gap:4px;min-width:0!important;width:auto!important;flex:0 0 auto!important;padding:5px 9px!important;margin:0!important;border:0!important;border-right:1px solid #dce5ed!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;font-size:10px!important;white-space:nowrap}
+      #tkSummary>div:last-child{border-right:0!important}
+      #tkSummary>div strong{font-size:13px!important;line-height:1!important;margin:0!important}
+      @media(max-width:520px){#tkSummary>div{padding:5px 6px!important;font-size:9px!important}#tkSummary>div strong{font-size:12px!important}}
       .tk-employee-summary{border-bottom:1px solid #dce5ed;background:#fff;margin:0;overflow:hidden}
       .tk-employee-summary:first-of-type{border-top:1px solid #dce5ed}
       .tk-employee-summary>summary{cursor:pointer;list-style:none;padding:5px 7px;display:grid;grid-template-columns:18px minmax(150px,1.7fr) repeat(4,minmax(62px,.65fr));gap:5px;align-items:center;min-height:30px}
