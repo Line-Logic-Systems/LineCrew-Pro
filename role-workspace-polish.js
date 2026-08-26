@@ -59,9 +59,6 @@
     else launcher.removeAttribute('data-leadership-assistant-ready');
   }
 
-  /* Foremen enter labor only in Crew Time. Hide only the two legacy hour
-     labels/inputs; never hide their parent because both inputs are direct
-     children of the Daily Report card. */
   function syncForemanCrewTimeOnly(){
     const hideLegacyHours=role()==='foreman';
     ['dailyRegularHours','dailyOvertimeHours'].forEach(id=>{
@@ -97,7 +94,6 @@
     syncAssistantVisibility();
     bindDailyReportHourUi();
     if(!dashboard||!grid||!plan) return;
-
     observer?.disconnect();
     try{
       addStyles();
@@ -105,14 +101,12 @@
       if(!banner){banner=document.createElement('div');banner.id='lcRoleWorkspace';banner.className='lc-role-workspace';grid.parentNode.insertBefore(banner,grid);}
       const bannerMarkup=`<strong>${plan.title}</strong><span>${plan.text}</span>`;
       if(banner.innerHTML!==bannerMarkup) banner.innerHTML=bannerMarkup;
-
       ['jobsTile','productionTile','safetyTile','priceBooksTile','teamTile','timekeepingTile','trainingTile'].forEach(id=>byId(id)?.classList.toggle('hidden',plan.hidden.includes(id)));
       const desiredTiles=plan.order.map(id=>byId(id)).filter(el=>el&&!el.classList.contains('hidden'));
       const desiredIds=desiredTiles.map(el=>el.id);
       const currentIds=Array.from(grid.children).filter(el=>desiredIds.includes(el.id)).map(el=>el.id);
       const tilesNeedReordering=desiredIds.length!==currentIds.length || desiredIds.some((id,index)=>id!==currentIds[index]);
       if(tilesNeedReordering) desiredTiles.forEach(el=>grid.appendChild(el));
-
       if(r==='foreman'){
         setDescription('jobsTile','Open assigned jobs and work points');
         setDescription('productionTile','Create and review your Daily Reports');
@@ -156,12 +150,20 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 
-/* Keep optional UI enhancements isolated from role/workflow logic. */
 (() => {
   if(document.querySelector('script[data-lc-gf-theme-enhancements]')) return;
   const script=document.createElement('script');
   script.src='/gf-review-theme-enhancements.js';
   script.defer=true;
   script.dataset.lcGfThemeEnhancements='1';
+  document.head.appendChild(script);
+})();
+
+(() => {
+  if(document.querySelector('script[data-lc-dark-draft-fix]')) return;
+  const script=document.createElement('script');
+  script.src='/dark-contrast-draft-edit-fix.js';
+  script.defer=true;
+  script.dataset.lcDarkDraftFix='1';
   document.head.appendChild(script);
 })();
