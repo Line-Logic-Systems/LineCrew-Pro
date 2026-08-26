@@ -142,6 +142,11 @@ jobs:
               pg_restore --list /backup/linecrew-postgres.dump > /generated/all.list
               pg_restore --data-only --schema=auth --schema=storage \
                 --file=/generated/managed-data.sql /backup/linecrew-postgres.dump
+              pg_restore --list --schema=public /backup/linecrew-postgres.dump > /generated/public-raw.list
+              awk '\''
+                / DEFAULT ACL / { print ";" $0; next }
+                { print }
+              '\'' /generated/public-raw.list > /generated/public.list
               grep "^;" /generated/all.list > /generated/auth-data.list
               for table in \
                 audit_log_entries custom_oauth_providers flow_state instances oauth_client_states \
@@ -215,8 +220,9 @@ jobs:
           docker run --rm \
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
             --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
+            --volume "$PWD/recovery-input/generated:/generated:ro" \
             postgres:17-alpine \
-            pg_restore --exit-on-error --no-owner --schema=public \
+            pg_restore --exit-on-error --no-owner --use-list=/generated/public.list \
               --dbname=postgres /backup/linecrew-postgres.dump
 
           docker run --rm \
