@@ -1,0 +1,35 @@
+name: Fix Payroll Exception Noise
+on:
+  push:
+    branches:
+      - fix/payroll-exception-noise
+    paths:
+      - .github/workflows/fix-payroll-exception-noise.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/payroll-exception-noise
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('timekeeping-payroll.js')
+          s=p.read_text()
+          old="""    const [from,through]=currentRange();const dates=datesBetween(from,through);\n    const selectedEmployee=byId('tkEmployeeFilter')?.value||'';const crew=(byId('tkCrewFilter')?.value||'').toLowerCase();\n    const activeEmployees=[...employeeMap.values()].filter(e=>e.active!==false&&(!selectedEmployee||e.id===selectedEmployee)&&(!crew||String(e.default_crew_name||'').toLowerCase()===crew));\n    const byPersonDay=new Map();\n    rows.forEach(r=>{const key=`${r.employee_id}|${r.work_date}`;if(!byPersonDay.has(key))byPersonDay.set(key,[]);byPersonDay.get(key).push(r);});\n    const out=[];\n    activeEmployees.forEach(e=>dates.forEach(date=>{const d=parseDate(date);if(d.getDay()===0||d.getDay()===6)return;const segs=byPersonDay.get(`${e.id}|${date}`)||[];if(!segs.length)out.push({type:'missing',employee:e.full_name,date,message:'No time recorded on this weekday.'});}));\n"""
+          new="""    const byPersonDay=new Map();\n    rows.forEach(r=>{const key=`${r.employee_id}|${r.work_date}`;if(!byPersonDay.has(key))byPersonDay.set(key,[]);byPersonDay.get(key).push(r);});\n    const out=[];\n    // Do not treat every blank weekday for every active roster employee as a payroll exception.\n    // LineCrew does not yet store an employee work schedule, so a blank day may simply be a day off,\n    // an unassigned employee, or someone not expected on this crew/job. Only recorded-time anomalies\n    // are actionable exceptions here.\n"""
+          if old not in s:
+              raise SystemExit('exception block not found')
+          s=s.replace(old,new,1)
+          s=s.replace("This period has no missing weekday time, high-hour totals, multi-job review flags, or possible duplicate segments.","This period has no high-hour totals, multi-job review flags, or possible duplicate time segments.",1)
+          p.write_text(s)
+          PY
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add timekeeping-payroll.js
+          git diff --cached --quiet || git commit -m "Stop flagging unrelated blank weekdays as payroll exceptions"
+          git push origin HEAD:fix/payroll-exception-noise
