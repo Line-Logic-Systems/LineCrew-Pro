@@ -16,6 +16,13 @@
       .lc-unsaved-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#8a4b08;background:#fff4db;border:1px solid #f2c97d;border-radius:999px;padding:5px 9px;margin-left:8px}
       .lc-dashboard-topbar{display:flex;justify-content:flex-end;margin:0 0 12px}
       .lc-dashboard-topbar button{width:auto;margin:0;padding:10px 14px}
+      #teamList{display:grid;gap:6px}
+      #teamList .lc-team-member-row{padding:9px 12px!important;margin:0!important;border-radius:10px!important;box-shadow:none!important}
+      #teamList .lc-team-member-row strong{font-size:13px;line-height:1.2}
+      #teamList .lc-team-member-row .role{font-size:11px;line-height:1.2;margin:2px 0 6px!important}
+      #teamList .lc-team-member-row select{width:auto;min-width:130px;padding:7px 9px;font-size:12px;border-radius:8px;margin:0 5px 0 0}
+      #teamList .lc-team-member-row button{width:auto;margin:0 5px 0 0;padding:7px 9px;font-size:11px;border-radius:8px}
+      #teamList .lc-team-member-row > div{margin-top:5px!important;margin-bottom:5px!important}
       @media(max-width:720px){
         #timekeepingPage .tk-grid{grid-template-columns:1fr!important}
         #timekeepingPage .tk-summary{grid-template-columns:1fr 1fr!important}
@@ -27,6 +34,7 @@
         #timekeepingPage .tk-table td:empty{display:none}
         #timekeepingPage .tk-inline-actions button{flex:1;min-width:140px}
         .section-header{gap:10px;align-items:flex-start!important;flex-wrap:wrap}
+        #teamList .lc-team-member-row select{min-width:120px}
       }
     `;document.head.appendChild(s);
   }
@@ -54,6 +62,15 @@
     if(box && /No time entries match these filters\./.test(box.textContent||'')){
       box.innerHTML='<div class="tk-crew-card"><strong>No time recorded for this view.</strong><p class="tk-help">Create or save a Daily Report with crew time, or change the date, employee, or job filters.</p></div>';
     }
+  }
+
+  function compactTeamRoster(){
+    const list=byId('teamList');
+    if(!list) return;
+    Array.from(list.children).forEach(card=>{
+      if(!/Role:\s*/i.test(card.textContent||'')) return;
+      card.classList.add('lc-team-member-row');
+    });
   }
 
   // Put Sign Out at the top of the Dashboard for every signed-in role.
@@ -126,6 +143,7 @@
     ensureTopSignOut();
     hardenProductionLoader();
     makeDashboardTilesAccessible();
+    compactTeamRoster();
   }
 
   function init(){
