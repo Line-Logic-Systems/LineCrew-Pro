@@ -19,7 +19,7 @@ jobs:
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add timekeeping.js timekeeping-input-v2.js
+          git add expanded-jsa.js index.html
           git diff --cached --quiet && exit 0
-          git commit -m "Save per diem and time details in core timekeeping upsert"
+          git commit -m "Refresh timekeeping browser assets"
           git push origin HEAD:fix/timekeeping-perdiem-admin-view
