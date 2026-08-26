@@ -34,6 +34,7 @@ for(const token of coldStartHtml){
   if(!html.includes(token)) throw new Error('Missing cold-start Offline JSA guard: ' + token);
 }
 
+// Keep the iPhone cold-start fallback and cached/online job-list merge regression-proof.
 if(!html.includes('if(!session){\nif(enterOfflineJsaMode()) return;')){
   throw new Error('A missing online session must fall back to cached Offline JSA access.');
 }
