@@ -144,6 +144,9 @@ jobs:
                 --file=/generated/managed-data.sql /backup/linecrew-postgres.dump
               pg_restore --list --schema=public /backup/linecrew-postgres.dump > /generated/public-raw.list
               awk '\''
+                / SCHEMA - public / { print ";" $0; next }
+                / COMMENT - SCHEMA public / { print ";" $0; next }
+                / ACL - SCHEMA public / { print ";" $0; next }
                 / DEFAULT ACL / { print ";" $0; next }
                 { print }
               '\'' /generated/public-raw.list > /generated/public.list
@@ -185,7 +188,6 @@ jobs:
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
             postgres:17-alpine \
             psql --set=ON_ERROR_STOP=1 <<'SQL'
-          drop schema if exists public cascade;
           do $$
           declare
             targets text;
@@ -224,6 +226,15 @@ jobs:
             postgres:17-alpine \
             pg_restore --exit-on-error --no-owner --use-list=/generated/public.list \
               --dbname=postgres /backup/linecrew-postgres.dump
+
+          docker run --rm \
+            --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+            postgres:17-alpine \
+            psql --set=ON_ERROR_STOP=1 <<'SQL'
+          alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
+          alter default privileges in schema public grant all on functions to postgres, anon, authenticated, service_role;
+          alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
+          SQL
 
           docker run --rm \
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
