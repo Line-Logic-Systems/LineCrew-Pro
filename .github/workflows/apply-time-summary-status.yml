@@ -1,0 +1,35 @@
+name: Apply Time Summary Status Cleanup
+on:
+  push:
+    branches: [ui/compact-time-summary]
+    paths: [.github/workflows/apply-time-summary-status.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui/compact-time-summary
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('timekeeping-polish.js')
+          s=p.read_text()
+          old="""  function updateReportStatus(){\n    const status=byId('tkReportStatus');if(!status)return;\n    const rows=document.querySelectorAll('#tkReportList .tk-table tbody tr').length;\n    const from=byId('tkFromDate')?.value||'';const through=byId('tkThroughDate')?.value||'';\n    if(rows) status.textContent=`Showing ${rows} time segment${rows===1?'':'s'}${from&&through?` from ${from} through ${through}`:''}.`;\n    else if(byId('tkReportList')?.textContent?.trim()) status.textContent=from&&through?`No matching time from ${from} through ${through}.`:'';\n  }\n"""
+          new="""  function updateReportStatus(){\n    const status=byId('tkReportStatus');if(!status)return;\n    status.textContent='';\n  }\n"""
+          if old not in s: raise SystemExit('time report status block not found')
+          p.write_text(s.replace(old,new,1))
+          p=Path('expanded-jsa.js')
+          s=p.read_text()
+          old_token="timekeeping-polish.js?v=20260820a"
+          if old_token not in s: raise SystemExit('timekeeping polish cache token not found')
+          p.write_text(s.replace(old_token,"timekeeping-polish.js?v=20260826b",1))
+          PY
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add timekeeping-polish.js expanded-jsa.js
+          git diff --cached --quiet || git commit -m "Remove redundant time report status line"
+          git push origin HEAD:ui/compact-time-summary
