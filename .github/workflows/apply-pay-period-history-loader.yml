@@ -1,0 +1,33 @@
+name: Apply Pay Period History Loader
+on:
+  push:
+    branches:
+      - feature/pay-period-history
+    paths:
+      - .github/workflows/apply-pay-period-history-loader.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feature/pay-period-history
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('expanded-jsa.js')
+          s=p.read_text()
+          old="      load('timekeeping-payroll.js?v=20260823b');"
+          new="      load('timekeeping-payroll.js?v=20260823b', () => load('timekeeping-pay-period-history.js?v=20260826a'));"
+          if old not in s:
+              raise SystemExit('timekeeping payroll loader not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add expanded-jsa.js
+          git diff --cached --quiet || git commit -m "Load archived pay period history"
+          git push origin HEAD:feature/pay-period-history
