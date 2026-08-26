@@ -269,6 +269,7 @@ assert(!fullDisasterRestoreWorkflow.includes('drop schema if exists public'), 'T
 assert(fullDisasterRestoreWorkflow.includes('linecrew-managed-objects.list'), 'The full recovery drill must restore LineCrew-specific Auth triggers and Storage policies.');
 assert(fullDisasterRestoreWorkflow.includes('/ SCHEMA - public /') && fullDisasterRestoreWorkflow.includes('/ DEFAULT ACL /') && fullDisasterRestoreWorkflow.includes('public.list'), 'The full recovery drill must restore into the existing public schema while preserving platform-owned defaults.');
 assert(fullDisasterRestoreWorkflow.includes('alter default privileges in schema public grant all on tables'), 'The full recovery drill must restore application-owner defaults for future public objects.');
+assert((fullDisasterRestoreWorkflow.match(/docker run --rm --interactive/g) || []).length >= 5, 'Recovery SQL heredocs must keep Docker standard input open.');
 assert(fullDisasterRestoreWorkflow.includes('post-restore-security.sql') && fullDisasterRestoreWorkflow.includes('verify-post-restore-security.sql'), 'The full recovery drill must restore and verify the global security gate.');
 assert(restoreBackupStorage.includes('sha256') && restoreBackupStorage.includes("'x-upsert': 'true'"), 'The full recovery drill must restore and hash-verify Storage objects.');
 assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
