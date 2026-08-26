@@ -1,0 +1,1 @@
+Offline JSA module is loaded by service-worker response augmentation for expanded-jsa.js so it is available online and from the cached PWA shell.
