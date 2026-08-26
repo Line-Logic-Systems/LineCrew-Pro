@@ -144,8 +144,8 @@
       <h3>Edit Submitted Time</h3>
       <p class="muted">${esc(e.full_name||'Employee')} · ${esc(row.work_date||'')} · ${esc(j.job_number||'')}</p>
       <div class="tk-edit-grid">
-        <label>Start<input id="tkEditStart" type="time" value="${esc(timeText(row.start_time))}"></label>
-        <label>Stop<input id="tkEditStop" type="time" value="${esc(timeText(row.stop_time))}"></label>
+        <label>Start (24 hr)<input id="tkEditStart" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off" value="${esc(timeText(row.start_time))}"></label>
+        <label>Stop (24 hr)<input id="tkEditStop" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off" value="${esc(timeText(row.stop_time))}"></label>
         <label>Lunch (min)<input id="tkEditLunch" type="number" min="0" max="720" step="1" value="${num(row.lunch_minutes)}"></label>
         <label>Equipment<input id="tkEditEquipment" type="text" value="${esc(row.equipment_used||'')}"></label>
         <label>Regular Hours<input id="tkEditRegular" type="number" min="0" max="24" step="0.01" value="${num(row.regular_hours).toFixed(2)}"></label>
@@ -165,6 +165,11 @@
     byId('tkEditSave').onclick=async()=>{
       const reason=(byId('tkEditReason')?.value||'').trim();
       if(!reason){toast('Enter a reason for the time correction.','warning');byId('tkEditReason')?.focus();return;}
+      const start=(byId('tkEditStart')?.value||'').trim();
+      const stop=(byId('tkEditStop')?.value||'').trim();
+      const military=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
+      if(start&&!military.test(start)){toast('Start time must use 24-hour HH:MM, for example 06:30 or 17:00.','warning');byId('tkEditStart')?.focus();return;}
+      if(stop&&!military.test(stop)){toast('Stop time must use 24-hour HH:MM, for example 06:30 or 17:00.','warning');byId('tkEditStop')?.focus();return;}
       const regular=num(byId('tkEditRegular')?.value),ot=num(byId('tkEditOt')?.value),lunch=Math.round(num(byId('tkEditLunch')?.value));
       if(regular<0||ot<0||regular+ot>24){toast('Regular plus OT must be between 0 and 24 hours.','warning');return;}
       if(lunch<0||lunch>720){toast('Lunch must be between 0 and 720 minutes.','warning');return;}
@@ -174,8 +179,8 @@
         const {error}=await getSb().rpc('admin_update_timekeeping_entry',{
           p_daily_report_id:row.daily_report_id,
           p_employee_id:row.employee_id,
-          p_start_time:byId('tkEditStart')?.value||null,
-          p_stop_time:byId('tkEditStop')?.value||null,
+          p_start_time:start||null,
+          p_stop_time:stop||null,
           p_lunch_minutes:lunch,
           p_regular_hours:regular,
           p_overtime_hours:ot,
