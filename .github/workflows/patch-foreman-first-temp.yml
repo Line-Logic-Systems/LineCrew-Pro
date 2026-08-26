@@ -1,9 +1,13 @@
 name: Patch Foreman First Temp
+
 on:
   push:
-    branches: [fix/foreman-first-at-source]
+    branches:
+      - fix/foreman-first-at-source
+
 permissions:
   contents: write
+
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -12,51 +16,48 @@ jobs:
         with:
           ref: fix/foreman-first-at-source
       - name: Patch timekeeping source
-        shell: python
         run: |
+          python3 <<'PY'
           from pathlib import Path
           p = Path('timekeeping.js')
           s = p.read_text()
-          old_select = ".select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id')"
-          new_select = ".select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id,linked_profile_id')"
-          if old_select in s:
-              s = s.replace(old_select, new_select, 1)
-          old = """    if(reportId){
-      const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
-      if(!error && data?.length){data.forEach(addCrewRow);return;}
-    }
-    if(role()==='foreman'){
-      const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
-      employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach(e=>addCrewRow({employee_id:e.id}));
-      return;
-    }
-"""
-          new = """    if(role()==='foreman'){
-      const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
-      const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;
-      if(reportId){
-        const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
-        if(!error){
-          const saved=data||[];
-          const ownSaved=own?saved.find(x=>x.employee_id===own.id):null;
-          if(own)addCrewRow(ownSaved||{employee_id:own.id});
-          saved.filter(x=>!own||x.employee_id!==own.id).forEach(addCrewRow);
-          if(saved.length||own)return;
-        }
-      }
-      if(own)addCrewRow({employee_id:own.id});
-      employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId&&(!own||e.id!==own.id)).forEach(e=>addCrewRow({employee_id:e.id}));
-      return;
-    }
-    if(reportId){
-      const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
-      if(!error && data?.length){data.forEach(addCrewRow);return;}
-    }
-"""
+          s = s.replace(".select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id')", ".select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id,linked_profile_id')", 1)
+          old = '''    if(reportId){
+              const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
+              if(!error && data?.length){data.forEach(addCrewRow);return;}
+            }
+            if(role()==='foreman'){
+              const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
+              employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach(e=>addCrewRow({employee_id:e.id}));
+              return;
+            }
+          '''
+          new = '''    if(role()==='foreman'){
+              const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
+              const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;
+              if(reportId){
+                const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
+                if(!error){
+                  const saved=data||[];
+                  const ownSaved=own?saved.find(x=>x.employee_id===own.id):null;
+                  if(own)addCrewRow(ownSaved||{employee_id:own.id});
+                  saved.filter(x=>!own||x.employee_id!==own.id).forEach(addCrewRow);
+                  if(saved.length||own)return;
+                }
+              }
+              if(own)addCrewRow({employee_id:own.id});
+              employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId&&(!own||e.id!==own.id)).forEach(e=>addCrewRow({employee_id:e.id}));
+              return;
+            }
+            if(reportId){
+              const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
+              if(!error && data?.length){data.forEach(addCrewRow);return;}
+            }
+          '''
           if old not in s:
-              raise SystemExit('Expected loadCrewRowsForReport block not found')
-          s = s.replace(old, new, 1)
-          p.write_text(s)
+              raise SystemExit('Expected source block not found')
+          p.write_text(s.replace(old,new,1))
+          PY
       - name: Commit patch
         run: |
           if git diff --quiet; then exit 0; fi
