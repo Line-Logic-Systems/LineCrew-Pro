@@ -27,14 +27,28 @@ const coldStartHtml = [
   'Offline JSA Mode',
   "!['foreman','gf'].includes(role)",
   'clearOfflineJsaAccess();',
-  'fillOfflineJsaJobSelect'
+  'fillOfflineJsaJobSelect',
+  'uniqueOfflineJsaJobs'
 ];
 for(const token of coldStartHtml){
   if(!html.includes(token)) throw new Error('Missing cold-start Offline JSA guard: ' + token);
 }
 
+if(!html.includes('if(!session){\nif(enterOfflineJsaMode()) return;')){
+  throw new Error('A missing online session must fall back to cached Offline JSA access.');
+}
+const signedOutStart = html.indexOf("if(event === 'SIGNED_OUT'){");
+const signedOutEnd = html.indexOf("if(\nevent === 'SIGNED_IN'", signedOutStart);
+const signedOutBlock = html.slice(signedOutStart, signedOutEnd);
+if(!signedOutBlock.includes('if(readOfflineJsaAccess())') || signedOutBlock.includes('clearOfflineJsaAccess();')){
+  throw new Error('Transient SIGNED_OUT events must preserve valid Offline JSA access.');
+}
+if((html.match(/return fillOfflineJsaJobSelect\(select,data \|\| \[\]\);/g) || []).length < 2){
+  throw new Error('Both digital and uploaded JSA job lists must rebuild from the deduplicated list.');
+}
+
 for(const token of [
-  'linecrew-pro-shell-v35',
+  'linecrew-pro-shell-v36',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
   '/offline-jsa.js?v=20260827a'
