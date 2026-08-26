@@ -1,8 +1,10 @@
 name: Apply GF Assignment Fix
-on:
+'on':
   push:
-    branches: [fix/gf-assignment-duplicate-cache]
-    paths: [.github/workflows/apply-gf-assignment-fix.yml]
+    branches:
+      - fix/gf-assignment-duplicate-cache
+    paths:
+      - .github/workflows/apply-gf-assignment-fix.yml
 permissions:
   contents: write
 jobs:
@@ -18,9 +20,7 @@ jobs:
           from pathlib import Path
           p=Path('gf-crew-scope.js')
           s=p.read_text()
-
           s=s.replace("  let loadedForCompany = null;\n", "  let loadedForScope = null;\n  let adminAssignmentInstallPromise = null;\n", 1)
-
           old="""    const companyId = profile()?.company_id || null;
     if(!companyId || !getSb()) return [];
     if(!force && loadedForCompany === companyId && assignmentRows.length >= 0) return assignmentRows;"""
@@ -30,12 +30,10 @@ jobs:
     if(!force && loadedForScope === scopeKey && assignmentRows.length >= 0) return assignmentRows;"""
           if old not in s: raise SystemExit('cache start anchor not found')
           s=s.replace(old,new,1)
-
           old="      loadedForCompany = companyId;\n"
           new="      loadedForScope = scopeKey;\n"
           if old not in s: raise SystemExit('cache assignment anchor not found')
           s=s.replace(old,new,1)
-
           old="""  async function installAdminAssignments(){
     if(!['admin','owner'].includes(role())){
       byId('gfAssignmentCard')?.remove();
@@ -47,7 +45,7 @@ jobs:
     const card=document.createElement('details');"""
           new="""  async function installAdminAssignments(){
     if(!['admin','owner'].includes(role())){
-      document.querySelectorAll('#gfAssignmentCard').forEach((el,index)=>{ if(index>0 || !['admin','owner'].includes(role())) el.remove(); });
+      document.querySelectorAll('#gfAssignmentCard').forEach(el=>el.remove());
       return;
     }
     const teamPage=byId('teamPage');
@@ -64,7 +62,6 @@ jobs:
     const card=document.createElement('details');"""
           if old not in s: raise SystemExit('install start anchor not found')
           s=s.replace(old,new,1)
-
           old="""    byId('gfAssignmentList').addEventListener('change',e=>{
       const select=e.target.closest('select');
       const row=select?.closest('.gf-assignment-row');
@@ -84,7 +81,6 @@ jobs:
 """
           if old not in s: raise SystemExit('install end anchor not found')
           s=s.replace(old,new,1)
-
           p.write_text(s)
           PY
       - name: Validate syntax
