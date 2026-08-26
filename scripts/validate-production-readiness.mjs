@@ -86,9 +86,12 @@ const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
 const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
+const fullDisasterRestoreWorkflow = fs.readFileSync('.github/workflows/full-disaster-recovery-drill.yml', 'utf8');
 const postRestoreSecurity = fs.readFileSync('scripts/post-restore-security.sql', 'utf8');
 const verifyPostRestoreSecurity = fs.readFileSync('scripts/verify-post-restore-security.sql', 'utf8');
 const testPostRestoreSecurity = fs.readFileSync('scripts/test-post-restore-security-gate.sh', 'utf8');
+const restoreBackupStorage = fs.readFileSync('scripts/restore-backup-storage.mjs', 'utf8');
+const verifyRestoredTableCounts = fs.readFileSync('scripts/verify-restored-table-counts.mjs', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
@@ -253,6 +256,15 @@ for (const marker of [
 ]) assert(independentBackup.includes(marker), `Independent backup is missing recovery-security marker: ${marker}`);
 assert(disasterRestoreWorkflow.includes('bash scripts/test-post-restore-security-gate.sh'), 'The disposable restore workflow must run an actual pg_restore security-gate drill.');
 assert(testPostRestoreSecurity.includes('pg_restore') && testPostRestoreSecurity.includes('pg_db_role_setting'), 'The recovery-security drill must prove pg_restore omits the role setting before restoring it.');
+assert(fullDisasterRestoreWorkflow.includes('environment: recovery-drill'), 'The full recovery drill must use its protected GitHub environment.');
+assert(fullDisasterRestoreWorkflow.includes("RESTORE_RECOVERY_DRILL"), 'The full recovery drill must require an explicit confirmation phrase.');
+assert(fullDisasterRestoreWorkflow.includes("test \"$RECOVERY_PROJECT_REF\" != \"$PRODUCTION_PROJECT_REF\""), 'The full recovery drill must refuse the Production project.');
+assert(fullDisasterRestoreWorkflow.includes("test \"$RECOVERY_PROJECT_REF\" != \"$NORMAL_TEST_PROJECT_REF\""), 'The full recovery drill must refuse the normal Test project.');
+assert(fullDisasterRestoreWorkflow.includes("to_regclass('public.companies') is null"), 'The full recovery drill must refuse a previously used target.');
+assert(fullDisasterRestoreWorkflow.includes('pg_restore --exit-on-error --no-owner') && !fullDisasterRestoreWorkflow.includes('pg_restore --exit-on-error --no-owner --no-acl'), 'The full recovery drill must restore ACLs and stop on restore errors.');
+assert(fullDisasterRestoreWorkflow.includes('post-restore-security.sql') && fullDisasterRestoreWorkflow.includes('verify-post-restore-security.sql'), 'The full recovery drill must restore and verify the global security gate.');
+assert(restoreBackupStorage.includes('sha256') && restoreBackupStorage.includes("'x-upsert': 'true'"), 'The full recovery drill must restore and hash-verify Storage objects.');
+assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
 assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl'), 'Independent backups must preserve function ACLs.');
 assert(!testPostRestoreSecurity.includes('--no-acl'), 'The recovery drill must restore and verify function ACLs.');
 assert(postRestoreSecurity.includes("alter role authenticator\n  set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"), 'The recovery bootstrap must restore the PostgREST pre-request gate.');
