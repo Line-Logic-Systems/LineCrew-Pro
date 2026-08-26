@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v32';
+const CACHE_NAME = 'linecrew-pro-shell-v33';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -6,7 +6,11 @@ const APP_SHELL = [
   '/icons/linecrew-pro-180.png',
   '/icons/linecrew-pro-192.png',
   '/icons/linecrew-pro-512.png',
-  '/expanded-jsa.js?v=20260825a'
+  '/expanded-jsa.js?v=20260825a',
+  '/expanded-jsa-core.js?v=20260820',
+  '/jsa-signatures.js?v=20260820j',
+  '/jsa-signature-layout-fix.js?v=20260820a',
+  '/offline-jsa.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -21,28 +25,38 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+async function addOfflineJsaLoader(response) {
+  if (!response || !response.ok) return response;
+  const text = await response.text();
+  const loader = "\n;(()=>{if(!document.querySelector('script[data-lc-offline-jsa]')){const s=document.createElement('script');s.src='/offline-jsa.js';s.defer=false;s.dataset.lcOfflineJsa='1';document.head.appendChild(s);}})();\n";
+  return new Response(text + loader, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  event.respondWith(
-    fetch(request)
-      .then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      })
-      .catch(async () => {
-        const cached = await caches.match(request);
-        if (cached) return cached;
-        if (request.mode === 'navigate') return caches.match('/');
-        return Response.error();
-      })
-  );
+  event.respondWith((async () => {
+    try {
+      const response = await fetch(request);
+      if (response.ok) {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+      }
+      return url.pathname === '/expanded-jsa.js' ? addOfflineJsaLoader(response) : response;
+    } catch (_) {
+      const cached = await caches.match(request);
+      if (cached) return url.pathname === '/expanded-jsa.js' ? addOfflineJsaLoader(cached) : cached;
+      if (request.mode === 'navigate') return caches.match('/');
+      return Response.error();
+    }
+  })());
 });
 
 self.addEventListener('push', (event) => {
