@@ -34,3 +34,4 @@ $('safetyJsaList').replaceChildren();"""
           git add index.html
           git diff --cached --quiet || git commit -m "Fix completed JSA rendering for leadership"
           git push origin HEAD:feature/gf-completed-jsa-view
+# trigger
