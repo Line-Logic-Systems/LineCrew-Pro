@@ -116,6 +116,7 @@ async function resumableUpload(bucket, objectPath, data, contentType) {
         'tus-resumable': '1.0.0',
         'upload-offset': String(offset),
         'content-type': 'application/offset+octet-stream',
+        'x-upsert': 'true',
       },
       body: chunk,
     });
