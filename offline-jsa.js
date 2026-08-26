@@ -206,11 +206,17 @@
 
   function validationMessage(targetId, message) {
     const target = byId(targetId);
-    if (target) target.textContent = message;
-    else alert(message);
+    if (target) {
+      target.textContent = message;
+      target.className = 'message error';
+    } else {
+      alert(message);
+    }
+    toast(message, 'warning');
   }
 
   async function queueDigital() {
+    console.info('[offline-jsa] Digital JSA save requested.', { online: navigator.onLine });
     const error = validateDigital();
     if (error) { validationMessage('safetyJsaMsg', error); return; }
     const profile = getProfile();
@@ -238,6 +244,7 @@
       toast('Complete JSA saved safely. LineCrew Pro will sync it automatically.', 'success');
       void syncQueue(true);
     } catch (saveError) {
+      console.error('[offline-jsa] Device save failed.', saveError);
       validationMessage('safetyJsaMsg', saveError?.message || 'This JSA could not be secured on the device. Do not close the form.');
       setStatus('The JSA is still on screen but was not saved to device storage. Do not close it.', 'error');
     } finally {
