@@ -133,16 +133,133 @@ jobs:
           PGUSER: ${{ env.RECOVERY_DB_USER }}
           PGSSLMODE: require
         run: |
+          mkdir -p recovery-input/generated
+          docker run --rm \
+            --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
+            --volume "$PWD/recovery-input/generated:/generated" \
+            postgres:17-alpine \
+            sh -ceu '
+              pg_restore --list /backup/linecrew-postgres.dump > /generated/all.list
+              pg_restore --data-only --schema=auth --schema=storage \
+                --file=/generated/managed-data.sql /backup/linecrew-postgres.dump
+              awk '\''
+                /^;/ { print; next }
+                / TABLE DATA auth / && $0 !~ / TABLE DATA auth schema_migrations / { print; next }
+                / SEQUENCE SET auth / { print; next }
+                { print ";" $0 }
+              '\'' /generated/all.list > /generated/auth-data.list
+              awk '\''
+                /^;/ { print; next }
+                / TABLE DATA storage / && $0 !~ / TABLE DATA storage (migrations|buckets_vectors|vector_indexes) / { print; next }
+                / SEQUENCE SET storage / { print; next }
+                { print ";" $0 }
+              '\'' /generated/all.list > /generated/storage-data.list
+              awk '\''
+                /^;/ { print; next }
+                / TRIGGER auth complete_team_invitation_signup / { print; next }
+                / POLICY storage / { print; next }
+                { print ";" $0 }
+              '\'' /generated/all.list > /generated/linecrew-managed-objects.list
+            '
+
           docker run --rm \
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
             postgres:17-alpine \
-            psql --set=ON_ERROR_STOP=1 --command \
-              'drop schema if exists public cascade; drop schema if exists auth cascade; drop schema if exists storage cascade;'
+            psql --set=ON_ERROR_STOP=1 <<'SQL'
+          drop schema if exists public cascade;
+          do $$
+          declare
+            targets text;
+          begin
+            select string_agg(format('%I.%I', n.nspname, c.relname), ', ' order by n.nspname, c.relname)
+              into targets
+              from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+             where c.relkind = 'r'
+               and n.nspname in ('auth', 'storage')
+               and has_table_privilege(current_user, c.oid, 'TRUNCATE')
+               and not (n.nspname = 'auth' and c.relname = 'schema_migrations')
+               and not (n.nspname = 'storage' and c.relname in ('migrations', 'buckets_vectors', 'vector_indexes'));
+            if targets is not null then
+              execute 'truncate table ' || targets || ' cascade';
+            end if;
+          end
+          $$;
+          SQL
+
+          for list in auth-data storage-data; do
+            docker run --rm \
+              --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+              --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
+              --volume "$PWD/recovery-input/generated:/generated:ro" \
+              postgres:17-alpine \
+              pg_restore --exit-on-error --no-owner \
+                --use-list="/generated/${list}.list" \
+                --dbname=postgres /backup/linecrew-postgres.dump
+          done
+
           docker run --rm \
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
             --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
             postgres:17-alpine \
-            pg_restore --exit-on-error --no-owner --dbname=postgres /backup/linecrew-postgres.dump
+            pg_restore --exit-on-error --no-owner --schema=public \
+              --dbname=postgres /backup/linecrew-postgres.dump
+
+          docker run --rm \
+            --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+            --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
+            --volume "$PWD/recovery-input/generated:/generated:ro" \
+            postgres:17-alpine \
+            pg_restore --exit-on-error --no-owner \
+              --use-list=/generated/linecrew-managed-objects.list \
+              --dbname=postgres /backup/linecrew-postgres.dump
+
+      - name: Verify restored Auth and Storage row counts
+        env:
+          PGPASSWORD: ${{ secrets.RECOVERY_DRILL_DB_PASSWORD }}
+          PGHOST: ${{ env.RECOVERY_DB_HOST }}
+          PGPORT: '5432'
+          PGDATABASE: postgres
+          PGUSER: ${{ env.RECOVERY_DB_USER }}
+          PGSSLMODE: require
+        run: |
+          docker run --rm \
+            --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
+            postgres:17-alpine \
+            psql --quiet --set=ON_ERROR_STOP=1 --tuples-only --no-align \
+            > recovery-input/generated/managed-actual-counts.tsv <<'SQL'
+          create temporary table recovery_managed_counts (
+            schema_name text not null,
+            table_name text not null,
+            row_count bigint not null
+          );
+          do $$
+          declare
+            target record;
+            total bigint;
+          begin
+            for target in
+              select n.nspname as schema_name, c.relname as table_name
+                from pg_class c
+                join pg_namespace n on n.oid = c.relnamespace
+               where c.relkind = 'r'
+                 and n.nspname in ('auth', 'storage')
+                 and not (n.nspname = 'auth' and c.relname = 'schema_migrations')
+                 and not (n.nspname = 'storage' and c.relname in ('migrations', 'buckets_vectors', 'vector_indexes'))
+               order by n.nspname, c.relname
+            loop
+              execute format('select count(*) from %I.%I', target.schema_name, target.table_name) into total;
+              insert into recovery_managed_counts values (target.schema_name, target.table_name, total);
+            end loop;
+          end
+          $$;
+          select schema_name || '.' || table_name || E'\t' || row_count
+            from recovery_managed_counts
+           order by schema_name, table_name;
+          SQL
+          node scripts/verify-restored-managed-counts.mjs \
+            recovery-input/generated/managed-data.sql \
+            recovery-input/generated/managed-actual-counts.tsv
 
       - name: Restore and verify the global Data API security gate
         env:
