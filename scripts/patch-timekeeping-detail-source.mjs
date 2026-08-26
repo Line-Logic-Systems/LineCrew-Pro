@@ -64,7 +64,7 @@ patch('expanded-jsa.js',[
 ]);
 
 patch('index.html',[[
-  'expanded-jsa.js?v=20260825b',
+  'expanded-jsa.js?v=20260825a',
   'expanded-jsa.js?v=20260826a',
   'expanded JSA cache version'
 ]]);
