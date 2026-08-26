@@ -1,0 +1,32 @@
+name: Update Foreman Readiness Temp
+on:
+  push:
+    branches: [fix/foreman-first-final]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: fix/foreman-first-final
+      - name: Update readiness assertion
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('scripts/validate-production-readiness.mjs')
+          s=p.read_text()
+          old="assert(timekeeping.includes(\"employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach\"), 'Foreman Daily Reports must directly preload assigned crew members.');"
+          new="assert(timekeeping.includes(\"const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;\"), 'Foreman Daily Reports must identify the logged-in Foreman employee directly.');\nassert(timekeeping.includes(\"if(own)addCrewRow(ownSaved||{employee_id:own.id});\"), 'Foreman Daily Reports must render the logged-in Foreman first when reopening a report.');\nassert(timekeeping.includes(\"employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId&&(!own||e.id!==own.id)).forEach\"), 'Foreman Daily Reports must preload assigned crew underneath the Foreman without duplication.');"
+          if old not in s:
+              raise SystemExit('Expected old Foreman preload assertion not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Commit readiness update
+        run: |
+          git config user.name "LineCrew Pro Automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add scripts/validate-production-readiness.mjs
+          git commit -m "Validate Foreman-first crew preload behavior"
+          git push origin HEAD:fix/foreman-first-final
