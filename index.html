@@ -4384,6 +4384,7 @@ popup.focus();
 setTimeout(() => popup.print(), 250);
 }
 function renderSafetyJsas(){
+const foremanEntryWorkspace = currentUserRole() === "foreman";
 const records = getFilteredSafetyJsas();
 $('safetyJsaList').replaceChildren();
 $('safetyJsaEmpty').classList.toggle('hidden', records.length > 0);
