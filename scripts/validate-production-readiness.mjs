@@ -43,7 +43,8 @@ const mustExist = [
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
   'scripts/verify-post-restore-security.sql',
-  'scripts/test-post-restore-security-gate.sh'
+  'scripts/test-post-restore-security-gate.sh',
+  'scripts/verify-restored-managed-counts.mjs'
 ];
 for (const file of mustExist) assert(fs.existsSync(file), `Missing ${file}`);
 
@@ -92,6 +93,7 @@ const verifyPostRestoreSecurity = fs.readFileSync('scripts/verify-post-restore-s
 const testPostRestoreSecurity = fs.readFileSync('scripts/test-post-restore-security-gate.sh', 'utf8');
 const restoreBackupStorage = fs.readFileSync('scripts/restore-backup-storage.mjs', 'utf8');
 const verifyRestoredTableCounts = fs.readFileSync('scripts/verify-restored-table-counts.mjs', 'utf8');
+const verifyRestoredManagedCounts = fs.readFileSync('scripts/verify-restored-managed-counts.mjs', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
@@ -262,9 +264,12 @@ assert(fullDisasterRestoreWorkflow.includes("test \"$RECOVERY_PROJECT_REF\" != \
 assert(fullDisasterRestoreWorkflow.includes("test \"$RECOVERY_PROJECT_REF\" != \"$NORMAL_TEST_PROJECT_REF\""), 'The full recovery drill must refuse the normal Test project.');
 assert(fullDisasterRestoreWorkflow.includes("to_regclass('public.companies') is null"), 'The full recovery drill must refuse a previously used target.');
 assert(fullDisasterRestoreWorkflow.includes('pg_restore --exit-on-error --no-owner') && !fullDisasterRestoreWorkflow.includes('pg_restore --exit-on-error --no-owner --no-acl'), 'The full recovery drill must restore ACLs and stop on restore errors.');
+assert(!fullDisasterRestoreWorkflow.includes('drop schema if exists auth') && !fullDisasterRestoreWorkflow.includes('drop schema if exists storage'), 'The full recovery drill must not drop Supabase-managed Auth or Storage schemas.');
+assert(fullDisasterRestoreWorkflow.includes('linecrew-managed-objects.list'), 'The full recovery drill must restore LineCrew-specific Auth triggers and Storage policies.');
 assert(fullDisasterRestoreWorkflow.includes('post-restore-security.sql') && fullDisasterRestoreWorkflow.includes('verify-post-restore-security.sql'), 'The full recovery drill must restore and verify the global security gate.');
 assert(restoreBackupStorage.includes('sha256') && restoreBackupStorage.includes("'x-upsert': 'true'"), 'The full recovery drill must restore and hash-verify Storage objects.');
 assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
+assert(verifyRestoredManagedCounts.includes("'auth.users'") && verifyRestoredManagedCounts.includes("'storage.objects'"), 'The full recovery drill must compare restored Auth and Storage row counts.');
 assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl'), 'Independent backups must preserve function ACLs.');
 assert(!testPostRestoreSecurity.includes('--no-acl'), 'The recovery drill must restore and verify function ACLs.');
 assert(postRestoreSecurity.includes("alter role authenticator\n  set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"), 'The recovery bootstrap must restore the PostgREST pre-request gate.');
