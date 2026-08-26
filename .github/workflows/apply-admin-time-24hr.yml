@@ -1,0 +1,42 @@
+name: Apply Admin Time 24hr
+on:
+  push:
+    branches: [fix/admin-time-editor-24hr]
+    paths: [.github/workflows/apply-admin-time-24hr.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/admin-time-editor-24hr
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('timekeeping-report-v2.js')
+          s=p.read_text()
+          old='''        <label>Start<input id="tkEditStart" type="time" value="${esc(timeText(row.start_time))}"></label>\n        <label>Stop<input id="tkEditStop" type="time" value="${esc(timeText(row.stop_time))}"></label>'''
+          new='''        <label>Start (24 hr)<input id="tkEditStart" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off" value="${esc(timeText(row.start_time))}"></label>\n        <label>Stop (24 hr)<input id="tkEditStop" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off" value="${esc(timeText(row.stop_time))}"></label>'''
+          if old not in s: raise SystemExit('time input block not found')
+          s=s.replace(old,new,1)
+          old2="""      const reason=(byId('tkEditReason')?.value||'').trim();\n      if(!reason){toast('Enter a reason for the time correction.','warning');byId('tkEditReason')?.focus();return;}\n      const regular=num(byId('tkEditRegular')?.value),ot=num(byId('tkEditOt')?.value),lunch=Math.round(num(byId('tkEditLunch')?.value));"""
+          new2="""      const reason=(byId('tkEditReason')?.value||'').trim();\n      if(!reason){toast('Enter a reason for the time correction.','warning');byId('tkEditReason')?.focus();return;}\n      const start=(byId('tkEditStart')?.value||'').trim();\n      const stop=(byId('tkEditStop')?.value||'').trim();\n      const military=/^(?:[01]\\d|2[0-3]):[0-5]\\d$/;\n      if(start&&!military.test(start)){toast('Start time must use 24-hour HH:MM, for example 06:30 or 17:00.','warning');byId('tkEditStart')?.focus();return;}\n      if(stop&&!military.test(stop)){toast('Stop time must use 24-hour HH:MM, for example 06:30 or 17:00.','warning');byId('tkEditStop')?.focus();return;}\n      const regular=num(byId('tkEditRegular')?.value),ot=num(byId('tkEditOt')?.value),lunch=Math.round(num(byId('tkEditLunch')?.value));"""
+          if old2 not in s: raise SystemExit('save validation block not found')
+          s=s.replace(old2,new2,1)
+          s=s.replace("p_start_time:byId('tkEditStart')?.value||null,\n          p_stop_time:byId('tkEditStop')?.value||null,","p_start_time:start||null,\n          p_stop_time:stop||null,",1)
+          p.write_text(s)
+          p=Path('expanded-jsa.js')
+          s=p.read_text()
+          old="timekeeping-report-v2.js?v=20260826d"
+          if old not in s: raise SystemExit('report cache token not found')
+          p.write_text(s.replace(old,"timekeeping-report-v2.js?v=20260826e",1))
+          PY
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add timekeeping-report-v2.js expanded-jsa.js
+          git diff --cached --quiet && exit 0
+          git commit -m "Use 24-hour time in Admin corrections"
+          git push origin HEAD:fix/admin-time-editor-24hr
