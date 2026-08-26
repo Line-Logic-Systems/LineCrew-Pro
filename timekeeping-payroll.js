@@ -169,21 +169,22 @@
     box.innerHTML=`<strong>${exceptions.length} exception${exceptions.length===1?'':'s'} to review</strong><div class="tk-exception-list">${exceptions.map(x=>`<div class="tk-exception ${x.type==='high'?'high':''}"><strong>${esc(x.employee||'Employee')} — ${esc(x.date)}</strong><br>${esc(x.message)}</div>`).join('')}</div>`;
   }
 
+  function timeText(v){return v?String(v).slice(0,5):'';}
   function detailData(rows){
     const api=window.LineCrewTimekeepingReport;const employeeMap=api.getEmployees(),jobMap=api.getJobs();
-    return rows.map(r=>{const e=employeeMap.get(r.employee_id)||{},j=jobMap.get(r.job_id)||{};return [e.employee_number||'',e.full_name||'',e.classification||'',r.work_date||'',j.job_number||'',j.job_name||'',r.crew_name||e.default_crew_name||'',num(r.regular_hours),num(r.overtime_hours),num(r.regular_hours)+num(r.overtime_hours),r.storm_work?'Yes':'No'];});
+    return rows.map(r=>{const e=employeeMap.get(r.employee_id)||{},j=jobMap.get(r.job_id)||{};const equipment=r.equipment_not_used?'Not used':(r.equipment_used||e.default_equipment||'');return [e.employee_number||'',e.full_name||'',e.classification||'',r.work_date||'',j.job_number||'',j.job_name||'',r.crew_name||e.default_crew_name||'',timeText(r.start_time),timeText(r.stop_time),num(r.lunch_minutes),num(r.regular_hours),num(r.overtime_hours),num(r.regular_hours)+num(r.overtime_hours),r.per_diem?'Yes':'No',equipment,r.storm_work?'Yes':'No'];});
   }
 
   async function exportExcel(){
     const rows=await ensureReport();if(!rows.length)return toast('There is no Timekeeping data to export for these filters.','warning');
     if(typeof XLSX==='undefined')return toast('Excel export library is still loading. Try again in a moment.','warning');
     await buildExceptions();const api=window.LineCrewTimekeepingReport,employeeMap=api.getEmployees();const [from,through]=currentRange();const dates=datesBetween(from,through);
-    const grouped=new Map();rows.forEach(r=>{if(!grouped.has(r.employee_id))grouped.set(r.employee_id,new Map());const day=grouped.get(r.employee_id);if(!day.has(r.work_date))day.set(r.work_date,{reg:0,ot:0});const x=day.get(r.work_date);x.reg+=num(r.regular_hours);x.ot+=num(r.overtime_hours);});
-    const header=['Employee #','Employee','Classification','Crew'];dates.forEach(d=>header.push(dayLabel(d)+' Reg',dayLabel(d)+' OT'));header.push('Total Reg','Total OT','Total Hours');
+    const grouped=new Map();rows.forEach(r=>{if(!grouped.has(r.employee_id))grouped.set(r.employee_id,new Map());const day=grouped.get(r.employee_id);if(!day.has(r.work_date))day.set(r.work_date,{reg:0,ot:0,perDiem:false});const x=day.get(r.work_date);x.reg+=num(r.regular_hours);x.ot+=num(r.overtime_hours);x.perDiem=x.perDiem||!!r.per_diem;});
+    const header=['Employee #','Employee','Classification','Crew'];dates.forEach(d=>header.push(dayLabel(d)+' Reg',dayLabel(d)+' OT'));header.push('Total Reg','Total OT','Total Hours','Per Diem Days');
     const aoa=[['LineCrew Pro Weekly Timesheet'],[`Period: ${from} through ${through}`],[`Status: ${(periodState.status||'open').toUpperCase()}`],[],header];
-    [...grouped.entries()].sort((a,b)=>String(employeeMap.get(a[0])?.full_name||'').localeCompare(String(employeeMap.get(b[0])?.full_name||''))).forEach(([employeeId,days])=>{const e=employeeMap.get(employeeId)||{};const row=[e.employee_number||'',e.full_name||'',e.classification||'',e.default_crew_name||''];let tr=0,to=0;dates.forEach(d=>{const x=days.get(d)||{reg:0,ot:0};row.push(x.reg,x.ot);tr+=x.reg;to+=x.ot;});row.push(tr,to,tr+to);aoa.push(row);});
+    [...grouped.entries()].sort((a,b)=>String(employeeMap.get(a[0])?.full_name||'').localeCompare(String(employeeMap.get(b[0])?.full_name||''))).forEach(([employeeId,days])=>{const e=employeeMap.get(employeeId)||{};const row=[e.employee_number||'',e.full_name||'',e.classification||'',e.default_crew_name||''];let tr=0,to=0,pd=0;dates.forEach(d=>{const x=days.get(d)||{reg:0,ot:0,perDiem:false};row.push(x.reg,x.ot);tr+=x.reg;to+=x.ot;if(x.perDiem)pd++;});row.push(tr,to,tr+to,pd);aoa.push(row);});
     const wb=XLSX.utils.book_new();const summary=XLSX.utils.aoa_to_sheet(aoa);summary['!cols']=header.map((_,i)=>({wch:i===1?24:i<4?16:11}));XLSX.utils.book_append_sheet(wb,summary,'Weekly Timesheet');
-    const detail=[['Employee #','Employee','Classification','Date','Job #','Job Name','Crew','Regular Hours','OT Hours','Total Hours','Storm'],...detailData(rows)];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(detail),'Detail');
+    const detail=[['Employee #','Employee','Classification','Date','Job #','Job Name','Crew','Start','Stop','Lunch Minutes','Regular Hours','OT Hours','Total Hours','Per Diem','Equipment','Storm'],...detailData(rows)];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(detail),'Detail');
     const ex=[['Type','Employee','Date','Review Note'],...exceptions.map(x=>[x.type,x.employee,x.date,x.message])];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ex),'Exceptions');
     XLSX.writeFile(wb,`linecrew-timesheet-${from}-to-${through}.xlsx`);toast('Excel timesheet exported.','success');
   }
@@ -199,7 +200,7 @@
       if(!window.jspdf.jsPDF.API.autoTable)await loadScript('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js','sha384-Xl/CUCfJbzsngMp0CFxkmF0VW/8C160IsGujqeQlIhaGxKz2+JsIGORFqtCPeldF');
       await buildExceptions();const {jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',unit:'pt',format:'letter'});const [from,through]=currentRange();
       doc.setFontSize(16);doc.text('LineCrew Pro Weekly Timesheet',36,34);doc.setFontSize(10);doc.text(`Period: ${from} through ${through}    Status: ${(periodState.status||'open').toUpperCase()}`,36,52);
-      doc.autoTable({startY:66,head:[['Date','Employee','Class','Job','Crew','Regular','OT','Total','Storm']],body:detailData(rows).map(r=>[r[3],r[1],r[2],r[4],r[6],Number(r[7]).toFixed(2),Number(r[8]).toFixed(2),Number(r[9]).toFixed(2),r[10]]),styles:{fontSize:8,cellPadding:3},headStyles:{fontStyle:'bold'}});
+      doc.autoTable({startY:66,head:[['Date','Employee','Job','Crew','Start','Stop','Lunch','Regular','OT','Total','Per Diem','Equipment','Storm']],body:detailData(rows).map(r=>[r[3],r[1],r[4],r[6],r[7],r[8],r[9],Number(r[10]).toFixed(2),Number(r[11]).toFixed(2),Number(r[12]).toFixed(2),r[13],r[14],r[15]]),styles:{fontSize:6.5,cellPadding:2},headStyles:{fontStyle:'bold'}});
       if(exceptions.length){const y=(doc.lastAutoTable?.finalY||66)+18;doc.setFontSize(11);doc.text('Exceptions / Review Flags',36,y);doc.autoTable({startY:y+8,head:[['Type','Employee','Date','Review Note']],body:exceptions.map(x=>[x.type,x.employee,x.date,x.message]),styles:{fontSize:8,cellPadding:3}});}
       doc.save(`linecrew-timesheet-${from}-to-${through}.pdf`);toast('PDF timesheet exported.','success');
     }catch(error){toast('Could not create PDF: '+error.message,'error');}finally{done();}
