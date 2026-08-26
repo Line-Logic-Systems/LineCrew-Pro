@@ -1,4 +1,5 @@
-const CACHE_NAME = 'linecrew-pro-shell-v34';
+const CACHE_NAME = 'linecrew-pro-shell-v35';
+const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -6,12 +7,13 @@ const APP_SHELL = [
   '/icons/linecrew-pro-180.png',
   '/icons/linecrew-pro-192.png',
   '/icons/linecrew-pro-512.png',
-  '/expanded-jsa.js?v=20260826c',
+  '/expanded-jsa.js?v=20260827a',
   '/expanded-jsa-core.js?v=20260820',
   '/jsa-signatures.js?v=20260820j',
   '/jsa-signature-layout-fix.js?v=20260820a',
-  '/offline-jsa.js?v=20260826b',
-  '/jsa-review.js?v=20260826a'
+  '/offline-jsa.js?v=20260827a',
+  '/jsa-review.js?v=20260826a',
+  SUPABASE_RUNTIME
 ];
 
 self.addEventListener('install', (event) => {
@@ -30,7 +32,8 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin) return;
+  const isSupabaseRuntime = request.url === SUPABASE_RUNTIME;
+  if (url.origin !== self.location.origin && !isSupabaseRuntime) return;
 
   event.respondWith((async () => {
     try {
