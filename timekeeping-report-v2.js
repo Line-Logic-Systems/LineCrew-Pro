@@ -148,20 +148,36 @@
         <label>Stop (24 hr)<input id="tkEditStop" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off" value="${esc(timeText(row.stop_time))}"></label>
         <label>Lunch (min)<input id="tkEditLunch" type="number" min="0" max="720" step="1" value="${num(row.lunch_minutes)}"></label>
         <label>Equipment<input id="tkEditEquipment" type="text" value="${esc(row.equipment_used||'')}"></label>
-        <label>Regular Hours<input id="tkEditRegular" type="number" min="0" max="24" step="0.01" value="${num(row.regular_hours).toFixed(2)}"></label>
-        <label>OT Hours<input id="tkEditOt" type="number" min="0" max="24" step="0.01" value="${num(row.overtime_hours).toFixed(2)}"></label>
+        <label>Worked Hours<input id="tkEditWorked" type="text" readonly value="${(num(row.regular_hours)+num(row.overtime_hours)).toFixed(2)}"></label>
+        <div class="tk-help">Regular and OT are calculated automatically from the employee's configured workweek.</div>
         <label class="tk-edit-wide">Reason for correction<input id="tkEditReason" type="text" placeholder="Required for audit trail"></label>
       </div>
       <div class="tk-edit-checks">
         <label><input id="tkEditPerDiem" type="checkbox" ${row.per_diem?'checked':''}> Per diem</label>
         <label><input id="tkEditEquipmentNotUsed" type="checkbox" ${row.equipment_not_used?'checked':''}> Equipment not used</label>
       </div>
-      <p class="tk-help">The original Daily Report remains submitted/approved. This correction updates payroll time only and records who changed it, when, why, and the before/after values.</p>
+      <p class="tk-help">The original Daily Report remains submitted/approved. Worked Hours are derived from Start, Stop and Lunch. Regular/OT are recalculated across the employee's full configured workweek. The original Daily Report remains submitted/approved, and the correction audit records who changed it, when, why, and the before/after values.</p>
       <div class="tk-edit-actions"><button id="tkEditCancel" type="button" class="secondary">Cancel</button><button id="tkEditSave" type="button" class="success">Save Correction</button></div>
     </div>`;
     document.body.appendChild(wrap);
     byId('tkEditCancel').onclick=()=>wrap.remove();
     wrap.addEventListener('click',ev=>{if(ev.target===wrap)wrap.remove();});
+    const calculateWorked=()=>{
+      const start=(byId('tkEditStart')?.value||'').trim();
+      const stop=(byId('tkEditStop')?.value||'').trim();
+      const lunch=Math.round(num(byId('tkEditLunch')?.value));
+      const military=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
+      if(!military.test(start)||!military.test(stop)){byId('tkEditWorked').value='—';return null;}
+      const toMinutes=value=>{const [h,m]=value.split(':').map(Number);return h*60+m;};
+      let elapsed=toMinutes(stop)-toMinutes(start);
+      if(elapsed<0)elapsed+=1440;
+      const worked=(elapsed-lunch)/60;
+      if(worked<0||worked>24){byId('tkEditWorked').value='—';return null;}
+      byId('tkEditWorked').value=worked.toFixed(2);
+      return worked;
+    };
+    ['tkEditStart','tkEditStop','tkEditLunch'].forEach(id=>byId(id)?.addEventListener('input',calculateWorked));
+    calculateWorked();
     byId('tkEditSave').onclick=async()=>{
       const reason=(byId('tkEditReason')?.value||'').trim();
       if(!reason){toast('Enter a reason for the time correction.','warning');byId('tkEditReason')?.focus();return;}
@@ -170,9 +186,10 @@
       const military=/^(?:[01]\d|2[0-3]):[0-5]\d$/;
       if(start&&!military.test(start)){toast('Start time must use 24-hour HH:MM, for example 06:30 or 17:00.','warning');byId('tkEditStart')?.focus();return;}
       if(stop&&!military.test(stop)){toast('Stop time must use 24-hour HH:MM, for example 06:30 or 17:00.','warning');byId('tkEditStop')?.focus();return;}
-      const regular=num(byId('tkEditRegular')?.value),ot=num(byId('tkEditOt')?.value),lunch=Math.round(num(byId('tkEditLunch')?.value));
-      if(regular<0||ot<0||regular+ot>24){toast('Regular plus OT must be between 0 and 24 hours.','warning');return;}
+      const lunch=Math.round(num(byId('tkEditLunch')?.value));
       if(lunch<0||lunch>720){toast('Lunch must be between 0 and 720 minutes.','warning');return;}
+      const worked=calculateWorked();
+      if(worked===null){toast('Start, Stop and Lunch must produce a valid shift between 0 and 24 hours.','warning');return;}
       const btn=byId('tkEditSave');
       const done=window.LineCrewUI?.loadingButton?.(btn,'Saving…')||(()=>{});
       try{
@@ -182,8 +199,8 @@
           p_start_time:start||null,
           p_stop_time:stop||null,
           p_lunch_minutes:lunch,
-          p_regular_hours:regular,
-          p_overtime_hours:ot,
+          p_regular_hours:worked,
+          p_overtime_hours:0,
           p_per_diem:!!byId('tkEditPerDiem')?.checked,
           p_equipment_used:(byId('tkEditEquipment')?.value||'').trim()||null,
           p_equipment_not_used:!!byId('tkEditEquipmentNotUsed')?.checked,
