@@ -324,7 +324,9 @@ assert(timekeeping.includes('+ Add Extra Man'), 'Foreman Crew Time must provide 
 assert(timekeeping.includes('tk-crew-group'), 'Leadership employee roster must group crew members by Foreman.');
 assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time options must identify assigned crew members first.');
 assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
-assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach"), 'Foreman Daily Reports must directly preload assigned crew members.');
+assert(timekeeping.includes("const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;"), 'Foreman Daily Reports must identify the logged-in Foreman employee directly.');
+assert(timekeeping.includes("if(own)addCrewRow(ownSaved||{employee_id:own.id});"), 'Foreman Daily Reports must render the logged-in Foreman first when reopening a report.');
+assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId&&(!own||e.id!==own.id)).forEach"), 'Foreman Daily Reports must preload assigned crew underneath the Foreman without duplication.');
 assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
 assert(hasVersionedAsset(expandedJsa, 'timekeeping.js'), 'Direct Foreman crew preload must use a cache version.');
 assert(timekeepingRoster.includes('await autoLoadAssignedCrew();'), 'Foreman roster selectors must wait for assigned crew data before rebuilding employee options.');
