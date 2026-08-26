@@ -274,6 +274,10 @@ assert(fullDisasterRestoreWorkflow.includes('post-restore-security.sql') && full
 assert(restoreBackupStorage.includes('sha256') && restoreBackupStorage.includes("'x-upsert': 'true'"), 'The full recovery drill must restore and hash-verify Storage objects.');
 assert(backupScript.includes('mimeType: item.metadata?.mimetype'), 'Independent backups must preserve each Storage object MIME type.');
 assert(restoreBackupStorage.includes("['.pdf', 'application/pdf']") && restoreBackupStorage.includes("'content-type': contentType"), 'The full recovery drill must restore Storage objects with an allowed MIME type.');
+assert(restoreBackupStorage.includes("['.mp4', 'video/mp4']"), 'The full recovery drill must recognize backed-up training videos.');
+assert(restoreBackupStorage.includes('/storage/v1/upload/resumable') && restoreBackupStorage.includes('6 * 1024 * 1024'), 'Large Storage restores must use Supabase resumable uploads with 6 MB chunks.');
+assert(restoreBackupStorage.includes("'tus-resumable': '1.0.0'") && restoreBackupStorage.includes("'upload-offset': String(offset)"), 'Large Storage restores must implement guarded TUS offsets.');
+assert(restoreBackupStorage.includes('Recovery project Storage limit is too small'), 'Recovery must clearly identify an undersized project Storage limit.');
 assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
 assert(verifyRestoredManagedCounts.includes("'auth.users'") && verifyRestoredManagedCounts.includes("'storage.objects'"), 'The full recovery drill must compare restored Auth and Storage row counts.');
 assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl'), 'Independent backups must preserve function ACLs.');
