@@ -265,8 +265,10 @@ assert(fullDisasterRestoreWorkflow.includes("test \"$RECOVERY_PROJECT_REF\" != \
 assert(fullDisasterRestoreWorkflow.includes("to_regclass('public.companies') is null"), 'The full recovery drill must refuse a previously used target.');
 assert(fullDisasterRestoreWorkflow.includes('pg_restore --exit-on-error --no-owner') && !fullDisasterRestoreWorkflow.includes('pg_restore --exit-on-error --no-owner --no-acl'), 'The full recovery drill must restore ACLs and stop on restore errors.');
 assert(!fullDisasterRestoreWorkflow.includes('drop schema if exists auth') && !fullDisasterRestoreWorkflow.includes('drop schema if exists storage'), 'The full recovery drill must not drop Supabase-managed Auth or Storage schemas.');
+assert(!fullDisasterRestoreWorkflow.includes('drop schema if exists public'), 'The full recovery drill must preserve the hosted project public schema and its platform-owned defaults.');
 assert(fullDisasterRestoreWorkflow.includes('linecrew-managed-objects.list'), 'The full recovery drill must restore LineCrew-specific Auth triggers and Storage policies.');
-assert(fullDisasterRestoreWorkflow.includes('/ DEFAULT ACL /') && fullDisasterRestoreWorkflow.includes('public.list'), 'The full recovery drill must preserve platform-owned default privileges while restoring public-object ACLs.');
+assert(fullDisasterRestoreWorkflow.includes('/ SCHEMA - public /') && fullDisasterRestoreWorkflow.includes('/ DEFAULT ACL /') && fullDisasterRestoreWorkflow.includes('public.list'), 'The full recovery drill must restore into the existing public schema while preserving platform-owned defaults.');
+assert(fullDisasterRestoreWorkflow.includes('alter default privileges in schema public grant all on tables'), 'The full recovery drill must restore application-owner defaults for future public objects.');
 assert(fullDisasterRestoreWorkflow.includes('post-restore-security.sql') && fullDisasterRestoreWorkflow.includes('verify-post-restore-security.sql'), 'The full recovery drill must restore and verify the global security gate.');
 assert(restoreBackupStorage.includes('sha256') && restoreBackupStorage.includes("'x-upsert': 'true'"), 'The full recovery drill must restore and hash-verify Storage objects.');
 assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
