@@ -114,6 +114,8 @@
   load('gf-crew-scope.js?v=20260826a');
   load('expanded-jsa-core.js?v=20260820', () => {
     load('jsa-signatures.js?v=20260820j', () => load('jsa-signature-layout-fix.js?v=20260820a'));
+    load('offline-jsa.js?v=20260826b');
+    load('jsa-review.js?v=20260826a');
   });
   load('timekeeping.js?v=20260826a', () => {
     load('timekeeping-roster.js?v=20260823f');
