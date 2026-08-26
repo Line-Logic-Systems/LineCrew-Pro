@@ -1,0 +1,37 @@
+name: Load Custom Time Export
+on:
+  push:
+    branches:
+      - feature/custom-time-export-options
+    paths:
+      - .github/workflows/load-custom-time-export.yml
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/custom-time-export-options
+      - name: Add export module script tag
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          tag='<script src="custom-time-export.js?v=20260826a"></script>'
+          if tag not in s:
+              marker='</body>'
+              if marker not in s:
+                  raise SystemExit('body close not found')
+              s=s.replace(marker,tag+'\n'+marker,1)
+              p.write_text(s)
+          PY
+      - name: Commit app wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --quiet || git commit -m "Load custom time export module"
+          git push origin HEAD:feature/custom-time-export-options
