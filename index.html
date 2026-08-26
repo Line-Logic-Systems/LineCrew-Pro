@@ -2475,6 +2475,9 @@ maxlength="200" placeholder="Example: Pole 18">
 <button id="saveDailyUnitBatchBtn" class="success">
 Save Pole &amp; Add Next
 </button>
+<button id="closeDailyUnitEditorBottomBtn" class="secondary">
+Done Adding Units
+</button>
 </div>
 </div>
 </div>
@@ -14080,8 +14083,13 @@ submitButton.focus();
 function closeDailyUnitEditor(){
 const reportFinished = currentDailyUnitReport;
 const doneButton = $('closeDailyUnitEditorBtn');
+const bottomDoneButton = $('closeDailyUnitEditorBottomBtn');
 doneButton.disabled = false;
 doneButton.textContent = 'Done Adding Units';
+if(bottomDoneButton){
+bottomDoneButton.disabled = false;
+bottomDoneButton.textContent = 'Done Adding Units';
+}
 $('dailyUnitEditor').classList.add('hidden');
 currentDailyUnitCatalog = [];
 currentDailySavedUnits = [];
@@ -14093,7 +14101,7 @@ if(reportFinished){
 void offerForemanSubmitAfterUnits(reportFinished);
 }
 }
-$('closeDailyUnitEditorBtn').onclick = async () => {
+async function finishDailyUnitEntry(triggerButton){
 if(!userCanEditDailyReportDraft(currentDailyUnitReport)){
 closeDailyUnitEditor();
 return;
@@ -14104,12 +14112,21 @@ row.quantityInput.value.trim()
 ) || $('dailyUnitPoleLocation').value.trim();
 if(hasUnsavedLines){
 const doneButton = $('closeDailyUnitEditorBtn');
+const bottomDoneButton = $('closeDailyUnitEditorBottomBtn');
 doneButton.disabled = true;
 doneButton.textContent = 'Saving & Finishing...';
+if(bottomDoneButton){
+bottomDoneButton.disabled = true;
+bottomDoneButton.textContent = 'Saving & Finishing...';
+}
 const saved = await saveDailyUnitBatch({ closeAfterSave:true });
 if(!saved){
 doneButton.disabled = false;
 doneButton.textContent = 'Done Adding Units';
+if(bottomDoneButton){
+bottomDoneButton.disabled = false;
+bottomDoneButton.textContent = 'Done Adding Units';
+}
 }
 return;
 }
@@ -14119,7 +14136,9 @@ $('dailyUnitPoleLocation').focus();
 return;
 }
 closeDailyUnitEditor();
-};
+}
+$('closeDailyUnitEditorBtn').onclick = () => finishDailyUnitEntry($('closeDailyUnitEditorBtn'));
+$('closeDailyUnitEditorBottomBtn').onclick = () => finishDailyUnitEntry($('closeDailyUnitEditorBottomBtn'));
 // The report list owns the secure unit-entry helpers. Expose the current
 // implementation so a newly saved report can continue directly to units.
 window.openDailyUnitEditor = openDailyUnitEditor;
