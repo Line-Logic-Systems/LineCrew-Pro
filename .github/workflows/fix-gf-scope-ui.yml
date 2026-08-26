@@ -1,0 +1,72 @@
+name: Fix GF Scope UI
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feature/gf-crew-scope-jsa-history
+      - name: Patch GF scope UI
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('gf-crew-scope.js')
+          s=p.read_text()
+          s=s.replace("  let loadedForCompany = null;\n  let loadPromise = null;\n  let observerTimer = null;", "  let loadedForKey = null;\n  let loadPromise = null;\n  let observerTimer = null;\n  let installingAdminAssignments = false;")
+          s=s.replace("    const companyId = profile()?.company_id || null;\n    if(!companyId || !getSb()) return [];\n    if(!force && loadedForCompany === companyId && assignmentRows.length >= 0) return assignmentRows;", "    const companyId = profile()?.company_id || null;\n    const viewerId = userId() || '';\n    const loadKey = companyId ? `${companyId}:${viewerId}` : null;\n    if(!companyId || !getSb()) return [];\n    if(!force && loadedForKey === loadKey) return assignmentRows;")
+          s=s.replace("      loadedForCompany = companyId;", "      loadedForKey = loadKey;")
+          old="""  async function installAdminAssignments(){
+    if(!['admin','owner'].includes(role())){
+      byId('gfAssignmentCard')?.remove();
+      return;
+    }
+    const teamPage=byId('teamPage');
+    if(!teamPage || byId('gfAssignmentCard')) return;
+    await ensureLoaded();
+    const card=document.createElement('details');"""
+          new="""  async function installAdminAssignments(){
+    if(!['admin','owner'].includes(role())){
+      document.querySelectorAll('#gfAssignmentCard,.gf-assignment-card').forEach((card,index)=>{ if(index>0 || card.id==='gfAssignmentCard') card.remove(); });
+      installingAdminAssignments=false;
+      return;
+    }
+    const teamPage=byId('teamPage');
+    if(!teamPage || byId('gfAssignmentCard') || installingAdminAssignments) return;
+    installingAdminAssignments=true;
+    try{
+      await ensureLoaded();
+      if(byId('gfAssignmentCard')) return;
+      document.querySelectorAll('.gf-assignment-card').forEach(card=>card.remove());
+      const card=document.createElement('details');"""
+          if old not in s: raise SystemExit('admin installer anchor not found')
+          s=s.replace(old,new,1)
+          old2="""    byId('gfAssignmentList').addEventListener('change',e=>{
+      const select=e.target.closest('select');
+      const row=select?.closest('.gf-assignment-row');
+      if(select&&row) saveAssignment(row,select);
+    });
+  }"""
+          new2="""      byId('gfAssignmentList').addEventListener('change',e=>{
+        const select=e.target.closest('select');
+        const row=select?.closest('.gf-assignment-row');
+        if(select&&row) saveAssignment(row,select);
+      });
+    } finally {
+      installingAdminAssignments=false;
+    }
+  }"""
+          if old2 not in s: raise SystemExit('admin installer close anchor not found')
+          s=s.replace(old2,new2,1)
+          p.write_text(s)
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add gf-crew-scope.js
+          git diff --cached --quiet || git commit -m 'Prevent duplicate GF assignment panels and stale user scope cache'
+          git push origin HEAD:feature/gf-crew-scope-jsa-history
