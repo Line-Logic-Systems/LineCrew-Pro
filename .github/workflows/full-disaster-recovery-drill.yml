@@ -117,7 +117,7 @@ jobs:
           PGUSER: ${{ env.RECOVERY_DB_USER }}
           PGSSLMODE: require
         run: |
-          docker run --rm \
+          docker run --rm --interactive \
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
             postgres:17-alpine \
             psql --set=ON_ERROR_STOP=1 --tuples-only --no-align --command \
@@ -134,7 +134,7 @@ jobs:
           PGSSLMODE: require
         run: |
           mkdir -p recovery-input/generated
-          docker run --rm \
+          docker run --rm --interactive \
             --volume "$PWD/recovery-input/extracted/backup-output/postgres:/backup:ro" \
             --volume "$PWD/recovery-input/generated:/generated" \
             postgres:17-alpine \
@@ -184,7 +184,7 @@ jobs:
               '\'' /generated/all.list > /generated/linecrew-managed-objects.list
             '
 
-          docker run --rm \
+          docker run --rm --interactive \
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
             postgres:17-alpine \
             psql --set=ON_ERROR_STOP=1 <<'SQL'
@@ -227,7 +227,7 @@ jobs:
             pg_restore --exit-on-error --no-owner --use-list=/generated/public.list \
               --dbname=postgres /backup/linecrew-postgres.dump
 
-          docker run --rm \
+          docker run --rm --interactive \
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
             postgres:17-alpine \
             psql --set=ON_ERROR_STOP=1 <<'SQL'
@@ -254,7 +254,7 @@ jobs:
           PGUSER: ${{ env.RECOVERY_DB_USER }}
           PGSSLMODE: require
         run: |
-          docker run --rm \
+          docker run --rm --interactive \
             --env PGPASSWORD --env PGHOST --env PGPORT --env PGDATABASE --env PGUSER --env PGSSLMODE \
             postgres:17-alpine \
             psql --quiet --set=ON_ERROR_STOP=1 --tuples-only --no-align \
