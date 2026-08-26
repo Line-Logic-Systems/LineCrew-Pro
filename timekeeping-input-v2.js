@@ -2,14 +2,14 @@
 (() => {
   'use strict';
   const byId=id=>document.getElementById(id);
-  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const num=v=>Number(v||0)||0;
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
   const getSb=()=>{try{return typeof sb!=='undefined'?sb:(window.sb||window.supabaseClient||null);}catch(_){return window.sb||window.supabaseClient||null;}};
   const profile=()=>typeof currentProfile!=='undefined'?currentProfile:window.currentProfile;
   const companyId=()=>profile()?.company_id||null;
   const role=()=>String(profile()?.role||'').toLowerCase();
-  const canManageEquipment=()=>['owner','admin','gf'].includes(role());
+  const canManageEquipment=()=>['owner','admin'].includes(role());
   let employeeEquipment=new Map();
+  let equipment=[];
   let wrappedSave=null;
   let loadedReport='';
 
@@ -23,28 +23,35 @@
     const style=document.createElement('style');
     style.id='tkLaunchDetailStyles';
     style.textContent=`
-      .tk-detail-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,minmax(105px,1fr));gap:8px;padding:8px 0 2px;border-top:1px dashed #d7e0e8}
-      .tk-detail-row label{font-size:11px;margin:0}.tk-detail-row input{margin:0;padding:8px}
-      .tk-detail-check{display:flex;gap:6px;align-items:center;padding-top:22px}.tk-detail-check input{width:auto;min-width:0}
-      .tk-worked{font-size:12px;color:#5f7080;align-self:end;padding:0 0 9px}.tk-worked.warn{color:#a15c00;font-weight:700}
-      .tk-equipment-card{margin-top:14px;border-top:1px solid #dce5ed;padding-top:12px}.tk-equipment-grid{display:grid;gap:7px}.tk-equipment-line{display:grid;grid-template-columns:minmax(170px,1fr) minmax(180px,1fr) auto;gap:8px;align-items:center}.tk-equipment-line input,.tk-equipment-line button{margin:0}
-      @media(max-width:900px){.tk-detail-row{grid-template-columns:repeat(3,1fr)}}
-      @media(max-width:600px){.tk-detail-row{grid-template-columns:1fr 1fr}.tk-equipment-line{grid-template-columns:1fr}.tk-equipment-line button{width:100%}}
+      .tk-detail-row{grid-column:1/-1;display:grid;grid-template-columns:minmax(150px,1fr) auto auto;gap:10px;padding:8px 0 2px;border-top:1px dashed #d7e0e8;align-items:end}
+      .tk-detail-row label{font-size:11px;margin:0}.tk-detail-row select{margin:0;padding:8px}
+      .tk-detail-check{display:flex;gap:6px;align-items:center;padding-bottom:10px}.tk-detail-check input{width:auto;min-width:0}
+      .tk-equipment-card{margin-top:14px;border-top:1px solid #dce5ed;padding-top:12px}.tk-equipment-grid{display:grid;gap:7px}.tk-equipment-line{display:grid;grid-template-columns:minmax(170px,1fr) minmax(180px,1fr) auto;gap:8px;align-items:center}.tk-equipment-line select,.tk-equipment-line button{margin:0}
+      .tk-equipment-upload{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:10px 0}.tk-equipment-upload label{margin:0;min-width:190px}.tk-equipment-upload button{width:auto;margin:0}
+      .tk-equipment-roster{font-size:12px;color:#5f7080;margin:6px 0 12px}
+      @media(max-width:600px){.tk-detail-row{grid-template-columns:1fr 1fr}.tk-detail-row>label:first-child{grid-column:1/-1}.tk-equipment-line{grid-template-columns:1fr}.tk-equipment-line button{width:100%}}
     `;
     document.head.appendChild(style);
   }
 
-  async function refreshEquipmentMap(){
+  async function refreshData(){
     const client=getSb();
     if(!client||!companyId()) return;
-    const {data,error}=await client.from('timekeeping_employees')
-      .select('id,full_name,employee_number,active,default_equipment')
-      .eq('company_id',companyId())
-      .order('full_name');
-    if(error){console.warn('Could not load default equipment',error);return;}
-    employeeEquipment=new Map((data||[]).map(e=>[e.id,e]));
+    const [empRes,equipRes]=await Promise.all([
+      client.from('timekeeping_employees').select('id,full_name,employee_number,active,default_equipment').eq('company_id',companyId()).order('full_name'),
+      client.from('timekeeping_equipment').select('id,unit_number,description,active').eq('company_id',companyId()).order('unit_number')
+    ]);
+    if(empRes.error) console.warn('Could not load employee equipment assignments',empRes.error);
+    else employeeEquipment=new Map((empRes.data||[]).map(e=>[e.id,e]));
+    if(equipRes.error) console.warn('Could not load equipment roster',equipRes.error);
+    else equipment=equipRes.data||[];
     renderEquipmentManager();
-    document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(row=>applyDefaultEquipment(row,false));
+    document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(row=>{renderEquipmentSelect(row);applyDefaultEquipment(row,false);});
+  }
+
+  function equipmentOptions(selected=''){
+    const active=equipment.filter(e=>e.active!==false);
+    return '<option value="">Select truck / equipment</option>'+active.map(e=>`<option value="${esc(e.unit_number)}" ${e.unit_number===selected?'selected':''}>${esc(e.unit_number)}${e.description?' — '+esc(e.description):''}</option>`).join('');
   }
 
   function installEquipmentManager(){
@@ -53,54 +60,63 @@
     const box=document.createElement('div');
     box.id='tkDefaultEquipmentCard';
     box.className='tk-equipment-card';
-    box.innerHTML='<h4>Default Equipment</h4><p class="tk-help">Assign the truck or normal equipment each employee usually uses. It will prefill on Daily Reports and can be marked Not used today.</p><div id="tkDefaultEquipmentList" class="tk-equipment-grid"></div>';
+    box.innerHTML=`<h4>Truck / Equipment Roster</h4>
+      <p class="tk-help">Upload the company truck/equipment roster, then assign each employee's normal unit. Foremen can only choose from this roster on Daily Reports.</p>
+      <div class="tk-equipment-upload"><label>Roster CSV<input id="tkEquipmentCsv" type="file" accept=".csv,text/csv"></label><button id="tkUploadEquipment" type="button" class="secondary small">Upload roster</button></div>
+      <div class="tk-equipment-roster" id="tkEquipmentRosterSummary"></div>
+      <div id="tkDefaultEquipmentList" class="tk-equipment-grid"></div>`;
     roster.appendChild(box);
+    byId('tkUploadEquipment').onclick=uploadEquipmentRoster;
     renderEquipmentManager();
   }
 
+  async function uploadEquipmentRoster(){
+    const file=byId('tkEquipmentCsv')?.files?.[0];
+    if(!file) return toast('Choose a CSV equipment roster first.','error');
+    const text=await file.text();
+    const lines=text.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    if(!lines.length) return toast('That roster is empty.','error');
+    const first=lines[0].split(',').map(x=>x.trim().replace(/^"|"$/g,''));
+    const hasHeader=/unit|truck|equipment|number/i.test(first.join(' '));
+    const rows=(hasHeader?lines.slice(1):lines).map(line=>{
+      const cols=line.split(',').map(x=>x.trim().replace(/^"|"$/g,''));
+      return {company_id:companyId(),unit_number:cols[0]||'',description:cols[1]||null,active:true};
+    }).filter(r=>r.unit_number);
+    if(!rows.length) return toast('No truck/equipment numbers were found. Put the unit number in the first CSV column.','error');
+    const {error}=await getSb().from('timekeeping_equipment').upsert(rows,{onConflict:'company_id,unit_number'});
+    if(error) return toast('Could not upload equipment roster: '+error.message,'error');
+    toast(`${rows.length} equipment roster row${rows.length===1?'':'s'} loaded.`,'success');
+    await refreshData();
+  }
+
   function renderEquipmentManager(){
+    const summary=byId('tkEquipmentRosterSummary');
+    if(summary) summary.textContent=`${equipment.filter(e=>e.active!==false).length} active truck/equipment unit${equipment.filter(e=>e.active!==false).length===1?'':'s'} available.`;
     const box=byId('tkDefaultEquipmentList');
     if(!box) return;
     const rows=[...employeeEquipment.values()].filter(e=>e.active!==false);
     if(!rows.length){box.innerHTML='<span class="muted">Add employees above before assigning equipment.</span>';return;}
-    box.innerHTML=rows.map(e=>`<div class="tk-equipment-line"><strong>${esc(e.full_name||e.employee_number||'Employee')}</strong><input data-tk-default-equipment="${esc(e.id)}" value="${esc(e.default_equipment||'')}" placeholder="Truck, bucket, digger, trailer…"><button type="button" class="secondary small" data-tk-save-equipment="${esc(e.id)}">Save</button></div>`).join('');
+    box.innerHTML=rows.map(e=>`<div class="tk-equipment-line"><strong>${esc(e.full_name||e.employee_number||'Employee')}</strong><select data-tk-default-equipment="${esc(e.id)}">${equipmentOptions(e.default_equipment||'')}</select><button type="button" class="secondary small" data-tk-save-equipment="${esc(e.id)}">Save assignment</button></div>`).join('');
     box.querySelectorAll('[data-tk-save-equipment]').forEach(button=>button.onclick=()=>saveDefaultEquipment(button.dataset.tkSaveEquipment));
   }
 
   async function saveDefaultEquipment(employeeId){
-    const client=getSb();
     const input=document.querySelector(`[data-tk-default-equipment="${CSS.escape(employeeId)}"]`);
-    if(!client||!input) return;
-    const value=input.value.trim()||null;
-    const {error}=await client.from('timekeeping_employees').update({default_equipment:value,updated_at:new Date().toISOString()}).eq('id',employeeId).eq('company_id',companyId());
-    if(error){toast('Could not save default equipment: '+error.message,'error');return;}
+    if(!input) return;
+    const value=input.value||null;
+    const {error}=await getSb().from('timekeeping_employees').update({default_equipment:value,updated_at:new Date().toISOString()}).eq('id',employeeId).eq('company_id',companyId());
+    if(error){toast('Could not save equipment assignment: '+error.message,'error');return;}
     const existing=employeeEquipment.get(employeeId)||{id:employeeId};existing.default_equipment=value;employeeEquipment.set(employeeId,existing);
     document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(row=>applyDefaultEquipment(row,false));
-    toast('Default equipment saved.','success');
+    toast('Equipment assignment saved.','success');
   }
 
-  function minutes(value){
-    if(!value||!/^[0-2]\d:[0-5]\d/.test(value)) return null;
-    const [h,m]=value.slice(0,5).split(':').map(Number);return h*60+m;
-  }
-
-  function workedHours(row){
-    const start=minutes(row.querySelector('.tk-start')?.value);
-    const stop=minutes(row.querySelector('.tk-stop')?.value);
-    if(start===null||stop===null) return null;
-    let span=stop-start;if(span<0) span+=1440;
-    span-=Math.max(0,num(row.querySelector('.tk-lunch')?.value));
-    return Math.max(0,span/60);
-  }
-
-  function updateWorked(row){
-    const output=row.querySelector('.tk-worked');if(!output)return;
-    const worked=workedHours(row);
-    if(worked===null){output.textContent='Worked: —';output.classList.remove('warn');return;}
-    const payroll=num(row.querySelector('.tk-regular')?.value)+num(row.querySelector('.tk-ot')?.value);
-    const mismatch=Math.abs(worked-payroll)>0.01;
-    output.textContent=`Worked: ${worked.toFixed(2)}h${mismatch?` • payroll split ${payroll.toFixed(2)}h`:''}`;
-    output.classList.toggle('warn',mismatch);
+  function renderEquipmentSelect(row){
+    const select=row.querySelector('.tk-equipment');
+    if(!select) return;
+    const selected=select.value;
+    select.innerHTML=equipmentOptions(selected);
+    select.value=selected;
   }
 
   function applyDefaultEquipment(row,force=false){
@@ -119,19 +135,11 @@
     row.dataset.tkLaunchDetails='1';
     const detail=document.createElement('div');
     detail.className='tk-detail-row';
-    detail.innerHTML=`
-      <label>Start<input class="tk-start" type="time"></label>
-      <label>Stop<input class="tk-stop" type="time"></label>
-      <label>Lunch (min)<input class="tk-lunch" type="number" min="0" max="720" step="5" value="0"></label>
-      <label>Equipment<input class="tk-equipment" type="text" placeholder="Truck / equipment"></label>
-      <label class="tk-detail-check"><input class="tk-per-diem" type="checkbox"> Per diem</label>
-      <label class="tk-detail-check"><input class="tk-equipment-not-used" type="checkbox"> Not used today</label>
-      <div class="tk-worked">Worked: —</div>`;
+    detail.innerHTML=`<label>Truck / Equipment<select class="tk-equipment">${equipmentOptions()}</select></label><label class="tk-detail-check"><input class="tk-per-diem" type="checkbox"> Per diem</label><label class="tk-detail-check"><input class="tk-equipment-not-used" type="checkbox"> Not used today</label>`;
     row.appendChild(detail);
-    row.querySelectorAll('.tk-start,.tk-stop,.tk-lunch,.tk-regular,.tk-ot').forEach(el=>el?.addEventListener('input',()=>updateWorked(row)));
     row.querySelector('.tk-employee')?.addEventListener('change',()=>applyDefaultEquipment(row,true));
     row.querySelector('.tk-equipment-not-used')?.addEventListener('change',()=>applyDefaultEquipment(row,false));
-    applyDefaultEquipment(row,false);updateWorked(row);
+    applyDefaultEquipment(row,false);
   }
 
   function collectDetails(){
@@ -139,25 +147,16 @@
     document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(row=>{
       const employee_id=row.querySelector('.tk-employee')?.value||'';
       if(!employee_id) return;
-      out.push({
-        employee_id,
-        start_time:row.querySelector('.tk-start')?.value||null,
-        stop_time:row.querySelector('.tk-stop')?.value||null,
-        lunch_minutes:Math.max(0,Math.min(720,Math.round(num(row.querySelector('.tk-lunch')?.value)))),
-        per_diem:!!row.querySelector('.tk-per-diem')?.checked,
-        equipment_used:(row.querySelector('.tk-equipment')?.value||'').trim()||null,
-        equipment_not_used:!!row.querySelector('.tk-equipment-not-used')?.checked
-      });
+      out.push({employee_id,per_diem:!!row.querySelector('.tk-per-diem')?.checked,equipment_used:row.querySelector('.tk-equipment')?.value||null,equipment_not_used:!!row.querySelector('.tk-equipment-not-used')?.checked});
     });
     return out;
   }
 
   async function saveDetails(reportId){
-    const client=getSb();if(!client||!reportId)return;
-    const details=collectDetails();
-    for(const item of details){
-      const payload={start_time:item.start_time,stop_time:item.stop_time,lunch_minutes:item.lunch_minutes,per_diem:item.per_diem,equipment_used:item.equipment_not_used?null:item.equipment_used,equipment_not_used:item.equipment_not_used,updated_at:new Date().toISOString()};
-      const {error}=await client.from('timekeeping_entries').update(payload).eq('daily_report_id',reportId).eq('employee_id',item.employee_id).eq('company_id',companyId());
+    if(!reportId)return;
+    for(const item of collectDetails()){
+      const payload={start_time:null,stop_time:null,lunch_minutes:0,per_diem:item.per_diem,equipment_used:item.equipment_not_used?null:item.equipment_used,equipment_not_used:item.equipment_not_used,updated_at:new Date().toISOString()};
+      const {error}=await getSb().from('timekeeping_entries').update(payload).eq('daily_report_id',reportId).eq('employee_id',item.employee_id).eq('company_id',companyId());
       if(error) throw error;
     }
   }
@@ -167,8 +166,7 @@
     if(typeof current!=='function'||current===wrappedSave||current.__lcLaunchWrapped) return;
     const original=current;
     const wrapper=async reportId=>{await original(reportId);await saveDetails(reportId);};
-    wrapper.__lcLaunchWrapped=true;wrapper.__lcOriginal=original;
-    wrappedSave=wrapper;window.saveDailyReportCrewTime=wrapper;
+    wrapper.__lcLaunchWrapped=true;wrapper.__lcOriginal=original;wrappedSave=wrapper;window.saveDailyReportCrewTime=wrapper;
   }
 
   async function loadExistingDetails(){
@@ -178,27 +176,23 @@
     if(!reportId||reportId===loadedReport) return;
     const rows=[...document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row')];
     if(!rows.length) return;
-    const client=getSb();if(!client)return;
-    const {data,error}=await client.from('timekeeping_entries').select('employee_id,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used').eq('daily_report_id',reportId).eq('company_id',companyId());
+    const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,per_diem,equipment_used,equipment_not_used').eq('daily_report_id',reportId).eq('company_id',companyId());
     if(error){console.warn('Could not load timekeeping detail fields',error);return;}
     const map=new Map((data||[]).map(x=>[x.employee_id,x]));
     rows.forEach(row=>{
       enhanceRow(row);
       const item=map.get(row.querySelector('.tk-employee')?.value||'');if(!item)return;
-      row.querySelector('.tk-start').value=(item.start_time||'').slice(0,5);
-      row.querySelector('.tk-stop').value=(item.stop_time||'').slice(0,5);
-      row.querySelector('.tk-lunch').value=item.lunch_minutes||0;
       row.querySelector('.tk-per-diem').checked=!!item.per_diem;
       row.querySelector('.tk-equipment-not-used').checked=!!item.equipment_not_used;
       row.querySelector('.tk-equipment').value=item.equipment_used||employeeEquipment.get(item.employee_id)?.default_equipment||'';
-      applyDefaultEquipment(row,false);updateWorked(row);
+      applyDefaultEquipment(row,false);
     });
     loadedReport=reportId;
   }
 
   function updateHelp(){
     const p=byId('dailyCrewTimeCard')?.querySelector('.tk-help');
-    if(p&&!p.dataset.tkLaunchHelp){p.dataset.tkLaunchHelp='1';p.textContent='Your assigned crew loads automatically. Record Start, Stop and Lunch for audit accuracy, then keep the Regular / OT split consistent with your company payroll rules. Per diem and equipment are carried into Timekeeping reporting.';}
+    if(p&&!p.dataset.tkLaunchHelp){p.dataset.tkLaunchHelp='1';p.textContent='Your assigned crew and your own Foreman row load automatically. Enter Regular and OT hours, mark per diem when applicable, and select the assigned truck/equipment from the company roster.';}
   }
 
   function scan(){
@@ -208,10 +202,9 @@
   }
 
   function init(){
-    addStyles();refreshEquipmentMap().then(scan);scan();
+    addStyles();refreshData().then(scan);scan();
     let timer;new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(scan,50);}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
     setInterval(installSaveWrapper,1000);
-    document.addEventListener('change',event=>{if(event.target?.matches?.('.tk-employee'))setTimeout(()=>{applyDefaultEquipment(event.target.closest('.tk-crew-row'),true);},0);});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
