@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 
 const html = fs.readFileSync('index.html','utf8');
+const offlineJsa = fs.readFileSync('offline-jsa.js','utf8');
+const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const migration = fs.readFileSync('supabase/migrations/202608190700_flexible_jsa_upload.sql','utf8');
 const compat = fs.readFileSync('supabase/migrations/202608190710_flexible_jsa_digital_compat.sql','utf8');
 
@@ -15,6 +17,37 @@ const requiredHtml = [
 ];
 for(const token of requiredHtml){
   if(!html.includes(token)) throw new Error('Missing flexible JSA UI token: ' + token);
+}
+
+const coldStartHtml = [
+  'linecrew-offline-jsa-access-v1',
+  'OFFLINE_JSA_ACCESS_MAX_AGE_MS',
+  'enterOfflineJsaMode',
+  'primeOfflineJsaJobs',
+  'Offline JSA Mode',
+  "!['foreman','gf'].includes(role)",
+  'clearOfflineJsaAccess();',
+  'fillOfflineJsaJobSelect'
+];
+for(const token of coldStartHtml){
+  if(!html.includes(token)) throw new Error('Missing cold-start Offline JSA guard: ' + token);
+}
+
+for(const token of [
+  'linecrew-pro-shell-v35',
+  '@supabase/supabase-js@2.112.3',
+  'isSupabaseRuntime',
+  '/offline-jsa.js?v=20260827a'
+]){
+  if(!serviceWorker.includes(token)) throw new Error('Missing Offline JSA app-shell token: ' + token);
+}
+
+for(const token of [
+  'markColdStartReady',
+  'Offline JSA form and device storage are ready.',
+  'window.LineCrewOfflineColdStart'
+]){
+  if(!offlineJsa.includes(token)) throw new Error('Missing Offline JSA readiness token: ' + token);
 }
 
 const requiredSql = [

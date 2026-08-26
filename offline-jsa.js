@@ -487,6 +487,23 @@
     }, 100));
   }
 
+  function markColdStartReady() {
+    if (!window.LineCrewOfflineColdStart) return;
+    ['createJsaBtn', 'uploadCompanyJsaBtn'].forEach((id) => {
+      const button = byId(id);
+      if (!button) return;
+      button.disabled = false;
+      button.textContent = button.dataset.offlineReadyLabel || (id === 'createJsaBtn' ? '+ Complete Digital JSA' : '+ Upload Company JSA');
+    });
+    const banner = byId('offlineColdStartJsaBanner');
+    if (banner) {
+      const ready = document.createElement('div');
+      ready.style.cssText = 'margin-top:8px;font-weight:800;color:#155d2d';
+      ready.textContent = 'Offline JSA form and device storage are ready.';
+      banner.appendChild(ready);
+    }
+  }
+
   async function init() {
     statusBox('safetyJsaForm', 'offlineJsaStatus');
     statusBox('companyJsaUploadForm', 'offlineJsaUploadStatus');
@@ -496,6 +513,7 @@
     restoreJobs('safetyJsaJob');
     restoreJobs('companyJsaUploadJob');
     cacheJobContext();
+    markColdStartReady();
     window.addEventListener('online', () => setTimeout(() => void syncQueue(true), 250));
     document.addEventListener('visibilitychange', () => { if (!document.hidden) void syncQueue(); });
     setInterval(() => { bind(); cacheJobContext(); void syncQueue(); }, 30000);
