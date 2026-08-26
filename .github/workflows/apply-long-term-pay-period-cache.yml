@@ -1,0 +1,31 @@
+name: Apply Long Term Pay Period Cache
+on:
+  push:
+    branches: [feature/long-term-pay-period-archive]
+    paths: [.github/workflows/apply-long-term-pay-period-cache.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: feature/long-term-pay-period-archive
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('expanded-jsa.js')
+          s=p.read_text()
+          old='timekeeping-pay-period-history.js?v=20260826a'
+          new='timekeeping-pay-period-history.js?v=20260826b'
+          if old not in s:
+              raise SystemExit('history cache token not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add expanded-jsa.js
+          git diff --cached --quiet || git commit -m "Refresh long-term pay period archive loader"
+          git push origin HEAD:feature/long-term-pay-period-archive
