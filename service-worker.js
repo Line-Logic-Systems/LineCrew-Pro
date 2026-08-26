@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v31';
+const CACHE_NAME = 'linecrew-pro-shell-v32';
 const APP_SHELL = [
   '/',
   '/index.html',
@@ -43,4 +43,44 @@ self.addEventListener('fetch', (event) => {
         return Response.error();
       })
   );
+});
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_) {
+    payload = { body: event.data ? event.data.text() : '' };
+  }
+  const title = payload.title || 'LineCrew Pro';
+  const options = {
+    body: payload.body || 'You have a new LineCrew Pro notification.',
+    icon: '/icons/linecrew-pro-192.png',
+    badge: '/icons/linecrew-pro-192.png',
+    tag: payload.tag || undefined,
+    renotify: Boolean(payload.renotify),
+    data: {
+      url: payload.url || '/',
+      ...(payload.data || {})
+    }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = new URL(event.notification.data?.url || '/', self.location.origin).href;
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of windows) {
+      if ('focus' in client) {
+        if ('navigate' in client && client.url !== targetUrl) {
+          try { await client.navigate(targetUrl); } catch (_) {}
+        }
+        await client.focus();
+        return;
+      }
+    }
+    if (self.clients.openWindow) await self.clients.openWindow(targetUrl);
+  })());
 });
