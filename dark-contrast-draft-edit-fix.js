@@ -1,7 +1,9 @@
-/* LineCrew Pro - dark contrast + draft crew time reload */
+/* LineCrew Pro - dark contrast + safe draft crew time restore */
 (() => {
   'use strict';
   const byId=id=>document.getElementById(id);
+  const getSb=()=>{try{return typeof sb!=='undefined'?sb:(window.sb||window.supabaseClient||null);}catch(_){return window.sb||window.supabaseClient||null;}};
+  const companyId=()=>{try{return typeof currentProfile!=='undefined'?currentProfile?.company_id:(window.currentProfile?.company_id||null);}catch(_){return window.currentProfile?.company_id||null;}};
 
   function addStyles(){
     if(byId('lcDarkContrastDraftFixStyles')) return;
@@ -51,30 +53,75 @@
     document.head.appendChild(style);
   }
 
-  function forceDraftCrewTimeReload(){
-    const form=byId('dailyReportForm');
-    if(!form || form.classList.contains('hidden') || !form.dataset.reportId) return;
-    if(form.dataset.lcDraftReloading==='1') return;
-    form.dataset.lcDraftReloading='1';
-    const reportId=form.dataset.reportId;
-    /* Both Timekeeping modules reset their internal loaded-report key when the
-       form becomes hidden. Toggle across animation frames so reopening the same
-       draft always reloads its saved crew rows/details instead of reusing stale
-       state from the previous visit. */
-    form.classList.add('hidden');
-    requestAnimationFrame(()=>{
-      requestAnimationFrame(()=>{
-        if(form.dataset.reportId===reportId){
-          form.classList.remove('hidden');
-          setTimeout(()=>{
-            delete form.dataset.lcDraftReloading;
-            form.scrollIntoView({behavior:'smooth',block:'start'});
-          },120);
-        }else{
-          delete form.dataset.lcDraftReloading;
-        }
-      });
+  function dedupeCrewRows(){
+    const seen=new Set();
+    document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(row=>{
+      const employeeId=row.querySelector('.tk-employee')?.value||'';
+      if(!employeeId) return;
+      if(seen.has(employeeId)) row.remove();
+      else seen.add(employeeId);
     });
+  }
+
+  function applySavedEntry(row,entry){
+    if(!row||!entry)return;
+    const regular=row.querySelector('.tk-regular');
+    const ot=row.querySelector('.tk-ot');
+    const start=row.querySelector('.tk-start');
+    const stop=row.querySelector('.tk-stop');
+    const lunch=row.querySelector('.tk-lunch');
+    const perDiem=row.querySelector('.tk-per-diem');
+    const equipment=row.querySelector('.tk-equipment');
+    const equipmentNotUsed=row.querySelector('.tk-equipment-not-used');
+    if(regular)regular.value=Number(entry.regular_hours||0).toFixed(2);
+    if(ot)ot.value=Number(entry.overtime_hours||0).toFixed(2);
+    if(start)start.value=String(entry.start_time||'').slice(0,5);
+    if(stop)stop.value=String(entry.stop_time||'').slice(0,5);
+    if(lunch)lunch.value=entry.lunch_minutes||0;
+    if(perDiem)perDiem.checked=entry.per_diem===true;
+    if(equipmentNotUsed)equipmentNotUsed.checked=entry.equipment_not_used===true;
+    if(equipment)equipment.value=entry.equipment_not_used?'':(entry.equipment_used||'');
+    start?.dispatchEvent(new Event('change',{bubbles:true}));
+    stop?.dispatchEvent(new Event('change',{bubbles:true}));
+    lunch?.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+
+  async function restoreDraftCrewTime(){
+    const form=byId('dailyReportForm');
+    const reportId=form?.dataset.reportId||'';
+    const client=getSb();
+    const cid=companyId();
+    if(!form||form.classList.contains('hidden')||!reportId||!client||!cid)return;
+    try{
+      const {data,error}=await client.from('timekeeping_entries')
+        .select('employee_id,regular_hours,overtime_hours,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used')
+        .eq('company_id',cid)
+        .eq('daily_report_id',reportId)
+        .order('created_at');
+      if(error)throw error;
+      const saved=data||[];
+      for(let attempt=0;attempt<6;attempt++){
+        if(form.dataset.reportId!==reportId||form.classList.contains('hidden'))return;
+        dedupeCrewRows();
+        const rows=[...document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row')];
+        const map=new Map(rows.map(row=>[row.querySelector('.tk-employee')?.value||'',row]));
+        let matched=0;
+        saved.forEach(entry=>{
+          const row=map.get(entry.employee_id);
+          if(!row)return;
+          applySavedEntry(row,entry);
+          matched++;
+        });
+        if(!saved.length || matched===saved.length){
+          dedupeCrewRows();
+          return;
+        }
+        await new Promise(resolve=>setTimeout(resolve,120));
+      }
+      dedupeCrewRows();
+    }catch(error){
+      console.warn('Could not restore Daily Report draft crew time:',error?.message||error);
+    }
   }
 
   function bindDraftEditButtons(){
@@ -82,7 +129,10 @@
       if(btn.dataset.lcDraftCrewReloadBound==='1') return;
       if(String(btn.textContent||'').trim()!=='Edit Report') return;
       btn.dataset.lcDraftCrewReloadBound='1';
-      btn.addEventListener('click',()=>setTimeout(forceDraftCrewTimeReload,40));
+      btn.addEventListener('click',()=>{
+        setTimeout(restoreDraftCrewTime,80);
+        setTimeout(restoreDraftCrewTime,350);
+      });
     });
   }
 
