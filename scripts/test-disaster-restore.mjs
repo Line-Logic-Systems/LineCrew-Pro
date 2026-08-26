@@ -90,8 +90,18 @@ async function main() {
   const companyA = await insert('companies', { name: `${runId} Company A`, created_by: userA.id });
   const companyB = await insert('companies', { name: `${runId} Company B`, created_by: userB.id });
   created.companies.push(companyA.id, companyB.id);
-  const profileA = await insert('profiles', { id: userA.id, company_id: companyA.id, full_name: 'Restore Admin A', role: 'admin', active: true });
-  await insert('profiles', { id: userB.id, company_id: companyB.id, full_name: 'Restore Admin B', role: 'admin', active: true });
+  const subscriptionA = await insert('company_subscriptions', {
+    company_id: companyA.id, plan_code: 'pilot', status: 'trialing',
+    access_enabled: true, access_override: true, provider: 'manual',
+    notes: 'Disposable recovery isolation test',
+  });
+  await insert('company_subscriptions', {
+    company_id: companyB.id, plan_code: 'pilot', status: 'trialing',
+    access_enabled: true, access_override: true, provider: 'manual',
+    notes: 'Disposable recovery isolation test',
+  });
+  const profileA = await insert('profiles', { id: userA.id, company_id: companyA.id, full_name: 'Restore Foreman A', role: 'foreman', active: true });
+  await insert('profiles', { id: userB.id, company_id: companyB.id, full_name: 'Restore Foreman B', role: 'foreman', active: true });
   const customerA = await insert('customers', { company_id: companyA.id, name: `${runId} Preserved Customer`, notes: 'must survive restore' });
   const priceBookA = await insert('price_books', { company_id: companyA.id, name: `${runId} Price Book` });
   const jobA = await insert('jobs', {
@@ -108,6 +118,11 @@ async function main() {
   const snapshot = {
     company: { id: companyA.id, name: companyA.name, created_by: companyA.created_by },
     profile: { id: profileA.id, company_id: profileA.company_id, full_name: profileA.full_name, role: profileA.role, active: profileA.active },
+    subscription: {
+      id: subscriptionA.id, company_id: subscriptionA.company_id, plan_code: subscriptionA.plan_code,
+      status: subscriptionA.status, access_enabled: subscriptionA.access_enabled,
+      access_override: subscriptionA.access_override, provider: subscriptionA.provider, notes: subscriptionA.notes,
+    },
     customer: { id: customerA.id, company_id: customerA.company_id, name: customerA.name, notes: customerA.notes },
     priceBook: { id: priceBookA.id, company_id: priceBookA.company_id, name: priceBookA.name },
     job: {
@@ -131,18 +146,20 @@ async function main() {
   assert(deleteObject.ok, `Unable to simulate file loss: ${JSON.stringify(deleteObject.data)}`);
 
   await insert('companies', snapshot.company);
+  const restoredSubscription = await insert('company_subscriptions', snapshot.subscription);
   await insert('profiles', snapshot.profile);
   const restoredCustomer = await insert('customers', snapshot.customer);
   await insert('price_books', snapshot.priceBook);
   await insert('jobs', snapshot.job);
   await insert('daily_report_jsas', snapshot.jsa);
   await storageUpload(created.objectPath, pdf);
+  assert(restoredSubscription.access_override === true, 'Restored company-access subscription changed.');
   assert(restoredCustomer.notes === 'must survive restore', 'Restored customer content changed.');
 
   const [tokenA, tokenB] = await Promise.all([signIn(userA.email), signIn(userB.email)]);
   const own = await request(`/rest/v1/customers?id=eq.${customerA.id}&select=id,name,notes`, { token: tokenA, apikey: anonKey });
   const foreign = await request(`/rest/v1/customers?id=eq.${customerA.id}&select=id`, { token: tokenB, apikey: anonKey });
-  assert(own.ok && own.data?.length === 1, 'Restored company cannot read its own customer.');
+  assert(own.ok && own.data?.length === 1, `Restored company cannot read its own customer: status=${own.status} response=${JSON.stringify(own.data)}`);
   assert(foreign.ok && Array.isArray(foreign.data) && foreign.data.length === 0, 'SECURITY FAILURE: restored data crossed company boundaries.');
 
   const ownFile = await storageDownload(created.objectPath, tokenA, anonKey);

@@ -94,6 +94,7 @@ const testPostRestoreSecurity = fs.readFileSync('scripts/test-post-restore-secur
 const restoreBackupStorage = fs.readFileSync('scripts/restore-backup-storage.mjs', 'utf8');
 const verifyRestoredTableCounts = fs.readFileSync('scripts/verify-restored-table-counts.mjs', 'utf8');
 const verifyRestoredManagedCounts = fs.readFileSync('scripts/verify-restored-managed-counts.mjs', 'utf8');
+const testDisasterRestore = fs.readFileSync('scripts/test-disaster-restore.mjs', 'utf8');
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
@@ -281,6 +282,8 @@ assert((restoreBackupStorage.match(/'x-upsert': 'true'/g) || []).length >= 3, 'S
 assert(restoreBackupStorage.includes('Recovery project Storage limit is too small'), 'Recovery must clearly identify an undersized project Storage limit.');
 assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
 assert(verifyRestoredManagedCounts.includes("'auth.users'") && verifyRestoredManagedCounts.includes("'storage.objects'"), 'The full recovery drill must compare restored Auth and Storage row counts.');
+assert(testDisasterRestore.includes("insert('company_subscriptions'") && testDisasterRestore.includes('access_override: true'), 'Recovered tenant-isolation tests must create an active company-access subscription.');
+assert(testDisasterRestore.includes("role: 'foreman'") && !testDisasterRestore.includes("role: 'admin'"), 'Recovered tenant-isolation tests must not trigger privileged MFA enforcement.');
 assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl'), 'Independent backups must preserve function ACLs.');
 assert(!testPostRestoreSecurity.includes('--no-acl'), 'The recovery drill must restore and verify function ACLs.');
 assert(postRestoreSecurity.includes("alter role authenticator\n  set pgrst.db_pre_request = 'public.enforce_linecrew_company_access'"), 'The recovery bootstrap must restore the PostgREST pre-request gate.');
