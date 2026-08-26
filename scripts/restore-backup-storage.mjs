@@ -14,6 +14,44 @@ const manifest = JSON.parse(await fs.readFile(path.join(backupDir, 'manifest.jso
 const headers = { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` };
 const sha256 = (data) => crypto.createHash('sha256').update(data).digest('hex');
 
+const mimeByExtension = new Map([
+  ['.pdf', 'application/pdf'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp'],
+  ['.heic', 'image/heic'],
+  ['.heif', 'image/heif'],
+  ['.csv', 'text/csv'],
+  ['.txt', 'text/plain'],
+  ['.json', 'application/json'],
+  ['.zip', 'application/zip'],
+  ['.xls', 'application/vnd.ms-excel'],
+  ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['.doc', 'application/msword'],
+  ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+]);
+
+function normalizedMime(value) {
+  const mime = typeof value === 'string' ? value.split(';', 1)[0].trim().toLowerCase() : '';
+  return /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/.test(mime) ? mime : null;
+}
+
+function contentTypeFor(object, data) {
+  const recorded = normalizedMime(object.mimeType || object.contentType);
+  if (recorded && recorded !== 'application/octet-stream') return recorded;
+
+  const inferred = mimeByExtension.get(path.extname(object.path).toLowerCase());
+  if (inferred) return inferred;
+
+  if (data.subarray(0, 5).toString('ascii') === '%PDF-') return 'application/pdf';
+  if (data.length >= 4 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return 'image/jpeg';
+  if (data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+
+  return 'application/octet-stream';
+}
+
 function safeSegments(value) {
   if (typeof value !== 'string' || !value) throw new Error('Storage path is empty');
   const segments = value.split('/');
@@ -44,6 +82,7 @@ for (const [bucket, entry] of Object.entries(manifest.storage || {})) {
     const objectPath = encodedPath(object.path);
     const localPath = path.join(backupDir, ...safeSegments(object.file));
     const data = await fs.readFile(localPath);
+    const contentType = contentTypeFor(object, data);
 
     if (data.length !== object.bytes || sha256(data) !== object.sha256) {
       throw new Error(`Backup object failed pre-upload verification: ${bucket}/${object.path}`);
@@ -53,7 +92,7 @@ for (const [bucket, entry] of Object.entries(manifest.storage || {})) {
       method: 'POST',
       headers: {
         ...headers,
-        'content-type': 'application/octet-stream',
+        'content-type': contentType,
         'x-upsert': 'true',
       },
       body: data,
