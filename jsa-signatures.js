@@ -121,11 +121,11 @@
   window.addEventListener('pointercancel',finishActive,true);
 
   window.addEventListener('mouseup',e=>{
-    if(!active&&Date.now()>suppressReleaseUntil)return;
+    if((!active&&Date.now()>suppressReleaseUntil)||!e.target?.closest?.('.lc-signature-wrap'))return;
     e.preventDefault();e.stopImmediatePropagation();
   },true);
   window.addEventListener('click',e=>{
-    if(Date.now()>suppressReleaseUntil)return;
+    if(Date.now()>suppressReleaseUntil||!e.target?.closest?.('.lc-signature-wrap'))return;
     e.preventDefault();e.stopImmediatePropagation();
   },true);
 
