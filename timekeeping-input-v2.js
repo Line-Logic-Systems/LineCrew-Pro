@@ -17,7 +17,9 @@
     const style=document.createElement('style');style.id='tkLaunchDetailStyles';
     style.textContent=`
       .tk-crew-row>label:has(.tk-regular),.tk-crew-row>label:has(.tk-ot){display:none!important}
-      .tk-detail-row{grid-column:1/-1;display:grid;grid-template-columns:110px 110px 100px minmax(150px,1fr) auto auto;gap:10px;padding:8px 0 2px;border-top:1px dashed #d7e0e8;align-items:end}
+      #dailyCrewTimeRows .tk-crew-row{border-bottom:3px solid #8b9dad;padding-bottom:16px;margin-bottom:16px}
+      #dailyCrewTimeRows .tk-crew-row:last-child{border-bottom:0;margin-bottom:0}
+      .tk-detail-row{grid-column:1/-1;display:grid;grid-template-columns:110px 110px 100px minmax(150px,1fr) auto auto;gap:10px;padding:8px 0 2px;border-top:1px solid #c2cdd7;align-items:end}
       .tk-detail-row label{font-size:11px;margin:0}.tk-detail-row input,.tk-detail-row select{margin:0;padding:8px}
       .tk-detail-check{display:flex;gap:6px;align-items:center;padding-bottom:10px}.tk-detail-check input{width:auto;min-width:0}
       .tk-hours-worked{font-size:12px;color:#5f7080;grid-column:1/-1}
@@ -79,7 +81,7 @@
   function enhanceRow(row){
     if(row.dataset.tkLaunchDetails==='1')return;row.dataset.tkLaunchDetails='1';
     const detail=document.createElement('div');detail.className='tk-detail-row';
-    detail.innerHTML=`<label>Start<input class="tk-start" type="time"></label><label>Stop<input class="tk-stop" type="time"></label><label>Lunch (min)<input class="tk-lunch" type="number" min="0" max="720" step="5" value="0"></label><label>Truck / Equipment<select class="tk-equipment">${equipmentOptions()}</select></label><label class="tk-detail-check"><input class="tk-per-diem" type="checkbox"> Per diem</label><label class="tk-detail-check"><input class="tk-equipment-not-used" type="checkbox"> Not used today</label><div class="tk-hours-worked">Worked: —</div>`;
+    detail.innerHTML=`<label>Start<input class="tk-start" type="time"></label><label>Stop<input class="tk-stop" type="time"></label><label>Lunch (min)<input class="tk-lunch" type="number" min="0" max="720" step="5" value="0"></label><label>Truck / Equipment<select class="tk-equipment">${equipmentOptions()}</select></label><label class="tk-detail-check"><input class="tk-equipment-not-used" type="checkbox"> Not used today</label><label class="tk-detail-check"><input class="tk-per-diem" type="checkbox" checked> Per diem</label><div class="tk-hours-worked">Worked: —</div>`;
     row.appendChild(detail);
     row.querySelectorAll('.tk-start,.tk-stop,.tk-lunch').forEach(el=>el.addEventListener('input',()=>syncPayrollFromClock(row)));
     row.querySelector('.tk-employee')?.addEventListener('change',()=>applyDefaultEquipment(row,true));row.querySelector('.tk-equipment-not-used')?.addEventListener('change',()=>applyDefaultEquipment(row,false));applyDefaultEquipment(row,false);
@@ -92,7 +94,7 @@
     const rows=[...document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row')];if(!rows.length)return;const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used').eq('daily_report_id',reportId).eq('company_id',companyId());if(error)return;
     const map=new Map((data||[]).map(x=>[x.employee_id,x]));rows.forEach(row=>{enhanceRow(row);const item=map.get(row.querySelector('.tk-employee')?.value||'');if(!item)return;row.querySelector('.tk-start').value=(item.start_time||'').slice(0,5);row.querySelector('.tk-stop').value=(item.stop_time||'').slice(0,5);row.querySelector('.tk-lunch').value=item.lunch_minutes||0;row.querySelector('.tk-per-diem').checked=!!item.per_diem;row.querySelector('.tk-equipment-not-used').checked=!!item.equipment_not_used;row.querySelector('.tk-equipment').value=item.equipment_used||employeeEquipment.get(item.employee_id)?.default_equipment||'';applyDefaultEquipment(row,false);syncPayrollFromClock(row);});loadedReport=reportId;
   }
-  function updateHelp(){const p=byId('dailyCrewTimeCard')?.querySelector('.tk-help');if(p&&!p.dataset.tkLaunchHelp){p.dataset.tkLaunchHelp='1';p.textContent='Your assigned crew and your own Foreman row load automatically. Enter Start, Stop and Lunch; LineCrew calculates hours for payroll. Mark per diem when applicable and select assigned equipment.';}}
+  function updateHelp(){const p=byId('dailyCrewTimeCard')?.querySelector('.tk-help');if(p&&!p.dataset.tkLaunchHelp){p.dataset.tkLaunchHelp='1';p.textContent='Your assigned crew and your own Foreman row load automatically. Enter Start, Stop and Lunch; LineCrew calculates hours for payroll. Per diem defaults on and can be unchecked when it does not apply. Select assigned equipment or mark Not used today.';}}
   function scan(){addStyles();installSaveWrapper();installEquipmentManager();updateHelp();document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(enhanceRow);loadExistingDetails();}
   function init(){addStyles();refreshData().then(scan);scan();let timer;new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(scan,50);}).observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});setInterval(installSaveWrapper,1000);}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
