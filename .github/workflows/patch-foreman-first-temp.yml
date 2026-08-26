@@ -22,17 +22,19 @@ jobs:
           p = Path('timekeeping.js')
           s = p.read_text()
           s = s.replace(".select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id')", ".select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id,linked_profile_id')", 1)
-          old = '''    if(reportId){
-              const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
-              if(!error && data?.length){data.forEach(addCrewRow);return;}
-            }
+          start = s.index('  async function loadCrewRowsForReport(){')
+          end = s.index('  async function persistCrewTime(', start)
+          new_fn = '''  async function loadCrewRowsForReport(){
+            const form=byId('dailyReportForm');if(!form||form.classList.contains('hidden'))return;
+            const reportId=form.dataset.reportId||null;
+            const loadKey=reportId||'new';
+            if(crewRowsLoadedForReport===loadKey)return;
+            crewRowsLoadedForReport=loadKey;
+            if(!employees.length) await loadEmployees();
+            refreshCrewEmployeeSelects();
+            const box=byId('dailyCrewTimeRows');if(!box)return;
+            box.innerHTML='';
             if(role()==='foreman'){
-              const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
-              employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach(e=>addCrewRow({employee_id:e.id}));
-              return;
-            }
-          '''
-          new = '''    if(role()==='foreman'){
               const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
               const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;
               if(reportId){
@@ -53,10 +55,11 @@ jobs:
               const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
               if(!error && data?.length){data.forEach(addCrewRow);return;}
             }
+            await loadDefaultCrewRows();
+          }
+
           '''
-          if old not in s:
-              raise SystemExit('Expected source block not found')
-          p.write_text(s.replace(old,new,1))
+          p.write_text(s[:start] + new_fn + s[end:])
           PY
       - name: Commit patch
         run: |
