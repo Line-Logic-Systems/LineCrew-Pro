@@ -1,0 +1,61 @@
+name: Apply Custom Time Exports
+on:
+  push:
+    branches: [feature/custom-time-export-options]
+    paths: [.github/workflows/apply-custom-time-exports.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/custom-time-export-options
+      - run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('timekeeping-report-v2.js'); s=p.read_text()
+          anchor="      .tk-report-toolbar button{width:auto;margin:0;padding:6px 9px;font-size:12px}\n"
+          css="""      .tk-custom-export{position:relative;display:inline-block}\n      .tk-custom-export>button{width:auto;margin:0}\n      .tk-custom-export-menu{position:absolute;left:0;top:calc(100% + 4px);z-index:20;min-width:190px;background:#fff;border:1px solid #dce5ed;border-radius:9px;box-shadow:0 8px 24px rgba(11,45,77,.18);padding:4px}\n      .tk-custom-export-menu.hidden{display:none}\n      .tk-custom-export-menu button{display:block;width:100%!important;text-align:left;margin:0!important;padding:7px 9px!important;background:#fff;color:#102235;border-radius:6px}\n      .tk-custom-export-menu button:hover{background:#eef4f8}\n"""
+          if css not in s: s=s.replace(anchor,anchor+css,1)
+          insert=s.index('  function exportCsv(){')
+          helpers=r'''  function customExportRows(){
+    const view=filteredRows();
+    return view.map(r=>{
+      const e=employees.get(r.employee_id)||{},j=jobs.get(r.job_id)||{};
+      return {'Employee #':e.employee_number||'','Employee':e.full_name||'','Classification':e.classification||'','Date':r.work_date||'','Job #':j.job_number||'','Job Name':j.job_name||'','Crew':r.crew_name||e.default_crew_name||'','Start':timeText(r.start_time),'Stop':timeText(r.stop_time),'Lunch Minutes':num(r.lunch_minutes),'Regular Hours':num(r.regular_hours),'OT Hours':num(r.overtime_hours),'Total Hours':num(r.regular_hours)+num(r.overtime_hours),'Per Diem':r.per_diem?'Yes':'No','Equipment':equipmentText(r,e),'Storm':r.storm_work?'Yes':'No'};
+    });
+  }
+  function customExportName(ext){return `linecrew-custom-time-${byId('tkFromDate')?.value||''}-to-${byId('tkThroughDate')?.value||''}.${ext}`;}
+  function exportExcel(){
+    const data=customExportRows(); if(!data.length){toast('Run the Custom Time Report before exporting.','warning');return;}
+    if(typeof XLSX==='undefined'){toast('Excel export library is not available.','error');return;}
+    const ws=XLSX.utils.json_to_sheet(data),wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Custom Time Report');XLSX.writeFile(wb,customExportName('xlsx'));toast('Custom Time Report exported to Excel.','success');
+  }
+  function exportPdf(){
+    const data=customExportRows(); if(!data.length){toast('Run the Custom Time Report before exporting.','warning');return;}
+    const from=byId('tkFromDate')?.value||'',through=byId('tkThroughDate')?.value||'';
+    const win=window.open('','_blank'); if(!win){toast('Allow pop-ups to export the PDF report.','warning');return;}
+    const cols=['Employee','Date','Job #','Crew','Start','Stop','Regular Hours','OT Hours','Total Hours','Per Diem'];
+    win.document.write(`<html><head><title>Custom Time Report</title><style>body{font-family:Arial,sans-serif;padding:24px;color:#102235}h2{margin:0 0 4px}p{margin:0 0 14px;color:#617284}table{width:100%;border-collapse:collapse;font-size:10px}th,td{border-bottom:1px solid #dce5ed;padding:5px;text-align:left}th{background:#eef4f8}@media print{body{padding:0}}</style></head><body><h2>LineCrew Pro — Custom Time Report</h2><p>${from} through ${through}</p><table><thead><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${data.map(row=>`<tr>${cols.map(c=>`<td>${esc(row[c])}</td>`).join('')}</tr>`).join('')}</tbody></table><script>window.onload=()=>window.print()<\/script></body></html>`);win.document.close();
+  }
+  function installCustomExportMenu(){
+    const old=byId('tkExportCsvBtn'); if(!old||byId('tkCustomExportWrap'))return;
+    const wrap=document.createElement('div');wrap.id='tkCustomExportWrap';wrap.className='tk-custom-export';wrap.innerHTML='<button id="tkCustomExportBtn" type="button" class="secondary">Export Current Report ▾</button><div id="tkCustomExportMenu" class="tk-custom-export-menu hidden"><button type="button" data-tk-export="excel">Excel (.xlsx)</button><button type="button" data-tk-export="pdf">PDF / Print</button><button type="button" data-tk-export="csv">CSV (.csv)</button></div>';
+    old.replaceWith(wrap);const menu=byId('tkCustomExportMenu');byId('tkCustomExportBtn').onclick=e=>{e.stopPropagation();menu.classList.toggle('hidden')};menu.querySelectorAll('[data-tk-export]').forEach(btn=>btn.onclick=()=>{menu.classList.add('hidden');if(btn.dataset.tkExport==='excel')exportExcel();else if(btn.dataset.tkExport==='pdf')exportPdf();else exportCsv();});document.addEventListener('click',()=>menu.classList.add('hidden'));
+  }
+
+'''
+          s=s[:insert]+helpers+s[insert:]
+          s=s.replace("  addStyles();\n  loadLaunchInput();","  addStyles();\n  installCustomExportMenu();\n  loadLaunchInput();",1)
+          p.write_text(s)
+          p=Path('expanded-jsa.js');s=p.read_text();old='timekeeping-report-v2.js?v=20260826f';
+          if old not in s: raise SystemExit('cache token not found')
+          p.write_text(s.replace(old,'timekeeping-report-v2.js?v=20260826g',1))
+          PY
+      - run: |
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add timekeeping-report-v2.js expanded-jsa.js
+          git diff --cached --quiet || git commit -m "Add custom time Excel PDF and CSV exports"
+          git push origin HEAD:feature/custom-time-export-options
