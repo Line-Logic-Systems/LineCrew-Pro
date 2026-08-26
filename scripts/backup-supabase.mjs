@@ -107,7 +107,13 @@ try {
             const destination = path.join(out, ...file.split('/'));
             await fs.mkdir(path.dirname(destination), { recursive: true });
             await fs.writeFile(destination, data);
-            objects.push({ path: objectPath, file, bytes: data.length, sha256: sha256(data) });
+            objects.push({
+              path: objectPath,
+              file,
+              bytes: data.length,
+              sha256: sha256(data),
+              mimeType: item.metadata?.mimetype || item.metadata?.contentType || null,
+            });
           }
           if (list.length < 1000) break;
           offset += list.length;

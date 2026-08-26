@@ -272,6 +272,8 @@ assert(fullDisasterRestoreWorkflow.includes('alter default privileges in schema 
 assert((fullDisasterRestoreWorkflow.match(/docker run --rm --interactive/g) || []).length >= 5, 'Recovery SQL heredocs must keep Docker standard input open.');
 assert(fullDisasterRestoreWorkflow.includes('post-restore-security.sql') && fullDisasterRestoreWorkflow.includes('verify-post-restore-security.sql'), 'The full recovery drill must restore and verify the global security gate.');
 assert(restoreBackupStorage.includes('sha256') && restoreBackupStorage.includes("'x-upsert': 'true'"), 'The full recovery drill must restore and hash-verify Storage objects.');
+assert(backupScript.includes('mimeType: item.metadata?.mimetype'), 'Independent backups must preserve each Storage object MIME type.');
+assert(restoreBackupStorage.includes("['.pdf', 'application/pdf']") && restoreBackupStorage.includes("'content-type': contentType"), 'The full recovery drill must restore Storage objects with an allowed MIME type.');
 assert(verifyRestoredTableCounts.includes("Prefer: 'count=exact'"), 'The full recovery drill must compare restored public-table row counts.');
 assert(verifyRestoredManagedCounts.includes("'auth.users'") && verifyRestoredManagedCounts.includes("'storage.objects'"), 'The full recovery drill must compare restored Auth and Storage row counts.');
 assert(!independentBackup.includes('pg_dump --dbname="$SUPABASE_DB_URL" --format=custom --no-owner --no-acl'), 'Independent backups must preserve function ACLs.');
