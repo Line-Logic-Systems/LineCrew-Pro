@@ -4377,7 +4377,8 @@ field('Emergency Plan / Nearest Facility', jsa.emergency_plan) +
 field('Crew Member Signatures', jsa.crew_members) +
 (jsa.weather_conditions ? field('Morning Conditions', jsa.weather_conditions) : '') +
 (jsa.special_equipment ? field('Special Equipment / Additional Notes', jsa.special_equipment) : '') +
-'</body></html>'
+'<script src="custom-time-export.js?v=20260826a"></script>
+</body></html>'
 );
 popup.document.close();
 popup.focus();
