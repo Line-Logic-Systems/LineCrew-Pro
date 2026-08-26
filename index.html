@@ -4474,7 +4474,9 @@ async function loadSafetyJsas(){
 $('safetyJsaLoading').classList.remove('hidden');
 $('safetyJsaEmpty').classList.add('hidden');
 $('safetyJsaList').replaceChildren();
-const { data, error } = await sb.rpc('get_company_jsas');
+if(window.linecrewGfCrewScope?.ensureLoaded) await window.linecrewGfCrewScope.ensureLoaded();
+const gfShowAll=currentUserRole()==='gf' && Boolean(window.linecrewGfCrewScope?.showAll?.());
+const { data, error } = await sb.rpc('get_company_jsas_scoped',{p_show_all:gfShowAll});
 $('safetyJsaLoading').classList.add('hidden');
 if(error){
 alert('Unable to load safety briefings: ' + error.message);
@@ -12508,9 +12510,17 @@ let fetched=0;
 const serverPageSize=250;
 while(fetched<currentProductionServerLimit){
 const through=Math.min(fetched+serverPageSize,currentProductionServerLimit)-1;
-const result=await sb.from('daily_reports')
+let reportQuery=sb.from('daily_reports')
 .select(reportSelect,{count:fetched===0?'exact':undefined})
-.eq('company_id',currentProfile.company_id)
+.eq('company_id',currentProfile.company_id);
+if(gfReviewWorkspace && window.linecrewGfCrewScope?.ensureLoaded){
+await window.linecrewGfCrewScope.ensureLoaded();
+if(window.linecrewGfCrewScope.shouldScope()){
+const assignedForemen=window.linecrewGfCrewScope.foremanIds();
+if(assignedForemen.length) reportQuery=reportQuery.in('foreman_id',assignedForemen);
+}
+}
+const result=await reportQuery
 .order('work_date',{ascending:false})
 .order('created_at',{ascending:false})
 .range(fetched,through);

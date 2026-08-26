@@ -274,6 +274,42 @@
     }
   }
 
+  let jsaHistoryPage=1;
+  const JSA_HISTORY_PAGE_SIZE=25;
+
+  function paginateJsaHistory(){
+    const list=byId('safetyJsaList');
+    if(!list) return;
+    const rows=Array.from(list.children).filter(node=>node.matches?.('details'));
+    byId('jsaHistoryPager')?.remove();
+    const pages=Math.max(1,Math.ceil(rows.length/JSA_HISTORY_PAGE_SIZE));
+    if(jsaHistoryPage>pages) jsaHistoryPage=pages;
+    rows.forEach((row,index)=>{
+      row.style.display=(index>=(jsaHistoryPage-1)*JSA_HISTORY_PAGE_SIZE && index<jsaHistoryPage*JSA_HISTORY_PAGE_SIZE)?'':'none';
+    });
+    if(rows.length<=JSA_HISTORY_PAGE_SIZE) return;
+    const pager=document.createElement('div');
+    pager.id='jsaHistoryPager';
+    pager.className='gf-scope-bar';
+    pager.innerHTML=`<span>Showing ${Math.min((jsaHistoryPage-1)*JSA_HISTORY_PAGE_SIZE+1,rows.length)}–${Math.min(jsaHistoryPage*JSA_HISTORY_PAGE_SIZE,rows.length)} of ${rows.length} JSAs</span><div><button type="button" class="secondary small" data-jsa-page="prev" ${jsaHistoryPage<=1?'disabled':''}>Previous</button> <button type="button" class="secondary small" data-jsa-page="next" ${jsaHistoryPage>=pages?'disabled':''}>Next</button></div>`;
+    list.parentNode.insertBefore(pager,list.nextSibling);
+    pager.addEventListener('click',event=>{
+      const action=event.target.closest('[data-jsa-page]')?.dataset.jsaPage;
+      if(action==='prev'&&jsaHistoryPage>1) jsaHistoryPage--;
+      if(action==='next'&&jsaHistoryPage<pages) jsaHistoryPage++;
+      paginateJsaHistory();
+    });
+  }
+
+  function installJsaPaginationReset(){
+    ['safetyJsaSearch','safetyJsaFromDate','safetyJsaThroughDate'].forEach(id=>{
+      const el=byId(id);
+      if(!el || el.dataset.gfPageReset==='1') return;
+      el.dataset.gfPageReset='1';
+      el.addEventListener(id==='safetyJsaSearch'?'input':'change',()=>{jsaHistoryPage=1;setTimeout(paginateJsaHistory,0);});
+    });
+  }
+
   async function refreshUi(){
     addStyles();
     if(!profile()?.company_id) return;
@@ -283,6 +319,8 @@
     updateScopeBars();
     installAdminAssignments();
     installJsaHistoryControls();
+    installJsaPaginationReset();
+    paginateJsaHistory();
   }
 
   function scheduleRefresh(){
