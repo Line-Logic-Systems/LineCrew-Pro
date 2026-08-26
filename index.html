@@ -14084,10 +14084,12 @@ function closeDailyUnitEditor(){
 const reportFinished = currentDailyUnitReport;
 const doneButton = $('closeDailyUnitEditorBtn');
 const bottomDoneButton = $('closeDailyUnitEditorBottomBtn');
-[doneButton,bottomDoneButton].filter(Boolean).forEach(button=>{
-button.disabled = false;
-button.textContent = 'Done Adding Units';
-});
+doneButton.disabled = false;
+doneButton.textContent = 'Done Adding Units';
+if(bottomDoneButton){
+bottomDoneButton.disabled = false;
+bottomDoneButton.textContent = 'Done Adding Units';
+}
 $('dailyUnitEditor').classList.add('hidden');
 currentDailyUnitCatalog = [];
 currentDailySavedUnits = [];
@@ -14109,18 +14111,22 @@ row.selectedItem || row.searchInput.value.trim() ||
 row.quantityInput.value.trim()
 ) || $('dailyUnitPoleLocation').value.trim();
 if(hasUnsavedLines){
-const topButton = $('closeDailyUnitEditorBtn');
-const bottomButton = $('closeDailyUnitEditorBottomBtn');
-[topButton,bottomButton].filter(Boolean).forEach(button=>{
-button.disabled = true;
-button.textContent = 'Saving & Finishing...';
-});
+const doneButton = $('closeDailyUnitEditorBtn');
+const bottomDoneButton = $('closeDailyUnitEditorBottomBtn');
+doneButton.disabled = true;
+doneButton.textContent = 'Saving & Finishing...';
+if(bottomDoneButton){
+bottomDoneButton.disabled = true;
+bottomDoneButton.textContent = 'Saving & Finishing...';
+}
 const saved = await saveDailyUnitBatch({ closeAfterSave:true });
 if(!saved){
-[topButton,bottomButton].filter(Boolean).forEach(button=>{
-button.disabled = false;
-button.textContent = 'Done Adding Units';
-});
+doneButton.disabled = false;
+doneButton.textContent = 'Done Adding Units';
+if(bottomDoneButton){
+bottomDoneButton.disabled = false;
+bottomDoneButton.textContent = 'Done Adding Units';
+}
 }
 return;
 }
