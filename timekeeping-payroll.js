@@ -144,13 +144,13 @@
   async function buildExceptions(){
     const rows=await ensureReport();const api=window.LineCrewTimekeepingReport;
     const employeeMap=api?.getEmployees?.()||new Map();
-    const [from,through]=currentRange();const dates=datesBetween(from,through);
-    const selectedEmployee=byId('tkEmployeeFilter')?.value||'';const crew=(byId('tkCrewFilter')?.value||'').toLowerCase();
-    const activeEmployees=[...employeeMap.values()].filter(e=>e.active!==false&&(!selectedEmployee||e.id===selectedEmployee)&&(!crew||String(e.default_crew_name||'').toLowerCase()===crew));
     const byPersonDay=new Map();
     rows.forEach(r=>{const key=`${r.employee_id}|${r.work_date}`;if(!byPersonDay.has(key))byPersonDay.set(key,[]);byPersonDay.get(key).push(r);});
     const out=[];
-    activeEmployees.forEach(e=>dates.forEach(date=>{const d=parseDate(date);if(d.getDay()===0||d.getDay()===6)return;const segs=byPersonDay.get(`${e.id}|${date}`)||[];if(!segs.length)out.push({type:'missing',employee:e.full_name,date,message:'No time recorded on this weekday.'});}));
+    // Do not treat every blank weekday for every active roster employee as a payroll exception.
+    // LineCrew does not yet store an employee work schedule, so a blank day may simply be a day off,
+    // an unassigned employee, or someone not expected on this crew/job. Only recorded-time anomalies
+    // are actionable exceptions here.
     byPersonDay.forEach((segs,key)=>{
       const [employeeId,date]=key.split('|');const employee=employeeMap.get(employeeId)||{};const total=segs.reduce((s,r)=>s+num(r.regular_hours)+num(r.overtime_hours),0);const jobs=new Set(segs.map(r=>r.job_id).filter(Boolean));
       if(total>16)out.push({type:'high',employee:employee.full_name||'',date,message:`${total.toFixed(2)} total hours recorded.`});
@@ -165,7 +165,7 @@
     await buildExceptions();const box=byId('tkExceptionsBox');if(!box)return;
     box.classList.toggle('hidden',!show);
     if(!show)return;
-    if(!exceptions.length){box.innerHTML='<div class="tk-empty-state"><strong>No Timekeeping exceptions found</strong>This period has no missing weekday time, high-hour totals, multi-job review flags, or possible duplicate segments.</div>';return;}
+    if(!exceptions.length){box.innerHTML='<div class="tk-empty-state"><strong>No Timekeeping exceptions found</strong>This period has no high-hour totals, multi-job review flags, or possible duplicate time segments.</div>';return;}
     box.innerHTML=`<strong>${exceptions.length} exception${exceptions.length===1?'':'s'} to review</strong><div class="tk-exception-list">${exceptions.map(x=>`<div class="tk-exception ${x.type==='high'?'high':''}"><strong>${esc(x.employee||'Employee')} — ${esc(x.date)}</strong><br>${esc(x.message)}</div>`).join('')}</div>`;
   }
 
