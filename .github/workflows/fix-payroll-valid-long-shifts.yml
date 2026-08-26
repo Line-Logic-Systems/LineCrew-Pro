@@ -19,17 +19,17 @@ jobs:
           from pathlib import Path
           p=Path('timekeeping-payroll.js')
           s=p.read_text()
-          old="if(total>16)out.push({type:'high',employee:employee.full_name||'',date,message:`${total.toFixed(2)} total hours recorded.`});"
-          new="if(total>24)out.push({type:'high',employee:employee.full_name||'',date,message:`${total.toFixed(2)} total hours recorded — more than 24 hours in one day.`});"
-          if old not in s:
-              raise SystemExit('high-hour exception rule not found')
-          s=s.replace(old,new,1)
-          s=s.replace('This period has no high-hour totals, multi-job review flags, or possible duplicate time segments.','This period has no impossible daily-hour totals, multi-job review flags, or possible duplicate time segments.',1)
+          anchor="""    byPersonDay.forEach((segs,key)=>{\n      const [employeeId,date]=key.split('|');const employee=employeeMap.get(employeeId)||{};const total=segs.reduce((s,r)=>s+num(r.regular_hours)+num(r.overtime_hours),0);const jobs=new Set(segs.map(r=>r.job_id).filter(Boolean));\n      if(total>24)out.push({type:'high',employee:employee.full_name||'',date,message:`${total.toFixed(2)} total hours recorded — more than 24 hours in one day.`});\n      if(jobs.size>1)out.push({type:'multijob',employee:employee.full_name||'',date,message:`Time is split across ${jobs.size} jobs.`});\n      const signatures=new Map();segs.forEach(r=>{const sig=[r.job_id,r.crew_name,num(r.regular_hours).toFixed(2),num(r.overtime_hours).toFixed(2),r.storm_work?'1':'0'].join('|');signatures.set(sig,(signatures.get(sig)||0)+1);});\n      if([...signatures.values()].some(v=>v>1))out.push({type:'duplicate',employee:employee.full_name||'',date,message:'Possible duplicate time segment detected.'});\n    });\n"""
+          replacement=anchor+"""    const crewDayTotals=new Map();\n    byPersonDay.forEach((segs,key)=>{\n      const [employeeId,date]=key.split('|');\n      const employee=employeeMap.get(employeeId)||{};\n      const crew=String(segs.find(r=>r.crew_name)?.crew_name||employee.default_crew_name||'').trim();\n      if(!crew)return;\n      const total=segs.reduce((sum,r)=>sum+num(r.regular_hours)+num(r.overtime_hours),0);\n      const crewKey=`${crew.toLowerCase()}|${date}`;\n      if(!crewDayTotals.has(crewKey))crewDayTotals.set(crewKey,{crew,date,members:[]});\n      crewDayTotals.get(crewKey).members.push({employee:employee.full_name||'Employee',total});\n    });\n    crewDayTotals.forEach(group=>{\n      if(group.members.length<2)return;\n      const buckets=new Map();\n      group.members.forEach(m=>{const k=m.total.toFixed(2);if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(m);});\n      if(buckets.size<=1)return;\n      const majority=[...buckets.entries()].sort((a,b)=>b[1].length-a[1].length)[0];\n      const expected=majority[0];\n      group.members.forEach(m=>{\n        if(m.total.toFixed(2)!==expected)out.push({type:'crew-hours',employee:m.employee,date:group.date,message:`${m.total.toFixed(2)} hours recorded; other members of crew ${group.crew} are at ${Number(expected).toFixed(2)} hours.`});\n      });\n    });\n"""
+          if anchor not in s:
+              raise SystemExit('exception loop anchor not found')
+          s=s.replace(anchor,replacement,1)
+          s=s.replace('This period has no impossible daily-hour totals, multi-job review flags, or possible duplicate time segments.','This period has no impossible daily-hour totals, crew-hour mismatches, multi-job review flags, or possible duplicate time segments.',1)
           p.write_text(s)
           PY
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add timekeeping-payroll.js
-          git diff --cached --quiet || git commit -m "Allow legitimate long linework shifts in payroll review"
+          git diff --cached --quiet || git commit -m "Flag crew hour mismatches for payroll review"
           git push origin HEAD:fix/payroll-valid-long-shifts
