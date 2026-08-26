@@ -43,6 +43,12 @@ The drill also performs a real PostgreSQL 17 `pg_restore` between disposable loc
 
 Production records and production files are never modified by this test.
 
+### Full provider-loss recovery drill
+
+`.github/workflows/full-disaster-recovery-drill.yml` is a manually started, one-time full restore of a selected independent Azure backup. It is deliberately locked to the separately billed `LineCrew Pro Recovery Drill` project and the protected `recovery-drill` GitHub environment. The workflow refuses Production, refuses the normal Test project, refuses a non-empty recovery database, and requires the operator to type `RESTORE_RECOVERY_DRILL` exactly.
+
+The drill downloads the selected Azure package, verifies every manifest hash, confirms the package came from Production, restores the complete PostgreSQL archive, reapplies and verifies the global Data API security gate, compares every public-table row count, restores and hash-verifies every Supabase Storage object, and repeats the two-company isolation test. Production and the normal Test project are not modified.
+
 ## Required GitHub configuration
 
 Repository secrets:
@@ -59,6 +65,11 @@ Repository secrets:
 - `SUPABASE_TEST_SERVICE_ROLE_KEY`
 - `SUPABASE_TEST_PROJECT_REF`
 - `SUPABASE_PRODUCTION_PROJECT_REF`
+
+`recovery-drill` environment secrets:
+
+- `RECOVERY_DRILL_DB_PASSWORD`
+- `RECOVERY_DRILL_SERVICE_ROLE_KEY`
 
 Never commit credentials or database URLs.
 
