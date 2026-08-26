@@ -3483,7 +3483,7 @@ return;
 }
 const existing = readOfflineJsaAccess();
 const jobs = existing?.profile?.id === profile.id && existing?.company?.id === company.id
-? (existing.jobs || [])
+? uniqueOfflineJsaJobs(existing.jobs || [])
 : [];
 try{
 localStorage.setItem(OFFLINE_JSA_ACCESS_KEY,JSON.stringify({
@@ -3511,14 +3511,23 @@ jobs
 console.warn('Unable to cache Offline JSA access:',error);
 }
 }
+function uniqueOfflineJsaJobs(jobs){
+const unique = new Map();
+(jobs || []).forEach(job => {
+const id = String(job?.id || '');
+if(!id || unique.has(id)) return;
+unique.set(id,{
+id,
+job_number:String(job.job_number || 'Job').slice(0,100),
+job_name:String(job.job_name || 'Unnamed').slice(0,180)
+});
+});
+return [...unique.values()];
+}
 function cacheOfflineJsaJobs(jobs){
 const cached = readOfflineJsaAccess();
 if(!cached || cached.profile.id !== currentProfile?.id || cached.company.id !== currentProfile?.company_id) return;
-cached.jobs = (jobs || []).map(job => ({
-id:String(job.id || ''),
-job_number:String(job.job_number || 'Job').slice(0,100),
-job_name:String(job.job_name || 'Unnamed').slice(0,180)
-})).filter(job => job.id);
+cached.jobs = uniqueOfflineJsaJobs(jobs);
 cached.cached_at = new Date().toISOString();
 try{
 localStorage.setItem(OFFLINE_JSA_ACCESS_KEY,JSON.stringify(cached));
@@ -3535,13 +3544,14 @@ return !navigator.onLine || /failed to fetch|network|load failed|timeout|timed o
 }
 function fillOfflineJsaJobSelect(select,jobs){
 select.innerHTML = '<option value="">Select active job</option>';
-(jobs || []).forEach(job => {
+const uniqueJobs = uniqueOfflineJsaJobs(jobs);
+uniqueJobs.forEach(job => {
 const option = document.createElement('option');
 option.value = job.id;
 option.textContent = (job.job_number || 'Job') + ' — ' + (job.job_name || 'Unnamed');
 select.appendChild(option);
 });
-return (jobs || []).length > 0;
+return uniqueJobs.length > 0;
 }
 function offlineJsaJobs(){
 const cached = readOfflineJsaAccess();
@@ -3946,6 +3956,7 @@ const {
 data:{session}
 } = await sb.auth.getSession();
 if(!session){
+if(enterOfflineJsaMode()) return;
 currentProfile = null;
 currentCompany = null;
 if(!pendingInviteToken){
@@ -3974,6 +3985,7 @@ mfaBootstrap,
 if(mfaStoppedLoad) return;
 }catch(mfaError){
 alert('Unable to verify account protection: ' + mfaError.message);
+clearOfflineJsaAccess();
 await sb.auth.signOut({ scope:'local' });
 show('authPage');
 return;
@@ -3993,6 +4005,7 @@ alert('Unable to verify account access: ' + accessStatusError.message);
 return;
 }
 if(isSuspended){
+clearOfflineJsaAccess();
 await sb.auth.signOut();
 currentProfile = null;
 currentCompany = null;
@@ -4020,6 +4033,7 @@ return;
 }
 if(!profile){
 if(pendingInviteToken){
+clearOfflineJsaAccess();
 await sb.auth.signOut({ scope:'local' });
 applyInvitationMode();
 show('authPage');
@@ -4070,6 +4084,7 @@ subscriptionStatus === 'trial' &&
 company.subscription_expires_at &&
 new Date(company.subscription_expires_at) <= new Date();
 if(['suspended','cancelled'].includes(subscriptionStatus) || trialExpired){
+clearOfflineJsaAccess();
 await sb.auth.signOut();
 currentProfile = null;
 currentCompany = null;
@@ -4169,15 +4184,30 @@ return alert(
 'Enter email and password.'
 );
 }
-const {error} =
-await sb.auth.signInWithPassword({
-email,
-password
+const button = $('loginBtn');
+button.disabled = true;
+button.textContent = 'Signing In...';
+try{
+if(!navigator.onLine && enterOfflineJsaMode()) return;
+const timeout = new Promise((_,reject) => {
+setTimeout(() => reject(new Error('Connection timed out.')),10000);
 });
+const {error} = await Promise.race([
+sb.auth.signInWithPassword({email,password}),
+timeout
+]);
 if(error){
+if(offlineJsaNetworkFailure(error) && enterOfflineJsaMode()) return;
 return alert(error.message);
 }
 await loadApp();
+}catch(error){
+if(offlineJsaNetworkFailure(error) && enterOfflineJsaMode()) return;
+alert(error?.message || 'LineCrew Pro could not sign in.');
+}finally{
+button.disabled = false;
+button.textContent = 'Sign In';
+}
 };
 $('forgotPasswordBtn').onclick = async () => {
 const email =
@@ -4436,13 +4466,7 @@ alert('Unable to load active jobs: ' + error.message);
 return false;
 }
 cacheOfflineJsaJobs(data || []);
-(data || []).forEach(job => {
-const option = document.createElement('option');
-option.value = job.id;
-option.textContent = job.job_number + ' — ' + job.job_name;
-select.appendChild(option);
-});
-return true;
+return fillOfflineJsaJobSelect(select,data || []);
 }
 $('createJsaBtn').onclick = async () => {
 resetSafetyJsaForm();
@@ -7991,7 +8015,10 @@ $('recoveryPassword').focus();
 return;
 }
 if(event === 'SIGNED_OUT'){
-clearOfflineJsaAccess();
+if(readOfflineJsaAccess()){
+enterOfflineJsaMode();
+return;
+}
 window.resetLineCrewLoginFormState?.();
 $('assistantLauncher').classList.add('hidden');
 $('assistantPanel').classList.add('hidden');
@@ -14784,13 +14811,7 @@ alert('Unable to load jobs: ' + error.message);
 return false;
 }
 cacheOfflineJsaJobs(data || []);
-(data || []).forEach(job => {
-const option = document.createElement('option');
-option.value = job.id;
-option.textContent = (job.job_number || 'Job') + ' — ' + (job.job_name || 'Unnamed');
-select.appendChild(option);
-});
-return true;
+return fillOfflineJsaJobSelect(select,data || []);
 }
 let pendingCompanyJsaCameraFiles = [];
 function companyJsaFileKey(file){
@@ -15061,6 +15082,7 @@ try{
 if(pendingInviteToken){
 const { data:{ session } } = await sb.auth.getSession();
 if(session){
+clearOfflineJsaAccess();
 await sb.auth.signOut({ scope:'local' });
 }
 }
