@@ -88,10 +88,7 @@
 
   function updateReportStatus(){
     const status=byId('tkReportStatus');if(!status)return;
-    const rows=document.querySelectorAll('#tkReportList .tk-table tbody tr').length;
-    const from=byId('tkFromDate')?.value||'';const through=byId('tkThroughDate')?.value||'';
-    if(rows) status.textContent=`Showing ${rows} time segment${rows===1?'':'s'}${from&&through?` from ${from} through ${through}`:''}.`;
-    else if(byId('tkReportList')?.textContent?.trim()) status.textContent=from&&through?`No matching time from ${from} through ${through}.`:'';
+    status.textContent='';
   }
 
   function markBusyButtons(){
