@@ -43,6 +43,11 @@ async function insert(table, row) {
   assert(result.ok && result.data?.length === 1, `Insert failed for ${table}: ${JSON.stringify(result.data)}`);
   return result.data[0];
 }
+async function update(table, query, row) {
+  const result = await request(`/rest/v1/${table}?${query}`, { method: 'PATCH', body: row, prefer: 'return=representation' });
+  assert(result.ok && result.data?.length === 1, `Update failed for ${table}: ${JSON.stringify(result.data)}`);
+  return result.data[0];
+}
 async function createUser(label) {
   const email = `${runId}-${label}@example.invalid`;
   const result = await request('/auth/v1/admin/users', { method: 'POST', body: { email, password, email_confirm: true } });
@@ -90,13 +95,13 @@ async function main() {
   const companyA = await insert('companies', { name: `${runId} Company A`, created_by: userA.id });
   const companyB = await insert('companies', { name: `${runId} Company B`, created_by: userB.id });
   created.companies.push(companyA.id, companyB.id);
-  const subscriptionA = await insert('company_subscriptions', {
-    company_id: companyA.id, plan_code: 'pilot', status: 'trialing',
+  const subscriptionA = await update('company_subscriptions', `company_id=eq.${companyA.id}`, {
+    plan_code: 'pilot', status: 'trialing',
     access_enabled: true, access_override: true, provider: 'manual',
     notes: 'Disposable recovery isolation test',
   });
-  await insert('company_subscriptions', {
-    company_id: companyB.id, plan_code: 'pilot', status: 'trialing',
+  await update('company_subscriptions', `company_id=eq.${companyB.id}`, {
+    plan_code: 'pilot', status: 'trialing',
     access_enabled: true, access_override: true, provider: 'manual',
     notes: 'Disposable recovery isolation test',
   });
@@ -146,6 +151,14 @@ async function main() {
   assert(deleteObject.ok, `Unable to simulate file loss: ${JSON.stringify(deleteObject.data)}`);
 
   await insert('companies', snapshot.company);
+  const removeGeneratedSubscription = await request(
+    `/rest/v1/company_subscriptions?company_id=eq.${companyA.id}`,
+    { method: 'DELETE', prefer: 'return=representation' },
+  );
+  assert(
+    removeGeneratedSubscription.ok && removeGeneratedSubscription.data?.length === 1,
+    `Unable to replace automatically generated recovery subscription: ${JSON.stringify(removeGeneratedSubscription.data)}`,
+  );
   const restoredSubscription = await insert('company_subscriptions', snapshot.subscription);
   await insert('profiles', snapshot.profile);
   const restoredCustomer = await insert('customers', snapshot.customer);
