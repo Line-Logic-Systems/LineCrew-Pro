@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const byId=id=>document.getElementById(id);
-  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=v=>Number(v||0)||0;
   const getSb=()=>{try{return typeof sb!=='undefined'?sb:(window.sb||window.supabaseClient||null);}catch(_){return window.sb||window.supabaseClient||null;}};
   const profile=()=>typeof currentProfile!=='undefined'?currentProfile:window.currentProfile;
@@ -83,9 +83,9 @@
     const reg=view.reduce((s,r)=>s+num(r.regular_hours),0);
     const ot=view.reduce((s,r)=>s+num(r.overtime_hours),0);
     const count=new Set(view.map(r=>r.employee_id)).size;
-    const perDiem=view.filter(r=>r.per_diem).length;
+    const perDiem=new Set(view.filter(r=>r.per_diem).map(r=>`${r.employee_id}|${r.work_date}`)).size;
     const sum=byId('tkSummary');
-    if(sum)sum.innerHTML=`<div><strong>${count}</strong>Employees</div><div><strong>${reg.toFixed(2)}</strong>Regular Hours</div><div><strong>${ot.toFixed(2)}</strong>OT Hours</div><div><strong>${(reg+ot).toFixed(2)}</strong>Total Hours</div><div><strong>${perDiem}</strong>Per Diem Entries</div>`;
+    if(sum)sum.innerHTML=`<div><strong>${count}</strong>Employees</div><div><strong>${reg.toFixed(2)}</strong>Regular Hours</div><div><strong>${ot.toFixed(2)}</strong>OT Hours</div><div><strong>${(reg+ot).toFixed(2)}</strong>Total Hours</div><div><strong>${perDiem}</strong>Per Diem Days</div>`;
     const box=byId('tkReportList');
     if(!box)return;
     if(!view.length){box.innerHTML='<div class="tk-crew-card"><strong>No time recorded for this view.</strong><p class="tk-help">Create or save a Daily Report with crew time, or change the filters.</p></div>';return;}
