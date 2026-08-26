@@ -39,6 +39,8 @@ const mustExist = [
   'supabase/migrations/20260825151500_dynamic_backup_table_inventory.sql',
   'supabase/migrations/20260825152000_restore_owner_job_rpc_access.sql',
   'number-input-polish.js',
+  'foreman-field-tools.js',
+  'supabase/migrations/20260826234242_foreman_remaining_job_units.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -82,9 +84,12 @@ const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const appPolish = fs.readFileSync('app-polish.js', 'utf8');
 const packetParser = fs.readFileSync('supabase/functions/parse-utility-job-packet/index.ts', 'utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
+const serviceWorker = fs.readFileSync('service-worker.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
 const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
+const foremanFieldTools = fs.readFileSync('foreman-field-tools.js', 'utf8');
+const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260826234242_foreman_remaining_job_units.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
 const fullDisasterRestoreWorkflow = fs.readFileSync('.github/workflows/full-disaster-recovery-drill.yml', 'utf8');
@@ -362,6 +367,18 @@ assert(timekeeping.includes("employees.filter(e=>e.active&&e.assigned_foreman_id
 assert(!timekeepingRoster.includes('addButton.click();'), 'Assigned crew preload must not depend on overlay click timing.');
 assert(hasVersionedAsset(expandedJsa, 'timekeeping.js'), 'Direct Foreman crew preload must use a cache version.');
 assert(timekeepingRoster.includes('await autoLoadAssignedCrew();'), 'Foreman roster selectors must wait for assigned crew data before rebuilding employee options.');
+assert(foremanFieldTools.includes("title.textContent = titleText"), 'Foreman Timekeeping tile must relabel itself as Crew Time.');
+assert(foremanFieldTools.includes("rpc('get_remaining_job_units_for_field'"), 'Remaining Units must load through the scoped database function.');
+assert(foremanFieldTools.includes('Saved Draft') && foremanFieldTools.includes('Awaiting GF') && foremanFieldTools.includes('Approved') && foremanFieldTools.includes('Remaining'), 'Remaining Units must separate draft, submitted, approved and remaining quantities.');
+assert(foremanFieldTools.includes("role() !== 'foreman'"), 'Remaining Units dashboard access must remain Foreman-only in the client.');
+assert(expandedJsa.includes("foreman-field-tools.js?v=20260826a"), 'Foreman field tools must load as a versioned application asset.');
+assert(serviceWorker.includes("/foreman-field-tools.js?v=20260826a"), 'Offline app shell must cache the Foreman field tools asset.');
+assert(foremanFieldTools.includes('@media(max-width:720px)') && foremanFieldTools.includes('.remaining-units-tools{grid-template-columns:1fr}'), 'Remaining Units must collapse its controls for phone screens.');
+assert(remainingUnitsMigration.includes("public.linecrew_foreman_has_job_assignment(job.id)"), 'Remaining Units must enforce assigned-job access server-side for Foremen.');
+assert(remainingUnitsMigration.includes("package.company_id = v_company_id") && remainingUnitsMigration.includes("report.company_id = location.company_id"), 'Remaining Units must scope package and production data to the authenticated company.');
+assert(remainingUnitsMigration.includes("report.reviewed_at is null") && remainingUnitsMigration.includes("report.review_notes"), 'Returned report quantities must be released until resubmission.');
+assert(remainingUnitsMigration.includes("revoke all on function public.get_remaining_job_units_for_field(uuid)") && remainingUnitsMigration.includes("from public, anon"), 'Remaining Units must deny anonymous function execution.');
+assert(!remainingUnitsMigration.includes('install_price') && !remainingUnitsMigration.includes('retirement_price'), 'Remaining Units must not expose contract pricing.');
 assert(hasVersionedAsset(expandedJsa, 'number-input-polish.js'), 'Global numeric input polish must be cache-versioned and loaded.');
 assert(numberInputPolish.includes("input.defaultValue === '0'"), 'Only numeric fields designed with a zero default may restore an empty value to zero.');
 assert(numberInputPolish.includes('input.select();'), 'Clicking a displayed zero must select it for immediate replacement.');

@@ -4,11 +4,11 @@
   const byId=id=>document.getElementById(id);
   const role=()=>String(window.currentProfile?.role || (typeof currentProfile!=='undefined' ? currentProfile?.role : '') || '').toLowerCase();
   const plans={
-    foreman:{title:'Foreman Workspace',text:'Start the day with Safety/JSA, then use Jobs, Production and Timekeeping for your crew.',order:['safetyTile','jobsTile','productionTile','timekeepingTile','trainingTile'],hidden:['teamTile','priceBooksTile']},
-    gf:{title:'General Foreman Workspace',text:'Review crews, jobs, production, safety and timekeeping from one place.',order:['productionTile','jobsTile','safetyTile','timekeepingTile','teamTile','trainingTile'],hidden:['priceBooksTile']},
-    superintendent:{title:'Superintendent Workspace',text:'Manage field operations, crews, jobs, production, safety and company tools available to your permissions.',order:['productionTile','jobsTile','teamTile','safetyTile','timekeepingTile','priceBooksTile','trainingTile'],hidden:[]},
-    admin:{title:'Admin Workspace',text:'Manage company setup, people, pricing, job setup, production oversight, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:[]},
-    owner:{title:'Owner Workspace',text:'Company-wide access for people, pricing, job setup, production oversight, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:[]}
+    foreman:{title:'Foreman Workspace',text:'Start the day with Safety/JSA, then use Jobs, Production, Remaining Units and Crew Time.',order:['safetyTile','jobsTile','productionTile','remainingUnitsTile','timekeepingTile','trainingTile'],hidden:['teamTile','priceBooksTile']},
+    gf:{title:'General Foreman Workspace',text:'Review crews, jobs, production, safety and timekeeping from one place.',order:['productionTile','jobsTile','safetyTile','timekeepingTile','teamTile','trainingTile'],hidden:['priceBooksTile','remainingUnitsTile']},
+    superintendent:{title:'Superintendent Workspace',text:'Manage field operations, crews, jobs, production, safety and company tools available to your permissions.',order:['productionTile','jobsTile','teamTile','safetyTile','timekeepingTile','priceBooksTile','trainingTile'],hidden:['remainingUnitsTile']},
+    admin:{title:'Admin Workspace',text:'Manage company setup, people, pricing, job setup, production oversight, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:['remainingUnitsTile']},
+    owner:{title:'Owner Workspace',text:'Company-wide access for people, pricing, job setup, production oversight, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:['remainingUnitsTile']}
   };
   let observer=null;
   let scheduled=false;
@@ -101,7 +101,7 @@
       if(!banner){banner=document.createElement('div');banner.id='lcRoleWorkspace';banner.className='lc-role-workspace';grid.parentNode.insertBefore(banner,grid);}
       const bannerMarkup=`<strong>${plan.title}</strong><span>${plan.text}</span>`;
       if(banner.innerHTML!==bannerMarkup) banner.innerHTML=bannerMarkup;
-      ['jobsTile','productionTile','safetyTile','priceBooksTile','teamTile','timekeepingTile','trainingTile'].forEach(id=>byId(id)?.classList.toggle('hidden',plan.hidden.includes(id)));
+      ['jobsTile','productionTile','safetyTile','priceBooksTile','teamTile','remainingUnitsTile','timekeepingTile','trainingTile'].forEach(id=>byId(id)?.classList.toggle('hidden',plan.hidden.includes(id)));
       const desiredTiles=plan.order.map(id=>byId(id)).filter(el=>el&&!el.classList.contains('hidden'));
       const desiredIds=desiredTiles.map(el=>el.id);
       const currentIds=Array.from(grid.children).filter(el=>desiredIds.includes(el.id)).map(el=>el.id);
@@ -111,7 +111,8 @@
         setDescription('jobsTile','Open assigned jobs and work points');
         setDescription('productionTile','Create and review your Daily Reports');
         setDescription('safetyTile','Complete today’s JSA and safety records');
-        setDescription('timekeepingTile','Enter and review your crew hours');
+        setDescription('remainingUnitsTile','What is left by job and work point');
+        setDescription('timekeepingTile','Review your crew hours and per diem');
         setDescription('trainingTile','How-to videos for Foreman tasks');
       }else if(r==='gf'){
         setDescription('productionTile','Review and approve crew Daily Reports');
