@@ -391,6 +391,31 @@ line-height:1.2;
 .supervisor-compact-report .report-summary-meta{
 font-size:12px;
 }
+.supervisor-compact-report{
+margin-bottom:3px;
+border-radius:6px;
+}
+.supervisor-compact-report > summary{
+min-height:30px;
+padding:4px 8px;
+gap:6px;
+}
+.supervisor-compact-report > summary::before{
+font-size:9px;
+}
+.supervisor-compact-report .report-summary-main{
+grid-template-columns:minmax(90px,120px) minmax(0,1fr);
+gap:6px;
+}
+.supervisor-compact-report .report-summary-main strong,
+.supervisor-compact-report .report-summary-main span,
+.supervisor-compact-report .report-summary-meta{
+font-size:10px;
+line-height:1.05;
+}
+.supervisor-compact-report .report-card-details{
+padding:10px 12px 6px;
+}
 @media(max-width:600px){
 .production-job-group > summary{
 grid-template-columns:auto minmax(0, 1fr);
