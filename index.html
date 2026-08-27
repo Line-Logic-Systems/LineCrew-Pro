@@ -3231,6 +3231,7 @@ try{ sessionStorage.setItem('linecrew_requested_plan', requestedSignupPlan); }ca
 }
 let pendingMfaFactor = null;
 let continueAfterMfa = null;
+let mfaEnforcementPromise = null;
 if(!/^[A-Za-z0-9_-]{43}$/.test(pendingInviteToken)){
 pendingInviteToken = '';
 }
@@ -3266,6 +3267,20 @@ const { data, error } = await sb.auth.mfa.listFactors();
 if(error) throw error;
 return (data?.totp || []).filter(factor => factor.status === 'verified');
 }
+function allMfaFactors(data){
+const factors = [
+...(data?.all || []),
+...(data?.totp || []),
+...(data?.phone || [])
+];
+return Array.from(
+new Map(
+factors
+.filter(factor => factor?.id)
+.map(factor => [factor.id,factor])
+).values()
+);
+}
 function resetMfaScreen(){
 $('mfaCode').value = '';
 $('mfaStatus').textContent = '';
@@ -3287,8 +3302,9 @@ continueAfterMfa = onComplete;
 resetMfaScreen();
 const existing = await sb.auth.mfa.listFactors();
 if(existing.error) throw existing.error;
-for(const factor of (existing.data?.all || []).filter(item => item.status !== 'verified')){
-await sb.auth.mfa.unenroll({ factorId:factor.id });
+for(const factor of allMfaFactors(existing.data).filter(item => item.status !== 'verified')){
+const removed = await sb.auth.mfa.unenroll({ factorId:factor.id });
+if(removed.error) throw removed.error;
 }
 const { data, error } = await sb.auth.mfa.enroll({
 factorType:'totp',
@@ -3306,6 +3322,12 @@ $('mfaCode').focus();
 }
 async function enforcePrivilegedMfa(profile, onComplete){
 if(!privilegedRoleRequiresMfa(profile)) return false;
+if(pendingMfaFactor){
+if(!continueAfterMfa) continueAfterMfa = onComplete;
+return true;
+}
+if(mfaEnforcementPromise) return mfaEnforcementPromise;
+mfaEnforcementPromise = (async()=>{
 const factors = await verifiedTotpFactors();
 const { data:aal, error:aalError } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
 if(aalError) throw aalError;
@@ -3318,6 +3340,12 @@ await showMfaEnrollment(onComplete);
 return true;
 }
 return false;
+})();
+try{
+return await mfaEnforcementPromise;
+}finally{
+mfaEnforcementPromise = null;
+}
 }
 $('verifyMfaBtn').onclick = async () => {
 const code = $('mfaCode').value.replace(/\D/g, '');
@@ -8039,6 +8067,9 @@ if(readOfflineJsaAccess()){
 enterOfflineJsaMode();
 return;
 }
+pendingMfaFactor = null;
+continueAfterMfa = null;
+mfaEnforcementPromise = null;
 window.resetLineCrewLoginFormState?.();
 $('assistantLauncher').classList.add('hidden');
 $('assistantPanel').classList.add('hidden');
