@@ -142,6 +142,10 @@ function renderReturnNotice(){
     }
     return;
   }
+  if(billingResult==='access-blocked'){
+    showReturnNotice('LineCrew Pro access for this company is currently inactive, so the app redirected you here. Start or restore the subscription below to restore access for your whole team.','warn');
+    return;
+  }
   $('returnNotice').classList.add('hidden');
 }
 
