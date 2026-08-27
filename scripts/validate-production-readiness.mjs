@@ -371,11 +371,13 @@ assert(foremanFieldTools.includes("title.textContent = titleText"), 'Foreman Tim
 assert(foremanFieldTools.includes("rpc('get_remaining_job_units_for_field'"), 'Remaining Units must load through the scoped database function.');
 assert(foremanFieldTools.includes('Saved Draft') && foremanFieldTools.includes('Awaiting GF') && foremanFieldTools.includes('Approved') && foremanFieldTools.includes('Remaining'), 'Remaining Units must separate draft, submitted, approved and remaining quantities.');
 assert(foremanFieldTools.includes("role() !== 'foreman'"), 'Remaining Units dashboard access must remain Foreman-only in the client.');
-assert(expandedJsa.includes("foreman-field-tools.js?v=20260827b"), 'Foreman field tools must load as a versioned application asset.');
-assert(serviceWorker.includes("/foreman-field-tools.js?v=20260827b"), 'Offline app shell must cache the Foreman field tools asset.');
+assert(expandedJsa.includes("foreman-field-tools.js?v=20260827c"), 'Foreman field tools must load as a versioned application asset.');
+assert(serviceWorker.includes("/foreman-field-tools.js?v=20260827c"), 'Offline app shell must cache the Foreman field tools asset.');
 assert(foremanFieldTools.includes('@media(max-width:720px)') && foremanFieldTools.includes('.remaining-units-tools{grid-template-columns:1fr}'), 'Remaining Units must collapse its controls for phone screens.');
 assert(foremanFieldTools.includes('-webkit-line-clamp:2') && foremanFieldTools.includes('remaining-unit-toggle'), 'Remaining Unit descriptions must stay compact and expand on demand.');
 assert(foremanFieldTools.includes('aria-expanded="false"') && foremanFieldTools.includes("toggle.setAttribute('aria-expanded'"), 'Remaining Unit description expansion must remain keyboard and screen-reader accessible.');
+assert(foremanFieldTools.includes('Search Work Point') && !foremanFieldTools.includes('Search Work Point or Unit'), 'Remaining Units search must be dedicated to work points.');
+assert(foremanFieldTools.includes('workPointMatches(row.work_point_code, search)') && foremanFieldTools.includes("replace(/^0+(?=\\d)/, '')"), 'Work Point search must ignore leading zeroes without matching unrelated unit fields.');
 assert(remainingUnitsMigration.includes("public.linecrew_foreman_has_job_assignment(job.id)"), 'Remaining Units must enforce assigned-job access server-side for Foremen.');
 assert(remainingUnitsMigration.includes("package.company_id = v_company_id") && remainingUnitsMigration.includes("report.company_id = location.company_id"), 'Remaining Units must scope package and production data to the authenticated company.');
 assert(remainingUnitsMigration.includes("report.reviewed_at is null") && remainingUnitsMigration.includes("report.review_notes"), 'Returned report quantities must be released until resubmission.');

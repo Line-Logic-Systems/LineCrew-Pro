@@ -107,7 +107,7 @@
       <div class="card">
         <div class="remaining-units-tools">
           <label>Assigned Job<select id="remainingUnitsJob"><option value="">Select a job</option></select></label>
-          <label>Search Work Point or Unit<input id="remainingUnitsSearch" type="search" placeholder="Example: WP 1 or OH4200"></label>
+          <label>Search Work Point<input id="remainingUnitsSearch" type="search" inputmode="numeric" placeholder="Example: 20 finds 020 or 0020"></label>
           <button id="remainingUnitsRefresh" type="button" class="secondary">Refresh</button>
         </div>
         <div class="remaining-units-help">Saved drafts and submitted reports reserve those quantities so another Foreman does not report them twice. Returned quantities become available again until the corrected report is resubmitted. Redlines are kept separate and never reduce the authorized quantity shown here.</div>
@@ -246,6 +246,21 @@
     return ({install:'Install',transfer:'Transfer',remove:'Remove'})[String(value || '').toLowerCase()] || value || '';
   }
 
+  function workPointMatches(workPointCode, searchValue) {
+    const query = String(searchValue || '').trim().toLowerCase();
+    if (!query) return true;
+    const code = String(workPointCode || '').trim().toLowerCase();
+    if (/^\d+$/.test(query)) {
+      const normalizedQuery = query.replace(/^0+(?=\d)/, '');
+      return (code.match(/\d+/g) || [])
+        .some(part => part.replace(/^0+(?=\d)/, '') === normalizedQuery);
+    }
+    const normalizeCode = value => value
+      .replace(/\s+/g, '')
+      .replace(/\d+/g, part => part.replace(/^0+(?=\d)/, ''));
+    return normalizeCode(code).includes(normalizeCode(query));
+  }
+
   function renderRows() {
     const list = byId('remainingUnitsList');
     const summary = byId('remainingUnitsSummary');
@@ -257,13 +272,11 @@
       list.textContent = 'Choose an assigned job to see its remaining units.';
       return;
     }
-    const search = String(byId('remainingUnitsSearch')?.value || '').trim().toLowerCase();
+    const search = byId('remainingUnitsSearch')?.value || '';
     const showComplete = byId('remainingUnitsShowComplete')?.checked === true;
     const visible = rows.filter(row => {
       if (!showComplete && number(row.remaining_quantity) <= 0) return false;
-      if (!search) return true;
-      return [row.work_point_code,row.work_point_description,row.unit_code,row.unit_name,row.unit_description,row.work_type]
-        .some(value => String(value || '').toLowerCase().includes(search));
+      return workPointMatches(row.work_point_code, search);
     });
     const workPoints = new Set(rows.filter(row => number(row.remaining_quantity) > 0).map(row => row.work_point_id)).size;
     const unitLines = rows.filter(row => number(row.remaining_quantity) > 0).length;
@@ -276,7 +289,7 @@
     }
     if (!visible.length) {
       list.className = 'remaining-units-empty';
-      list.textContent = search ? 'No remaining units match this search.' : 'All authorized units on this job have been reported.';
+      list.textContent = search ? 'No work points match this search.' : 'All authorized units on this job have been reported.';
       return;
     }
     list.className = 'remaining-units-table-wrap';
