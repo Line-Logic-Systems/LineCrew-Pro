@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v38';
+const CACHE_NAME = 'linecrew-pro-shell-v39';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
@@ -7,13 +7,13 @@ const APP_SHELL = [
   '/icons/linecrew-pro-180.png',
   '/icons/linecrew-pro-192.png',
   '/icons/linecrew-pro-512.png',
-  '/expanded-jsa.js?v=20260827a',
+  '/expanded-jsa.js?v=20260827b',
   '/expanded-jsa-core.js?v=20260820',
   '/jsa-signatures.js?v=20260827a',
   '/jsa-signature-layout-fix.js?v=20260820a',
   '/offline-jsa.js?v=20260827b',
   '/jsa-review.js?v=20260826a',
-  '/foreman-field-tools.js?v=20260826a',
+  '/foreman-field-tools.js?v=20260827b',
   SUPABASE_RUNTIME
 ];
 
