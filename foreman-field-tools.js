@@ -42,6 +42,14 @@
       .remaining-units-table th,.remaining-units-table td{padding:9px 8px;border-bottom:1px solid #dce5ed;text-align:left;vertical-align:middle}
       .remaining-units-table th{font-size:11px;text-transform:uppercase;color:#617284}
       .remaining-units-table td:nth-last-child(-n+5),.remaining-units-table th:nth-last-child(-n+5){text-align:right;font-variant-numeric:tabular-nums}
+      .remaining-unit-toggle{appearance:none!important;display:block!important;width:100%!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;color:inherit!important;font:inherit!important;text-align:left!important;cursor:pointer}
+      .remaining-unit-code{display:flex;align-items:center;gap:5px;min-width:0;line-height:1.2}
+      .remaining-unit-code strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .remaining-unit-toggle-icon{flex:0 0 auto;color:#1677d2;font-size:11px;transition:transform .15s ease}
+      .remaining-unit-description{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;max-height:2.4em;margin-top:1px;line-height:1.2}
+      .remaining-unit-toggle.is-expanded .remaining-unit-description{display:block;-webkit-line-clamp:unset;max-height:none}
+      .remaining-unit-toggle.is-expanded .remaining-unit-toggle-icon{transform:rotate(180deg)}
+      .remaining-unit-toggle:focus-visible{outline:2px solid #1677d2!important;outline-offset:3px}
       .remaining-units-left{font-size:16px;color:#1677d2}
       .remaining-units-complete{opacity:.62}
       .remaining-units-empty{border:1px dashed #cbd7e2;border-radius:12px;padding:16px;color:#607386;background:#f8fbfe}
@@ -115,6 +123,14 @@
     byId('remainingUnitsRefresh').onclick = refresh;
     byId('remainingUnitsSearch').addEventListener('input', renderRows);
     byId('remainingUnitsShowComplete').addEventListener('change', renderRows);
+    byId('remainingUnitsList').addEventListener('click', event => {
+      const toggle = event.target?.closest?.('.remaining-unit-toggle');
+      if (!toggle) return;
+      const expanded = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.classList.toggle('is-expanded', !expanded);
+      toggle.setAttribute('aria-expanded', String(!expanded));
+      toggle.title = expanded ? 'Show full unit description' : 'Collapse unit description';
+    });
   }
 
   function createTile() {
@@ -266,7 +282,12 @@
     list.className = 'remaining-units-table-wrap';
     list.innerHTML = `<table class="remaining-units-table"><thead><tr><th>Work Point</th><th>Unit</th><th>Work</th><th>Authorized</th><th>Saved Draft</th><th>Awaiting GF</th><th>Approved</th><th>Remaining</th></tr></thead><tbody>${visible.map(row => {
       const complete = number(row.remaining_quantity) <= 0;
-      return `<tr class="${complete ? 'remaining-units-complete' : ''}"><td><strong>${esc(row.work_point_code || '')}</strong>${row.work_point_description ? `<br><span class="muted">${esc(row.work_point_description)}</span>` : ''}</td><td><strong>${esc(row.unit_code || '')}</strong>${row.unit_name ? `<br><span class="muted">${esc(row.unit_name)}</span>` : ''}</td><td>${esc(workTypeLabel(row.work_type))}</td><td>${quantity(row.authorized_quantity)}</td><td>${quantity(row.draft_quantity)}</td><td>${quantity(row.submitted_quantity)}</td><td>${quantity(row.approved_quantity)}</td><td><strong class="remaining-units-left">${quantity(row.remaining_quantity)}</strong></td></tr>`;
+      const unitCode = row.unit_code || '';
+      const unitDescription = row.unit_name || row.unit_description || '';
+      const unitCell = unitDescription
+        ? `<button type="button" class="remaining-unit-toggle" aria-expanded="false" aria-label="Show full description for ${esc(unitCode)}" title="Show full unit description"><span class="remaining-unit-code"><strong>${esc(unitCode)}</strong><span class="remaining-unit-toggle-icon" aria-hidden="true">▼</span></span><span class="remaining-unit-description muted">${esc(unitDescription)}</span></button>`
+        : `<strong>${esc(unitCode)}</strong>`;
+      return `<tr class="${complete ? 'remaining-units-complete' : ''}"><td><strong>${esc(row.work_point_code || '')}</strong>${row.work_point_description ? `<br><span class="muted">${esc(row.work_point_description)}</span>` : ''}</td><td>${unitCell}</td><td>${esc(workTypeLabel(row.work_type))}</td><td>${quantity(row.authorized_quantity)}</td><td>${quantity(row.draft_quantity)}</td><td>${quantity(row.submitted_quantity)}</td><td>${quantity(row.approved_quantity)}</td><td><strong class="remaining-units-left">${quantity(row.remaining_quantity)}</strong></td></tr>`;
     }).join('')}</tbody></table>`;
   }
 
