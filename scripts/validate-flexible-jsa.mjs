@@ -49,7 +49,7 @@ if((html.match(/return fillOfflineJsaJobSelect\(select,data \|\| \[\]\);/g) || [
 }
 
 for(const token of [
-  'linecrew-pro-shell-v39',
+  'linecrew-pro-shell-v40',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
   '/offline-jsa.js?v=20260827b',
