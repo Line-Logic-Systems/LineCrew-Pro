@@ -3542,6 +3542,13 @@ function offlineJsaNetworkFailure(error){
 const message = String(error?.message || error || '').toLowerCase();
 return !navigator.onLine || /failed to fetch|network|load failed|timeout|timed out|connection/.test(message);
 }
+/* enforce_linecrew_company_access blocks every Data API call for a company
+   whose subscription is not entitled. Company Billing is exempt from that gate,
+   so Owner/Admin must be routed there instead of dead-ending on an alert. */
+function companyAccessInactive(error){
+const text = String(error?.message || '') + ' ' + String(error?.hint || '');
+return /company access is inactive/i.test(text);
+}
 function fillOfflineJsaJobSelect(select,jobs){
 select.innerHTML = '<option value="">Select active job</option>';
 const uniqueJobs = uniqueOfflineJsaJobs(jobs);
@@ -4001,6 +4008,15 @@ error:accessStatusError
 } = await sb.rpc('is_my_profile_suspended');
 if(accessStatusError){
 if(offlineJsaNetworkFailure(accessStatusError) && enterOfflineJsaMode()) return;
+if(companyAccessInactive(accessStatusError)){
+const blockedRole = String(mfaBootstrap?.role || mfaBootstrap?.user_role || '').toLowerCase();
+if(['owner','admin'].includes(blockedRole)){
+window.location.replace('/billing.html?billing=access-blocked');
+return;
+}
+alert('This company’s LineCrew Pro access is inactive. Ask your company Owner or Admin to open Company Billing.');
+return;
+}
 alert('Unable to verify account access: ' + accessStatusError.message);
 return;
 }

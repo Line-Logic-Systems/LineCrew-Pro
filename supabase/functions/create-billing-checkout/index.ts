@@ -145,25 +145,39 @@ Deno.serve(async (request) => {
       );
       customerId = customer.id;
 
-      const { error: saveCustomerError } = await serviceClient.from("company_subscriptions").upsert({
-        company_id: company.id,
-        plan_code: planCode,
-        provider: "stripe",
-        stripe_customer_id: customerId,
-        status: "incomplete",
-        access_enabled: false,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "company_id" });
-      if (saveCustomerError) throw saveCustomerError;
-    } else if (requestedPlan) {
-      const { error: pendingPlanError } = await serviceClient.from("company_subscriptions").update({
-        plan_code: planCode,
-        provider: "stripe",
-        status: "incomplete",
-        access_enabled: false,
-        updated_at: new Date().toISOString(),
-      }).eq("company_id", company.id);
-      if (pendingPlanError) throw pendingPlanError;
+      // Starting Checkout links a Stripe customer and nothing else. status,
+      // access_enabled, plan_code and trial_ends_at belong to the signed
+      // customer.subscription webhook alone, so a company that abandons or
+      // fails Checkout keeps the access and trial window it already had. The
+      // requested plan still reaches the webhook through Checkout metadata and
+      // the subscription price below.
+      if (existing) {
+        const { error: linkCustomerError } = await serviceClient
+          .from("company_subscriptions")
+          .update({
+            provider: "stripe",
+            stripe_customer_id: customerId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("company_id", company.id)
+          .is("stripe_customer_id", null);
+        if (linkCustomerError) throw linkCustomerError;
+      } else {
+        // A company with no subscription row is already inactive to
+        // enforce_linecrew_company_access, so seeding the customer link cannot
+        // remove access it does not currently have.
+        const { error: seedCustomerError } = await serviceClient
+          .from("company_subscriptions")
+          .insert({
+            company_id: company.id,
+            provider: "stripe",
+            stripe_customer_id: customerId,
+            status: "incomplete",
+            access_enabled: false,
+            updated_at: new Date().toISOString(),
+          });
+        if (seedCustomerError) throw seedCustomerError;
+      }
     }
 
     const params = new URLSearchParams();

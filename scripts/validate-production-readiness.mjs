@@ -41,6 +41,7 @@ const mustExist = [
   'number-input-polish.js',
   'foreman-field-tools.js',
   'supabase/migrations/20260826234242_foreman_remaining_job_units.sql',
+  'supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -89,7 +90,7 @@ const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
 const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
 const foremanFieldTools = fs.readFileSync('foreman-field-tools.js', 'utf8');
-const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260826234242_foreman_remaining_job_units.sql', 'utf8');
+const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
 const fullDisasterRestoreWorkflow = fs.readFileSync('.github/workflows/full-disaster-recovery-drill.yml', 'utf8');
@@ -380,6 +381,10 @@ assert(foremanFieldTools.includes('Search Work Point') && !foremanFieldTools.inc
 assert(foremanFieldTools.includes('workPointMatches(row.work_point_code, search)') && foremanFieldTools.includes("replace(/^0+(?=\\d)/, '')"), 'Work Point search must ignore leading zeroes without matching unrelated unit fields.');
 assert(remainingUnitsMigration.includes("public.linecrew_foreman_has_job_assignment(job.id)"), 'Remaining Units must enforce assigned-job access server-side for Foremen.');
 assert(remainingUnitsMigration.includes("package.company_id = v_company_id") && remainingUnitsMigration.includes("report.company_id = location.company_id"), 'Remaining Units must scope package and production data to the authenticated company.');
+assert(remainingUnitsMigration.includes('join public.daily_production_units line') && remainingUnitsMigration.includes('line.job_id = p_job_id'), 'Remaining Units usage must be scoped through the production line job.');
+assert(remainingUnitsMigration.includes('join public.daily_reports report') && remainingUnitsMigration.includes('report.job_id = p_job_id'), 'Remaining Units usage must be scoped through the owning report job.');
+assert(!remainingUnitsMigration.includes('left join public.daily_production_unit_locations') && !remainingUnitsMigration.includes('left join public.daily_reports report'), 'Invalid or different-job production rows must not survive as NULL draft reports.');
+assert(remainingUnitsMigration.includes('report.archived is not true') && remainingUnitsMigration.includes("<> 'rejected'"), 'Archived and rejected reports must not reserve Remaining Units.');
 assert(remainingUnitsMigration.includes("report.reviewed_at is null") && remainingUnitsMigration.includes("report.review_notes"), 'Returned report quantities must be released until resubmission.');
 assert(remainingUnitsMigration.includes("revoke all on function public.get_remaining_job_units_for_field(uuid)") && remainingUnitsMigration.includes("from public, anon"), 'Remaining Units must deny anonymous function execution.');
 assert(!remainingUnitsMigration.includes('install_price') && !remainingUnitsMigration.includes('retirement_price'), 'Remaining Units must not expose contract pricing.');

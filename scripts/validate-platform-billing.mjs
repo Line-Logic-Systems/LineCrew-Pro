@@ -125,6 +125,8 @@ for (const marker of [
   'Cancellation scheduled for ',
   'App access remains enabled until then.',
   'Stripe Checkout was closed. No new subscription was created.',
+  "billingResult==='access-blocked'",
+  'Start or restore the subscription below to restore access for your whole team.',
 ]) {
   if (!billing.includes(marker)) throw new Error(`billing.html is missing portal return state: ${marker}`);
 }
@@ -200,6 +202,26 @@ if (checkout.includes('BILLING_ALLOWED_PRICE_IDS')) throw new Error('Checkout st
 if (!checkout.includes('planPriceMap.get(planCode)')) throw new Error('Checkout must bind the company assigned plan to its Stripe Price server-side.');
 if (!checkout.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner or Admin role.');
 if (!checkout.includes('already has a Stripe subscription')) throw new Error('Checkout must guard against duplicate live subscriptions.');
+if (/\.update\(\{[^}]*\b(?:plan_code|status|access_enabled|trial_ends_at)\b/s.test(checkout)) {
+  throw new Error('Starting Checkout must not overwrite an existing company entitlement.');
+}
+if ((checkout.match(/status:\s*"incomplete"/g) || []).length !== 1 ||
+    (checkout.match(/access_enabled:\s*false/g) || []).length !== 1) {
+  throw new Error('Only a brand-new subscription seed may start incomplete and blocked.');
+}
+for (const marker of [
+  'if (existing)',
+  'stripe_customer_id: customerId',
+  '.is("stripe_customer_id", null)',
+  'metadata[plan_code]',
+  'subscription_data[metadata][plan_code]',
+]) {
+  if (!checkout.includes(marker)) throw new Error(`Checkout is missing metadata-only entitlement safety marker: ${marker}`);
+}
+if (!app.includes('companyAccessInactive(accessStatusError)') ||
+    !app.includes("window.location.replace('/billing.html?billing=access-blocked')")) {
+  throw new Error('Blocked Owner/Admin access must route to the exempt Company Billing recovery page.');
+}
 if (!portal.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Billing portal must require company Owner or Admin role.');
 if (!portal.includes('/billing.html?billing=portal-return')) throw new Error('Billing portal must return to the contractor billing page.');
 for (const marker of ['STRIPE_MANAGE_PORTAL_CONFIGURATION_ID','linecrew_manage_only_v1','subscription_update','update?.enabled !== true','params.set("configuration", portalConfiguration)']) {
