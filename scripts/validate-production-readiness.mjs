@@ -256,6 +256,11 @@ assert(!index.includes('postponeMfaBtn'), 'The privileged MFA screen must not pr
 
 assert(index.includes("sb.rpc('linecrew_mfa_bootstrap_identity')"), 'The app must complete the narrow MFA bootstrap before other Data API requests.');
 assert(index.indexOf("sb.rpc('linecrew_mfa_bootstrap_identity')") < index.indexOf("sb.rpc('is_my_profile_suspended')"), 'The MFA bootstrap must run before protected profile checks.');
+assert(index.includes('let mfaEnforcementPromise = null;'), 'Privileged MFA enforcement must be single-flight.');
+assert(index.includes('if(mfaEnforcementPromise) return mfaEnforcementPromise;'), 'Concurrent app loads must share the active MFA check.');
+assert(index.includes('if(pendingMfaFactor){'), 'An MFA screen already in progress must not start another enrollment.');
+assert(index.includes('...(data?.totp || [])'), 'Incomplete TOTP factors must be found even when listFactors omits the combined list.');
+assert(index.includes('if(removed.error) throw removed.error;'), 'Incomplete-factor cleanup errors must stop enrollment instead of creating a duplicate factor.');
 assert(support.includes("rpc('linecrew_mfa_bootstrap_identity')"), 'The support console must complete the narrow MFA bootstrap before protected support RPCs.');
 for (const marker of [
   'post-restore-security.sql',
