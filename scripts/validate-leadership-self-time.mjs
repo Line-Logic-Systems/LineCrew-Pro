@@ -1,0 +1,54 @@
+import fs from 'node:fs';
+
+function read(path) {
+  if (!fs.existsSync(path)) throw new Error(`Missing leadership self-time file: ${path}`);
+  return fs.readFileSync(path, 'utf8');
+}
+
+function requireText(text, value, message) {
+  if (!text.includes(value)) throw new Error(message);
+}
+
+const module = read('leadership-my-time.js');
+const loader = read('expanded-jsa.js');
+const shell = read('service-worker.js');
+const report = read('timekeeping-report-v2.js');
+const customExport = read('custom-time-export.js');
+const payroll = read('timekeeping-payroll.js');
+const migration = read('supabase/migrations/20260828172839_leadership_self_time.sql');
+
+for (const role of ['gf','superintendent','admin','owner']) {
+  requireText(module, `'${role}'`, `My Time UI is missing the ${role} role.`);
+  requireText(migration, `'${role}'`, `My Time database authorization is missing the ${role} role.`);
+}
+
+for (const field of [
+  'myTimeDate','myTimeStart','myTimeStop','myTimeLunch','myTimeChargeType',
+  'myTimeJob','myTimeLabor','myTimePerDiem','myTimeEquipment','myTimeNotes'
+]) requireText(module, field, `My Time UI is missing ${field}.`);
+
+requireText(module, "rpc('upsert_my_leadership_time'", 'My Time must save through the guarded RPC.');
+requireText(module, 'Regular and overtime are calculated automatically', 'My Time must explain automatic weekly OT.');
+requireText(module, 'Recent My Time', 'My Time must provide editable recent history.');
+requireText(module, 'data-my-time-edit', 'Recent My Time entries must be editable.');
+
+requireText(migration, 'alter column job_id drop not null', 'Overhead time must not require a fake job.');
+requireText(migration, "entry_kind = 'leadership_self'", 'Leadership self-time rows must be explicitly typed.');
+requireText(migration, 'timekeeping_entries_leadership_overhead_uidx', 'Duplicate overhead entries need a unique guard.');
+requireText(migration, 'linked_profile_id = auth.uid()', 'The RPC must bind the payroll employee to the signed-in profile.');
+requireText(migration, 'job.company_id = v_company_id and job.active is true', 'Job charges must be active and company-scoped.');
+requireText(migration, 'private.recalculate_leadership_week', 'Leadership time must reuse company-week OT calculations.');
+requireText(migration, "security invoker", 'The exposed My Time RPC/report must run with caller permissions.');
+requireText(migration, "security definer\nset search_path = ''", 'The private weekly helper must pin an empty search path.');
+requireText(migration, 'revoke all on function public.upsert_my_leadership_time', 'Anonymous/Public RPC execution must be revoked.');
+requireText(migration, 'timekeeping_report_rows_v3', 'Payroll reports need the labor-code-aware report function.');
+
+requireText(loader, 'leadership-my-time.js?v=20260828a', 'The My Time module is not loaded.');
+requireText(shell, '/leadership-my-time.js?v=20260828a', 'The My Time module is not in the offline app shell.');
+requireText(report, "rpc('timekeeping_report_rows_v3'", 'The Time Report must include leadership self-time.');
+requireText(customExport, "rpc('timekeeping_report_rows_v3'", 'Custom exports must include leadership self-time.');
+requireText(report, 'r.labor_code', 'The Time Report must show overhead labor codes.');
+requireText(customExport, 'row.labor_code', 'Custom exports must show overhead labor codes.');
+requireText(payroll, 'r.labor_code', 'Payroll exports must show overhead labor codes.');
+
+console.log('Leadership My Time guardrails passed.');

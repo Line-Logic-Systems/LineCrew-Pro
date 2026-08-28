@@ -44,7 +44,7 @@
     const jobId = byId('tkJobFilter')?.value || null;
 
     const results = await Promise.all([
-      client.rpc('timekeeping_report_rows_v2', {p_from:from, p_through:through, p_employee:employeeId, p_job:jobId}),
+      client.rpc('timekeeping_report_rows_v3', {p_from:from, p_through:through, p_employee:employeeId, p_job:jobId}),
       client.from('timekeeping_employees').select('id,employee_number,full_name,classification,default_crew_name,default_equipment').eq('company_id', current.company_id),
       client.from('jobs').select('id,job_number,job_name').eq('company_id', current.company_id)
     ]);
@@ -74,8 +74,8 @@
           'Employee': employee.full_name || '',
           'Classification': employee.classification || '',
           'Date': row.work_date || '',
-          'Job #': job.job_number || '',
-          'Job Name': job.job_name || '',
+          'Job #': job.job_number || row.labor_code || '',
+          'Job Name': job.job_name || (row.labor_code ? 'Overhead' : ''),
           'Crew': row.crew_name || employee.default_crew_name || '',
           'Start': timeText(row.start_time),
           'Stop': timeText(row.stop_time),
