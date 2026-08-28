@@ -208,6 +208,53 @@ border-bottom:1px solid var(--border);
 .collapsible-card-content{
 padding:4px 22px 18px;
 }
+#safetyJsaHistoryCard > summary::after{
+content:'+ Show History';
+}
+#safetyJsaHistoryCard[open] > summary::after{
+content:'− Hide History';
+}
+#safetyJsaHistoryCard .collapsible-card-content{
+padding:0 12px 12px;
+}
+#safetyJsaList{
+border:1px solid var(--border);
+border-radius:12px;
+overflow:hidden;
+background:var(--card);
+}
+#safetyJsaList .safety-jsa-history-row{
+margin:0;
+border:0;
+border-radius:0;
+box-shadow:none;
+background:var(--card);
+}
+#safetyJsaList .safety-jsa-history-row + .safety-jsa-history-row{
+border-top:1px solid var(--border);
+}
+#safetyJsaList .safety-jsa-history-row > summary{
+padding:14px 12px;
+}
+#safetyJsaList .report-summary-main,
+#safetyJsaList .report-summary-meta{
+min-width:0;
+overflow-wrap:anywhere;
+}
+.daily-value-summary > span{
+min-width:0;
+overflow-wrap:anywhere;
+}
+.status,.role,.button-row button,.section-header button{
+max-width:100%;
+overflow-wrap:anywhere;
+white-space:normal;
+}
+@media(max-width:600px){
+#safetyJsaHistoryCard > summary{align-items:flex-start;flex-wrap:wrap;padding:14px 16px;}
+#safetyJsaHistoryCard .collapsible-summary-count{margin-left:0;}
+#safetyJsaHistoryCard > summary::after{margin-left:auto;}
+}
 .collapsible-summary-count{
 margin-left:auto;
 font-weight:400;
@@ -2216,7 +2263,15 @@ I confirm this JSA was reviewed with the crew before work began.
 </div>
 <div id="uploadedCompanyJsaList"></div>
 </div>
+<details class="card collapsible-card hidden" id="safetyJsaHistoryCard">
+<summary>
+<span>Completed JSA History</span>
+<span id="safetyJsaHistoryCount" class="collapsible-summary-count">0 records</span>
+</summary>
+<div class="collapsible-card-content">
 <div id="safetyJsaList"></div>
+</div>
+</details>
 </section>
 <!-- PRODUCTION PAGE -->
 <section id="productionPage" class="hidden">
@@ -2394,12 +2449,13 @@ Enter the foreman daily production report.
 <input id="dailyWorkDate" type="date">
 <label for="dailyForemanName">Foreman</label>
 <input id="dailyForemanName" type="text" readonly>
-<label for="dailyCrewName">Crew</label>
+<label for="dailyCrewName">Crew Name / Number</label>
 <input
 id="dailyCrewName"
 type="text"
-placeholder="Example: Crew 1"
+placeholder="Example: Crew 12"
 >
+<p class="muted" style="margin-top:-8px">Identifies this field crew on the Daily Report and Crew Time records.</p>
 <label for="dailyRegularHours">Regular Hours</label>
 <input
 id="dailyRegularHours"
@@ -4654,6 +4710,8 @@ function renderSafetyJsas(){
 const foremanEntryWorkspace = currentUserRole() === "foreman";
 const records = getFilteredSafetyJsas();
 $('safetyJsaList').replaceChildren();
+$('safetyJsaHistoryCard').classList.toggle('hidden', records.length === 0);
+$('safetyJsaHistoryCount').textContent = records.length + ' record' + (records.length === 1 ? '' : 's');
 $('safetyJsaEmpty').classList.toggle('hidden', records.length > 0);
 $('safetyJsaFilterCount').textContent = 'Showing ' + records.length + ' of ' + currentSafetyJsas.length;
 const summary = $('safetyJsaReportingSummary');
@@ -4686,7 +4744,7 @@ metrics.innerHTML =
 records.forEach(jsa => {
 const card = document.createElement('details');
 card.className = 'job-card compact-report-card' +
-(foremanEntryWorkspace ? '' : ' supervisor-compact-report');
+(foremanEntryWorkspace ? '' : ' supervisor-compact-report') + ' safety-jsa-history-row';
 card.innerHTML =
 '<summary><div class="report-summary-main"><strong>' +
 escapeHtml(jsa.job_number || 'Job') + '</strong><span>' +
@@ -4715,6 +4773,7 @@ $('safetyJsaList').appendChild(card);
 async function loadSafetyJsas(){
 $('safetyJsaLoading').classList.remove('hidden');
 $('safetyJsaEmpty').classList.add('hidden');
+$('safetyJsaHistoryCard').classList.add('hidden');
 $('safetyJsaList').replaceChildren();
 if(window.linecrewGfCrewScope?.ensureLoaded) await window.linecrewGfCrewScope.ensureLoaded();
 const gfShowAll=currentUserRole()==='gf' && Boolean(window.linecrewGfCrewScope?.showAll?.());
@@ -15146,7 +15205,7 @@ alert('LineCrew Pro could not start: ' + (error?.message || 'Unknown error'));
 }
 startApp();
 </script>
-<script src="expanded-jsa.js?v=20260827c"></script>
+<script src="expanded-jsa.js?v=20260828a"></script>
 <script>
 (function () {
 var installPrompt = null;

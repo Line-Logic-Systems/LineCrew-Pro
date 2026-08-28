@@ -15,6 +15,8 @@ assert(html.includes('id="jobsPage"'), 'Missing jobs page.');
 assert(html.includes('id="priceBooksPage"'), 'Missing Price Books page.');
 assert(html.includes('id="teamPage"'), 'Missing Team page.');
 assert(html.includes('id="safetyPage"'), 'Missing Safety/JSA page.');
+assert(html.includes('id="safetyJsaHistoryCard"'), 'Missing compact completed JSA history control.');
+assert(html.includes('Crew Name / Number'), 'Daily Report crew identifier must be clearly labeled.');
 
 // Weekend pilot critical-role markers. These do not replace server-side policy tests;
 // they prevent accidental removal of required UI wiring during rapid changes.
@@ -59,11 +61,26 @@ if (scriptStart >= 0 && scriptEnd > scriptStart) {
 // Extension scripts are validated independently so additional script tags do not
 // become part of the main inline application parse window.
 if (fs.existsSync('expanded-jsa.js')) {
+  const expandedJsaCode = fs.readFileSync('expanded-jsa.js', 'utf8');
   try {
-    new Function(fs.readFileSync('expanded-jsa.js', 'utf8'));
+    new Function(expandedJsaCode);
   } catch (error) {
     failures.push('Expanded JSA JavaScript syntax error: ' + error.message);
   }
+  assert(
+    expandedJsaCode.includes("load('timekeeping-input-v2.js"),
+    'Foreman Crew Time must load Start/Stop, lunch, per diem, and equipment controls.'
+  );
+}
+
+if (fs.existsSync('jsa-signatures.js')) {
+  const signatureCode = fs.readFileSync('jsa-signatures.js', 'utf8');
+  assert(
+    signatureCode.includes('setPointerCapture') &&
+      signatureCode.includes("'touchmove'") &&
+      signatureCode.includes('passive:false'),
+    'JSA signature pads must capture drawing gestures without scrolling the page.'
+  );
 }
 
 if (fs.existsSync('role-workspace-polish.js')) {

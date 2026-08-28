@@ -113,12 +113,13 @@
   load('role-workspace-polish.js?v=20260823a');
   load('gf-crew-scope.js?v=20260826a');
   load('expanded-jsa-core.js?v=20260820', () => {
-    load('jsa-signatures.js?v=20260827a', () => {
+    load('jsa-signatures.js?v=20260828a', () => {
       load('jsa-signature-layout-fix.js?v=20260820a', () => load('offline-jsa.js?v=20260827b'));
     });
     load('jsa-review.js?v=20260826a');
   });
   load('timekeeping.js?v=20260826a', () => {
+    load('timekeeping-input-v2.js?v=20260828a');
     load('foreman-field-tools.js?v=20260827c');
     load('timekeeping-roster.js?v=20260823f');
     load('timekeeping-report-v2.js?v=20260826f', () => {
