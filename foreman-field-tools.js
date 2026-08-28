@@ -82,7 +82,7 @@
     const page = byId('timekeepingPage');
     const heading = page?.querySelector('.section-header h2');
     const subtitle = page?.querySelector('.section-header .muted');
-    const reportHeading = page?.querySelector('#timekeepingRosterCard + .card h3');
+    const reportHeading = page?.querySelector('#timekeepingReportCard h3');
     const headingText = isForeman ? 'Crew Time' : 'Timekeeping';
     const reportHeadingText = isForeman ? 'Crew Time Report' : 'Time Report';
     if (heading && heading.textContent !== headingText) heading.textContent = headingText;

@@ -113,7 +113,7 @@
           <div id="myTimeHistoryList"><p class="muted">No My Time entries loaded.</p></div>
         </div>`;
 
-      const reportCard = [...page.children].find((element) => element.querySelector?.('h3')?.textContent?.trim() === 'Time Report');
+      const reportCard = byId('timekeepingReportCard');
       if (reportCard) page.insertBefore(card, reportCard);
       else page.appendChild(card);
       bindEvents();
