@@ -60,8 +60,8 @@ requireText(managedMigration, 'employee.active is true', 'Managed time must targ
 requireText(managedMigration, 'security invoker', 'Managed time must run with caller RLS permissions.');
 requireText(managedMigration, 'revoke all on function public.upsert_leadership_employee_time', 'Managed time must not be executable by Public or anon.');
 
-requireText(loader, 'leadership-my-time.js?v=20260828c', 'The My Time module is not loaded.');
-requireText(shell, '/leadership-my-time.js?v=20260828c', 'The My Time module is not in the offline app shell.');
+requireText(loader, 'leadership-my-time.js?v=20260828d', 'The My Time module is not loaded.');
+requireText(shell, '/leadership-my-time.js?v=20260828d', 'The My Time module is not in the offline app shell.');
 requireText(report, "rpc('timekeeping_report_rows_v3'", 'The Time Report must include leadership self-time.');
 requireText(customExport, "rpc('timekeeping_report_rows_v3'", 'Custom exports must include leadership self-time.');
 requireText(report, 'r.labor_code', 'The Time Report must show overhead labor codes.');

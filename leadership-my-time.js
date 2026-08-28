@@ -139,6 +139,7 @@
       resetForm();
     }
     card.classList.toggle('hidden', !canEnterMyTime());
+    byId('myTimePeopleWrap')?.classList.toggle('hidden', !canAddOtherPeople());
     return true;
   }
 
