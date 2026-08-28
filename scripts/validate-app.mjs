@@ -16,6 +16,9 @@ assert(html.includes('id="priceBooksPage"'), 'Missing Price Books page.');
 assert(html.includes('id="teamPage"'), 'Missing Team page.');
 assert(html.includes('id="safetyPage"'), 'Missing Safety/JSA page.');
 assert(html.includes('id="safetyJsaHistoryCard"'), 'Missing compact completed JSA history control.');
+assert(html.includes('id="safetyJsaRecordSelect"'), 'Missing single-record Foreman JSA picker.');
+assert(html.includes("'Reset to Today'"), 'Foreman JSA filters must reset to the current day.');
+assert(html.includes('createSafetyJsaHistoryCard'), 'Missing reusable JSA history renderer.');
 assert(html.includes('Crew Name / Number'), 'Daily Report crew identifier must be clearly labeled.');
 
 // Weekend pilot critical-role markers. These do not replace server-side policy tests;
