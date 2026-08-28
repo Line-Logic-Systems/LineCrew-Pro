@@ -79,7 +79,7 @@
         <button id="tkAddEmployeeBtn" class="success">Add Employee</button>
         <div id="tkRosterList" style="margin-top:12px"></div>
       </div>
-      <div class="card">
+      <div id="timekeepingReportCard" class="card">
         <h3>Time Report</h3>
         <div class="tk-grid">
           <label>From<input id="tkFromDate" type="date"></label>

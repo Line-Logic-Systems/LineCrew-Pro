@@ -381,8 +381,8 @@ assert(foremanFieldTools.includes("title.textContent = titleText"), 'Foreman Tim
 assert(foremanFieldTools.includes("rpc('get_remaining_job_units_for_field'"), 'Remaining Units must load through the scoped database function.');
 assert(foremanFieldTools.includes('Saved Draft') && foremanFieldTools.includes('Awaiting GF') && foremanFieldTools.includes('Approved') && foremanFieldTools.includes('Remaining'), 'Remaining Units must separate draft, submitted, approved and remaining quantities.');
 assert(foremanFieldTools.includes("role() !== 'foreman'"), 'Remaining Units dashboard access must remain Foreman-only in the client.');
-assert(expandedJsa.includes("foreman-field-tools.js?v=20260827c"), 'Foreman field tools must load as a versioned application asset.');
-assert(serviceWorker.includes("/foreman-field-tools.js?v=20260827c"), 'Offline app shell must cache the Foreman field tools asset.');
+assert(expandedJsa.includes("foreman-field-tools.js?v=20260828b"), 'Foreman field tools must load as a versioned application asset.');
+assert(serviceWorker.includes("/foreman-field-tools.js?v=20260828b"), 'Offline app shell must cache the Foreman field tools asset.');
 assert(foremanFieldTools.includes('@media(max-width:720px)') && foremanFieldTools.includes('.remaining-units-tools{grid-template-columns:1fr}'), 'Remaining Units must collapse its controls for phone screens.');
 assert(foremanFieldTools.includes('-webkit-line-clamp:2') && foremanFieldTools.includes('remaining-unit-toggle'), 'Remaining Unit descriptions must stay compact and expand on demand.');
 assert(foremanFieldTools.includes('aria-expanded="false"') && foremanFieldTools.includes("toggle.setAttribute('aria-expanded'"), 'Remaining Unit description expansion must remain keyboard and screen-reader accessible.');
