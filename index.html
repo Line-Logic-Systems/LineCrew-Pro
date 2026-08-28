@@ -217,6 +217,17 @@ content:'− Hide History';
 #safetyJsaHistoryCard .collapsible-card-content{
 padding:0 12px 12px;
 }
+#safetyJsaRecordChooser{
+padding:12px 0;
+}
+#safetyJsaRecordChooser label{
+display:block;
+margin-bottom:6px;
+}
+#safetyJsaRecordChooser .muted{
+margin:6px 0 0;
+font-size:12px;
+}
 #safetyJsaList{
 border:1px solid var(--border);
 border-radius:12px;
@@ -2265,10 +2276,15 @@ I confirm this JSA was reviewed with the crew before work began.
 </div>
 <details class="card collapsible-card hidden" id="safetyJsaHistoryCard">
 <summary>
-<span>Completed JSA History</span>
+<span id="safetyJsaHistoryTitle">Completed JSA History</span>
 <span id="safetyJsaHistoryCount" class="collapsible-summary-count">0 records</span>
 </summary>
 <div class="collapsible-card-content">
+<div id="safetyJsaRecordChooser" class="hidden">
+<label for="safetyJsaRecordSelect">JSA to review</label>
+<select id="safetyJsaRecordSelect"></select>
+<p class="muted">Use Find Completed JSAs above to search an older date or job.</p>
+</div>
 <div id="safetyJsaList"></div>
 </div>
 </details>
@@ -3476,6 +3492,8 @@ let currentCompany = null;
 let currentStormModeAssigned = false;
 let stormAssignableMembers = [];
 let currentSafetyJsas = [];
+let selectedSafetyJsaId = '';
+let safetyJsaFilterScopeKey = '';
 let currentPriceBookItems = [];
 let currentPriceBookItemPage = 1;
 const PRICE_BOOK_ITEMS_PER_PAGE = 50;
@@ -4706,10 +4724,45 @@ popup.document.close();
 popup.focus();
 setTimeout(() => popup.print(), 250);
 }
+function createSafetyJsaHistoryCard(jsa, foremanEntryWorkspace){
+const card = document.createElement('details');
+card.className = 'job-card compact-report-card' +
+(foremanEntryWorkspace ? '' : ' supervisor-compact-report') + ' safety-jsa-history-row';
+card.innerHTML =
+'<summary><div class="report-summary-main"><strong>' +
+escapeHtml(jsa.job_number || 'Job') + '</strong><span>' +
+escapeHtml(jsa.foreman_name || 'Foreman') + ' — ' + escapeHtml(jsa.crew_name || 'Crew') +
+'</span></div><div class="report-summary-meta">' +
+escapeHtml(jsa.work_date || '') + ' • COMPLETED</div></summary>' +
+'<div class="report-card-details"><div class="job-title">' + escapeHtml(jsa.job_name || '') + '</div>' +
+'<div class="job-info"><strong>Work Plan / Briefing</strong><br>' +
+escapeHtml(jsa.job_briefing || '').split('\n').join('<br>') + '<br><br><strong>Hazards</strong><br>' +
+escapeHtml(jsa.hazards || '').split('\n').join('<br>') + '<br><br><strong>Controls</strong><br>' +
+escapeHtml(jsa.controls || '').split('\n').join('<br>') + '<br><br><strong>Required PPE</strong><br>' +
+escapeHtml(jsa.ppe || '').split('\n').join('<br>') + '<br><br><strong>Emergency Plan</strong><br>' +
+escapeHtml(jsa.emergency_plan || '').split('\n').join('<br>') + '<br><br><strong>Crew Members</strong><br>' +
+escapeHtml(jsa.crew_members || '').split('\n').join('<br>') +
+(jsa.weather_conditions ? '<br><br><strong>Conditions</strong><br>' + escapeHtml(jsa.weather_conditions) : '') +
+(jsa.special_equipment ? '<br><br><strong>Special Equipment / Notes</strong><br>' +
+escapeHtml(jsa.special_equipment).split('\n').join('<br>') : '') + '</div></div>';
+const button = document.createElement('button');
+button.className = 'secondary small';
+button.textContent = 'Print / Save PDF';
+button.onclick = () => printSafetyJsa(jsa);
+card.querySelector('.report-card-details').appendChild(button);
+return card;
+}
 function renderSafetyJsas(){
 const foremanEntryWorkspace = currentUserRole() === "foreman";
 const records = getFilteredSafetyJsas();
 $('safetyJsaList').replaceChildren();
+$('safetyJsaRecordChooser').classList.toggle('hidden', !foremanEntryWorkspace || records.length === 0);
+const today = new Date().toISOString().slice(0,10);
+const showingToday = $('safetyJsaFromDate').value === today &&
+$('safetyJsaThroughDate').value === today;
+$('safetyJsaHistoryTitle').textContent = foremanEntryWorkspace
+? (showingToday ? "Today's Completed JSAs" : 'Completed JSA Search')
+: 'Completed JSA History';
 $('safetyJsaHistoryCard').classList.toggle('hidden', records.length === 0);
 $('safetyJsaHistoryCount').textContent = records.length + ' record' + (records.length === 1 ? '' : 's');
 $('safetyJsaEmpty').classList.toggle('hidden', records.length > 0);
@@ -4741,36 +4794,39 @@ metrics.innerHTML =
 '<span><strong>' + crews.size + '</strong><br>Crews</span>' +
 '<span><strong>' + crewSignIns + '</strong><br>Crew Sign-ins</span>';
 }
+if(foremanEntryWorkspace && records.length > 0){
+const select = $('safetyJsaRecordSelect');
+select.replaceChildren();
+records.forEach((jsa, index) => {
+const option = document.createElement('option');
+option.value = String(jsa.id || index);
+option.textContent = [jsa.work_date, jsa.job_number || jsa.job_name, jsa.crew_name]
+.filter(Boolean).join(' — ');
+select.appendChild(option);
+});
+const selectedIndex = records.findIndex((jsa, index) => String(jsa.id || index) === selectedSafetyJsaId);
+const visibleIndex = selectedIndex >= 0 ? selectedIndex : 0;
+selectedSafetyJsaId = String(records[visibleIndex].id || visibleIndex);
+select.value = selectedSafetyJsaId;
+$('safetyJsaList').appendChild(createSafetyJsaHistoryCard(records[visibleIndex], true));
+}else{
 records.forEach(jsa => {
-const card = document.createElement('details');
-card.className = 'job-card compact-report-card' +
-(foremanEntryWorkspace ? '' : ' supervisor-compact-report') + ' safety-jsa-history-row';
-card.innerHTML =
-'<summary><div class="report-summary-main"><strong>' +
-escapeHtml(jsa.job_number || 'Job') + '</strong><span>' +
-escapeHtml(jsa.foreman_name || 'Foreman') + ' — ' + escapeHtml(jsa.crew_name || 'Crew') +
-'</span></div><div class="report-summary-meta">' +
-escapeHtml(jsa.work_date || '') + ' • COMPLETED</div></summary>' +
-'<div class="report-card-details"><div class="job-title">' + escapeHtml(jsa.job_name || '') + '</div>' +
-'<div class="job-info"><strong>Work Plan / Briefing</strong><br>' +
-escapeHtml(jsa.job_briefing || '').split('\n').join('<br>') + '<br><br><strong>Hazards</strong><br>' +
-escapeHtml(jsa.hazards || '').split('\n').join('<br>') + '<br><br><strong>Controls</strong><br>' +
-escapeHtml(jsa.controls || '').split('\n').join('<br>') + '<br><br><strong>Required PPE</strong><br>' +
-escapeHtml(jsa.ppe || '').split('\n').join('<br>') + '<br><br><strong>Emergency Plan</strong><br>' +
-escapeHtml(jsa.emergency_plan || '').split('\n').join('<br>') + '<br><br><strong>Crew Members</strong><br>' +
-escapeHtml(jsa.crew_members || '').split('\n').join('<br>') +
-(jsa.weather_conditions ? '<br><br><strong>Conditions</strong><br>' + escapeHtml(jsa.weather_conditions) : '') +
-(jsa.special_equipment ? '<br><br><strong>Special Equipment / Notes</strong><br>' +
-escapeHtml(jsa.special_equipment).split('\n').join('<br>') : '') + '</div></div>';
-const button = document.createElement('button');
-button.className = 'secondary small';
-button.textContent = 'Print / Save PDF';
-button.onclick = () => printSafetyJsa(jsa);
-card.querySelector('.report-card-details').appendChild(button);
-$('safetyJsaList').appendChild(card);
+$('safetyJsaList').appendChild(createSafetyJsaHistoryCard(jsa, false));
 });
 }
+}
 async function loadSafetyJsas(){
+const foremanEntryWorkspace = currentUserRole() === 'foreman';
+const today = new Date().toISOString().slice(0,10);
+$('clearSafetyJsaFiltersBtn').textContent = foremanEntryWorkspace ? 'Reset to Today' : 'Clear Filters';
+const filterScopeKey = [currentProfile?.company_id,currentProfile?.id,currentUserRole()].join(':');
+if(safetyJsaFilterScopeKey !== filterScopeKey){
+$('safetyJsaSearch').value = '';
+$('safetyJsaFromDate').value = foremanEntryWorkspace ? today : '';
+$('safetyJsaThroughDate').value = foremanEntryWorkspace ? today : '';
+selectedSafetyJsaId = '';
+safetyJsaFilterScopeKey = filterScopeKey;
+}
 $('safetyJsaLoading').classList.remove('hidden');
 $('safetyJsaEmpty').classList.add('hidden');
 $('safetyJsaHistoryCard').classList.add('hidden');
@@ -4789,10 +4845,17 @@ renderSafetyJsas();
 ['safetyJsaSearch','safetyJsaFromDate','safetyJsaThroughDate'].forEach(id => {
 $(id).addEventListener(id === 'safetyJsaSearch' ? 'input' : 'change', renderSafetyJsas);
 });
+$('safetyJsaRecordSelect').addEventListener('change', event => {
+selectedSafetyJsaId = event.target.value;
+renderSafetyJsas();
+});
 $('clearSafetyJsaFiltersBtn').onclick = () => {
+const foremanEntryWorkspace = currentUserRole() === 'foreman';
+const today = new Date().toISOString().slice(0,10);
 $('safetyJsaSearch').value = '';
-$('safetyJsaFromDate').value = '';
-$('safetyJsaThroughDate').value = '';
+$('safetyJsaFromDate').value = foremanEntryWorkspace ? today : '';
+$('safetyJsaThroughDate').value = foremanEntryWorkspace ? today : '';
+selectedSafetyJsaId = '';
 renderSafetyJsas();
 };
 $('exportSafetyJsasBtn').onclick = exportFilteredSafetyJsas;
