@@ -18,6 +18,7 @@ const payroll = read('timekeeping-payroll.js');
 const timekeeping = read('timekeeping.js');
 const foremanTools = read('foreman-field-tools.js');
 const migration = read('supabase/migrations/20260828172839_leadership_self_time.sql');
+const managedMigration = read('supabase/migrations/20260828203148_leadership_add_other_people.sql');
 
 for (const role of ['gf','superintendent','admin','owner']) {
   requireText(module, `'${role}'`, `My Time UI is missing the ${role} role.`);
@@ -29,7 +30,13 @@ for (const field of [
   'myTimeJob','myTimeLabor','myTimePerDiem','myTimeEquipment','myTimeNotes'
 ]) requireText(module, field, `My Time UI is missing ${field}.`);
 
+for (const field of ['myTimePeopleWrap','myTimePersonSelect','myTimeAddPersonBtn','myTimePersonList']) {
+  requireText(module, field, `My Time add-employee UI is missing ${field}.`);
+}
+
 requireText(module, "rpc('upsert_my_leadership_time'", 'My Time must save through the guarded RPC.');
+requireText(module, "rpc('upsert_leadership_employee_time'", 'Admin/GF added employees must save through the guarded employee RPC.');
+requireText(module, "['gf','admin']", 'Only Admin and General Foreman may add other employees.');
 requireText(module, 'Regular and overtime are calculated automatically', 'My Time must explain automatic weekly OT.');
 requireText(module, 'Recent My Time', 'My Time must provide editable recent history.');
 requireText(module, 'data-my-time-edit', 'Recent My Time entries must be editable.');
@@ -47,9 +54,14 @@ requireText(migration, "security invoker", 'The exposed My Time RPC/report must 
 requireText(migration, "security definer\nset search_path = ''", 'The private weekly helper must pin an empty search path.');
 requireText(migration, 'revoke all on function public.upsert_my_leadership_time', 'Anonymous/Public RPC execution must be revoked.');
 requireText(migration, 'timekeeping_report_rows_v3', 'Payroll reports need the labor-code-aware report function.');
+requireText(managedMigration, "v_role not in ('gf','admin')", 'The managed-time RPC must permit only GF and Admin.');
+requireText(managedMigration, 'employee.company_id = v_company_id', 'Managed time must remain company-scoped.');
+requireText(managedMigration, 'employee.active is true', 'Managed time must target only active employees.');
+requireText(managedMigration, 'security invoker', 'Managed time must run with caller RLS permissions.');
+requireText(managedMigration, 'revoke all on function public.upsert_leadership_employee_time', 'Managed time must not be executable by Public or anon.');
 
-requireText(loader, 'leadership-my-time.js?v=20260828b', 'The My Time module is not loaded.');
-requireText(shell, '/leadership-my-time.js?v=20260828b', 'The My Time module is not in the offline app shell.');
+requireText(loader, 'leadership-my-time.js?v=20260828c', 'The My Time module is not loaded.');
+requireText(shell, '/leadership-my-time.js?v=20260828c', 'The My Time module is not in the offline app shell.');
 requireText(report, "rpc('timekeeping_report_rows_v3'", 'The Time Report must include leadership self-time.');
 requireText(customExport, "rpc('timekeeping_report_rows_v3'", 'Custom exports must include leadership self-time.');
 requireText(report, 'r.labor_code', 'The Time Report must show overhead labor codes.');

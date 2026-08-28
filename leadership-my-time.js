@@ -10,6 +10,7 @@
   const profile = () => typeof currentProfile !== 'undefined' ? currentProfile : window.currentProfile;
   const role = () => String(profile()?.role || '').toLowerCase();
   const canEnterMyTime = () => ['gf','superintendent','admin','owner'].includes(role());
+  const canAddOtherPeople = () => ['gf','admin'].includes(role());
   const getSb = () => {
     try { return typeof sb !== 'undefined' ? sb : (window.sb || window.supabaseClient || null); }
     catch (_) { return window.sb || window.supabaseClient || null; }
@@ -23,6 +24,8 @@
   const overheadCodes = ['Company Overhead','Administration','Travel','Training','Other'];
 
   let employee = null;
+  let employees = [];
+  let selectedEmployeeIds = [];
   let jobs = [];
   let entries = [];
   let editId = null;
@@ -42,6 +45,12 @@
       .my-time-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;align-items:end}
       .my-time-grid label{margin:0}
       .my-time-wide{grid-column:span 2}
+      .my-time-people{margin:12px 0;padding:12px;border:1px solid #cbd9e5;background:#f7fafc;border-radius:12px}
+      .my-time-people-picker{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:8px;align-items:end;margin-top:8px}
+      .my-time-people-picker button{width:auto;margin:0}
+      .my-time-person-list{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+      .my-time-person{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #b9cddd;background:#fff;border-radius:999px;font-size:12px;font-weight:700;color:#0b2d4d}
+      .my-time-person button{border:0;background:transparent;color:#a72828;font-size:16px;line-height:1;padding:0;margin:0;width:auto}
       .my-time-checks{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin:12px 0}
       .my-time-checks label{display:flex;align-items:center;gap:7px;margin:0}
       .my-time-checks input{width:auto;margin:0}
@@ -62,6 +71,7 @@
       }
       @media(max-width:520px){
         .my-time-grid{grid-template-columns:1fr}
+        .my-time-people-picker{grid-template-columns:1fr}
         .my-time-wide{grid-column:auto}
         .my-time-row{grid-template-columns:1fr auto;gap:4px}
         .my-time-row>:nth-child(3),.my-time-row>:nth-child(4),.my-time-row>:nth-child(5){display:none}
@@ -83,9 +93,18 @@
         <div class="section-header">
           <div>
             <h3>My Time</h3>
-            <p class="muted">Enter your own day for payroll. Charge the time to an active job or an overhead labor code.</p>
+            <p class="muted">Enter your day for payroll. Admin and General Foreman can add other employees to the same entry.</p>
           </div>
           <button id="myTimeNewBtn" type="button" class="secondary small">New Entry</button>
+        </div>
+        <div id="myTimePeopleWrap" class="my-time-people hidden">
+          <strong>People on this entry</strong>
+          <p class="muted">Your name is included automatically. Add any other active employee who worked the same date, hours, and charge.</p>
+          <div class="my-time-people-picker">
+            <label>Add Employee<select id="myTimePersonSelect"><option value="">Choose an active employee</option></select></label>
+            <button id="myTimeAddPersonBtn" type="button" class="secondary">+ Add Employee</button>
+          </div>
+          <div id="myTimePersonList" class="my-time-person-list"></div>
         </div>
         <div class="my-time-grid">
           <label>Work Date<input id="myTimeDate" type="date"></label>
@@ -103,13 +122,13 @@
           <label><input id="myTimeEquipmentNotUsed" type="checkbox"> Equipment not used</label>
         </div>
         <div class="my-time-actions">
-          <button id="myTimeSaveBtn" type="button" class="success">Save My Time</button>
+          <button id="myTimeSaveBtn" type="button" class="success">Save Time</button>
           <button id="myTimeCancelBtn" type="button" class="secondary hidden">Cancel Edit</button>
           <span class="my-time-hours"><strong id="myTimeWorked">—</strong> worked hours</span>
         </div>
         <div id="myTimeStatus" class="my-time-status">Regular and overtime are calculated automatically using the company workweek.</div>
         <div class="my-time-history">
-          <div class="section-header"><div><strong>Recent My Time</strong><p class="muted">Your saved entries flow into the same Time Report, pay-period controls, payroll, and exports as crew time.</p></div></div>
+          <div class="section-header"><div><strong>Recent My Time</strong><p class="muted">Entries you submit flow into the same Time Report, pay-period controls, payroll, and exports as crew time.</p></div></div>
           <div id="myTimeHistoryList"><p class="muted">No My Time entries loaded.</p></div>
         </div>`;
 
@@ -133,6 +152,7 @@
       if (input.disabled) input.value = '';
     };
     byId('myTimeSaveBtn').onclick = save;
+    byId('myTimeAddPersonBtn').onclick = addSelectedPerson;
     byId('myTimeCancelBtn').onclick = resetForm;
     byId('myTimeNewBtn').onclick = () => {
       resetForm();
@@ -151,10 +171,55 @@
     if (byId('myTimePerDiem')) byId('myTimePerDiem').checked = false;
     if (byId('myTimeEquipmentNotUsed')) byId('myTimeEquipmentNotUsed').checked = false;
     if (byId('myTimeEquipment')) byId('myTimeEquipment').disabled = false;
-    if (byId('myTimeSaveBtn')) byId('myTimeSaveBtn').textContent = 'Save My Time';
+    selectedEmployeeIds = employee?.id ? [employee.id] : [];
+    if (byId('myTimeSaveBtn')) byId('myTimeSaveBtn').textContent = 'Save Time';
     byId('myTimeCancelBtn')?.classList.add('hidden');
+    byId('myTimePeopleWrap')?.classList.toggle('hidden', !canAddOtherPeople());
+    if (byId('myTimeAddPersonBtn')) byId('myTimeAddPersonBtn').disabled = false;
+    if (byId('myTimePersonSelect')) byId('myTimePersonSelect').disabled = false;
+    renderPeople();
     toggleChargeFields();
     calculateWorked();
+  }
+
+  function employeeName(id) {
+    const item = employees.find((candidate) => candidate.id === id);
+    return item?.full_name || (id === employee?.id ? employee.full_name : 'Employee');
+  }
+
+  function renderPeople() {
+    const box = byId('myTimePersonList');
+    if (!box) return;
+    box.innerHTML = selectedEmployeeIds.map((id) => {
+      const item = employees.find((candidate) => candidate.id === id) || (id === employee?.id ? employee : null) || {};
+      const self = id === employee?.id;
+      return `<span class="my-time-person">${esc(item.full_name || 'Employee')}${item.classification ? ` — ${esc(item.classification)}` : ''}${self ? ' (You)' : ''}${self || editId ? '' : `<button type="button" title="Remove ${esc(item.full_name || 'employee')}" data-my-time-remove-person="${esc(id)}">×</button>`}</span>`;
+    }).join('');
+    box.querySelectorAll('[data-my-time-remove-person]').forEach((button) => {
+      button.onclick = () => {
+        selectedEmployeeIds = selectedEmployeeIds.filter((id) => id !== button.dataset.myTimeRemovePerson);
+        renderPeople();
+        renderPersonOptions();
+      };
+    });
+  }
+
+  function renderPersonOptions() {
+    const select = byId('myTimePersonSelect');
+    if (!select) return;
+    const available = employees.filter((item) => item.active !== false && !selectedEmployeeIds.includes(item.id));
+    select.innerHTML = '<option value="">Choose an active employee</option>' + available.map((item) =>
+      `<option value="${esc(item.id)}">${esc(item.full_name || 'Employee')}${item.classification ? ' — ' + esc(item.classification) : ''}</option>`
+    ).join('');
+  }
+
+  function addSelectedPerson() {
+    if (!canAddOtherPeople() || editId) return;
+    const id = byId('myTimePersonSelect')?.value || '';
+    if (!id) return toast('Choose an employee to add.', 'warning');
+    if (!selectedEmployeeIds.includes(id)) selectedEmployeeIds.push(id);
+    renderPeople();
+    renderPersonOptions();
   }
 
   function toggleChargeFields() {
@@ -191,7 +256,7 @@
     const client = getSb();
     const current = profile();
     if (!client || !current?.company_id || !canEnterMyTime()) return;
-    const [employeeResult, jobsResult] = await Promise.all([
+    const [employeeResult, jobsResult, employeesResult] = await Promise.all([
       client.from('timekeeping_employees')
         .select('id,full_name,classification,linked_profile_id,active')
         .eq('company_id', current.company_id)
@@ -202,10 +267,20 @@
         .select('id,job_number,job_name,active')
         .eq('company_id', current.company_id)
         .eq('active', true)
-        .order('job_number')
+        .order('job_number'),
+      canAddOtherPeople() ? client.from('timekeeping_employees')
+        .select('id,full_name,classification,linked_profile_id,active')
+        .eq('company_id', current.company_id)
+        .order('full_name') : Promise.resolve({data:[], error:null})
     ]);
     if (employeeResult.error) throw employeeResult.error;
     employee = employeeResult.data || null;
+    if (employeesResult.error) throw employeesResult.error;
+    employees = employeesResult.data || [];
+    if (employee && !employees.some((item) => item.id === employee.id)) employees.unshift(employee);
+    if (!editId && !selectedEmployeeIds.length && employee?.id) selectedEmployeeIds = [employee.id];
+    renderPeople();
+    renderPersonOptions();
     jobs = jobsResult.error ? [] : (jobsResult.data || []);
     const select = byId('myTimeJob');
     if (select) {
@@ -231,10 +306,13 @@
     const since = new Date();
     since.setDate(since.getDate() - 90);
     const sinceIso = since.toISOString().slice(0,10);
-    const {data, error} = await client.from('timekeeping_entries')
-      .select('id,job_id,work_date,regular_hours,overtime_hours,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used,notes,labor_code,entry_kind')
-      .eq('employee_id', employee.id)
-      .eq('entry_kind', 'leadership_self')
+    let query = client.from('timekeeping_entries')
+      .select('id,employee_id,created_by,job_id,work_date,regular_hours,overtime_hours,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used,notes,labor_code,entry_kind')
+      .eq('entry_kind', 'leadership_self');
+    query = canAddOtherPeople()
+      ? query.or(`employee_id.eq.${employee.id},created_by.eq.${profile().id}`)
+      : query.eq('employee_id', employee.id);
+    const {data, error} = await query
       .gte('work_date', sinceIso)
       .order('work_date', {ascending:false})
       .order('created_at', {ascending:false})
@@ -256,11 +334,11 @@
       return;
     }
     const jobMap = new Map(jobs.map((job) => [job.id, job]));
-    box.innerHTML = '<div class="my-time-row my-time-header"><span>Date</span><span>Charge</span><span>Start–Stop</span><span>Regular</span><span>OT</span><span></span></div>' + entries.map((entry) => {
+    box.innerHTML = '<div class="my-time-row my-time-header"><span>Date / Person</span><span>Charge</span><span>Start–Stop</span><span>Regular</span><span>OT</span><span></span></div>' + entries.map((entry) => {
       const job = jobMap.get(entry.job_id) || {};
       const charge = entry.job_id ? (job.job_number || 'Job') : (entry.labor_code || 'Overhead');
       return `<div class="my-time-row">
-        <span>${esc(entry.work_date)}</span>
+        <span>${esc(entry.work_date)}<br><small>${esc(employeeName(entry.employee_id))}</small></span>
         <span class="my-time-charge">${esc(charge)}</span>
         <span>${esc(timeText(entry.start_time))}–${esc(timeText(entry.stop_time))}</span>
         <span>${num(entry.regular_hours).toFixed(2)}</span>
@@ -277,6 +355,7 @@
     const entry = entries.find((item) => item.id === id);
     if (!entry) return;
     editId = entry.id;
+    selectedEmployeeIds = [entry.employee_id];
     byId('myTimeDate').value = entry.work_date || todayIso();
     byId('myTimeStart').value = timeText(entry.start_time);
     byId('myTimeStop').value = timeText(entry.stop_time);
@@ -293,8 +372,12 @@
       byId('myTimeChargeType').value = 'overhead';
       byId('myTimeLabor').value = overheadCodes.includes(entry.labor_code) ? entry.labor_code : 'Other';
     }
-    byId('myTimeSaveBtn').textContent = 'Update My Time';
+    byId('myTimeSaveBtn').textContent = `Update ${employeeName(entry.employee_id)} Time`;
     byId('myTimeCancelBtn').classList.remove('hidden');
+    if (byId('myTimeAddPersonBtn')) byId('myTimeAddPersonBtn').disabled = true;
+    if (byId('myTimePersonSelect')) byId('myTimePersonSelect').disabled = true;
+    renderPeople();
+    renderPersonOptions();
     toggleChargeFields();
     calculateWorked();
     byId('leadershipMyTimeCard')?.scrollIntoView({behavior:'smooth', block:'start'});
@@ -303,6 +386,9 @@
   async function save() {
     if (!canEnterMyTime()) return toast('This role cannot submit My Time.', 'error');
     if (!employee?.id) return toast('Your payroll employee record is not ready yet. Refresh the page or ask an Admin to update your profile.', 'error');
+    const targetEmployeeIds = editId ? selectedEmployeeIds.slice(0,1) : selectedEmployeeIds;
+    if (!targetEmployeeIds.length) return toast('Add at least one person to this time entry.', 'warning');
+    if (targetEmployeeIds.some((id) => id !== employee.id) && !canAddOtherPeople()) return toast('Only Admin and General Foreman can add another employee.', 'error');
     const worked = calculateWorked();
     if (worked === null) return toast('Enter a valid Start, Stop, and Lunch. Overnight shifts are supported.', 'warning');
     const chargeType = byId('myTimeChargeType')?.value || 'job';
@@ -313,9 +399,9 @@
     const button = byId('myTimeSaveBtn');
     const done = window.LineCrewUI?.loadingButton?.(button, editId ? 'Updating…' : 'Saving…') || (() => {});
     const status = byId('myTimeStatus');
-    if (status) status.textContent = 'Saving and recalculating your company workweek…';
+    if (status) status.textContent = `Saving ${targetEmployeeIds.length} ${targetEmployeeIds.length === 1 ? 'entry' : 'entries'} and recalculating each company workweek…`;
     try {
-      const {error} = await getSb().rpc('upsert_my_leadership_time', {
+      const common = {
         p_entry_id: editId,
         p_work_date: byId('myTimeDate')?.value || null,
         p_start_time: byId('myTimeStart')?.value || null,
@@ -327,19 +413,24 @@
         p_equipment_used: (byId('myTimeEquipment')?.value || '').trim() || null,
         p_equipment_not_used: !!byId('myTimeEquipmentNotUsed')?.checked,
         p_notes: (byId('myTimeNotes')?.value || '').trim() || null
-      });
-      if (error) throw error;
-      toast(editId ? 'Your time was updated and weekly overtime was recalculated.' : 'Your time was saved for payroll.', 'success');
+      };
+      const results = await Promise.all(targetEmployeeIds.map((employeeId) => employeeId === employee.id
+        ? getSb().rpc('upsert_my_leadership_time', common)
+        : getSb().rpc('upsert_leadership_employee_time', {...common, p_employee_id: employeeId})
+      ));
+      const failed = results.find((result) => result.error);
+      if (failed?.error) throw failed.error;
+      toast(editId ? `${employeeName(targetEmployeeIds[0])}'s time was updated.` : `Time was saved for ${targetEmployeeIds.length} ${targetEmployeeIds.length === 1 ? 'person' : 'people'}.`, 'success');
       if (status) status.textContent = 'Saved. Regular and overtime now reflect the company workweek.';
       resetForm();
       await loadEntries();
       await window.LineCrewTimekeepingReport?.run?.();
     } catch (error) {
       if (status) status.textContent = 'Your entry was not saved.';
-      toast('Could not save My Time: ' + error.message, 'error');
+      toast('Could not save time: ' + error.message, 'error');
     } finally {
       done();
-      if (button) button.textContent = editId ? 'Update My Time' : 'Save My Time';
+      if (button) button.textContent = editId ? 'Update Time' : 'Save Time';
     }
   }
 
