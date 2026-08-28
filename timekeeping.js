@@ -401,6 +401,32 @@
     if(matches.length){box.innerHTML='';matches.forEach(e=>addCrewRow({employee_id:e.id}));}
   }
 
+  function preferredCrewName(){
+    if(role()!=='foreman')return '';
+    const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
+    if(!viewerId)return '';
+    const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId);
+    const ownCrew=String(own?.default_crew_name||'').trim();
+    if(ownCrew)return ownCrew;
+    const counts=new Map();
+    employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId).forEach(e=>{
+      const name=String(e.default_crew_name||'').trim();
+      if(name)counts.set(name,(counts.get(name)||0)+1);
+    });
+    const ranked=[...counts.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+    if(ranked.length===1)return ranked[0][0];
+    if(ranked[0]?.[1]>ranked[1]?.[1])return ranked[0][0];
+    return '';
+  }
+
+  function fillDefaultCrewName(){
+    const form=byId('dailyReportForm');
+    const input=byId('dailyCrewName');
+    if(!form||!input||form.dataset.reportId||input.value.trim())return;
+    const crewName=preferredCrewName();
+    if(crewName)input.value=crewName;
+  }
+
   async function loadCrewRowsForReport(){
   const form=byId('dailyReportForm');if(!form||form.classList.contains('hidden'))return;
   const reportId=form.dataset.reportId||null;
@@ -408,6 +434,7 @@
   if(crewRowsLoadedForReport===loadKey)return;
   crewRowsLoadedForReport=loadKey;
   if(!employees.length) await loadEmployees();
+  fillDefaultCrewName();
   refreshCrewEmployeeSelects();
   const box=byId('dailyCrewTimeRows');if(!box)return;
   box.innerHTML='';

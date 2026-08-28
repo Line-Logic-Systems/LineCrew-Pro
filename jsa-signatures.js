@@ -14,8 +14,8 @@
       .lc-signature-cell{display:block;min-width:0;width:100%}
       .lc-crew-row>.lc-signature-cell{grid-column:2!important}
       .lc-signature-cell>label{display:block!important;min-width:0}
-      .lc-signature-wrap{border:1px solid #cfdbe5;border-radius:12px;background:#fff;overflow:hidden;margin:6px 0 12px;width:100%}
-      .lc-signature-svg{display:block;width:100%;height:120px;touch-action:none;background:repeating-linear-gradient(0deg,#fff,#fff 31px,#edf2f6 32px);cursor:crosshair;user-select:none;-webkit-user-select:none}
+      .lc-signature-wrap{border:1px solid #cfdbe5;border-radius:12px;background:#fff;overflow:hidden;margin:6px 0 12px;width:100%;touch-action:none!important;overscroll-behavior:contain}
+      .lc-signature-svg{display:block;width:100%;height:120px;touch-action:none!important;overscroll-behavior:contain;background:repeating-linear-gradient(0deg,#fff,#fff 31px,#edf2f6 32px);cursor:crosshair;user-select:none;-webkit-user-select:none}
       .lc-signature-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 9px;background:#f7fafc;border-top:1px solid #e3eaf0;font-size:12px;color:#667788}
       .lc-signature-actions button{width:auto!important;margin:0!important;padding:6px 10px!important}
       .lc-signature-status.signed{color:#198754;font-weight:800}
@@ -93,6 +93,7 @@
       strokes=[...strokes,current];cache.set(key,strokes);
       const line=addStroke(svg,current);
       active={pointerId:e.pointerId,svg,input,current,line,point,persist};
+      try{svg.setPointerCapture(e.pointerId)}catch(_){}
       status.textContent='Signing…';status.classList.add('signed');
     });
 
@@ -109,11 +110,19 @@
     active.line.setAttribute('points',active.current.map(p=>`${p[0]},${p[1]}`).join(' '));
   },true);
 
+  window.addEventListener('touchmove',e=>{
+    if(!active)return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  },{capture:true,passive:false});
+
   function finishActive(e){
     if(!active||e.pointerId!==active.pointerId)return;
     e.preventDefault();e.stopImmediatePropagation();
     if(active.current.length===1){active.current.push([active.current[0][0]+1,active.current[0][1]+1]);active.line.setAttribute('points',active.current.map(p=>`${p[0]},${p[1]}`).join(' '))}
-    active.persist();
+    const finished=active;
+    finished.persist();
+    try{finished.svg.releasePointerCapture(finished.pointerId)}catch(_){}
     suppressReleaseUntil=Date.now()+800;
     active=null;
   }
