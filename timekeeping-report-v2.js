@@ -115,7 +115,7 @@
       if(!from||!through) return;
       const emp=byId('tkEmployeeFilter')?.value||null;
       const job=byId('tkJobFilter')?.value||null;
-      const {data,error}=await client.rpc('timekeeping_report_rows_v2',{p_from:from,p_through:through,p_employee:emp,p_job:job});
+      const {data,error}=await client.rpc('timekeeping_report_rows_v3',{p_from:from,p_through:through,p_employee:emp,p_job:job});
       if(error) throw error;
       rows=data||[];
       populateCrewFilter();
@@ -138,7 +138,7 @@
   }
 
   function openTimeEditor(row){
-    if(!canEditTime())return;
+    if(!canEditTime()||row.entry_kind==='leadership_self')return;
     byId('tkEditBackdrop')?.remove();
     const e=employees.get(row.employee_id)||{};
     const j=jobs.get(row.job_id)||{};
@@ -147,7 +147,7 @@
     wrap.className='tk-edit-backdrop';
     wrap.innerHTML=`<div class="tk-edit-card">
       <h3>Edit Submitted Time</h3>
-      <p class="muted">${esc(e.full_name||'Employee')} · ${esc(row.work_date||'')} · ${esc(j.job_number||'')}</p>
+      <p class="muted">${esc(e.full_name||'Employee')} · ${esc(row.work_date||'')} · ${esc(j.job_number||row.labor_code||'')}</p>
       <div class="tk-edit-grid">
         <label>Start (24 hr)<input id="tkEditStart" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off" value="${esc(timeText(row.start_time))}"></label>
         <label>Stop (24 hr)<input id="tkEditStop" type="text" inputmode="numeric" maxlength="5" placeholder="HH:MM" autocomplete="off" value="${esc(timeText(row.stop_time))}"></label>
@@ -224,7 +224,9 @@
     return [...group].sort((a,b)=>String(b.work_date||'').localeCompare(String(a.work_date||''))).map((r,index)=>{
       const e=employees.get(r.employee_id)||{};
       const j=jobs.get(r.job_id)||{};
-      return `<tr><td>${esc(r.work_date)}</td><td>${esc(j.job_number||'')}</td><td>${esc(r.crew_name||e.default_crew_name||'')}</td><td>${esc(timeText(r.start_time))}</td><td>${esc(timeText(r.stop_time))}</td><td>${num(r.lunch_minutes)}</td><td>${num(r.regular_hours).toFixed(2)}</td><td>${num(r.overtime_hours).toFixed(2)}</td><td>${(num(r.regular_hours)+num(r.overtime_hours)).toFixed(2)}</td><td class="${r.per_diem?'tk-per-diem-yes':''}">${r.per_diem?'Yes':'No'}</td><td>${esc(equipmentText(r,e))}</td><td>${r.storm_work?'Yes':'No'}</td>${canEditTime()?`<td><button type="button" class="secondary tk-edit-time-btn" data-tk-edit-row="${index}">Edit</button></td>`:''}</tr>`;
+      const charge=j.job_number||r.labor_code||'';
+      const editCell=canEditTime()?(r.entry_kind==='leadership_self'?'<td></td>':`<td><button type="button" class="secondary tk-edit-time-btn" data-tk-edit-row="${index}">Edit</button></td>`):'';
+      return `<tr><td>${esc(r.work_date)}</td><td>${esc(charge)}</td><td>${esc(r.crew_name||e.default_crew_name||'')}</td><td>${esc(timeText(r.start_time))}</td><td>${esc(timeText(r.stop_time))}</td><td>${num(r.lunch_minutes)}</td><td>${num(r.regular_hours).toFixed(2)}</td><td>${num(r.overtime_hours).toFixed(2)}</td><td>${(num(r.regular_hours)+num(r.overtime_hours)).toFixed(2)}</td><td class="${r.per_diem?'tk-per-diem-yes':''}">${r.per_diem?'Yes':'No'}</td><td>${esc(equipmentText(r,e))}</td><td>${r.storm_work?'Yes':'No'}</td>${editCell}</tr>`;
     }).join('');
   }
 
@@ -249,7 +251,7 @@
         const epd=new Set(group.filter(r=>r.per_diem).map(r=>r.work_date)).size;
         const crew=[...new Set(group.map(r=>r.crew_name||e.default_crew_name||'').filter(Boolean))].join(', ');
         const meta=[e.classification||'',crew].filter(Boolean).join(' · ');
-        return `<details class="tk-employee-summary" data-tk-group="${groupIndex}"><summary><span class="tk-employee-toggle">▶</span><span class="tk-employee-name"><span>${esc(e.full_name||'Employee')}</span>${meta?`<span class="tk-employee-meta">${esc(meta)}</span>`:''}</span><span class="tk-employee-metric"><strong>${er.toFixed(2)}</strong><span>Regular</span></span><span class="tk-employee-metric"><strong>${eo.toFixed(2)}</strong><span>OT</span></span><span class="tk-employee-metric"><strong>${(er+eo).toFixed(2)}</strong><span>Total</span></span><span class="tk-employee-metric"><strong>${epd}</strong><span>Per Diem</span></span></summary><div class="tk-employee-detail"><div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Date</th><th>Job</th><th>Crew</th><th>Start</th><th>Stop</th><th>Lunch</th><th>Regular</th><th>OT</th><th>Total</th><th>Per Diem</th><th>Equipment</th><th>Storm</th>${canEditTime()?'<th></th>':''}</tr></thead><tbody>${detailRows(group)}</tbody></table></div></div></details>`;
+        return `<details class="tk-employee-summary" data-tk-group="${groupIndex}"><summary><span class="tk-employee-toggle">▶</span><span class="tk-employee-name"><span>${esc(e.full_name||'Employee')}</span>${meta?`<span class="tk-employee-meta">${esc(meta)}</span>`:''}</span><span class="tk-employee-metric"><strong>${er.toFixed(2)}</strong><span>Regular</span></span><span class="tk-employee-metric"><strong>${eo.toFixed(2)}</strong><span>OT</span></span><span class="tk-employee-metric"><strong>${(er+eo).toFixed(2)}</strong><span>Total</span></span><span class="tk-employee-metric"><strong>${epd}</strong><span>Per Diem</span></span></summary><div class="tk-employee-detail"><div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Date</th><th>Job / Labor Code</th><th>Crew</th><th>Start</th><th>Stop</th><th>Lunch</th><th>Regular</th><th>OT</th><th>Total</th><th>Per Diem</th><th>Equipment</th><th>Storm</th>${canEditTime()?'<th></th>':''}</tr></thead><tbody>${detailRows(group)}</tbody></table></div></div></details>`;
       }).join('');
     byId('tkExpandEmployees').onclick=()=>box.querySelectorAll('.tk-employee-summary').forEach(detail=>detail.open=true);
     byId('tkCollapseEmployees').onclick=()=>box.querySelectorAll('.tk-employee-summary').forEach(detail=>detail.open=false);
@@ -271,7 +273,7 @@
     view.forEach(r=>{
       const e=employees.get(r.employee_id)||{};
       const j=jobs.get(r.job_id)||{};
-      out.push([e.employee_number||'',e.full_name||'',e.classification||'',r.work_date||'',j.job_number||'',j.job_name||'',r.crew_name||e.default_crew_name||'',timeText(r.start_time),timeText(r.stop_time),num(r.lunch_minutes),num(r.regular_hours).toFixed(2),num(r.overtime_hours).toFixed(2),(num(r.regular_hours)+num(r.overtime_hours)).toFixed(2),r.per_diem?'Yes':'No',equipmentText(r,e),r.storm_work?'Yes':'No']);
+      out.push([e.employee_number||'',e.full_name||'',e.classification||'',r.work_date||'',j.job_number||r.labor_code||'',j.job_name||(r.labor_code?'Overhead':''),r.crew_name||e.default_crew_name||'',timeText(r.start_time),timeText(r.stop_time),num(r.lunch_minutes),num(r.regular_hours).toFixed(2),num(r.overtime_hours).toFixed(2),(num(r.regular_hours)+num(r.overtime_hours)).toFixed(2),r.per_diem?'Yes':'No',equipmentText(r,e),r.storm_work?'Yes':'No']);
     });
     const blob=new Blob([out.map(x=>x.map(csvCell).join(',')).join('\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');

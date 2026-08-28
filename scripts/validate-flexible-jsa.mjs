@@ -49,11 +49,11 @@ if((html.match(/return fillOfflineJsaJobSelect\(select,data \|\| \[\]\);/g) || [
 }
 
 for(const token of [
-  'linecrew-pro-shell-v40',
+  'linecrew-pro-shell-v42',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
   '/offline-jsa.js?v=20260827b',
-  '/jsa-signatures.js?v=20260827a'
+  '/jsa-signatures.js?v=20260828a'
 ]){
   if(!serviceWorker.includes(token)) throw new Error('Missing Offline JSA app-shell token: ' + token);
 }

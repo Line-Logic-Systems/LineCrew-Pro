@@ -74,6 +74,24 @@ if (fs.existsSync('expanded-jsa.js')) {
     expandedJsaCode.includes("load('timekeeping-input-v2.js"),
     'Foreman Crew Time must load Start/Stop, lunch, per diem, and equipment controls.'
   );
+  assert(
+    expandedJsaCode.includes("load('leadership-my-time.js"),
+    'GF, Superintendent, Admin, and Owner My Time must load with Timekeeping.'
+  );
+}
+
+if (fs.existsSync('leadership-my-time.js')) {
+  const leadershipMyTimeCode = fs.readFileSync('leadership-my-time.js', 'utf8');
+  try {
+    new Function(leadershipMyTimeCode);
+  } catch (error) {
+    failures.push('Leadership My Time JavaScript syntax error: ' + error.message);
+  }
+  assert(
+    leadershipMyTimeCode.includes("rpc('upsert_my_leadership_time'") &&
+      leadershipMyTimeCode.includes('Recent My Time'),
+    'Leadership My Time must save through the guarded RPC and show recent entries.'
+  );
 }
 
 if (fs.existsSync('jsa-signatures.js')) {

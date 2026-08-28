@@ -201,7 +201,7 @@
   function timeText(v){return v?String(v).slice(0,5):'';}
   function detailData(rows){
     const api=window.LineCrewTimekeepingReport;const employeeMap=api.getEmployees(),jobMap=api.getJobs();
-    return rows.map(r=>{const e=employeeMap.get(r.employee_id)||{},j=jobMap.get(r.job_id)||{};const equipment=r.equipment_not_used?'Not used':(r.equipment_used||e.default_equipment||'');return [e.employee_number||'',e.full_name||'',e.classification||'',r.work_date||'',j.job_number||'',j.job_name||'',r.crew_name||e.default_crew_name||'',timeText(r.start_time),timeText(r.stop_time),num(r.lunch_minutes),num(r.regular_hours),num(r.overtime_hours),num(r.regular_hours)+num(r.overtime_hours),r.per_diem?'Yes':'No',equipment,r.storm_work?'Yes':'No'];});
+    return rows.map(r=>{const e=employeeMap.get(r.employee_id)||{},j=jobMap.get(r.job_id)||{};const equipment=r.equipment_not_used?'Not used':(r.equipment_used||e.default_equipment||'');return [e.employee_number||'',e.full_name||'',e.classification||'',r.work_date||'',j.job_number||r.labor_code||'',j.job_name||(r.labor_code?'Overhead':''),r.crew_name||e.default_crew_name||'',timeText(r.start_time),timeText(r.stop_time),num(r.lunch_minutes),num(r.regular_hours),num(r.overtime_hours),num(r.regular_hours)+num(r.overtime_hours),r.per_diem?'Yes':'No',equipment,r.storm_work?'Yes':'No'];});
   }
 
   async function exportExcel(){
