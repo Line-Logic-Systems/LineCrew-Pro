@@ -32,6 +32,9 @@ if (existsSync(join(docsDir, '.nojekyll'))) {
 for (const file of htmlFiles) {
   const html = readFileSync(join(docsDir, file), 'utf8');
 
+  if (html.includes('Line Logic Systems')) fail(file, 'contains the former business name');
+  if (!html.includes('© 2026 LineCrew Pro LLC')) fail(file, 'footer must identify LineCrew Pro LLC');
+
   if (!html.includes('styles.css?v=site6')) fail(file, 'must use the current site stylesheet version');
   if (!html.includes('accessibility.css?v=site5')) fail(file, 'must load the accessibility stylesheet');
   if (!html.includes('class="skip-link"')) fail(file, 'must include a keyboard skip link');
@@ -108,6 +111,27 @@ if (!signup.includes('name="robots" content="noindex,follow"')) {
 }
 if (!signup.includes('Checkout is not active yet.')) {
   fail('signup.html', 'must explain the disabled checkout beside the control');
+}
+
+const terms = readFileSync(join(docsDir, 'terms.html'), 'utf8');
+if (terms.includes('Public paid subscriptions are not yet enabled')) {
+  fail('terms.html', 'must not contradict the live paid-subscription funnel');
+}
+for (const marker of [
+  'LineCrew Pro LLC',
+  'automatically renew for successive one-month periods',
+  'Cancellation takes effect at the end of the then-current paid billing period',
+  'Payments are non-refundable',
+  'Warranty disclaimer',
+  'Limitation of liability',
+  'laws of the State of Texas',
+]) {
+  if (!terms.includes(marker)) fail('terms.html', `subscription terms are missing: ${marker}`);
+}
+
+const privacy = readFileSync(join(docsDir, 'privacy.html'), 'utf8');
+for (const marker of ['LineCrew Pro LLC', 'process commercial subscriptions and payments', 'Subscription payments are processed by Stripe', 'does not receive or store complete payment-card numbers']) {
+  if (!privacy.includes(marker)) fail('privacy.html', `payment privacy disclosure is missing: ${marker}`);
 }
 
 const sitemap = readFileSync(join(docsDir, 'sitemap.xml'), 'utf8');
