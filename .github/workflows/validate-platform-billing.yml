@@ -22,6 +22,7 @@ on:
       - 'supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql'
       - 'supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql'
       - 'supabase/config.toml'
+      - 'supabase/functions/_shared/**'
       - 'supabase/functions/create-billing-checkout/**'
       - 'supabase/functions/create-billing-portal/**'
       - 'supabase/functions/create-plan-upgrade/**'
@@ -48,7 +49,9 @@ jobs:
           node scripts/validate-platform-billing.mjs
           node --check scripts/test-platform-billing-isolation.mjs
       - name: Test Stripe webhook decision logic
-        run: deno test supabase/functions/stripe-webhook/logic_test.ts
+        run: |
+          deno test supabase/functions/_shared/api-keys_test.ts
+          deno test supabase/functions/stripe-webhook/logic_test.ts
       - name: Type-check billing Edge Functions
         run: |
           deno check supabase/functions/create-billing-checkout/index.ts
@@ -56,3 +59,7 @@ jobs:
           deno check supabase/functions/create-plan-upgrade/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
           deno check supabase/functions/capture-crew-usage/index.ts
+          deno check supabase/functions/complete-team-invitation-signup/index.ts
+          deno check supabase/functions/linecrew-assistant/index.ts
+          deno check supabase/functions/parse-utility-job-packet/index.ts
+          deno check supabase/functions/send-team-invitation/index.ts

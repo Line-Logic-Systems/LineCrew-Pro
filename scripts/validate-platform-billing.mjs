@@ -14,9 +14,12 @@ const requiredFiles = [
   'supabase/functions/create-billing-checkout/index.ts',
   'supabase/functions/create-billing-portal/index.ts',
   'supabase/functions/create-plan-upgrade/index.ts',
+  'supabase/functions/capture-crew-usage/index.ts',
   'supabase/functions/stripe-webhook/index.ts',
   'supabase/functions/stripe-webhook/logic.ts',
   'supabase/functions/stripe-webhook/logic_test.ts',
+  'supabase/functions/_shared/api-keys.ts',
+  'supabase/functions/_shared/api-keys_test.ts',
   'supabase/config.toml',
   'scripts/test-platform-billing-isolation.mjs',
   '.github/workflows/test-platform-billing-isolation.yml',
@@ -41,9 +44,11 @@ const entitlementHardening = fs.readFileSync('supabase/migrations/20260825133736
 const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/index.ts', 'utf8');
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
 const upgrade = fs.readFileSync('supabase/functions/create-plan-upgrade/index.ts', 'utf8');
+const crewUsage = fs.readFileSync('supabase/functions/capture-crew-usage/index.ts', 'utf8');
 const webhook = fs.readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
 const webhookLogic = fs.readFileSync('supabase/functions/stripe-webhook/logic.ts', 'utf8');
 const webhookTests = fs.readFileSync('supabase/functions/stripe-webhook/logic_test.ts', 'utf8');
+const edgeApiKeys = fs.readFileSync('supabase/functions/_shared/api-keys.ts', 'utf8');
 const functionConfig = fs.readFileSync('supabase/config.toml', 'utf8');
 const vercelConfig = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
 const isolation = fs.readFileSync('scripts/test-platform-billing-isolation.mjs', 'utf8');
@@ -290,7 +295,7 @@ if (!webhookTests.includes('incomplete access is disabled')) {
 for (const [name, verifyJwt] of [
   ['stripe-webhook', false],
   ['complete-team-invitation-signup', false],
-  ['capture-crew-usage', true],
+  ['capture-crew-usage', false],
   ['create-billing-checkout', true],
   ['create-billing-portal', true],
   ['create-plan-upgrade', true],
@@ -319,5 +324,26 @@ for (const pattern of [
 }
 if (owner.includes('SUPABASE_SERVICE_ROLE_KEY') || billing.includes('SUPABASE_SERVICE_ROLE_KEY')) throw new Error('A browser page references the Supabase service-role key.');
 if (owner.includes('STRIPE_SECRET_KEY') || billing.includes('STRIPE_SECRET_KEY')) throw new Error('A browser page references the Stripe secret key.');
+
+for (const marker of ['SUPABASE_PUBLISHABLE_KEYS', 'SUPABASE_SECRET_KEYS', 'edge_functions_admin']) {
+  if (!edgeApiKeys.includes(marker)) throw new Error(`Edge API-key helper is missing ${marker}.`);
+}
+for (const marker of ['req.headers.get("apikey")', 'req.headers.get("x-linecrew-cron-secret")', 'getSecretKey()']) {
+  if (!crewUsage.includes(marker)) throw new Error(`capture-crew-usage is missing dual-auth marker ${marker}.`);
+}
+for (const [name, source] of [
+  ['create-billing-checkout', checkout],
+  ['create-billing-portal', portal],
+  ['create-plan-upgrade', upgrade],
+  ['stripe-webhook', webhook],
+  ['capture-crew-usage', crewUsage],
+]) {
+  if (/SUPABASE_(?:ANON_KEY|SERVICE_ROLE_KEY)/.test(source)) {
+    throw new Error(`${name} still depends on a legacy Supabase API key.`);
+  }
+  if (!source.includes('getSecretKey()') && !source.includes('getPublishableKey()')) {
+    throw new Error(`${name} is not wired to the named Supabase API-key environment.`);
+  }
+}
 
 console.log('PASS: platform owner, crew-tier and subscription billing validation passed.');

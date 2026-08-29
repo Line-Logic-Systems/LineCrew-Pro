@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { getPublishableKey } from "../_shared/api-keys.ts";
 
 const allowedOrigins = new Set([
   "https://app.linecrewpro.com",
@@ -98,7 +99,7 @@ Deno.serve(async (request) => {
     if (!authorization) throw new Error("Authentication required.");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const anonKey = getPublishableKey();
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
     if (!supabaseUrl || !anonKey || !openAiKey) throw new Error("Packet parsing service is not configured.");
 

@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { getPublishableKey } from "../_shared/api-keys.ts";
 
 const allowedOrigins = new Set([
   "https://app.linecrewpro.com",
@@ -58,7 +59,7 @@ Deno.serve(async (request) => {
     if (!authorization) return jsonResponse(request, { error: "Authentication required." }, 401);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const anonKey = getPublishableKey();
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!supabaseUrl || !anonKey || !resendApiKey) {
       console.error("Team invitation service is missing required server configuration.");

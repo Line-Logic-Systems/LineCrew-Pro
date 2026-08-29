@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.112.4";
+import { getPublishableKey, getSecretKey } from "../_shared/api-keys.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -101,8 +102,8 @@ Deno.serve(async (request) => {
     if (!auth) throw new Error("Authentication required.");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = getPublishableKey();
+    const serviceKey = getSecretKey();
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     const configuredPortalId = Deno.env.get(
       "STRIPE_MANAGE_PORTAL_CONFIGURATION_ID",

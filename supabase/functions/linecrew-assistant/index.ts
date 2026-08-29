@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { getPublishableKey } from "../_shared/api-keys.ts";
 
 const KNOWLEDGE_VERSION = "2026-08-25-admin-operations-v3";
 
@@ -212,7 +213,7 @@ Deno.serve(async (request) => {
     if (!authorization) throw new Error("Authentication required.");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const anonKey = getPublishableKey();
     const openAiKey = Deno.env.get("OPENAI_API_KEY");
     if (!supabaseUrl || !anonKey) throw new Error("Supabase environment is incomplete.");
     if (!openAiKey) throw new Error("AI service is not configured.");
