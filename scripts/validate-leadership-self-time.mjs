@@ -41,6 +41,8 @@ requireText(module, "['gf','admin']", 'Only Admin and General Foreman may add ot
 requireText(module, 'assigned_admin_id === profile().id', 'Admin My Time must auto-load only the signed-in Admin roster.');
 requireText(module, 'const targetEmployeeId = activeEmployeeId', 'Admin roster time must save one selected person at a time.');
 requireText(module, 'These fields and hours belong only to this person.', 'My Time must explain that each person has independent hours.');
+requireText(module, 'titleElement.textContent !== peopleTitle', 'My Time observer updates must not rewrite unchanged labels and freeze the app.');
+requireText(module, 'helpElement.textContent !== peopleHelp', 'My Time observer help text must be mutation-idempotent.');
 requireText(module, 'Regular and overtime are calculated automatically', 'My Time must explain automatic weekly OT.');
 requireText(module, 'Recent My Time', 'My Time must provide editable recent history.');
 requireText(module, 'data-my-time-edit', 'Recent My Time entries must be editable.');
@@ -70,7 +72,7 @@ requireText(adminRosterMigration, 'revoke all on function public.validate_timeke
 requireText(timekeeping, 'data-tk-admin', 'Personnel management must include an Assigned Admin control.');
 requireText(timekeeping, 'assigned_admin_id:assignedAdminId||null', 'Personnel Admin assignments must persist.');
 
-requireText(loader, 'leadership-my-time.js?v=20260829a', 'The My Time module is not loaded.');
+requireText(loader, 'leadership-my-time.js?v=20260829b', 'The My Time module is not loaded.');
 requireText(shell, '/leadership-my-time.js?v=20260829a', 'The My Time module is not in the offline app shell.');
 requireText(report, "rpc('timekeeping_report_rows_v3'", 'The Time Report must include leadership self-time.');
 requireText(customExport, "rpc('timekeeping_report_rows_v3'", 'Custom exports must include leadership self-time.');
