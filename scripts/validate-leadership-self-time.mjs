@@ -19,6 +19,7 @@ const timekeeping = read('timekeeping.js');
 const foremanTools = read('foreman-field-tools.js');
 const migration = read('supabase/migrations/20260828172839_leadership_self_time.sql');
 const managedMigration = read('supabase/migrations/20260828203148_leadership_add_other_people.sql');
+const adminRosterMigration = read('supabase/migrations/20260829084727_admin_time_roster_assignments.sql');
 
 for (const role of ['gf','superintendent','admin','owner']) {
   requireText(module, `'${role}'`, `My Time UI is missing the ${role} role.`);
@@ -37,6 +38,9 @@ for (const field of ['myTimePeopleWrap','myTimePersonSelect','myTimeAddPersonBtn
 requireText(module, "rpc('upsert_my_leadership_time'", 'My Time must save through the guarded RPC.');
 requireText(module, "rpc('upsert_leadership_employee_time'", 'Admin/GF added employees must save through the guarded employee RPC.');
 requireText(module, "['gf','admin']", 'Only Admin and General Foreman may add other employees.');
+requireText(module, 'assigned_admin_id === profile().id', 'Admin My Time must auto-load only the signed-in Admin roster.');
+requireText(module, 'const targetEmployeeId = activeEmployeeId', 'Admin roster time must save one selected person at a time.');
+requireText(module, 'These fields and hours belong only to this person.', 'My Time must explain that each person has independent hours.');
 requireText(module, 'Regular and overtime are calculated automatically', 'My Time must explain automatic weekly OT.');
 requireText(module, 'Recent My Time', 'My Time must provide editable recent history.');
 requireText(module, 'data-my-time-edit', 'Recent My Time entries must be editable.');
@@ -59,9 +63,15 @@ requireText(managedMigration, 'employee.company_id = v_company_id', 'Managed tim
 requireText(managedMigration, 'employee.active is true', 'Managed time must target only active employees.');
 requireText(managedMigration, 'security invoker', 'Managed time must run with caller RLS permissions.');
 requireText(managedMigration, 'revoke all on function public.upsert_leadership_employee_time', 'Managed time must not be executable by Public or anon.');
+requireText(adminRosterMigration, 'add column if not exists assigned_admin_id', 'Personnel need a persistent Admin assignment.');
+requireText(adminRosterMigration, "lower(coalesce(administrator.role, '')) = 'admin'", 'Admin assignments must target active same-company Admins.');
+requireText(adminRosterMigration, 'timekeeping_employees_assigned_admin_idx', 'Admin roster lookup needs a covering index.');
+requireText(adminRosterMigration, 'revoke all on function public.validate_timekeeping_employee_admin_assignment()', 'The assignment trigger function must not be directly executable.');
+requireText(timekeeping, 'data-tk-admin', 'Personnel management must include an Assigned Admin control.');
+requireText(timekeeping, 'assigned_admin_id:assignedAdminId||null', 'Personnel Admin assignments must persist.');
 
-requireText(loader, 'leadership-my-time.js?v=20260828d', 'The My Time module is not loaded.');
-requireText(shell, '/leadership-my-time.js?v=20260828d', 'The My Time module is not in the offline app shell.');
+requireText(loader, 'leadership-my-time.js?v=20260829a', 'The My Time module is not loaded.');
+requireText(shell, '/leadership-my-time.js?v=20260829a', 'The My Time module is not in the offline app shell.');
 requireText(report, "rpc('timekeeping_report_rows_v3'", 'The Time Report must include leadership self-time.');
 requireText(customExport, "rpc('timekeeping_report_rows_v3'", 'Custom exports must include leadership self-time.');
 requireText(report, 'r.labor_code', 'The Time Report must show overhead labor codes.');
