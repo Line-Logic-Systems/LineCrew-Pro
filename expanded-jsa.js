@@ -100,10 +100,15 @@
     productionDescription.textContent = 'Daily production reporting and review';
   }
 
-  const load = (src, onload) => {
+  const load = (src, onload, marker) => {
+    if (marker && document.querySelector(`script[data-${marker}]`)) {
+      if (onload) onload();
+      return;
+    }
     const script = document.createElement('script');
     script.src = src;
     script.defer = false;
+    if (marker) script.setAttribute(`data-${marker}`, '1');
     if (onload) script.onload = onload;
     document.head.appendChild(script);
   };
@@ -119,7 +124,7 @@
     load('jsa-review.js?v=20260826a');
   });
   load('timekeeping.js?v=20260829b', () => {
-    load('timekeeping-input-v2.js?v=20260829a');
+    load('timekeeping-input-v2.js?v=20260829b', null, 'linecrew-timekeeping-input-v2');
     load('foreman-field-tools.js?v=20260828b');
     load('timekeeping-roster.js?v=20260823f');
     load('timekeeping-report-v2.js?v=20260829h', () => {
