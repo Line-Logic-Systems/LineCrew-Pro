@@ -54,11 +54,25 @@
       .tk-edit-checks input{width:auto}
       .tk-edit-actions{display:flex;gap:8px;justify-content:flex-end}
       .tk-edit-actions button{width:auto;margin-top:8px}
+      .tk-overhead-summary{margin:10px 0 14px;border:1px solid #c8d8e5;border-radius:11px;background:#f7fafc;overflow:hidden}
+      .tk-overhead-summary-title{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:#eaf3fa;border-bottom:1px solid #c8d8e5}
+      .tk-overhead-summary-title strong{color:#0b2d4d}
+      .tk-overhead-code{border-bottom:1px solid #dce5ed;background:#fff}
+      .tk-overhead-code:last-child{border-bottom:0}
+      .tk-overhead-code>summary{cursor:pointer;list-style:none;display:grid;grid-template-columns:minmax(150px,1.5fr) repeat(4,minmax(62px,.65fr));gap:6px;align-items:center;padding:8px 10px}
+      .tk-overhead-code>summary::-webkit-details-marker{display:none}
+      .tk-overhead-name{font-weight:800;color:#0b2d4d}
+      .tk-overhead-metric{text-align:right;font-variant-numeric:tabular-nums;font-size:11px}
+      .tk-overhead-metric span{display:block;color:#617284;font-size:8px;text-transform:uppercase}
+      .tk-overhead-detail{padding:7px;background:#f8fafc;border-top:1px solid #dce5ed}
+      .tk-overhead-detail .tk-table{min-width:760px;background:#fff;font-size:11px}
       @media(max-width:760px){
         .tk-employee-summary>summary{grid-template-columns:16px minmax(120px,1fr) repeat(2,58px);padding:5px}
         .tk-employee-metric:nth-of-type(3),.tk-employee-metric:nth-of-type(5){display:none}
         .tk-employee-meta{display:none}
         .tk-edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .tk-overhead-code>summary{grid-template-columns:minmax(120px,1fr) repeat(2,58px)}
+        .tk-overhead-code .tk-overhead-metric:nth-of-type(2),.tk-overhead-code .tk-overhead-metric:nth-of-type(4){display:none}
       }
     `;
     document.head.appendChild(style);
@@ -80,8 +94,17 @@
 
   function filteredRows(){
     const crew=(byId('tkCrewFilter')?.value||'').trim().toLowerCase();
-    if(!crew) return [...rows];
-    return rows.filter(row=>String(row.crew_name||employees.get(row.employee_id)?.default_crew_name||'').trim().toLowerCase()===crew);
+    const charge=byId('tkChargeFilter')?.value||'';
+    const labor=(byId('tkLaborCodeFilter')?.value||'').trim().toLowerCase();
+    return rows.filter(row=>{
+      const rowCrew=String(row.crew_name||employees.get(row.employee_id)?.default_crew_name||'').trim().toLowerCase();
+      if(crew&&rowCrew!==crew)return false;
+      const overhead=!row.job_id&&!!row.labor_code;
+      if(charge==='job'&&overhead)return false;
+      if(charge==='overhead'&&!overhead)return false;
+      if(labor&&String(row.labor_code||'').trim().toLowerCase()!==labor)return false;
+      return true;
+    });
   }
 
   function populateCrewFilter(){
@@ -93,6 +116,28 @@
     rows.forEach(r=>{if(r.crew_name)crews.add(String(r.crew_name).trim());});
     select.innerHTML='<option value="">All crews</option>'+[...crews].filter(Boolean).sort((a,b)=>a.localeCompare(b)).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
     if([...select.options].some(o=>o.value===current)) select.value=current;
+  }
+
+  function populateLaborCodeFilter(){
+    const select=byId('tkLaborCodeFilter');
+    if(!select)return;
+    const current=select.value;
+    const codes=new Set(rows.filter(row=>!row.job_id&&row.labor_code).map(row=>String(row.labor_code).trim()).filter(Boolean));
+    select.innerHTML='<option value="">All overhead codes</option>'+[...codes].sort((a,b)=>a.localeCompare(b)).map(code=>`<option value="${esc(code)}">${esc(code)}</option>`).join('');
+    if([...select.options].some(option=>option.value===current))select.value=current;
+  }
+
+  function updateChargeFilters(){
+    const charge=byId('tkChargeFilter')?.value||'';
+    const wrap=byId('tkLaborCodeFilterWrap');
+    const select=byId('tkLaborCodeFilter');
+    const job=byId('tkJobFilter');
+    wrap?.classList.toggle('hidden',charge!=='overhead');
+    if(charge!=='overhead'&&select)select.value='';
+    if(job){
+      if(charge==='overhead')job.value='';
+      job.disabled=charge==='overhead';
+    }
   }
 
   async function run(){
@@ -119,6 +164,8 @@
       if(error) throw error;
       rows=data||[];
       populateCrewFilter();
+      populateLaborCodeFilter();
+      updateChargeFilters();
       render();
       document.dispatchEvent(new CustomEvent('linecrew:timekeeping-report',{detail:{rows:filteredRows()}}));
     }catch(error){
@@ -230,6 +277,28 @@
     }).join('');
   }
 
+  function overheadSummary(view){
+    const overhead=view.filter(row=>!row.job_id&&row.labor_code);
+    if(!overhead.length)return '';
+    const grouped=new Map();
+    overhead.forEach(row=>{
+      const code=String(row.labor_code||'Company Overhead');
+      if(!grouped.has(code))grouped.set(code,[]);
+      grouped.get(code).push(row);
+    });
+    const total=overhead.reduce((sum,row)=>sum+num(row.regular_hours)+num(row.overtime_hours),0);
+    return `<section class="tk-overhead-summary"><div class="tk-overhead-summary-title"><strong>Overhead Charge Summary</strong><span class="muted">${grouped.size} code${grouped.size===1?'':'s'} · ${total.toFixed(2)} total hours</span></div>${[...grouped.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([code,group])=>{
+      const regular=group.reduce((sum,row)=>sum+num(row.regular_hours),0);
+      const overtime=group.reduce((sum,row)=>sum+num(row.overtime_hours),0);
+      const people=new Set(group.map(row=>row.employee_id)).size;
+      const detail=[...group].sort((a,b)=>String(b.work_date||'').localeCompare(String(a.work_date||''))||String(employees.get(a.employee_id)?.full_name||'').localeCompare(String(employees.get(b.employee_id)?.full_name||''))).map(row=>{
+        const person=employees.get(row.employee_id)||{};
+        return `<tr><td>${esc(row.work_date||'')}</td><td>${esc(person.full_name||'Employee')}</td><td>${esc(timeText(row.start_time))}</td><td>${esc(timeText(row.stop_time))}</td><td>${num(row.lunch_minutes)}</td><td>${num(row.regular_hours).toFixed(2)}</td><td>${num(row.overtime_hours).toFixed(2)}</td><td>${(num(row.regular_hours)+num(row.overtime_hours)).toFixed(2)}</td><td>${esc(row.notes||'')}</td></tr>`;
+      }).join('');
+      return `<details class="tk-overhead-code"><summary><span class="tk-overhead-name">${esc(code)}</span><span class="tk-overhead-metric"><strong>${people}</strong><span>People</span></span><span class="tk-overhead-metric"><strong>${regular.toFixed(2)}</strong><span>Regular</span></span><span class="tk-overhead-metric"><strong>${overtime.toFixed(2)}</strong><span>OT</span></span><span class="tk-overhead-metric"><strong>${(regular+overtime).toFixed(2)}</strong><span>Total</span></span></summary><div class="tk-overhead-detail"><div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Date</th><th>Employee</th><th>Start</th><th>Stop</th><th>Lunch</th><th>Regular</th><th>OT</th><th>Total</th><th>Notes</th></tr></thead><tbody>${detail}</tbody></table></div></div></details>`;
+    }).join('')}</section>`;
+  }
+
   function render(){
     addStyles();
     const view=filteredRows();
@@ -243,7 +312,7 @@
     if(!box)return;
     if(!view.length){box.innerHTML='<div class="tk-crew-card"><strong>No time recorded for this view.</strong><p class="tk-help">Create or save a Daily Report with crew time, or change the filters.</p></div>';return;}
     const groups=employeeGroups(view);
-    box.innerHTML=`<div class="tk-report-toolbar"><span class="muted">${groups.length} employees · click a row for daily detail${canEditTime()?' and corrections':''}.</span><button id="tkExpandEmployees" class="secondary small" type="button">Expand All</button><button id="tkCollapseEmployees" class="secondary small" type="button">Collapse All</button></div>`+
+    box.innerHTML=overheadSummary(view)+`<div class="tk-report-toolbar"><span class="muted">${groups.length} employees · click a row for daily detail${canEditTime()?' and corrections':''}.</span><button id="tkExpandEmployees" class="secondary small" type="button">Expand All</button><button id="tkCollapseEmployees" class="secondary small" type="button">Collapse All</button></div>`+
       groups.map(([employeeId,group],groupIndex)=>{
         const e=employees.get(employeeId)||{};
         const er=group.reduce((s,r)=>s+num(r.regular_hours),0);
@@ -269,11 +338,11 @@
   function exportCsv(){
     const view=filteredRows();
     if(!view.length){toast('Run the Timekeeping report before exporting.','warning');return;}
-    const out=[['Employee #','Employee','Classification','Date','Job #','Job Name','Crew','Start','Stop','Lunch Minutes','Regular Hours','OT Hours','Total Hours','Per Diem','Equipment','Storm']];
+    const out=[['Employee #','Employee','Classification','Date','Charge To','Job #','Job Name','Overhead Labor Code','Crew','Start','Stop','Lunch Minutes','Regular Hours','OT Hours','Total Hours','Per Diem','Equipment','Storm']];
     view.forEach(r=>{
       const e=employees.get(r.employee_id)||{};
       const j=jobs.get(r.job_id)||{};
-      out.push([e.employee_number||'',e.full_name||'',e.classification||'',r.work_date||'',j.job_number||r.labor_code||'',j.job_name||(r.labor_code?'Overhead':''),r.crew_name||e.default_crew_name||'',timeText(r.start_time),timeText(r.stop_time),num(r.lunch_minutes),num(r.regular_hours).toFixed(2),num(r.overtime_hours).toFixed(2),(num(r.regular_hours)+num(r.overtime_hours)).toFixed(2),r.per_diem?'Yes':'No',equipmentText(r,e),r.storm_work?'Yes':'No']);
+      out.push([e.employee_number||'',e.full_name||'',e.classification||'',r.work_date||'',r.job_id?'Job':'Overhead',j.job_number||'',j.job_name||'',r.labor_code||'',r.crew_name||e.default_crew_name||'',timeText(r.start_time),timeText(r.stop_time),num(r.lunch_minutes),num(r.regular_hours).toFixed(2),num(r.overtime_hours).toFixed(2),(num(r.regular_hours)+num(r.overtime_hours)).toFixed(2),r.per_diem?'Yes':'No',equipmentText(r,e),r.storm_work?'Yes':'No']);
     });
     const blob=new Blob([out.map(x=>x.map(csvCell).join(',')).join('\n')],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob),a=document.createElement('a');
@@ -293,7 +362,8 @@
   window.LineCrewTimekeepingReport={run,render,getRows:()=>filteredRows(),getAllRows:()=>[...rows],getEmployees:()=>new Map(employees),getJobs:()=>new Map(jobs),refreshRefs:refs};
 
   document.addEventListener('change',e=>{
-    if(e.target?.id==='tkCrewFilter'){
+    if(['tkCrewFilter','tkChargeFilter','tkLaborCodeFilter'].includes(e.target?.id)){
+      if(e.target.id==='tkChargeFilter')updateChargeFilters();
       render();
       document.dispatchEvent(new CustomEvent('linecrew:timekeeping-report',{detail:{rows:filteredRows()}}));
     }

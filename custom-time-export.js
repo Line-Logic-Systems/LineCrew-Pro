@@ -59,12 +59,19 @@
     const employeeMap = new Map((employeeResult.data || []).map((item) => [item.id, item]));
     const jobMap = new Map((jobResult.data || []).map((item) => [item.id, item]));
     const crewFilter = (byId('tkCrewFilter')?.value || '').trim().toLowerCase();
+    const chargeFilter = byId('tkChargeFilter')?.value || '';
+    const laborCodeFilter = (byId('tkLaborCodeFilter')?.value || '').trim().toLowerCase();
 
     return (reportResult.data || [])
       .filter((row) => {
-        if (!crewFilter) return true;
         const employee = employeeMap.get(row.employee_id) || {};
-        return String(row.crew_name || employee.default_crew_name || '').trim().toLowerCase() === crewFilter;
+        const rowCrew = String(row.crew_name || employee.default_crew_name || '').trim().toLowerCase();
+        if (crewFilter && rowCrew !== crewFilter) return false;
+        const overhead = !row.job_id && !!row.labor_code;
+        if (chargeFilter === 'job' && overhead) return false;
+        if (chargeFilter === 'overhead' && !overhead) return false;
+        if (laborCodeFilter && String(row.labor_code || '').trim().toLowerCase() !== laborCodeFilter) return false;
+        return true;
       })
       .map((row) => {
         const employee = employeeMap.get(row.employee_id) || {};
@@ -74,8 +81,10 @@
           'Employee': employee.full_name || '',
           'Classification': employee.classification || '',
           'Date': row.work_date || '',
-          'Job #': job.job_number || row.labor_code || '',
-          'Job Name': job.job_name || (row.labor_code ? 'Overhead' : ''),
+          'Charge To': row.job_id ? 'Job' : 'Overhead',
+          'Job #': job.job_number || '',
+          'Job Name': job.job_name || '',
+          'Overhead Labor Code': row.labor_code || '',
           'Crew': row.crew_name || employee.default_crew_name || '',
           'Start': timeText(row.start_time),
           'Stop': timeText(row.stop_time),
@@ -123,7 +132,7 @@
     const popup = window.open('', '_blank');
     if (!popup) throw new Error('Allow pop-ups to create the PDF/print report.');
 
-    const columns = ['Employee','Date','Job #','Crew','Start','Stop','Regular Hours','OT Hours','Total Hours','Per Diem'];
+    const columns = ['Employee','Date','Charge To','Job #','Overhead Labor Code','Crew','Start','Stop','Regular Hours','OT Hours','Total Hours','Per Diem'];
     const headerHtml = columns.map((column) => '<th>' + esc(column) + '</th>').join('');
     const rowsHtml = data.map((row) => {
       const cells = columns.map((column) => '<td>' + esc(row[column]) + '</td>').join('');
