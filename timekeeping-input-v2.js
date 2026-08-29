@@ -132,7 +132,17 @@
   function sortForemanFirst(){if(role()!=='foreman')return;ensureForemanRow();const box=byId('dailyCrewTimeRows'),ownEmp=ownForemanEmployee();if(!box||!ownEmp)return;const own=[...box.querySelectorAll('.tk-crew-row')].find(r=>r.querySelector('.tk-employee')?.value===ownEmp.id);if(!own)return;if(box.firstElementChild!==own)box.insertBefore(own,box.firstElementChild);const remove=own.querySelector('.tk-remove');if(remove){remove.textContent='Foreman';remove.disabled=true;remove.classList.remove('danger');remove.classList.add('secondary');}}
 
   function enhanceRow(row){
-    if(row.dataset.tkLaunchDetails==='1'){renderEquipmentSelect(row);applyDefaultEquipment(row,false);return;}
+    const existingDetail=row.querySelector('.tk-detail-row');
+    const detailIsComplete=!!(
+      existingDetail&&
+      existingDetail.querySelector('.tk-start')&&
+      existingDetail.querySelector('.tk-stop')&&
+      existingDetail.querySelector('.tk-lunch')&&
+      existingDetail.querySelector('.tk-equipment')&&
+      existingDetail.querySelector('.tk-per-diem')
+    );
+    if(row.dataset.tkLaunchDetails==='1'&&detailIsComplete){renderEquipmentSelect(row);applyDefaultEquipment(row,false);return;}
+    existingDetail?.remove();
     row.dataset.tkLaunchDetails='1';
     const detail=document.createElement('div');detail.className='tk-detail-row';
     detail.innerHTML=`<label>Start (24 hr)<input class="tk-start tk-clock24" type="text" inputmode="numeric" maxlength="5" value="" aria-label="Start time in 24-hour format"></label><label>Stop (24 hr)<input class="tk-stop tk-clock24" type="text" inputmode="numeric" maxlength="5" value="" aria-label="Stop time in 24-hour format"></label><label>Lunch (min)<input class="tk-lunch" type="number" min="0" max="720" step="5" value="0"></label><label>Truck / Equipment<select class="tk-equipment"></select></label><label class="tk-detail-check"><input class="tk-equipment-not-used" type="checkbox"> Not used today</label><label class="tk-detail-check"><input class="tk-per-diem" type="checkbox" checked> Per diem</label><div class="tk-hours-worked">Worked: —</div>`;
