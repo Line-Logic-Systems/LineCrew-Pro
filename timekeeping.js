@@ -20,6 +20,7 @@
 
   let employees = [];
   let foremen = [];
+  let admins = [];
   let entries = [];
   let jobs = [];
   let crewRowsLoadedForReport = null;
@@ -67,14 +68,15 @@
         </div>
       </div>
       <div id="timekeepingRosterCard" class="card hidden">
-        <h3>Manage Foreman Crews</h3>
-        <p class="muted">Add field employees who do not need a LineCrew login. Open a Foreman section below and use the Assigned Foreman dropdown to move employees between crews. Assigned members automatically appear on that Foreman's Daily Report.</p>
+        <h3>Manage Personnel Assignments</h3>
+        <p class="muted">Assign field employees to their Foreman crew and, independently, to an Admin time roster. Foreman crew members automatically appear on Daily Reports; Admin roster members automatically appear in that Admin's My Time workspace.</p>
         <div class="tk-grid">
           <label>Employee #<input id="tkEmployeeNumber" type="text" placeholder="Optional"></label>
           <label>Employee Name<input id="tkEmployeeName" type="text" placeholder="Full name"></label>
           <label>Classification<input id="tkEmployeeClass" type="text" placeholder="Lineman, Operator, Groundman..."></label>
           <label>Default Crew<input id="tkEmployeeCrew" type="text" placeholder="Crew name / number"></label>
           <label>Assigned Foreman<select id="tkEmployeeForeman"><option value="">Unassigned</option></select></label>
+          <label>Assigned Admin<select id="tkEmployeeAdmin"><option value="">Unassigned</option></select></label>
         </div>
         <button id="tkAddEmployeeBtn" class="success">Add Employee</button>
         <div id="tkRosterList" style="margin-top:12px"></div>
@@ -139,7 +141,7 @@
   async function refreshTimekeeping(){
     if(!companyId() || !getSb()) return;
     byId('timekeepingRosterCard')?.classList.toggle('hidden', !canManageRoster());
-    await Promise.all([loadEmployees(), loadJobs(), loadForemen()]);
+    await Promise.all([loadEmployees(), loadJobs(), loadForemen(), loadAdmins()]);
     renderRoster();
     fillFilters();
     await loadEntries();
@@ -148,7 +150,7 @@
   async function loadEmployees(){
     if(!companyId()) return;
     const { data, error } = await getSb().from('timekeeping_employees')
-      .select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id,linked_profile_id')
+      .select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id,assigned_admin_id,linked_profile_id')
       .eq('company_id', companyId())
       .order('active', { ascending:false })
       .order('full_name');
@@ -170,6 +172,24 @@
     if(select){
       const selected=select.value;
       select.innerHTML='<option value="">Unassigned</option>'+foremen.map(f=>`<option value="${esc(f.id)}">${esc(f.full_name||'Foreman')}</option>`).join('');
+      select.value=selected;
+    }
+  }
+
+  async function loadAdmins(){
+    if(!companyId() || !canManageRoster()) return;
+    const { data, error } = await getSb().from('profiles')
+      .select('id,full_name,role,active')
+      .eq('company_id', companyId())
+      .eq('role','admin')
+      .eq('active',true)
+      .order('full_name');
+    if(error){ console.error('Admin roster load failed', error); return; }
+    admins = data || [];
+    const select=byId('tkEmployeeAdmin');
+    if(select){
+      const selected=select.value;
+      select.innerHTML='<option value="">Unassigned</option>'+admins.map(a=>`<option value="${esc(a.id)}">${esc(a.full_name||'Admin')}</option>`).join('');
       select.value=selected;
     }
   }
@@ -209,11 +229,12 @@
       classification: (byId('tkEmployeeClass')?.value || '').trim() || null,
       default_crew_name: (byId('tkEmployeeCrew')?.value || '').trim() || null,
       assigned_foreman_id: byId('tkEmployeeForeman')?.value || null,
+      assigned_admin_id: byId('tkEmployeeAdmin')?.value || null,
       active: true
     };
     const { error } = await getSb().from('timekeeping_employees').insert(payload);
     if(error) return alert('Could not add employee: ' + error.message);
-    ['tkEmployeeNumber','tkEmployeeName','tkEmployeeClass','tkEmployeeCrew','tkEmployeeForeman'].forEach(id => { if(byId(id)) byId(id).value=''; });
+    ['tkEmployeeNumber','tkEmployeeName','tkEmployeeClass','tkEmployeeCrew','tkEmployeeForeman','tkEmployeeAdmin'].forEach(id => { if(byId(id)) byId(id).value=''; });
     await loadEmployees();
     renderRoster();
     fillFilters();
@@ -240,17 +261,30 @@
     refreshCrewEmployeeSelects();
   }
 
+  async function assignEmployeeAdmin(id, assignedAdminId){
+    if(!canManageRoster()) return;
+    const { error } = await getSb().from('timekeeping_employees')
+      .update({assigned_admin_id:assignedAdminId||null,updated_at:new Date().toISOString()})
+      .eq('id',id);
+    if(error) return alert('Could not assign employee to the Admin roster: '+error.message);
+    await loadEmployees();
+    renderRoster();
+    window.LineCrewLeadershipMyTime?.refresh?.();
+  }
+
   function renderRoster(){
     const box = byId('tkRosterList');
     if(!box) return;
     if(!employees.length){box.innerHTML='<p class="muted">No employees have been added yet.</p>';return;}
     const foremanOptions=(selected)=>'<option value="">Unassigned</option>'+foremen.map(f=>`<option value="${esc(f.id)}" ${f.id===selected?'selected':''}>${esc(f.full_name||'Foreman')}</option>`).join('');
-    const employeeRows=(group)=>group.map(e=>`<tr><td data-label="Employee"><strong>${esc(e.full_name)}</strong></td><td data-label="#">${esc(e.employee_number || '')}</td><td data-label="Classification">${esc(e.classification || '')}</td><td data-label="Default Crew">${esc(e.default_crew_name || '')}</td><td data-label="Assigned Foreman"><select data-tk-foreman="${esc(e.id)}" ${e.active?'':'disabled'}>${foremanOptions(e.assigned_foreman_id)}</select></td><td data-label="Status">${e.active ? 'Active':'Inactive'}</td><td data-label="Action" class="tk-row-actions"><button class="secondary small" data-tk-toggle="${esc(e.id)}" data-active="${e.active ? '0':'1'}">${e.active ? 'Deactivate':'Activate'}</button></td></tr>`).join('');
+    const adminOptions=(selected)=>'<option value="">Unassigned</option>'+admins.map(a=>`<option value="${esc(a.id)}" ${a.id===selected?'selected':''}>${esc(a.full_name||'Admin')}</option>`).join('');
+    const employeeRows=(group)=>group.map(e=>`<tr><td data-label="Employee"><strong>${esc(e.full_name)}</strong></td><td data-label="#">${esc(e.employee_number || '')}</td><td data-label="Classification">${esc(e.classification || '')}</td><td data-label="Default Crew">${esc(e.default_crew_name || '')}</td><td data-label="Assigned Foreman"><select data-tk-foreman="${esc(e.id)}" ${e.active?'':'disabled'}>${foremanOptions(e.assigned_foreman_id)}</select></td><td data-label="Assigned Admin"><select data-tk-admin="${esc(e.id)}" ${e.active?'':'disabled'}>${adminOptions(e.assigned_admin_id)}</select></td><td data-label="Status">${e.active ? 'Active':'Inactive'}</td><td data-label="Action" class="tk-row-actions"><button class="secondary small" data-tk-toggle="${esc(e.id)}" data-active="${e.active ? '0':'1'}">${e.active ? 'Deactivate':'Activate'}</button></td></tr>`).join('');
     const crewGroups=foremen.map(f=>({name:f.full_name||'Foreman',members:employees.filter(e=>e.assigned_foreman_id===f.id)}));
     crewGroups.push({name:'Unassigned Employees',members:employees.filter(e=>!e.assigned_foreman_id)});
-    box.innerHTML=crewGroups.map(group=>`<details class="job-card tk-crew-group"><summary><strong>${esc(group.name)}</strong> — ${group.members.length} crew member${group.members.length===1?'':'s'}</summary>${group.members.length?`<div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Default Crew</th><th>Assigned Foreman</th><th>Status</th><th></th></tr></thead><tbody>${employeeRows(group.members)}</tbody></table></div>`:'<p class="muted">No employees assigned.</p>'}</details>`).join('');
+    box.innerHTML=crewGroups.map(group=>`<details class="job-card tk-crew-group"><summary><strong>${esc(group.name)}</strong> — ${group.members.length} crew member${group.members.length===1?'':'s'}</summary>${group.members.length?`<div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Default Crew</th><th>Assigned Foreman</th><th>Assigned Admin</th><th>Status</th><th></th></tr></thead><tbody>${employeeRows(group.members)}</tbody></table></div>`:'<p class="muted">No employees assigned.</p>'}</details>`).join('');
     box.querySelectorAll('[data-tk-toggle]').forEach(btn => btn.onclick = () => toggleEmployee(btn.dataset.tkToggle, btn.dataset.active === '1'));
     box.querySelectorAll('[data-tk-foreman]').forEach(select => select.onchange = () => assignEmployee(select.dataset.tkForeman,select.value));
+    box.querySelectorAll('[data-tk-admin]').forEach(select => select.onchange = () => assignEmployeeAdmin(select.dataset.tkAdmin,select.value));
   }
 
   async function loadEntries(){
