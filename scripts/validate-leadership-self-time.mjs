@@ -34,6 +34,9 @@ for (const field of [
 for (const field of ['myTimePeopleWrap','myTimePersonSelect','myTimeAddPersonBtn','myTimePersonList']) {
   requireText(module, field, `My Time add-employee UI is missing ${field}.`);
 }
+for (const field of ['myTimeAdminRosterRows','my-time-admin-start','my-time-admin-stop','my-time-admin-lunch','my-time-admin-charge']) {
+  requireText(module, field, `Admin roster rows are missing ${field}.`);
+}
 
 requireText(module, "rpc('upsert_my_leadership_time'", 'My Time must save through the guarded RPC.');
 requireText(module, "rpc('upsert_leadership_employee_time'", 'Admin/GF added employees must save through the guarded employee RPC.');
@@ -41,6 +44,8 @@ requireText(module, "['gf','admin']", 'Only Admin and General Foreman may add ot
 requireText(module, 'assigned_admin_id === profile().id', 'Admin My Time must auto-load only the signed-in Admin roster.');
 requireText(module, 'const targetEmployeeId = activeEmployeeId', 'Admin roster time must save one selected person at a time.');
 requireText(module, 'These fields and hours belong only to this person.', 'My Time must explain that each person has independent hours.');
+requireText(module, 'saveAdminRow(row)', 'Each Admin roster row must save independently.');
+requireText(module, 'captureAdminRows()', 'Admin roster drafts must survive adding or editing another person.');
 requireText(module, 'Start (24 hr)', 'My Time Start must use the Foreman-style 24-hour entry.');
 requireText(module, 'Stop (24 hr)', 'My Time Stop must use the Foreman-style 24-hour entry.');
 requireText(module, "digits.padStart(4,'0')", 'My Time must accept compact military entries such as 600 and 1630.');
@@ -75,13 +80,20 @@ requireText(adminRosterMigration, 'timekeeping_employees_assigned_admin_idx', 'A
 requireText(adminRosterMigration, 'revoke all on function public.validate_timekeeping_employee_admin_assignment()', 'The assignment trigger function must not be directly executable.');
 requireText(timekeeping, 'data-tk-admin', 'Personnel management must include an Assigned Admin control.');
 requireText(timekeeping, 'assigned_admin_id:assignedAdminId||null', 'Personnel Admin assignments must persist.');
+requireText(timekeeping, 'id="tkChargeFilter"', 'Time Report needs a Job/Overhead charge filter.');
+requireText(timekeeping, 'id="tkLaborCodeFilter"', 'Time Report needs an overhead labor-code filter.');
 
-requireText(loader, 'leadership-my-time.js?v=20260829c', 'The My Time module is not loaded.');
-requireText(shell, '/leadership-my-time.js?v=20260829a', 'The My Time module is not in the offline app shell.');
+requireText(loader, 'leadership-my-time.js?v=20260829d', 'The My Time module is not loaded.');
+requireText(shell, '/leadership-my-time.js?v=20260829d', 'The My Time module is not in the offline app shell.');
 requireText(report, "rpc('timekeeping_report_rows_v3'", 'The Time Report must include leadership self-time.');
 requireText(customExport, "rpc('timekeeping_report_rows_v3'", 'Custom exports must include leadership self-time.');
 requireText(report, 'r.labor_code', 'The Time Report must show overhead labor codes.');
 requireText(customExport, 'row.labor_code', 'Custom exports must show overhead labor codes.');
 requireText(payroll, 'r.labor_code', 'Payroll exports must show overhead labor codes.');
+requireText(report, 'Overhead Charge Summary', 'The Time Report must group overhead hours by labor code.');
+requireText(report, "byId('tkChargeFilter')", 'The Time Report must apply its charge filter.');
+requireText(report, "byId('tkLaborCodeFilter')", 'The Time Report must apply its labor-code filter.');
+requireText(customExport, "'Charge To'", 'Custom exports must identify Job versus Overhead charges.');
+requireText(customExport, "'Overhead Labor Code'", 'Custom exports must include the overhead labor code explicitly.');
 
 console.log('Leadership My Time guardrails passed.');
