@@ -34,13 +34,6 @@ jobs:
           node scripts/verify-backup.mjs "$BACKUP_PATH"
       - name: Package backup
         run: tar -czf linecrew-pro-daily-data-backup.tgz backup-output
-      - name: Upload recovery artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: linecrew-pro-daily-data-backup-${{ github.run_number }}
-          path: linecrew-pro-daily-data-backup.tgz
-          retention-days: 30
-          if-no-files-found: error
       - name: Copy backup outside GitHub and Supabase
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_BACKUP_CONNECTION_STRING }}
