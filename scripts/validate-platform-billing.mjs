@@ -212,6 +212,15 @@ if (!checkout.includes('BILLING_PLAN_PRICE_MAP')) throw new Error('Checkout must
 if (checkout.includes('BILLING_ALLOWED_PRICE_IDS')) throw new Error('Checkout still contains the older client-selected Price ID allowlist path.');
 if (!checkout.includes('planPriceMap.get(planCode)')) throw new Error('Checkout must bind the company assigned plan to its Stripe Price server-side.');
 if (!checkout.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner or Admin role.');
+for (const [name, source] of [
+  ['Checkout', checkout],
+  ['Billing portal', portal],
+  ['Plan upgrade', upgrade],
+]) {
+  if (!source.includes('.getClaims(accessToken)') || !source.includes('claimsData?.claims?.aal !== "aal2"')) {
+    throw new Error(`${name} must explicitly require a verified aal2 JWT before using the service client.`);
+  }
+}
 if (!checkout.includes('already has a Stripe subscription')) throw new Error('Checkout must guard against duplicate live subscriptions.');
 if (/\.update\(\{[^}]*\b(?:plan_code|status|access_enabled|trial_ends_at)\b/s.test(checkout)) {
   throw new Error('Starting Checkout must not overwrite an existing company entitlement.');

@@ -377,7 +377,7 @@
       return (hours * 60) + minutes;
     };
     let elapsed = toMinutes(stop) - toMinutes(start);
-    if (elapsed <= 0) elapsed += 1440;
+    if (elapsed < 0) elapsed += 1440;
     const worked = (elapsed - lunch) / 60;
     if (worked <= 0 || worked > 24) {
       if (output) output.textContent = '—';
@@ -541,7 +541,7 @@
       return (hours * 60) + minutes;
     };
     let elapsed = toMinutes(stop) - toMinutes(start);
-    if (elapsed <= 0) elapsed += 1440;
+    if (elapsed < 0) elapsed += 1440;
     const worked = (elapsed - lunch) / 60;
     if (worked <= 0 || worked > 24) {
       if (output) output.textContent = '—';
