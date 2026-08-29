@@ -158,6 +158,20 @@ if (fs.existsSync('role-workspace-polish.js')) {
   );
 }
 
+if (fs.existsSync('training/training-center.js')) {
+  const trainingCenterCode = fs.readFileSync('training/training-center.js', 'utf8');
+  try {
+    new Function(trainingCenterCode);
+  } catch (error) {
+    failures.push('Training Center JavaScript syntax error: ' + error.message);
+  }
+  assert(
+    trainingCenterCode.includes('New training videos are being added') &&
+      trainingCenterCode.includes('The previous videos were retired after recent LineCrew Pro updates.'),
+    'The Training Center must explain the temporary empty state after legacy videos are retired.'
+  );
+}
+
 const forbiddenSecrets = [
   ['Supabase service-role key reference', /service[_-]?role/i],
   ['OpenAI API key reference', /OPENAI_API_KEY|sk-proj-/],
