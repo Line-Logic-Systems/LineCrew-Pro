@@ -74,7 +74,10 @@
     if(crewCard && hideLegacyHours){
       crewCard.setAttribute('data-time-source','primary');
       const help=crewCard.querySelector('.tk-help');
-      if(help) help.textContent="Enter each crew member's Regular and OT hours. These hours automatically drive Daily Report totals, production run-rate calculations, and payroll/time reports.";
+      if(help&&!help.dataset.tkLaunchHelp){
+        help.dataset.tkLaunchHelp='1';
+        help.textContent='Your Foreman row appears first, followed by the assigned crew. Assigned equipment fills in automatically; change the dropdown only when someone uses a different unit that day. Enter Start and Stop in 24-hour time plus Lunch; LineCrew calculates hours for payroll. Per diem defaults on.';
+      }
     }
   }
 

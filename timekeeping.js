@@ -19,6 +19,7 @@
   };
 
   let employees = [];
+  let equipment = [];
   let foremen = [];
   let admins = [];
   let entries = [];
@@ -45,10 +46,14 @@
       .tk-crew-row{display:grid;grid-template-columns:minmax(180px,1.6fr) minmax(90px,.7fr) minmax(90px,.7fr) auto;gap:8px;align-items:end;margin:8px 0}
       .tk-crew-row label{margin:0;font-size:12px}
       .tk-crew-row button{width:auto;margin:0;padding:11px}
+      .tk-hours-fallback{display:none!important}
+      .tk-detail-row{grid-column:1/-1;display:grid;grid-template-columns:110px 110px 100px minmax(150px,1fr) auto auto;gap:10px;padding:8px 0 2px;border-top:1px solid #c2cdd7;align-items:end}
+      .tk-detail-row label{font-size:11px;margin:0}.tk-detail-row input,.tk-detail-row select{margin:0;padding:8px}.tk-clock24{font-variant-numeric:tabular-nums;letter-spacing:.4px}
+      .tk-detail-check{display:flex;gap:6px;align-items:center;padding-bottom:10px}.tk-detail-check input{width:auto;min-width:0}.tk-hours-worked{font-size:12px;color:#5f7080;grid-column:1/-1}
       .tk-help{font-size:13px;color:#6c7a89}
       .tk-inline-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
       .tk-inline-actions button{width:auto}
-      @media(max-width:720px){.tk-grid,.tk-summary{grid-template-columns:1fr 1fr}.tk-crew-row{grid-template-columns:1fr 1fr}.tk-crew-row .tk-person{grid-column:1/-1}}
+      @media(max-width:720px){.tk-grid,.tk-summary{grid-template-columns:1fr 1fr}.tk-crew-row{grid-template-columns:1fr 1fr}.tk-crew-row .tk-person{grid-column:1/-1}.tk-detail-row{grid-template-columns:1fr 1fr}.tk-detail-row>label:nth-child(4){grid-column:1/-1}}
     `;
     document.head.appendChild(style);
   }
@@ -151,13 +156,21 @@
 
   async function loadEmployees(){
     if(!companyId()) return;
-    const { data, error } = await getSb().from('timekeeping_employees')
-      .select('id,employee_number,full_name,classification,default_crew_name,active,assigned_foreman_id,assigned_admin_id,linked_profile_id')
-      .eq('company_id', companyId())
-      .order('active', { ascending:false })
-      .order('full_name');
+    const [employeeResult,equipmentResult] = await Promise.all([
+      getSb().from('timekeeping_employees')
+        .select('id,employee_number,full_name,classification,default_crew_name,default_equipment,active,assigned_foreman_id,assigned_admin_id,linked_profile_id')
+        .eq('company_id', companyId())
+        .order('active', { ascending:false })
+        .order('full_name'),
+      getSb().from('timekeeping_equipment')
+        .select('id,unit_number,description,active')
+        .eq('company_id', companyId())
+        .order('unit_number')
+    ]);
+    const { data, error } = employeeResult;
     if(error){ console.error('Timekeeping employee load failed', error); return; }
     employees = data || [];
+    if(!equipmentResult.error) equipment = equipmentResult.data || [];
   }
 
   async function loadForemen(){
@@ -348,7 +361,7 @@
     const card = document.createElement('div');
     card.id='dailyCrewTimeCard';
     card.className='tk-crew-card';
-    card.innerHTML=`<h3>Crew Time</h3><p class="tk-help">Your assigned crew loads automatically. Use Add Extra Man for another active company employee helping your crew today. Daily Report totals update automatically.</p><div id="dailyCrewTimeRows"></div><div class="tk-inline-actions"><button id="dailyAddCrewMember" type="button" class="secondary small">+ Add Extra Man</button><span id="dailyCrewTimeTotals" class="muted"></span></div>`;
+    card.innerHTML=`<h3>Crew Time</h3><p class="tk-help" data-tk-launch-help="1">Your Foreman row appears first, followed by the assigned crew. Assigned equipment fills in automatically; change the dropdown only when someone uses a different unit that day. Enter Start and Stop in 24-hour time plus Lunch; LineCrew calculates hours for payroll. Per diem defaults on.</p><div id="dailyCrewTimeRows"></div><div class="tk-inline-actions"><button id="dailyAddCrewMember" type="button" class="secondary small">+ Add Extra Man</button><span id="dailyCrewTimeTotals" class="muted"></span></div>`;
     const notes = byId('dailyNotes');
     if(notes?.parentElement) notes.parentElement.insertBefore(card, notes);
     else form.appendChild(card);
@@ -373,14 +386,71 @@
     }).join('');
   }
 
+  function equipmentOptions(selected=''){
+    let options=equipment.filter(item=>item.active!==false).map(item=>`<option value="${esc(item.unit_number)}" ${item.unit_number===selected?'selected':''}>${esc(item.unit_number)}${item.description?' — '+esc(item.description):''}</option>`);
+    if(selected&&!equipment.some(item=>item.unit_number===selected))options.unshift(`<option value="${esc(selected)}" selected>${esc(selected)}</option>`);
+    return '<option value="">Select truck / equipment</option>'+options.join('');
+  }
+
+  function normalizeClock(input){
+    let value=String(input.value||'').replace(/[^0-9:]/g,'').slice(0,5);
+    if(/^\d{3,4}$/.test(value)){value=value.padStart(4,'0');value=value.slice(0,2)+':'+value.slice(2);}
+    if(/^\d{1,2}:\d{1,2}$/.test(value)){
+      const [hours,minutes]=value.split(':').map(Number);
+      if(hours>=0&&hours<=23&&minutes>=0&&minutes<=59)value=String(hours).padStart(2,'0')+':'+String(minutes).padStart(2,'0');
+    }
+    input.value=value;
+  }
+
+  function clockMinutes(value){
+    if(!value||!/^([01]\d|2[0-3]):[0-5]\d$/.test(value))return null;
+    const [hours,minutes]=value.split(':').map(Number);
+    return hours*60+minutes;
+  }
+
+  function syncCrewRowFromClock(row){
+    const start=clockMinutes(row.querySelector('.tk-start')?.value);
+    const stop=clockMinutes(row.querySelector('.tk-stop')?.value);
+    const output=row.querySelector('.tk-hours-worked');
+    if(start===null||stop===null){if(output)output.textContent='Worked: —';syncDailyTotals();return;}
+    let minutes=stop-start;
+    if(minutes<0)minutes+=1440;
+    minutes-=Math.max(0,number(row.querySelector('.tk-lunch')?.value));
+    const total=Math.max(0,minutes/60);
+    const regular=row.querySelector('.tk-regular');
+    const overtime=row.querySelector('.tk-ot');
+    if(regular)regular.value=total.toFixed(2);
+    if(overtime)overtime.value='0.00';
+    if(output)output.textContent=`Worked: ${total.toFixed(2)} h · Weekly OT is calculated after save`;
+    syncDailyTotals();
+  }
+
   function addCrewRow(data={}){
     const box=byId('dailyCrewTimeRows');if(!box)return;
     const row=document.createElement('div');
-    row.className='tk-crew-row';row.dataset.row=String(++crewRowCounter);
-    row.innerHTML=`<label class="tk-person">Employee<select class="tk-employee">${employeeOptions(data.employee_id||'')}</select></label><label>Regular<input class="tk-regular" type="number" min="0" max="24" step="0.25" value="${number(data.regular_hours)}"></label><label>OT<input class="tk-ot" type="number" min="0" max="24" step="0.25" value="${number(data.overtime_hours)}"></label><button type="button" class="danger small tk-remove">Remove</button>`;
+    row.className='tk-crew-row';row.dataset.row=String(++crewRowCounter);row.dataset.tkLaunchDetails='1';
+    const employee=employees.find(item=>item.id===(data.employee_id||''));
+    const selectedEquipment=data.equipment_used||employee?.default_equipment||'';
+    const perDiem=data.per_diem!==false;
+    row.innerHTML=`<label class="tk-person">Employee<select class="tk-employee">${employeeOptions(data.employee_id||'')}</select></label><label class="tk-hours-fallback">Regular<input class="tk-regular" type="number" min="0" max="24" step="0.25" value="${number(data.regular_hours)}"></label><label class="tk-hours-fallback">OT<input class="tk-ot" type="number" min="0" max="24" step="0.25" value="${number(data.overtime_hours)}"></label><button type="button" class="danger small tk-remove">Remove</button><div class="tk-detail-row"><label>Start (24 hr)<input class="tk-start tk-clock24" type="text" inputmode="numeric" maxlength="5" value="${esc(String(data.start_time||'').slice(0,5))}" aria-label="Start time in 24-hour format"></label><label>Stop (24 hr)<input class="tk-stop tk-clock24" type="text" inputmode="numeric" maxlength="5" value="${esc(String(data.stop_time||'').slice(0,5))}" aria-label="Stop time in 24-hour format"></label><label>Lunch (min)<input class="tk-lunch" type="number" min="0" max="720" step="5" value="${Math.max(0,Math.min(720,Math.round(number(data.lunch_minutes))))}"></label><label>Truck / Equipment<select class="tk-equipment">${equipmentOptions(selectedEquipment)}</select></label><label class="tk-detail-check"><input class="tk-equipment-not-used" type="checkbox" ${data.equipment_not_used?'checked':''}> Not used today</label><label class="tk-detail-check"><input class="tk-per-diem" type="checkbox" ${perDiem?'checked':''}> Per diem</label><div class="tk-hours-worked">Worked: —</div></div>`;
     row.querySelector('.tk-remove').onclick=()=>{row.remove();syncDailyTotals();};
     row.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',syncDailyTotals));
+    row.querySelectorAll('.tk-start,.tk-stop').forEach(input=>{
+      input.addEventListener('blur',()=>{normalizeClock(input);syncCrewRowFromClock(row);});
+      input.addEventListener('input',()=>syncCrewRowFromClock(row));
+    });
+    row.querySelector('.tk-lunch')?.addEventListener('input',()=>syncCrewRowFromClock(row));
+    row.querySelector('.tk-employee')?.addEventListener('change',()=>{
+      const selected=employees.find(item=>item.id===row.querySelector('.tk-employee')?.value);
+      const select=row.querySelector('.tk-equipment');
+      if(select){select.innerHTML=equipmentOptions(selected?.default_equipment||'');select.value=selected?.default_equipment||'';}
+    });
+    const equipmentNotUsed=row.querySelector('.tk-equipment-not-used');
+    const syncEquipmentState=()=>{const select=row.querySelector('.tk-equipment');if(select)select.disabled=!!equipmentNotUsed?.checked;};
+    equipmentNotUsed?.addEventListener('change',syncEquipmentState);
+    syncEquipmentState();
     box.appendChild(row);syncDailyTotals();
+    if(row.querySelector('.tk-start')?.value&&row.querySelector('.tk-stop')?.value)syncCrewRowFromClock(row);
   }
 
   function refreshCrewEmployeeSelects(){
@@ -478,7 +548,7 @@
     const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
     const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;
     if(reportId){
-      const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
+      const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used').eq('daily_report_id',reportId).order('created_at');
       if(!error){
         const saved=data||[];
         const ownSaved=own?saved.find(x=>x.employee_id===own.id):null;
@@ -492,7 +562,7 @@
     return;
   }
   if(reportId){
-    const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId).order('created_at');
+    const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used').eq('daily_report_id',reportId).order('created_at');
     if(!error && data?.length){data.forEach(addCrewRow);return;}
   }
   await loadDefaultCrewRows();

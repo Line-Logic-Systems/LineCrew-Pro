@@ -115,7 +115,7 @@
 
   load('app-polish.js?v=20260823b');
   load('number-input-polish.js?v=20260823a');
-  load('role-workspace-polish.js?v=20260823a');
+  load('role-workspace-polish.js?v=20260829a');
   load('gf-crew-scope.js?v=20260826a');
   load('expanded-jsa-core.js?v=20260820', () => {
     load('jsa-signatures.js?v=20260828a', () => {
@@ -123,8 +123,8 @@
     });
     load('jsa-review.js?v=20260826a');
   });
-  load('timekeeping.js?v=20260829b', () => {
-    load('timekeeping-input-v2.js?v=20260829b', null, 'linecrew-timekeeping-input-v2');
+  load('timekeeping.js?v=20260829c', () => {
+    load('timekeeping-input-v2.js?v=20260829c', null, 'linecrew-timekeeping-input-v2');
     load('foreman-field-tools.js?v=20260828b');
     load('timekeeping-roster.js?v=20260823f');
     load('timekeeping-report-v2.js?v=20260829h', () => {

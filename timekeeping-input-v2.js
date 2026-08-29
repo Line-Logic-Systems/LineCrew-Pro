@@ -141,7 +141,10 @@
       existingDetail.querySelector('.tk-equipment')&&
       existingDetail.querySelector('.tk-per-diem')
     );
-    if(row.dataset.tkLaunchDetails==='1'&&detailIsComplete){renderEquipmentSelect(row);applyDefaultEquipment(row,false);return;}
+    if(row.dataset.tkLaunchDetails==='1'&&detailIsComplete){
+      if(loadedCompanyId===companyId()){renderEquipmentSelect(row);applyDefaultEquipment(row,false);}
+      return;
+    }
     existingDetail?.remove();
     row.dataset.tkLaunchDetails='1';
     const detail=document.createElement('div');detail.className='tk-detail-row';
