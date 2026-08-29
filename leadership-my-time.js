@@ -23,6 +23,31 @@
   const timeText = (value) => value ? String(value).slice(0,5) : '';
   const overheadCodes = ['Company Overhead','Administration','Travel','Training','Other'];
 
+  function militaryTime(value) {
+    let digits = String(value || '').trim().replace(/[^0-9:]/g, '');
+    if (/^\d{1,2}$/.test(digits)) {
+      const hours = Number(digits);
+      if (hours >= 0 && hours <= 23) return String(hours).padStart(2,'0') + ':00';
+    }
+    if (/^\d{3,4}$/.test(digits)) {
+      digits = digits.padStart(4,'0');
+      digits = digits.slice(0,2) + ':' + digits.slice(2);
+    }
+    const match = digits.match(/^(\d{1,2}):(\d{1,2})$/);
+    if (!match) return '';
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return '';
+    return String(hours).padStart(2,'0') + ':' + String(minutes).padStart(2,'0');
+  }
+
+  function normalizeMilitaryInput(input) {
+    if (!input) return '';
+    const normalized = militaryTime(input.value);
+    if (normalized) input.value = normalized;
+    return normalized;
+  }
+
   let employee = null;
   let employees = [];
   let selectedEmployeeIds = [];
@@ -117,8 +142,8 @@
         <div id="myTimeActivePerson" class="my-time-active-person"></div>
         <div class="my-time-grid">
           <label>Work Date<input id="myTimeDate" type="date"></label>
-          <label>Start<input id="myTimeStart" type="time" step="60"></label>
-          <label>Stop<input id="myTimeStop" type="time" step="60"></label>
+          <label>Start (24 hr)<input id="myTimeStart" class="my-time-clock24" type="text" inputmode="numeric" maxlength="5" placeholder="0600"></label>
+          <label>Stop (24 hr)<input id="myTimeStop" class="my-time-clock24" type="text" inputmode="numeric" maxlength="5" placeholder="1630"></label>
           <label>Lunch (minutes)<input id="myTimeLunch" type="number" min="0" max="720" step="1" value="0"></label>
           <label>Charge To<select id="myTimeChargeType"><option value="job">Active Job</option><option value="overhead">Overhead</option></select></label>
           <label id="myTimeJobWrap" class="my-time-wide">Job<select id="myTimeJob"><option value="">Choose a job</option></select></label>
@@ -162,7 +187,12 @@
 
   function bindEvents() {
     byId('myTimeChargeType').onchange = toggleChargeFields;
-    ['myTimeStart','myTimeStop','myTimeLunch'].forEach((id) => byId(id)?.addEventListener('input', calculateWorked));
+    ['myTimeStart','myTimeStop'].forEach((id) => {
+      const input = byId(id);
+      input?.addEventListener('input', calculateWorked);
+      input?.addEventListener('blur', () => { normalizeMilitaryInput(input); calculateWorked(); });
+    });
+    byId('myTimeLunch')?.addEventListener('input', calculateWorked);
     byId('myTimeEquipmentNotUsed').onchange = () => {
       const input = byId('myTimeEquipment');
       if (!input) return;
@@ -338,8 +368,8 @@
   }
 
   function calculateWorked() {
-    const start = byId('myTimeStart')?.value || '';
-    const stop = byId('myTimeStop')?.value || '';
+    const start = militaryTime(byId('myTimeStart')?.value || '');
+    const stop = militaryTime(byId('myTimeStop')?.value || '');
     const lunch = Math.round(num(byId('myTimeLunch')?.value));
     const output = byId('myTimeWorked');
     if (!start || !stop || lunch < 0 || lunch > 720) {
@@ -502,6 +532,8 @@
     const targetEmployeeId = activeEmployeeId;
     if (!targetEmployeeId || !selectedEmployeeIds.includes(targetEmployeeId)) return toast('Choose the person whose time you want to save.', 'warning');
     if (targetEmployeeId !== employee.id && !canAddOtherPeople()) return toast('Only Admin and General Foreman can add another employee.', 'error');
+    const startTime = normalizeMilitaryInput(byId('myTimeStart'));
+    const stopTime = normalizeMilitaryInput(byId('myTimeStop'));
     const worked = calculateWorked();
     if (worked === null) return toast('Enter a valid Start, Stop, and Lunch. Overnight shifts are supported.', 'warning');
     const chargeType = byId('myTimeChargeType')?.value || 'job';
@@ -518,8 +550,8 @@
       const common = {
         p_entry_id: editId,
         p_work_date: byId('myTimeDate')?.value || null,
-        p_start_time: byId('myTimeStart')?.value || null,
-        p_stop_time: byId('myTimeStop')?.value || null,
+        p_start_time: startTime || null,
+        p_stop_time: stopTime || null,
         p_lunch_minutes: lunch,
         p_job_id: jobId,
         p_labor_code: laborCode,
