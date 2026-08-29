@@ -15,6 +15,9 @@ const requiredFiles = [
   'supabase/functions/create-billing-portal/index.ts',
   'supabase/functions/create-plan-upgrade/index.ts',
   'supabase/functions/capture-crew-usage/index.ts',
+  'supabase/functions/linecrew-assistant/index.ts',
+  'supabase/functions/parse-utility-job-packet/index.ts',
+  'supabase/functions/send-team-invitation/index.ts',
   'supabase/functions/stripe-webhook/index.ts',
   'supabase/functions/stripe-webhook/logic.ts',
   'supabase/functions/stripe-webhook/logic_test.ts',
@@ -45,6 +48,9 @@ const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/ind
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
 const upgrade = fs.readFileSync('supabase/functions/create-plan-upgrade/index.ts', 'utf8');
 const crewUsage = fs.readFileSync('supabase/functions/capture-crew-usage/index.ts', 'utf8');
+const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts', 'utf8');
+const packetParser = fs.readFileSync('supabase/functions/parse-utility-job-packet/index.ts', 'utf8');
+const teamInvitation = fs.readFileSync('supabase/functions/send-team-invitation/index.ts', 'utf8');
 const webhook = fs.readFileSync('supabase/functions/stripe-webhook/index.ts', 'utf8');
 const webhookLogic = fs.readFileSync('supabase/functions/stripe-webhook/logic.ts', 'utf8');
 const webhookTests = fs.readFileSync('supabase/functions/stripe-webhook/logic_test.ts', 'utf8');
@@ -296,15 +302,31 @@ for (const [name, verifyJwt] of [
   ['stripe-webhook', false],
   ['complete-team-invitation-signup', false],
   ['capture-crew-usage', false],
-  ['create-billing-checkout', true],
-  ['create-billing-portal', true],
-  ['create-plan-upgrade', true],
-  ['linecrew-assistant', true],
-  ['parse-utility-job-packet', true],
-  ['send-team-invitation', true],
+  ['create-billing-checkout', false],
+  ['create-billing-portal', false],
+  ['create-plan-upgrade', false],
+  ['linecrew-assistant', false],
+  ['parse-utility-job-packet', false],
+  ['send-team-invitation', false],
 ]) {
   const block = new RegExp(`\\[functions\\.${name}\\]\\s+verify_jwt\\s*=\\s*${verifyJwt}`, 'm');
   if (!block.test(functionConfig)) throw new Error(`supabase/config.toml must explicitly set verify_jwt=${verifyJwt} for ${name}.`);
+}
+
+for (const [name, source] of [
+  ['create-billing-checkout', checkout],
+  ['create-billing-portal', portal],
+  ['create-plan-upgrade', upgrade],
+  ['linecrew-assistant', assistant],
+  ['parse-utility-job-packet', packetParser],
+  ['send-team-invitation', teamInvitation],
+]) {
+  if (!source.includes('headers.get("Authorization")')) {
+    throw new Error(`${name} must require an Authorization header before running with verify_jwt=false.`);
+  }
+  if (!source.includes('.getUser()')) {
+    throw new Error(`${name} must validate the caller through Supabase Auth before running with verify_jwt=false.`);
+  }
 }
 
 for (const marker of ['DISPOSABLE_ONLY','SUPABASE_PRODUCTION_PROJECT_REF','platform_owner_company_dashboard','my_company_billing_summary','my_company_subscription_access','company_subscriptions','platform_owners','Foreman accessed company Admin billing summary']) {

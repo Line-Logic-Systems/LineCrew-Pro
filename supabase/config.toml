@@ -1,6 +1,7 @@
-# Keep authentication behavior in source control. Stripe cannot send a
-# Supabase user JWT, and an invited user has no session until signup completes;
-# every other browser-callable function requires a valid JWT at the gateway.
+# Keep authentication behavior in source control. All functions disable the
+# legacy gateway JWT verifier so Auth can rotate to asymmetric signing keys.
+# Each handler fails closed with its own appropriate check: Stripe signature,
+# one-time invitation token, dual cron secrets, or Supabase Auth getUser().
 [functions.stripe-webhook]
 verify_jwt = false
 
@@ -11,19 +12,19 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.create-billing-checkout]
-verify_jwt = true
+verify_jwt = false
 
 [functions.create-billing-portal]
-verify_jwt = true
+verify_jwt = false
 
 [functions.create-plan-upgrade]
-verify_jwt = true
+verify_jwt = false
 
 [functions.linecrew-assistant]
-verify_jwt = true
+verify_jwt = false
 
 [functions.parse-utility-job-packet]
-verify_jwt = true
+verify_jwt = false
 
 [functions.send-team-invitation]
-verify_jwt = true
+verify_jwt = false

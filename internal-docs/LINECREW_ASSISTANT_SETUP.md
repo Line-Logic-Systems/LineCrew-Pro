@@ -18,7 +18,10 @@ The browser never stores an OpenAI key. The key belongs only in Supabase Edge Fu
 5. Add `OPENAI_API_KEY` with the server API key.
 6. Optional: add `OPENAI_MODEL` to override the default model.
 7. Optional: add `CORS_ALLOWED_ORIGINS` as a comma-separated list of exact development app origins. Production `https://app.linecrewpro.com` is always allowed. Do not add the public marketing site or wildcard origins.
-8. Confirm JWT verification remains enabled.
+8. Confirm platform JWT verification is disabled. The handler requires the
+   caller's `Authorization` header and validates it with `auth.getUser()` so it
+   supports Supabase's asymmetric JWT signing-key rotation without trusting an
+   unverified caller.
 9. Deploy the function.
 
 Supabase supplies `SUPABASE_URL` and the named `SUPABASE_PUBLISHABLE_KEYS` JSON object to hosted Edge Functions. The assistant reads the `default` publishable key and does not depend on the legacy `anon` key.

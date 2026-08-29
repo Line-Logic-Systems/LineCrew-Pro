@@ -160,7 +160,13 @@ The browser submits only a plan code such as `business`. It never submits or con
 
 Point Stripe to the deployed `stripe-webhook` Edge Function URL. The function validates `Stripe-Signature` with HMAC SHA-256 and a five-minute timestamp tolerance before processing the JSON body.
 
-`supabase/config.toml` intentionally sets `verify_jwt=false` only for the Stripe webhook and invitation-completion endpoint. Stripe authenticates with its signature, not a Supabase user JWT. All other Edge Functions are explicitly pinned to `verify_jwt=true`.
+`supabase/config.toml` intentionally sets `verify_jwt=false` for every deployed
+Edge Function so Supabase Auth can rotate from the legacy shared JWT secret to
+asymmetric signing keys. Authentication still fails closed inside each handler:
+Stripe uses its signed webhook, invitation completion uses its one-time token,
+scheduled usage capture requires both named secrets, and every signed-in user
+function requires an `Authorization` header and validates it with
+`auth.getUser()` before reading or changing company data.
 
 Subscribe to these events:
 - `checkout.session.completed`
