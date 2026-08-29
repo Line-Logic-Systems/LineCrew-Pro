@@ -14,7 +14,7 @@ No single provider is the only copy of company data. A backup is not considered 
 2. Every company upload in Supabase Storage.
 3. A manifest with row counts, byte counts, and SHA-256 hashes for every table and object.
 
-The large `training-videos` bucket is excluded from the daily package and included in the weekly backup. The package is retained in GitHub for 30 days and copied to the independent Azure backup container.
+The large `training-videos` bucket is excluded from the daily package and included in the weekly backup. The package is uploaded directly to the independent Azure backup container. GitHub Actions does not retain a backup artifact.
 
 ### Weekly full disaster backup
 
@@ -26,7 +26,7 @@ The large `training-videos` bucket is excluded from the daily package and includ
 4. The integrity manifest and `pg_restore` archive inventory.
 5. A separately hashed post-restore SQL bootstrap and verification script for the global Data API security gate.
 
-The package is retained in GitHub for 30 days and copied to Azure Blob Storage. Either destination can survive loss of Supabase; Azure also protects against loss of GitHub.
+The package is uploaded directly to Azure Blob Storage. Because it includes the database, Storage objects, and a complete Git bundle, the Azure copy can survive loss of Supabase or GitHub. GitHub Actions does not retain a backup artifact.
 
 ### Monthly disposable restore test
 
@@ -79,7 +79,7 @@ Never commit credentials or database URLs.
 
 ## Restore runbook
 
-1. Download the newest successful weekly package from Azure and compare it with the GitHub copy when both are available.
+1. Download the newest successful weekly package from Azure.
 2. Extract the package and run `node scripts/verify-backup.mjs backup-output/<timestamp>` before importing anything.
 3. Create a new, empty Supabase recovery project. Never restore over the damaged production project before validation.
 4. Restore the PostgreSQL archive with a PostgreSQL 17 client. Review `linecrew-postgres.list`, confirm the referenced Supabase roles exist in the recovery project, then use `pg_restore --no-owner --dbname <recovery-url> linecrew-postgres.dump`. Do not use `--no-acl`; function GRANT/REVOKE entries are part of the security boundary.
