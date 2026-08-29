@@ -21,6 +21,13 @@ const migration = read('supabase/migrations/20260828172839_leadership_self_time.
 const managedMigration = read('supabase/migrations/20260828203148_leadership_add_other_people.sql');
 const adminRosterMigration = read('supabase/migrations/20260829084727_admin_time_roster_assignments.sql');
 
+if (module.includes('if (elapsed <= 0) elapsed += 1440;')) {
+  throw new Error('Equal start and stop times must not be converted into a 24-hour shift.');
+}
+if ((module.match(/if \(elapsed < 0\) elapsed \+= 1440;/g) || []).length < 2) {
+  throw new Error('Both leadership time calculators must only roll genuinely overnight shifts.');
+}
+
 for (const role of ['gf','superintendent','admin','owner']) {
   requireText(module, `'${role}'`, `My Time UI is missing the ${role} role.`);
   requireText(migration, `'${role}'`, `My Time database authorization is missing the ${role} role.`);

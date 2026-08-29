@@ -220,6 +220,16 @@ Deno.serve(async (request) => {
       throw new RequestError("Authentication required.", 401);
     }
 
+    const accessToken = auth.replace(/^Bearer\s+/i, "").trim();
+    const { data: claimsData, error: claimsError } = await userClient.auth
+      .getClaims(accessToken);
+    if (claimsError || claimsData?.claims?.aal !== "aal2") {
+      throw new RequestError(
+        "Complete multi-factor authentication before managing billing.",
+        403,
+      );
+    }
+
     const { data: profile, error: profileError } = await service
       .from("profiles")
       .select("company_id,role,active")

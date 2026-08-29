@@ -86,6 +86,12 @@ Deno.serve(async (request) => {
     const { data: userData, error: userError } = await userClient.auth.getUser();
     if (userError || !userData.user) throw new Error("Authentication required.");
 
+    const accessToken = auth.replace(/^Bearer\s+/i, "").trim();
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(accessToken);
+    if (claimsError || claimsData?.claims?.aal !== "aal2") {
+      return json({ error: "Complete multi-factor authentication before managing billing." }, 403);
+    }
+
     const { data: profile, error: profileError } = await serviceClient
       .from("profiles")
       .select("company_id,role,active")
