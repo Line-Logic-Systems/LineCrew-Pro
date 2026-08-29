@@ -21,7 +21,7 @@ The browser never stores an OpenAI key. The key belongs only in Supabase Edge Fu
 8. Confirm JWT verification remains enabled.
 9. Deploy the function.
 
-Supabase supplies `SUPABASE_URL` and `SUPABASE_ANON_KEY` to hosted Edge Functions.
+Supabase supplies `SUPABASE_URL` and the named `SUPABASE_PUBLISHABLE_KEYS` JSON object to hosted Edge Functions. The assistant reads the `default` publishable key and does not depend on the legacy `anon` key.
 
 ## Security checks
 
