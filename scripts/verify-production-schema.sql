@@ -10,25 +10,47 @@ with function_state as (
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'
-), policy_state as (
-  select policyname
-  from pg_policies
-  where schemaname = 'public' and policyname like 'linecrew_owner_%'
-), superintendent_contract_policy_state as (
-  select policyname
+), customer_contract_management_policy_state as (
+  select tablename, policyname, cmd
   from pg_policies
   where schemaname = 'public'
     and tablename in ('customers', 'contracts')
     and policyname in (
-      'linecrew_superintendent_customers_manage',
-      'linecrew_superintendent_contracts_manage'
+      'customers_leadership_insert',
+      'customers_leadership_update',
+      'customers_leadership_delete',
+      'contracts_leadership_insert',
+      'contracts_leadership_update',
+      'contracts_leadership_delete'
     )
-    and cmd = 'ALL'
     and roles = array['authenticated']::name[]
-    and qual like '%customers_contracts%'
-    and qual like '%my_company_id%'
-    and with_check like '%customers_contracts%'
-    and with_check like '%my_company_id%'
+    and (
+      (cmd = 'INSERT'
+        and with_check like '%owner%'
+        and with_check like '%admin%'
+        and with_check like '%superintendent%'
+        and with_check like '%customers_contracts%'
+        and with_check like '%my_company_id%')
+      or
+      (cmd = 'UPDATE'
+        and qual like '%owner%'
+        and qual like '%admin%'
+        and qual like '%superintendent%'
+        and qual like '%customers_contracts%'
+        and qual like '%my_company_id%'
+        and with_check like '%owner%'
+        and with_check like '%admin%'
+        and with_check like '%superintendent%'
+        and with_check like '%customers_contracts%'
+        and with_check like '%my_company_id%')
+      or
+      (cmd = 'DELETE'
+        and qual like '%owner%'
+        and qual like '%admin%'
+        and qual like '%superintendent%'
+        and qual like '%customers_contracts%'
+        and qual like '%my_company_id%')
+    )
 )
 select
   to_regprocedure('public.update_my_profile_name(text)') is not null
@@ -60,9 +82,10 @@ select
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_admin_update'
   ) as broad_profile_update_policy_removed,
-  (select count(*) from policy_state) as owner_company_policy_count,
-  (select count(*) = 2 from superintendent_contract_policy_state)
-    as superintendent_customers_contracts_policies_safe,
+  (select count(*) from customer_contract_management_policy_state)
+    as customer_contract_management_policy_count,
+  (select count(*) = 6 from customer_contract_management_policy_state)
+    as customer_contract_management_policies_safe,
   (select count(*) from function_state f
    where f.prosecdef and has_function_privilege('anon', f.oid, 'execute'))
     as anon_executable_security_definer_count;
