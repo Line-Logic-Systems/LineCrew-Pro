@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const html = fs.readFileSync('index.html','utf8');
 const offlineJsa = fs.readFileSync('offline-jsa.js','utf8');
+const timekeepingInput = fs.readFileSync('timekeeping-input-v2.js','utf8');
 const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const migration = fs.readFileSync('supabase/migrations/202608190700_flexible_jsa_upload.sql','utf8');
 const compat = fs.readFileSync('supabase/migrations/202608190710_flexible_jsa_digital_compat.sql','utf8');
@@ -35,24 +36,28 @@ for(const token of coldStartHtml){
 }
 
 // Keep the iPhone cold-start fallback and cached/online job-list merge regression-proof.
-if(!html.includes('if(!session){\nif(enterOfflineJsaMode()) return;')){
-  throw new Error('A missing online session must fall back to cached Offline JSA access.');
+if(!html.includes('if(!session){\nif(!navigator.onLine && enterOfflineJsaMode()) return;')){
+  throw new Error('Only a missing offline session may fall back to cached Offline JSA access.');
 }
 const signedOutStart = html.indexOf("if(event === 'SIGNED_OUT'){");
 const signedOutEnd = html.indexOf("if(\nevent === 'SIGNED_IN'", signedOutStart);
 const signedOutBlock = html.slice(signedOutStart, signedOutEnd);
-if(!signedOutBlock.includes('if(readOfflineJsaAccess())') || signedOutBlock.includes('clearOfflineJsaAccess();')){
-  throw new Error('Transient SIGNED_OUT events must preserve valid Offline JSA access.');
+if(!signedOutBlock.includes('if(!navigator.onLine && readOfflineJsaAccess())') || signedOutBlock.includes('clearOfflineJsaAccess();')){
+  throw new Error('Offline sign-out must preserve cached JSA access while online sign-out returns to login.');
 }
 if((html.match(/return fillOfflineJsaJobSelect\(select,data \|\| \[\]\);/g) || []).length < 2){
   throw new Error('Both digital and uploaded JSA job lists must rebuild from the deduplicated list.');
 }
+if(!timekeepingInput.includes('window.LineCrewOfflineColdStart||!navigator.onLine')){
+  throw new Error('Timekeeping must not poll protected APIs during Offline JSA mode.');
+}
 
 for(const token of [
-  'linecrew-pro-shell-v47',
+  'linecrew-pro-shell-v48',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
   '/offline-jsa.js?v=20260827b',
+  '/timekeeping-input-v2.js?v=20260829a',
   '/jsa-signatures.js?v=20260828a'
 ]){
   if(!serviceWorker.includes(token)) throw new Error('Missing Offline JSA app-shell token: ' + token);
