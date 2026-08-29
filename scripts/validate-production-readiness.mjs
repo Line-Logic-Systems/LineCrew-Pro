@@ -100,11 +100,23 @@ const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster
 const fullDisasterRestoreWorkflow = fs.readFileSync('.github/workflows/full-disaster-recovery-drill.yml', 'utf8');
 const postRestoreSecurity = fs.readFileSync('scripts/post-restore-security.sql', 'utf8');
 const verifyPostRestoreSecurity = fs.readFileSync('scripts/verify-post-restore-security.sql', 'utf8');
+const verifyProductionSchema = fs.readFileSync('scripts/verify-production-schema.sql', 'utf8');
 const testPostRestoreSecurity = fs.readFileSync('scripts/test-post-restore-security-gate.sh', 'utf8');
 const restoreBackupStorage = fs.readFileSync('scripts/restore-backup-storage.mjs', 'utf8');
 const verifyRestoredTableCounts = fs.readFileSync('scripts/verify-restored-table-counts.mjs', 'utf8');
 const verifyRestoredManagedCounts = fs.readFileSync('scripts/verify-restored-managed-counts.mjs', 'utf8');
 const testDisasterRestore = fs.readFileSync('scripts/test-disaster-restore.mjs', 'utf8');
+
+for (const marker of [
+  'customers_leadership_insert',
+  'customers_leadership_update',
+  'customers_leadership_delete',
+  'contracts_leadership_insert',
+  'contracts_leadership_update',
+  'contracts_leadership_delete',
+  'customer_contract_management_policy_count',
+  'customer_contract_management_policies_safe'
+]) assert(verifyProductionSchema.includes(marker), `Production schema verifier is stale or missing: ${marker}`);
 
 const vercelText = JSON.stringify(vercel);
 for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Policy','X-Robots-Tag','Content-Security-Policy','Strict-Transport-Security']) {
