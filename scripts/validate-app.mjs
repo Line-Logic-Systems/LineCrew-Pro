@@ -27,6 +27,12 @@ assert(
     html.includes('Your secure session expired after an account security update.'),
   'Startup must recover from locally cached sessions invalidated by a signing-key rotation.'
 );
+assert(
+  html.includes("sb.functions.invoke('notify-pilot-feedback'") &&
+    html.includes('body:{feedback_id:feedbackId}') &&
+    html.includes('Your feedback was saved and emailed to Support.'),
+  'Pilot feedback must save first and then invoke the authenticated support email notifier.'
+);
 
 // Weekend pilot critical-role markers. These do not replace server-side policy tests;
 // they prevent accidental removal of required UI wiring during rapid changes.

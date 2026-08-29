@@ -14,6 +14,7 @@ const mustExist = [
   'scripts/validate-app.mjs',
   'supabase/functions/linecrew-assistant/index.ts',
   'supabase/functions/send-team-invitation/index.ts',
+  'supabase/functions/notify-pilot-feedback/index.ts',
   'supabase/functions/complete-team-invitation-signup/index.ts',
   'supabase/functions/_shared/api-keys.ts',
   'supabase/functions/_shared/api-keys_test.ts',
@@ -62,6 +63,7 @@ const support = fs.readFileSync('support.html', 'utf8');
 const vercel = JSON.parse(fs.readFileSync('vercel.json', 'utf8'));
 const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts', 'utf8');
 const teamInvitation = fs.readFileSync('supabase/functions/send-team-invitation/index.ts', 'utf8');
+const pilotFeedbackNotifier = fs.readFileSync('supabase/functions/notify-pilot-feedback/index.ts', 'utf8');
 const invitationSignup = fs.readFileSync('supabase/functions/complete-team-invitation-signup/index.ts', 'utf8');
 const edgeApiKeys = fs.readFileSync('supabase/functions/_shared/api-keys.ts', 'utf8');
 const roleMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_roles.sql', 'utf8');
@@ -193,6 +195,19 @@ assert(teamInvitation.includes('reply_to: "support@linecrewpro.com"'), 'Team inv
 assert(!teamInvitation.includes('SUPABASE_SERVICE_ROLE_KEY'), 'Team invitation sender must not bypass RLS with a service-role key.');
 assert(teamInvitation.includes('getPublishableKey()'), 'Team invitation sender must use the named publishable API-key environment.');
 assert(index.includes("sb.functions.invoke('send-team-invitation'"), 'Team invitation button must invoke the secured server sender.');
+
+for (const marker of [
+  'userClient.auth.getUser()',
+  'getPublishableKey()',
+  'getSecretKey()',
+  '.from("pilot_feedback")',
+  'feedback.submitted_by !== userData.user.id',
+  'to: ["support@linecrewpro.com"]',
+  'Idempotency-Key',
+  'Deno.env.get("RESEND_API_KEY")'
+]) assert(pilotFeedbackNotifier.includes(marker), `Pilot feedback email security marker missing: ${marker}`);
+assert(!/sb_secret_[A-Za-z0-9_-]+/i.test(pilotFeedbackNotifier), 'Pilot feedback notifier must not contain a literal secret key.');
+assert(index.includes("sb.functions.invoke('notify-pilot-feedback'"), 'Pilot feedback must invoke the secured email notifier after the record is saved.');
 
 for (const marker of [
   'getSecretKey()',

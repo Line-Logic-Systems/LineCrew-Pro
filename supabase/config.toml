@@ -28,3 +28,6 @@ verify_jwt = false
 
 [functions.send-team-invitation]
 verify_jwt = false
+
+[functions.notify-pilot-feedback]
+verify_jwt = false
