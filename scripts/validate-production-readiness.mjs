@@ -96,6 +96,7 @@ const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
 const foremanFieldTools = fs.readFileSync('foreman-field-tools.js', 'utf8');
 const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
+const dailyCompanyBackup = fs.readFileSync('.github/workflows/daily-company-data-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
 const fullDisasterRestoreWorkflow = fs.readFileSync('.github/workflows/full-disaster-recovery-drill.yml', 'utf8');
 const postRestoreSecurity = fs.readFileSync('scripts/post-restore-security.sql', 'utf8');
@@ -284,6 +285,14 @@ for (const marker of [
   'security-files.sha256',
   'sha256sum --check'
 ]) assert(independentBackup.includes(marker), `Independent backup is missing recovery-security marker: ${marker}`);
+for (const [name, workflow] of [
+  ['Independent backup', independentBackup],
+  ['Daily company backup', dailyCompanyBackup]
+]) {
+  assert(!workflow.includes('actions/upload-artifact'), `${name} must not publish sensitive recovery data as a GitHub artifact.`);
+  assert(workflow.includes('AZURE_STORAGE_CONNECTION_STRING'), `${name} must retain the off-platform Azure backup destination.`);
+  assert(workflow.includes('az storage blob upload'), `${name} must upload its recovery package to Azure.`);
+}
 assert(disasterRestoreWorkflow.includes('bash scripts/test-post-restore-security-gate.sh'), 'The disposable restore workflow must run an actual pg_restore security-gate drill.');
 assert(testPostRestoreSecurity.includes('pg_restore') && testPostRestoreSecurity.includes('pg_db_role_setting'), 'The recovery-security drill must prove pg_restore omits the role setting before restoring it.');
 assert(fullDisasterRestoreWorkflow.includes('environment: recovery-drill'), 'The full recovery drill must use its protected GitHub environment.');

@@ -59,13 +59,6 @@ jobs:
           git log -1 --format='%H %cI' > backup-output/repository-head.txt
       - name: Package backup
         run: tar -czf linecrew-pro-backup.tgz backup-output
-      - name: Upload encrypted-platform artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: linecrew-pro-disaster-backup-${{ github.run_number }}
-          path: linecrew-pro-backup.tgz
-          retention-days: 30
-          if-no-files-found: error
       - name: Copy backup to Azure Blob Storage
         env:
           AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_BACKUP_CONNECTION_STRING }}
