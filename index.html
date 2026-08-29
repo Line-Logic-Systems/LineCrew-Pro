@@ -4065,7 +4065,7 @@ const {
 data:{session}
 } = await sb.auth.getSession();
 if(!session){
-if(enterOfflineJsaMode()) return;
+if(!navigator.onLine && enterOfflineJsaMode()) return;
 currentProfile = null;
 currentCompany = null;
 if(!pendingInviteToken){
@@ -8206,7 +8206,7 @@ $('recoveryPassword').focus();
 return;
 }
 if(event === 'SIGNED_OUT'){
-if(readOfflineJsaAccess()){
+if(!navigator.onLine && readOfflineJsaAccess()){
 enterOfflineJsaMode();
 return;
 }
