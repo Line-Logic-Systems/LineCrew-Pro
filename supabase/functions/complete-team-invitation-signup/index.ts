@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { getSecretKey } from "../_shared/api-keys.ts";
 
 const allowedOrigins = new Set(["https://app.linecrewpro.com"]);
 
@@ -57,7 +58,7 @@ Deno.serve(async (request) => {
     }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = getSecretKey();
     if (!supabaseUrl || !serviceRoleKey) {
       console.error("Invitation signup service is missing required server configuration.");
       return jsonResponse(request, { error: "Invitation signup is unavailable." }, 503);
