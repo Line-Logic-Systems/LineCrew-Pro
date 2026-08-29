@@ -20,6 +20,13 @@ assert(html.includes('id="safetyJsaRecordSelect"'), 'Missing single-record Forem
 assert(html.includes("'Reset to Today'"), 'Foreman JSA filters must reset to the current day.');
 assert(html.includes('createSafetyJsaHistoryCard'), 'Missing reusable JSA history renderer.');
 assert(html.includes('Crew Name / Number'), 'Daily Report crew identifier must be clearly labeled.');
+assert(
+  html.includes('await sb.auth.getUser()') &&
+    html.includes('await sb.auth.refreshSession()') &&
+    html.includes("await sb.auth.signOut({scope:'local'})") &&
+    html.includes('Your secure session expired after an account security update.'),
+  'Startup must recover from locally cached sessions invalidated by a signing-key rotation.'
+);
 
 // Weekend pilot critical-role markers. These do not replace server-side policy tests;
 // they prevent accidental removal of required UI wiring during rapid changes.
