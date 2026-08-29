@@ -37,7 +37,7 @@
   function assignedEmployeeForUnit(unit,excludeId=''){return [...employeeEquipment.values()].find(e=>e.active!==false&&e.id!==excludeId&&e.default_equipment===unit)||null;}
   async function refreshData(){
     const c=getSb(),cid=companyId();
-    if(!c||!cid||refreshingData)return false;
+    if(!c||!cid||refreshingData||window.LineCrewOfflineColdStart||!navigator.onLine)return false;
     refreshingData=true;
     try{
       const requests=[
@@ -60,7 +60,7 @@
       refreshingData=false;
     }
   }
-  function ensureDataLoaded(){const cid=companyId();if(!cid||loadedCompanyId===cid)return;refreshData().then(ok=>{if(ok)scan();});}
+  function ensureDataLoaded(){const cid=companyId();if(!cid||loadedCompanyId===cid||window.LineCrewOfflineColdStart||!navigator.onLine)return;refreshData().then(ok=>{if(ok)scan();});}
   function equipmentOptions(selected='',employeeId='',showAssignments=false){return '<option value="">Select truck / equipment</option>'+equipment.filter(e=>e.active!==false).map(e=>{const assigned=showAssignments?assignedEmployeeForUnit(e.unit_number,employeeId):null;const label=`${e.unit_number}${e.description?' — '+e.description:''}${assigned?' — Assigned: '+(assigned.full_name||assigned.employee_number||'Employee'):''}`;return `<option value="${esc(e.unit_number)}" ${e.unit_number===selected?'selected':''} ${assigned?'style="color:#9aa6b2"':''}>${esc(label)}</option>`;}).join('');}
   function installEquipmentManager(){
     const roster=byId('timekeepingRosterCard');if(!roster||byId('tkDefaultEquipmentCard')||!canManageEquipment())return;
