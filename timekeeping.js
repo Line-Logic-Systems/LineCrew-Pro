@@ -88,6 +88,8 @@
           <label>Through<input id="tkThroughDate" type="date"></label>
           <label>Employee<select id="tkEmployeeFilter"><option value="">All employees</option></select></label>
           <label>Job<select id="tkJobFilter"><option value="">All jobs</option></select></label>
+          <label>Charge To<select id="tkChargeFilter"><option value="">All charges</option><option value="job">Jobs only</option><option value="overhead">Overhead only</option></select></label>
+          <label id="tkLaborCodeFilterWrap" class="hidden">Overhead Labor Code<select id="tkLaborCodeFilter"><option value="">All overhead codes</option></select></label>
         </div>
         <div class="tk-inline-actions">
           <button id="tkRunReportBtn">Run Report</button>
