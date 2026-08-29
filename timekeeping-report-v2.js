@@ -352,9 +352,9 @@
   }
 
   function loadLaunchInput(){
-    if(document.querySelector('script[data-linecrew-timekeeping-input-v2]'))return;
+    if(document.querySelector('script[data-linecrew-timekeeping-input-v2]')||[...document.scripts].some(item=>item.src.includes('/timekeeping-input-v2.js')))return;
     const script=document.createElement('script');
-    script.src='timekeeping-input-v2.js?v=20260826b';
+    script.src='timekeeping-input-v2.js?v=20260829b';
     script.dataset.linecrewTimekeepingInputV2='1';
     document.head.appendChild(script);
   }
