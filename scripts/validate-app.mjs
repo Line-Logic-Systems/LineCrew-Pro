@@ -88,11 +88,26 @@ if (fs.existsSync('expanded-jsa.js')) {
     'Foreman Crew Time must load Start/Stop, lunch, per diem, and equipment controls.'
   );
   const timekeepingInputCode = fs.readFileSync('timekeeping-input-v2.js', 'utf8');
+  const timekeepingCode = fs.readFileSync('timekeeping.js', 'utf8');
+  const roleWorkspaceCode = fs.readFileSync('role-workspace-polish.js', 'utf8');
   assert(
     expandedJsaCode.includes("'linecrew-timekeeping-input-v2'") &&
       timekeepingInputCode.includes("row.dataset.tkLaunchDetails==='1'&&detailIsComplete") &&
       timekeepingInputCode.includes('existingDetail?.remove()'),
     'Foreman Crew Time must prevent duplicate enhancement loads and repair incomplete first-load rows.'
+  );
+  assert(
+    timekeepingCode.includes("row.dataset.tkLaunchDetails='1'") &&
+      timekeepingCode.includes('class="tk-start tk-clock24"') &&
+      timekeepingCode.includes('class="tk-stop tk-clock24"') &&
+      timekeepingCode.includes('class="tk-lunch"') &&
+      timekeepingCode.includes('class="tk-equipment"') &&
+      timekeepingCode.includes('class="tk-per-diem"'),
+    'Core Foreman Crew Time rows must render every military-time control before enhancement or refresh.'
+  );
+  assert(
+    !roleWorkspaceCode.includes("Enter each crew member's Regular and OT hours"),
+    'Role workspace polish must not restore the obsolete Regular/OT Crew Time instructions.'
   );
   assert(
     expandedJsaCode.includes("load('leadership-my-time.js"),
