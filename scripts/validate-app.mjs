@@ -87,6 +87,13 @@ if (fs.existsSync('expanded-jsa.js')) {
     expandedJsaCode.includes("load('timekeeping-input-v2.js"),
     'Foreman Crew Time must load Start/Stop, lunch, per diem, and equipment controls.'
   );
+  const timekeepingInputCode = fs.readFileSync('timekeeping-input-v2.js', 'utf8');
+  assert(
+    expandedJsaCode.includes("'linecrew-timekeeping-input-v2'") &&
+      timekeepingInputCode.includes("row.dataset.tkLaunchDetails==='1'&&detailIsComplete") &&
+      timekeepingInputCode.includes('existingDetail?.remove()'),
+    'Foreman Crew Time must prevent duplicate enhancement loads and repair incomplete first-load rows.'
+  );
   assert(
     expandedJsaCode.includes("load('leadership-my-time.js"),
     'GF, Superintendent, Admin, and Owner My Time must load with Timekeeping.'
