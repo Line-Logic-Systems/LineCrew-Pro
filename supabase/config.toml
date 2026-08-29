@@ -8,7 +8,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.capture-crew-usage]
-verify_jwt = true
+verify_jwt = false
 
 [functions.create-billing-checkout]
 verify_jwt = true
