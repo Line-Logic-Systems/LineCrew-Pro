@@ -4075,6 +4075,27 @@ applyInvitationMode();
 show('authPage');
 return;
 }
+// A signing-key rotation can invalidate a still-unexpired access token that is
+// cached on the device. Validate it once before protected startup RPCs, and
+// attempt a refresh so the app never gets stranded behind a blank/blocked load.
+const {error:savedSessionError} = await sb.auth.getUser();
+if(savedSessionError){
+if(offlineJsaNetworkFailure(savedSessionError) && enterOfflineJsaMode()) return;
+const {
+data:{session:refreshedSession},
+error:sessionRefreshError
+} = await sb.auth.refreshSession();
+if(sessionRefreshError || !refreshedSession){
+clearOfflineJsaAccess();
+try{ await sb.auth.signOut({scope:'local'}); }catch{}
+currentProfile = null;
+currentCompany = null;
+applyInvitationMode();
+show('authPage');
+alert('Your secure session expired after an account security update. Sign in again to continue.');
+return;
+}
+}
 const {
 data:mfaBootstrapRows,
 error:mfaBootstrapError
