@@ -106,7 +106,7 @@ Set these Supabase Edge Function secrets/config values:
 - `BILLING_PLAN_PRICE_MAP` — JSON object mapping LineCrew Pro plan codes to Stripe Price IDs.
 - `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated normal Manage Billing Portal. If omitted, the server discovers exactly one active configuration labeled `linecrew_purpose=linecrew_manage_only_v1`.
 - `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated Stripe Customer Portal configuration used only by the upgrade-confirmation flow. If omitted, the server discovers exactly one active configuration labeled with metadata `linecrew_purpose=linecrew_upgrade_only_v1` and otherwise fails closed.
-- `CREW_USAGE_CRON_SECRET` — a separate random secret required by the optional `capture-crew-usage` Edge Function in addition to its Supabase JWT gateway check.
+- `CREW_USAGE_CRON_SECRET` — a separate random secret required by the optional `capture-crew-usage` Edge Function in addition to the named `edge_functions_admin` key in the `apikey` header.
 
 Example shape only:
 
@@ -116,7 +116,7 @@ Example shape only:
 
 The real Price IDs belong in the Edge Function secret/config store, not in `billing.html`, `owner.html`, `index.html`, or the repository.
 
-Supabase supplies `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` to deployed Edge Functions. Never put the service-role key or Stripe secret key in GitHub Pages/browser configuration.
+Supabase supplies `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS`, and `SUPABASE_SECRET_KEYS` to deployed Edge Functions. User-scoped functions read the `default` publishable key; privileged functions read the dedicated `edge_functions_admin` secret key. Never put a secret key or Stripe secret key in GitHub Pages/browser configuration.
 
 ## 6. Checkout security model
 
@@ -204,7 +204,7 @@ select public.capture_all_company_crew_usage(current_date);
 
 5. Run it once manually and confirm the Cron history succeeds and today's `company_crew_usage_daily` rows exist.
 
-The job runs inside Postgres as a trusted database job. Do not grant the three crew-usage maintenance RPCs back to `authenticated`; company users must never be able to supply another company's UUID. The `capture-crew-usage` Edge Function is only a guarded fallback for an external scheduler and requires both a valid Supabase JWT and `x-linecrew-cron-secret`.
+The job runs inside Postgres as a trusted database job. Do not grant the three crew-usage maintenance RPCs back to `authenticated`; company users must never be able to supply another company's UUID. The `capture-crew-usage` Edge Function is only a guarded fallback for an external scheduler and requires both the named `edge_functions_admin` key in the `apikey` header and `x-linecrew-cron-secret`.
 
 ## 9. Active crew enforcement
 
