@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.112.4";
+import { getSecretKey } from "../_shared/api-keys.ts";
 import {
   accessForStatus,
   assertEventEnvironment,
@@ -87,7 +88,7 @@ Deno.serve(async (request) => {
   let eventId: string | null = null;
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceKey = getSecretKey();
     const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!supabaseUrl || !serviceKey || !webhookSecret || !stripeKey) {
