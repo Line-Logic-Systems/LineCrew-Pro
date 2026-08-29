@@ -149,10 +149,14 @@
     }
     card.classList.toggle('hidden', !canEnterMyTime());
     byId('myTimePeopleWrap')?.classList.toggle('hidden', !canAddOtherPeople());
-    if (byId('myTimePeopleTitle')) byId('myTimePeopleTitle').textContent = role() === 'admin' ? 'My Admin Time Roster' : 'People on this entry';
-    if (byId('myTimePeopleHelp')) byId('myTimePeopleHelp').textContent = role() === 'admin'
+    const peopleTitle = role() === 'admin' ? 'My Admin Time Roster' : 'People on this entry';
+    const peopleHelp = role() === 'admin'
       ? 'Assigned Personnel appear automatically. Choose a name to enter individual hours, or add a temporary person for today.'
       : 'Choose a name to enter individual hours, or add a temporary person for today.';
+    const titleElement = byId('myTimePeopleTitle');
+    const helpElement = byId('myTimePeopleHelp');
+    if (titleElement && titleElement.textContent !== peopleTitle) titleElement.textContent = peopleTitle;
+    if (helpElement && helpElement.textContent !== peopleHelp) helpElement.textContent = peopleHelp;
     return true;
   }
 
