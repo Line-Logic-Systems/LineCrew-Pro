@@ -57,6 +57,21 @@ background:var(--navy);
 color:white;
 padding:28px 22px;
 }
+header .app-brand{
+max-width:850px;
+margin:auto;
+display:flex;
+align-items:center;
+gap:16px;
+}
+header .app-brand-logo{
+display:block;
+width:68px;
+height:68px;
+object-fit:cover;
+border-radius:12px;
+box-shadow:0 8px 22px rgba(0,0,0,.24);
+}
 header h1{
 margin:0;
 font-size:30px;
@@ -64,6 +79,11 @@ font-size:30px;
 header p{
 margin:6px 0 0;
 opacity:.85;
+}
+@media(max-width:600px){
+header{padding:18px 16px;}
+header .app-brand-logo{width:56px;height:56px;border-radius:10px;}
+header h1{font-size:26px;}
 }
 main{
 max-width:850px;
@@ -1383,8 +1403,13 @@ margin:4px 0;
 </head>
 <body>
 <header>
+<div class="app-brand">
+<img class="app-brand-logo" src="/icons/linecrew-pro-192.png" alt="">
+<div>
 <h1>LineCrew Pro</h1>
 <p>Powerline Management Platform</p>
+</div>
+</div>
 </header>
 <main>
 <!-- AUTH -->

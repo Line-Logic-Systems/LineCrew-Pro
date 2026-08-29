@@ -15,6 +15,7 @@ const requiredCanonical = new Set([
   'pricing.html',
   'training.html',
   'demo.html',
+  'contact.html',
   'privacy.html',
   'terms.html',
   'subscriber.html',
@@ -35,7 +36,7 @@ for (const file of htmlFiles) {
   if (html.includes('Line Logic Systems')) fail(file, 'contains the former business name');
   if (!html.includes('© 2026 LineCrew Pro LLC')) fail(file, 'footer must identify LineCrew Pro LLC');
 
-  if (!html.includes('styles.css?v=site6')) fail(file, 'must use the current site stylesheet version');
+  if (!html.includes('styles.css?v=site7')) fail(file, 'must use the current site stylesheet version');
   if (!html.includes('accessibility.css?v=site5')) fail(file, 'must load the accessibility stylesheet');
   if (!html.includes('class="skip-link"')) fail(file, 'must include a keyboard skip link');
   if (!html.includes('<main id="main-content">')) fail(file, 'must identify the main content target');
