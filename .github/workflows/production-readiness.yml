@@ -38,3 +38,6 @@ jobs:
 
       - name: Validate LineCrew Assistant live context
         run: node scripts/validate-assistant-live-context.mjs
+
+      - name: Validate LineCrew Assistant memory safeguards
+        run: node scripts/validate-assistant-memory.mjs

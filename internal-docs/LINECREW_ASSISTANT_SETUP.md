@@ -2,9 +2,17 @@
 
 ## What works immediately
 
-The Owner/Admin-only assistant is an operations coach for the full LineCrew Pro role model. Knowledge release `2026-08-30-live-context-v5` understands Owner, Admin, Superintendent, General Foreman and Foreman responsibilities; role handoffs; company setup and logo upload; Team and GF crew scope; Customers; Contracts; Price Books; Jobs; utility job packets; complete/offline JSA behavior; Daily Reports; Remaining Units; clock-time entry and weekly overtime; equipment; leadership My Time; payroll approval/locking/history; GF review badges and full crew-time review; approvals; redlines; pending packets; billing batches; job closeout; Storm Mode; reporting; company subscription billing; exports; training and password recovery. It also receives a limited snapshot of the current app screen, independently rechecks referenced records through the signed-in Owner/Admin's RLS permissions, and loads relevant read-only company data for jobs, reports, team access, timekeeping, billing and Price Books. If the AI service is not deployed or is unavailable, the matching built-in help remains available.
+The Owner/Admin-only assistant is an operations coach for the full LineCrew Pro role model. Knowledge release `2026-08-30-assistant-memory-v6` understands Owner, Admin, Superintendent, General Foreman and Foreman responsibilities; role handoffs; company setup and logo upload; Team and GF crew scope; Customers; Contracts; Price Books; Jobs; utility job packets; complete/offline JSA behavior; Daily Reports; Remaining Units; clock-time entry and weekly overtime; equipment; leadership My Time; payroll approval/locking/history; GF review badges and full crew-time review; approvals; redlines; pending packets; billing batches; job closeout; Storm Mode; reporting; company subscription billing; exports; training and password recovery. It also receives a limited snapshot of the current app screen, independently rechecks referenced records through the signed-in Owner/Admin's RLS permissions, and loads relevant read-only company data for jobs, reports, team access, timekeeping, billing and Price Books. If the AI service is not deployed or is unavailable, the matching built-in help remains available.
 
 The live assistant receives the authenticated caller's role, current app page, an allowlisted screen snapshot, company-scoped aggregate counts and only the read-only records relevant to the question. The Edge Function queries those records with the caller's Supabase session, explicit `company_id` filters and existing RLS. It never uses a service-role key, never accepts arbitrary table/query instructions from the browser and never sends attachments, passwords, secrets, free-form company notes or another contractor's context. Company and employee names are treated as untrusted data rather than instructions.
+
+## Assistant Memory and reminders
+
+An Owner/Admin can ask the assistant to remember a company workflow or prepare a reminder for the currently selected job. The request is parsed deterministically and shown as a **Not saved yet** proposal. The assistant does not save anything itself; the Owner/Admin must choose **Save Reminder** or **Save Workflow Memory**.
+
+Saved memories live in `public.assistant_memories`, separate from jobs, reports, timekeeping and billing. Direct browser mutations are revoked. Active Owner/Admin callers can mutate only through `create_assistant_memory`, `complete_assistant_memory` and `remove_assistant_memory`; each function rechecks caller role, active status, company scope, valid trigger/type, length limits and job ownership. Completion and removal are soft terminal states with actor/time fields.
+
+Matching reminders appear in the app while the relevant job/workflow is open. A `final_billing` reminder is shown as an advisory confirmation before the existing Final Bill reconciliation and confirmation flow. It does not alter the batch, block the server RPC, or make a billing decision. Assistant Memory is in-app only and does not promise background phone notifications.
 
 ## Enable live AI answers
 
@@ -64,6 +72,10 @@ Supabase supplies `SUPABASE_URL` and the named `SUPABASE_PUBLISHABLE_KEYS` JSON 
 23. Ask “Is this job ready for final billing?” Confirm it uses the reasoning route, checks the available job/report/billing snapshot and clearly identifies anything it cannot verify.
 24. Temporarily disable the Edge Function and confirm built-in answers still appear for the role questions.
 25. Re-enable the function and confirm live answers return.
+26. Open a job and ask: “On this job, remind me to add a redline attachment before final billing.” Confirm a **Not saved yet** proposal appears and no memory exists before clicking **Save Reminder**.
+27. Save the proposal, reopen Final Bill for that job and confirm the advisory reminder appears before the existing reconciliation checks. Cancel the reminder and confirm no billing record was created.
+28. Open **Saved Memories**, mark the job reminder complete, and confirm it no longer appears. Save a company workflow, remove it, and confirm no job/report/timekeeping/billing record changed.
+29. Attempt direct insert/update/delete against `assistant_memories` as an authenticated user and confirm access is denied. Attempt each memory RPC as Superintendent/General Foreman/Foreman and confirm access is denied.
 
 ## Keeping knowledge current
 

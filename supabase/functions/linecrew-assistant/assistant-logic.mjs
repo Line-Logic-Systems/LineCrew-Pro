@@ -31,6 +31,7 @@ const LIVE_CONTEXT_TERMS = Object.freeze({
 });
 
 const COMPLEX_REQUEST_PATTERN = /\b(why|diagnose|investigate|cannot|can't|won't|not working|failed|failure|error|blocked|preventing|missing|mismatch|incorrect|wrong|conflict|ready for|safe to|final bill|closeout)\b/i;
+const MEMORY_REQUEST_PATTERN = /\b(remember(?:\s+that)?|remind\s+me(?:\s+to)?|from\s+now\s+on|always\s+(?:remember|make\s+sure|check|include|attach|add|verify))\b/i;
 
 function clippedText(value, maxLength) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
@@ -117,4 +118,55 @@ export function assistantModelConfig(route, env = {}) {
     return { model: reasoningModel, effort: 'medium', fallbackModel: fastModel };
   }
   return { model: fastModel, effort: 'low', fallbackModel: fastModel };
+}
+
+export function detectAssistantMemoryProposal(question, screenContext = {}) {
+  const original = clippedText(question, 1200);
+  if (!original || !MEMORY_REQUEST_PATTERN.test(original)) return null;
+  if (/\b(how|where|can\s+you)\b.{0,30}\b(reminders?|memory|remember)\b/i.test(original) &&
+      !/\b(remind\s+me|remember\s+that|from\s+now\s+on)\b/i.test(original)) return null;
+
+  const selectedIds = screenContext?.selected_ids && typeof screenContext.selected_ids === 'object'
+    ? screenContext.selected_ids
+    : {};
+  const selectedLabels = screenContext?.selected_labels && typeof screenContext.selected_labels === 'object'
+    ? screenContext.selected_labels
+    : {};
+  const jobId = UUID_PATTERN.test(String(selectedIds.job_id || '')) ? String(selectedIds.job_id) : null;
+  const companyScopeRequested = /\b(company|company-wide|workflow|every\s+job|all\s+jobs|from\s+now\s+on)\b/i.test(original);
+  const jobScopeRequested = Boolean(jobId) && !companyScopeRequested && (
+    /\b(on|for|about)\s+(?:this|the|selected|current)\s+job\b/i.test(original) ||
+    /\bthis\s+job\b/i.test(original) ||
+    /\bremind\s+me\b/i.test(original)
+  );
+  const memoryType = jobScopeRequested ? 'job_reminder' : 'company_workflow';
+
+  let instruction = original
+    .replace(/^\s*(?:on|for)\s+(?:this|the|selected|current)\s+job\s*[,;:-]?\s*/i, '')
+    .replace(/^\s*(?:please\s+)?(?:can\s+you\s+)?(?:remember(?:\s+that)?|remind\s+me(?:\s+to)?|from\s+now\s+on\s*[,;:-]?|always\s+(?:remember\s+to|make\s+sure\s+to)?)\s*/i, '')
+    .replace(/^\s*(?:on|for)\s+(?:this|the|selected|current)\s+job\s*[,;:-]?\s*/i, '')
+    .replace(/^\s*(?:remember(?:\s+that)?|remind\s+me(?:\s+to)?|to)\s*/i, '')
+    .replace(/[?.!]+$/, '')
+    .trim();
+  if (!instruction || instruction.length < 3) return null;
+  instruction = instruction.slice(0, 800);
+
+  let triggerType = memoryType === 'job_reminder' ? 'job_open' : 'always';
+  if (/\b(final\s+bill(?:ing)?|before\s+(?:the\s+)?final\s+bill)\b/i.test(original)) triggerType = 'final_billing';
+  else if (/\b(production\s+review|report\s+(?:review|approval)|before\s+approv(?:e|ing))\b/i.test(original)) triggerType = 'production_review';
+  else if (/\b(timekeeping|timesheet|payroll|pay\s+period)\b/i.test(original)) triggerType = 'timekeeping';
+  else if (/\b(bill(?:ing)?|invoice)\b/i.test(original)) triggerType = 'billing';
+  else if (/\b(manual|only\s+when\s+asked)\b/i.test(original)) triggerType = 'manual';
+
+  const compactTitle = instruction.charAt(0).toUpperCase() + instruction.slice(1);
+  const title = compactTitle.length > 96 ? `${compactTitle.slice(0, 93).trim()}...` : compactTitle;
+  return {
+    memory_type: memoryType,
+    title,
+    instruction,
+    trigger_type: triggerType,
+    job_id: memoryType === 'job_reminder' ? jobId : null,
+    job_label: memoryType === 'job_reminder' ? clippedText(selectedLabels.job, 160) || 'Selected job' : null,
+    requires_confirmation: true,
+  };
 }
