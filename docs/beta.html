@@ -43,13 +43,9 @@
 </main>
 <footer class="footer"><div class="wrap footer-grid"><div><b>LINECREW PRO</b><br>Powerline contractor operations software.</div><div>© 2026 LineCrew Pro LLC · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="contact.html">Contact</a></div></div></footer>
 <script>
-const PROD_URL='https://ldgkyxuozbozgkvwzadg.supabase.co';
-const PROD_KEY='sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
-const TEST_URL='https://yvuxrqrdprquxypiffpa.supabase.co';
-const TEST_KEY='sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx';
-const isLocal=['localhost','127.0.0.1'].includes(location.hostname);
-const endpoint=(isLocal?TEST_URL:PROD_URL)+'/functions/v1/submit-beta-application';
-const apiKey=isLocal?TEST_KEY:PROD_KEY;
+const SUPABASE_URL='https://ldgkyxuozbozgkvwzadg.supabase.co';
+const SUPABASE_KEY='sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
+const endpoint=SUPABASE_URL+'/functions/v1/submit-beta-application';
 const form=document.getElementById('betaForm');
 const statusEl=document.getElementById('status');
 const submitBtn=document.getElementById('submitBtn');
@@ -69,7 +65,7 @@ form.addEventListener('submit',async event=>{
   };
   submitBtn.disabled=true;statusEl.textContent='Submitting your application…';
   try{
-    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','apikey':apiKey},body:JSON.stringify(payload)});
+    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},body:JSON.stringify(payload)});
     const result=await response.json().catch(()=>({}));
     if(!response.ok) throw new Error(result.error||'Unable to submit the application.');
     form.reset();statusEl.className='beta-status ok';statusEl.textContent='Application received. LineCrew Pro will review it and email you if your company is approved.';
