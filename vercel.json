@@ -1,5 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/billing.html",
+      "has": [
+        {
+          "type": "query",
+          "key": "pilot_conversion",
+          "value": "1"
+        }
+      ],
+      "destination": "/pilot-convert.html"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",
