@@ -153,7 +153,7 @@ assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must a
 assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
 assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
 assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
-assert(assistant.includes('2026-08-25-admin-operations-v3'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('2026-08-30-operations-v4'), 'AI assistant knowledge version marker must track the current workflow release.');
 assert(assistant.includes('ADMIN OPERATIONS COACH'), 'AI assistant must include Admin operations-coach guidance.');
 assert(assistant.includes('ROLE OPERATING MODEL'), 'AI assistant must describe the complete company role model.');
 assert(assistant.includes('BILLING BATCHES AND JOB CLOSEOUT'), 'AI assistant must distinguish operational billing and closeout.');
@@ -167,7 +167,18 @@ for (const marker of [
   'Regular + 1.5 × OT',
   'There is no separate bulk Job-file import',
   'Supervisors review but do not edit a Foreman',
-  'green at or above the exact target'
+  'green at or above the exact target',
+  'Offline JSA Mode',
+  'the current offline workflow is JSA-only',
+  'search by Work Point',
+  'Start and Stop in 24-hour time plus Lunch',
+  'full Crew Time table',
+  'background push notifications',
+  'My Admin Time Roster',
+  'Payroll & Timesheet Export',
+  'Pay Period History / Archived Timesheets',
+  'Truck / Equipment Roster',
+  'New training videos are being added'
 ]) assert(assistant.includes(marker), `AI assistant workflow knowledge is missing: ${marker}`);
 assert(index.includes("function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }"), 'AI assistant launcher must be Owner/Admin-only.');
 assert(!index.includes("['ai_assistant','AI Assistant']"), 'AI assistant must not be configurable as a Superintendent capability.');
@@ -177,7 +188,17 @@ for (const marker of [
   'Assign Another Foreman / Leader',
   'Manage Foreman Crews',
   'There is no separate bulk Job-file import',
-  'Red is below 95% of target'
+  'Red is below 95% of target',
+  'Offline JSA Mode',
+  'searches by Work Point',
+  'Start and Stop in 24-hour time plus Lunch',
+  'full Crew Time table',
+  'background phone push notifications',
+  'My Admin Time Roster',
+  'Payroll & Timesheet Export',
+  'Pay Period History / Archived Timesheets',
+  'Truck / Equipment Roster',
+  'New training videos are being added'
 ]) assert(index.includes(marker), `Built-in assistant fallback is missing current workflow help: ${marker}`);
 
 assert(teamInvitation.includes('Deno.env.get("RESEND_API_KEY")'), 'Team invitation sender must use the server-side Resend secret.');
