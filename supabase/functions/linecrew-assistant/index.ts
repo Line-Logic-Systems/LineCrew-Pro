@@ -219,7 +219,9 @@ Do not perform changes for the user. Explain the exact steps and confirmations.
 Never invent contract, billing, payroll, safety, legal or utility requirements. When a question depends on company policy or field facts, say what the user must verify.
 `;
 
-type AssistantClient = ReturnType<typeof createClient>;
+type AssistantClient = {
+  from: (table: string) => any;
+};
 
 async function readRows(
   label: string,
@@ -595,7 +597,7 @@ Deno.serve(async (request) => {
     const screenContext = sanitizeAssistantScreenContext({
       ...rawScreenContext,
       page: body?.page || rawScreenContext.page || "dashboardPage",
-    });
+    }) as Record<string, unknown>;
     const page = String(screenContext.page || "dashboardPage");
     if (!question) throw new Error("Enter a question.");
     const requestPlan = classifyAssistantRequest(question, page, screenContext);
