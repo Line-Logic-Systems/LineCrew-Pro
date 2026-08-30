@@ -32,3 +32,6 @@ jobs:
 
       - name: Validate production readiness
         run: node scripts/validate-production-readiness.mjs
+
+      - name: Validate LineCrew Assistant knowledge
+        run: node scripts/validate-assistant-knowledge.mjs
