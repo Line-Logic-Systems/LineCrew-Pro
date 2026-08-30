@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 const migrationPath = 'supabase/migrations/20260830174354_assistant_memory_reminders.sql';
 const migration = fs.readFileSync(migrationPath,'utf8');
+const indexMigration = fs.readFileSync('supabase/migrations/20260830175934_index_assistant_memory_foreign_keys.sql','utf8');
 const edge = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts','utf8');
 const app = fs.readFileSync('index.html','utf8');
 
@@ -26,6 +27,9 @@ assert((migration.match(/revoke all on function public\./g) || []).length >= 3,
   'Every Assistant Memory mutation RPC must revoke default execution.');
 assert((migration.match(/grant execute on function public\./g) || []).length >= 3,
   'Every Assistant Memory mutation RPC needs an explicit authenticated grant.');
+for(const column of ['created_by','completed_by','removed_by']){
+  assert(indexMigration.includes(`(${column})`),`Assistant Memory audit foreign key needs an index: ${column}`);
+}
 
 for(const marker of [
   '.from("assistant_memories")',
