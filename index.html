@@ -8126,8 +8126,8 @@ terms:['invite team','invite member','team invitation','send invite','automatic 
 answer:'Preferred team onboarding: an authorized leader opens Team and chooses Invite Team Member, enters the person’s email, and sends the invitation. The email-bound one-time link opens Create Account & Join Company with the email locked. The invited person enters and confirms a password and is enrolled directly in the inviting company as a Foreman—no Company Code and no company-creation choice. Company Code is only a manual fallback when no invitation is being used.'
 },
 {
-terms:['desktop view','desktop mode','mobile view','phone layout','wide layout'],
-answer:'Every LineCrew Pro role can choose Desktop View from the profile card on the Dashboard. The choice is saved on that device and applies to the entire app. Choose Return to Mobile View in the same location to restore the normal responsive phone layout.'
+terms:['desktop view','desktop mode','mobile view','phone layout','wide layout','dark mode','light mode','theme'],
+answer:'Every LineCrew Pro role can choose Desktop View from the profile card on the Dashboard. Choose Return to Mobile View there to restore the responsive phone layout. Use Dark Mode or Light Mode on the Dashboard for the Industrial Navy or standard theme. These display choices are saved on that device and apply across the app.'
 },
 {
 terms:['add job','new job','create job','start job','job setup','import jobs','upload jobs','bulk jobs'],
@@ -8151,7 +8151,7 @@ answer:'Open Jobs, select the existing job, choose + Add Utility Package, enter 
 },
 {
 terms:['remaining units','units left','what is left','left on job','left at work point','crew time tab'],
-answer:'A Foreman opens Remaining Units from the Dashboard, selects an assigned active job, and searches by work point or unit code. The screen shows Authorized, Saved Draft, Awaiting GF, Approved and Remaining quantities for install, transfer and remove work without exposing contract prices. Saved drafts and submitted reports reserve quantities across Foremen; a returned report releases its quantities until the corrected report is resubmitted. The Foreman Dashboard Timekeeping tile is labeled Crew Time and opens the assigned-crew hours, OT, per diem and equipment report.'
+answer:'A Foreman opens Remaining Units from the Dashboard, selects an assigned active job, and searches by Work Point. The screen shows Authorized, Saved Draft, Awaiting GF, Approved and Remaining quantities for install, transfer and remove work without exposing contract prices. Saved drafts and submitted reports reserve quantities across Foremen; a returned report releases its quantities until the corrected report is resubmitted. Redlines stay separate and do not reduce the authorized remaining quantity. The Foreman Dashboard Timekeeping tile is labeled Crew Time.'
 },
 {
 terms:['billing export','bill job','billing batch','excel billing','csv billing','pdf billing','mark submitted','mark paid','duplicate billing'],
@@ -8159,7 +8159,7 @@ answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Pro
 },
 {
 terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
-answer:'A Foreman creates and edits field reports. Submitted reports appear in Production Review for General Foremen and leadership with Production Review permission. Review crew hours, units, poles and exceptions, then Approve or Return Report with correction notes. The owning Foreman opens the returned draft, makes the requested correction and submits it again. Supervisors review but do not directly edit the Foreman’s draft. If GF redline approval is required, leadership override requires a recorded reason.'
+answer:'A Foreman creates and edits field reports. Submitted reports appear in Production Review for General Foremen within their assigned-crew scope and leadership with Production Review permission. The number on the Production Dashboard tile is the in-app count waiting for review; LineCrew Pro does not currently promise background phone push notifications. Expand a report and review the full Crew Time table—employee, Start, Stop, Lunch, Regular, OT, Total, Per diem and Equipment—plus units, poles, attachments and exceptions. Choose Approve or Return Report with correction notes. The owning Foreman corrects the returned draft and submits it again; supervisors do not directly edit that draft. If GF redline approval is required, leadership override requires a recorded reason.'
 },
 {
 terms:['redline','not authorized','extra unit'],
@@ -8179,11 +8179,11 @@ answer:'Owner/Admin, General Foreman, or a Superintendent with Jobs permission o
 },
 {
 terms:['add employee','upload employees','employee roster','assign crew','crew member','foreman crew','extra man'],
-answer:'Non-login field employees are managed in Timekeeping > Manage Foreman Crews. Owner/Admin can add employees or upload a CSV/Excel roster; leadership assigns each active employee to a Foreman. A new Foreman Daily Report auto-populates that assigned crew in Crew Time. Use + Add Extra Man for another active company employee helping that crew that day. Foremen cannot permanently reassign the company roster.'
+answer:'Non-login field employees are managed in Timekeeping > Manage Foreman Crews. Owner, Admin and General Foreman can add employees or upload a CSV/Excel roster and assign each active employee to a Foreman. Owner/Admin can also assign General Foremen to specific Foreman crews; the GF review and completed-JSA scope follows those assignments. A new Foreman Daily Report auto-populates the assigned crew in Crew Time. Use + Add Extra Man for another active employee helping that day. Foremen cannot permanently reassign the company roster.'
 },
 {
-terms:['jsa','job safety','morning safety','safety briefing','crew signature'],
-answer:'Safety / JSA supports the LineCrew Pro digital JSA, uploading an existing company/paper JSA, or both depending on Company Settings. Uploaded JSAs can contain a PDF or multiple photos and are stored with job, date, crew and Foreman information. A JSA is not required by LineCrew Pro before a Daily Report can be created or submitted; follow the contractor safety program and applicable requirements.'
+terms:['jsa','job safety','morning safety','safety briefing','crew signature','offline jsa','no service','offline safety'],
+answer:'Safety / JSA supports the LineCrew Pro digital JSA, uploading an existing company/paper JSA, or both depending on Company Settings. Uploaded JSAs can contain a PDF or multiple photos and are stored with job, date, crew and Foreman information. If service is lost after an eligible session was cached, Offline JSA Mode saves the full JSA on that device and syncs automatically when service returns; leave it on that device and do not clear browser storage until sync is confirmed. The current offline queue is for JSAs, not Daily Reports. General Foremen and authorized leadership can review the complete saved form, signatures and pages allowed by their scope. Follow the contractor safety program and applicable requirements.'
 },
 {
 terms:['storm mode','storm event','storm crew','storm report'],
@@ -8191,7 +8191,19 @@ answer:'Owner/Admin or a Superintendent with Storm Mode permission can create or
 },
 {
 terms:['create daily','enter daily','add daily','save units','manage units','submit report','crew time','regular hours','ot hours','timekeeping'],
-answer:'Foreman workflow: Production > Create Daily Report; choose an assigned job/date; verify the auto-populated Crew Time roster; enter Regular and OT per employee and add any Extra Man; enter weather/delay and notes; save the draft. Crew Time saves into Timekeeping for that report/job/date. In Manage Units, enter one pole/location and its completed units, Save Pole & Add Next, repeat, then Done Adding Units. Review details/attachments and Submit Report. A Foreman may delete only their own draft.'
+answer:'Foreman workflow: Production > Create Daily Report; choose an assigned job/date; verify the auto-populated Crew Time roster; enter Start and Stop in 24-hour time plus Lunch, confirm Per diem and Truck / Equipment, and add any Extra Man. LineCrew derives worked hours and recalculates Regular/OT across the employee’s configured workweek after save. Enter weather/delay and notes and save the draft. In Manage Units, enter one pole/location and its completed units, Save Pole & Add Next, repeat, then Done Adding Units from either finish control. Review details/attachments and Submit Report. A Foreman may delete only their own draft.'
+},
+{
+terms:['payroll','timesheet','approve time','lock pay period','unlock pay period','pay period history','archived timesheets','time export','correct time'],
+answer:'Open Timekeeping and run the Time Report for the intended date range. Review Start, Stop, Lunch, Regular, OT, Total, Per diem, Equipment, job/overhead charge and exceptions before export. Owner/Admin may correct non-self submitted time with a required audit reason; the source Daily Report stays submitted or approved. General Foreman/Admin/Owner may approve or reopen a pay period. Only Admin/Owner may lock or unlock it. Approved time returns to Open when an entry changes, and locked time cannot change until unlocked. Payroll & Timesheet Export supports Excel, PDF, CSV and custom formats. Pay Period History / Archived Timesheets searches saved periods by year, date range or status.'
+},
+{
+terms:['my time','leadership time','admin time roster','add employee time','overhead time','labor code'],
+answer:'General Foreman, Superintendent, Admin and Owner can use Timekeeping > My Time for their own job or overhead time. General Foreman can add another active employee to an entry. Admin uses My Admin Time Roster for persistent assigned people and can add employee time. Enter Start, Stop and Lunch; choose a job or an allowed overhead code—Company Overhead, Administration, Travel, Training or Other—and save. LineCrew recalculates Regular/OT across the company workweek.'
+},
+{
+terms:['equipment roster','truck roster','upload equipment','assign equipment','default equipment','not used today'],
+answer:'Owner/Admin opens Timekeeping and uses Truck / Equipment Roster. Upload CSV/Excel with unit numbers to add new equipment or update matching units, then assign defaults to employees. Saved units remain in the company roster even when unassigned. Assigned equipment fills Crew Time automatically; the Foreman can select a different unit for that day or check Not used today. Deactivate old equipment instead of deleting its history.'
 },
 {
 terms:['adjustment','adjusted price','field value','foreman price','percentage'],
@@ -8211,7 +8223,11 @@ answer:'Open Production and choose Show Filters. Filter by status, dates, job, F
 },
 {
 terms:['company settings','logo','brand color','time zone','company name'],
-answer:'Admin steps: open Admin Controls > Company Settings, enter the display name, time zone, email and phone, choose Company Logo to select a PNG, JPG or WebP, choose the brand color, then select Save Company Settings. The uploaded company logo appears in the app header on desktop and mobile and on printed daily reports; the LineCrew Pro product logo remains separate.'
+answer:'Admin steps: open Admin Controls > Company Settings, enter the display name, time zone, email and phone, choose Company Logo to select a PNG, JPG or WebP, choose the brand color and Workweek Starts On day, then select Save Company Settings. The uploaded company logo appears in the app header on desktop/mobile and on printed Daily Reports; the LineCrew Pro product logo remains separate. The workweek start controls the boundary used when LineCrew recalculates weekly Regular and OT.'
+},
+{
+terms:['training','training center','training video','how to video','old videos','new videos'],
+answer:'Open Training from the Dashboard. The private Training Center is role-based and available to eligible active subscribers. It shows only currently published videos allowed for the signed-in role and saves viewing progress. If no eligible videos are active, it displays New training videos are being added. Do not assume that a particular role video is published until it appears there.'
 },
 {
 terms:['delete job','cannot delete','foreign key','archive'],
