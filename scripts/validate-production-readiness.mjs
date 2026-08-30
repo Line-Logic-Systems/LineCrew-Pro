@@ -165,6 +165,11 @@ assert(index.includes("sb.rpc('create_assistant_memory'"), 'Assistant Memory mus
 assert(index.includes('confirmAssistantFinalBillingReminders(jobId)'), 'Final billing must display matching advisory Assistant Memory reminders.');
 assert(index.includes('id="assistantMemoryTile"'), 'Owner/Admin Dashboard must include visible Assistant Memory access.');
 assert(index.includes("$('assistantMemoryTile').classList.toggle('hidden', !userCanUseAssistant())"), 'Assistant Memory Dashboard tile must remain Owner/Admin-only.');
+assert(index.includes("['loginEmail','loginPassword'].forEach"), 'Sign-in fields must submit through the Sign In button when Enter is pressed.');
+assert(index.includes("event.key === 'Enter' && !event.shiftKey && !event.isComposing"), 'Assistant must send on Enter while preserving Shift+Enter for a new line and IME composition.');
+assert(index.includes('Enter to send · Shift+Enter for a new line'), 'Assistant must explain its keyboard shortcut.');
+assert(index.includes('id="expandAssistant"'), 'Assistant panel must provide an accessible Expand/Restore control.');
+assert(index.includes("$('assistantPanel').classList.toggle('expanded', expanded)"), 'Assistant Expand/Restore control must resize the panel.');
 assert(assistant.includes('ADMIN OPERATIONS COACH'), 'AI assistant must include Admin operations-coach guidance.');
 assert(assistant.includes('ROLE OPERATING MODEL'), 'AI assistant must describe the complete company role model.');
 assert(assistant.includes('BILLING BATCHES AND JOB CLOSEOUT'), 'AI assistant must distinguish operational billing and closeout.');

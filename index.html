@@ -634,6 +634,16 @@ z-index:29;
 border:1px solid var(--border);
 box-shadow:0 18px 48px rgba(11,45,77,.25);
 }
+.assistant-panel.expanded{
+inset:20px;
+width:auto;
+max-height:none;
+}
+.assistant-panel-actions{
+display:flex;
+align-items:center;
+gap:6px;
+}
 .assistant-messages{
 display:flex;
 flex-direction:column;
@@ -699,6 +709,7 @@ box-shadow:0 10px 30px rgba(11,45,77,.18);
 @media (max-width:600px){
 .assistant-launcher{right:12px;bottom:12px;}
 .assistant-panel{right:8px;bottom:66px;width:calc(100vw - 16px);}
+.assistant-panel.expanded{inset:8px;width:auto;}
 .assistant-reminder-banner{right:8px;bottom:66px;width:calc(100vw - 16px);}
 .pilot-feedback-launcher{left:12px;bottom:12px;}
 }
@@ -3400,7 +3411,10 @@ Ask LineCrew AI
 <h2>LineCrew Assistant</h2>
 <p class="muted">Leadership help using the current screen and permission-safe, read-only company data.</p>
 </div>
+<div class="assistant-panel-actions">
+<button id="expandAssistant" class="secondary small" type="button" aria-pressed="false">Expand</button>
 <button id="closeAssistant" class="secondary small">Close</button>
+</div>
 </div>
 <div class="assistant-quick-actions" id="assistantQuickActions">
 <button class="secondary small" data-assistant-question="How do I import a Price Book?">Import Price Book</button>
@@ -3416,6 +3430,7 @@ Ask LineCrew AI
 <div id="assistantMessages" class="assistant-messages" aria-live="polite"></div>
 <label for="assistantQuestion">Ask a question</label>
 <textarea id="assistantQuestion" rows="3" maxlength="1200" placeholder="Example: Why is this daily report pending?"></textarea>
+<p class="muted" style="font-size:12px;margin:5px 0 0">Enter to send · Shift+Enter for a new line</p>
 <button id="sendAssistantQuestion">Ask Assistant</button>
 <p class="muted">The assistant provides app guidance. Verify contract, safety and billing decisions before acting.</p>
 </section>
@@ -4528,6 +4543,13 @@ button.disabled = false;
 button.textContent = 'Sign In';
 }
 };
+['loginEmail','loginPassword'].forEach(id => {
+$(id).addEventListener('keydown', event => {
+if(event.key !== 'Enter' || event.isComposing) return;
+event.preventDefault();
+if(!$('loginBtn').disabled) $('loginBtn').click();
+});
+});
 $('forgotPasswordBtn').onclick = async () => {
 const email =
 $('loginEmail').value.trim() ||
@@ -8629,8 +8651,16 @@ $('assistantQuestion').focus();
 }
 renderAssistantReminderBanner();
 }
+function setAssistantExpanded(expanded){
+$('assistantPanel').classList.toggle('expanded', expanded);
+$('expandAssistant').textContent = expanded ? 'Restore' : 'Expand';
+$('expandAssistant').setAttribute('aria-pressed', String(expanded));
+}
 $('assistantLauncher').onclick = () => setAssistantOpen(true);
 $('closeAssistant').onclick = () => setAssistantOpen(false);
+$('expandAssistant').onclick = () => {
+setAssistantExpanded(!$('assistantPanel').classList.contains('expanded'));
+};
 $('openAssistantMemories').onclick = () => {
 setAssistantOpen(true);
 $('assistantMemorySection').open = true;
@@ -8677,9 +8707,9 @@ button.textContent = 'Ask Assistant';
 }
 };
 $('assistantQuestion').addEventListener('keydown', event => {
-if(event.key === 'Enter' && (event.ctrlKey || event.metaKey)){
+if(event.key === 'Enter' && !event.shiftKey && !event.isComposing){
 event.preventDefault();
-$('sendAssistantQuestion').click();
+if(!$('sendAssistantQuestion').disabled) $('sendAssistantQuestion').click();
 }
 });
 /* AUTH CHANGE */
