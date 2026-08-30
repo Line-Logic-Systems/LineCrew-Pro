@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
   <style>
     :root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754;--red:#b83232}
-    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}main{max-width:620px;margin:0 auto;padding:38px 16px}.brand{text-align:center;margin-bottom:22px}.brand img{width:72px;height:72px;border-radius:14px}.card{background:#fff;border:1px solid var(--border);border-radius:18px;padding:24px;box-shadow:0 5px 22px #1231}h1{color:var(--navy);font-size:26px;margin:0 0 10px}.muted{color:var(--muted);line-height:1.5}label{display:block;font-weight:700;margin:14px 0 6px}input,button{width:100%;font:inherit;border-radius:10px;padding:12px}input{border:1px solid #b8c6d2}button{border:0;background:var(--blue);color:white;font-weight:800;margin-top:16px;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.success{border-left:5px solid var(--green)}.error{color:var(--red);font-weight:700}.hidden{display:none!important}.ready{font-size:18px;font-weight:800;color:var(--green)}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}main{max-width:620px;margin:0 auto;padding:38px 16px}.brand{text-align:center;margin-bottom:22px}.brand img{width:72px;height:72px;border-radius:14px}.card{background:#fff;border:1px solid var(--border);border-radius:18px;padding:24px;box-shadow:0 5px 22px #1231}h1{color:var(--navy);font-size:26px;margin:0 0 10px}.muted{color:var(--muted);line-height:1.5}label{display:block;font-weight:700;margin:14px 0 6px}input,button{width:100%;font:inherit;border-radius:10px;padding:12px}input{border:1px solid #b8c6d2}button{border:0;background:var(--blue);color:white;font-weight:800;margin-top:16px;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.success{border-left:5px solid var(--green)}.error{color:var(--red);font-weight:700}.hidden{display:none!important}.ready{font-size:18px;font-weight:800;color:var(--green)}.security-note{margin:18px 0;padding:16px;border:1px solid #b9d5ee;border-radius:12px;background:#f3f8fc;line-height:1.5}.security-note h2{font-size:18px;color:var(--navy);margin:0 0 8px}.security-note p{margin:7px 0}.security-note ul{margin:8px 0 0;padding-left:20px}.security-note li{margin:5px 0}
   </style>
 </head>
 <body>
@@ -17,6 +17,17 @@
   <section id="setupCard" class="card">
     <h1>Set Up Your Beta Admin Account</h1>
     <p class="muted">Create the password you will use to sign in to LineCrew Pro. Your email is locked to this private invitation.</p>
+    <div class="security-note" role="note" aria-label="Authenticator app requirement">
+      <h2>Before you get started</h2>
+      <p><strong>LineCrew Pro requires two-step verification for Owner and Admin accounts.</strong> This protects company settings, employee information, billing and other sensitive business data.</p>
+      <p>You will need an authenticator app on your phone after you create your password.</p>
+      <ul>
+        <li>Already have Microsoft Authenticator, Google Authenticator, Authy, 1Password or another TOTP authenticator? You are ready.</li>
+        <li>Don't have one yet? That's okay. Install one before continuing to the secure setup step.</li>
+        <li>LineCrew Pro will show you a QR code to scan, then you will enter the 6-digit code from your app.</li>
+      </ul>
+      <p><strong>Password → Authenticator app → Company setup</strong></p>
+    </div>
     <label for="email">Email</label><input id="email" type="email" readonly autocomplete="email">
     <label for="password">Password</label><input id="password" type="password" minlength="8" maxlength="128" autocomplete="new-password">
     <label for="confirm">Confirm Password</label><input id="confirm" type="password" minlength="8" maxlength="128" autocomplete="new-password">
@@ -25,11 +36,11 @@
   </section>
   <section id="readyCard" class="card success hidden">
     <h1>Your LineCrew Pro account is ready!</h1>
-    <p class="ready">Setup complete.</p>
+    <p class="ready">Password setup complete.</p>
     <p>Your company account has been created and your Admin login is ready.</p>
     <p><strong>No additional email is required.</strong> You do not need to wait for another message.</p>
-    <p class="muted">Continue to LineCrew Pro to finish secure Admin setup, including authenticator verification.</p>
-    <button id="continueBtn">Continue to LineCrew Pro</button>
+    <p class="muted">Next, LineCrew Pro will guide you through the required authenticator setup. Have your phone and authenticator app ready; you will scan a QR code and enter its current 6-digit code.</p>
+    <button id="continueBtn">Continue to Authenticator Setup</button>
   </section>
 </main>
 <script>
