@@ -97,9 +97,31 @@ for (const [file, html] of [['index.html', home], ['pricing.html', pricing]]) {
   for (const marker of ['Interested in becoming a Beta/Pilot company?', 'Approved pilots are free and require no card.', 'Apply for Beta/Pilot']) {
     if (!html.includes(marker)) fail(file, `Beta/Pilot presentation is missing: ${marker}`);
   }
-  if (!html.includes('LineCrew%20Pro%20Beta%2FPilot%20Application')) {
-    fail(file, 'Beta/Pilot action must open its dedicated prewritten sales email');
+  if (!html.includes('href="beta.html"')) {
+    fail(file, 'Beta/Pilot action must open the secure website application form');
   }
+  if (html.includes('LineCrew%20Pro%20Beta%2FPilot%20Application')) {
+    fail(file, 'Beta/Pilot action must not use the legacy mailto application');
+  }
+}
+
+const beta = readFileSync(join(docsDir, 'beta.html'), 'utf8');
+for (const marker of [
+  'Submit Beta Application',
+  'name="company_name"',
+  'name="contact_name"',
+  'name="email"',
+  'name="phone"',
+  'name="active_crew_count"',
+  'name="testing_notes"',
+  'name="website"',
+  '/functions/v1/submit-beta-application',
+  'No payment information is collected here.',
+]) {
+  if (!beta.includes(marker)) fail('beta.html', `secure Beta/Pilot form is missing: ${marker}`);
+}
+if (!beta.includes("'apikey':SUPABASE_KEY")) {
+  fail('beta.html', 'Beta/Pilot form must call the public Edge Function with the publishable API key');
 }
 
 const signup = readFileSync(join(docsDir, 'signup.html'), 'utf8');
