@@ -27,6 +27,9 @@
       .lc-team-tools input,.lc-team-tools select{margin:0;padding:9px 10px;font-size:12px;border-radius:9px}
       .lc-team-count{font-size:11px;color:#607386;white-space:nowrap;text-align:right}
       .lc-team-empty{padding:12px;border:1px dashed #cbd7e2;border-radius:9px;color:#607386;font-size:12px;background:#f8fbfe}
+      .lc-pilot-onboarding{background:#fff;border:1px solid #c8d9e8;border-left:5px solid #1677d2;border-radius:14px;padding:16px;margin:0 0 16px;box-shadow:0 3px 12px rgba(12,37,62,.06)}
+      .lc-pilot-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}.lc-pilot-head h2{margin:0 0 4px;font-size:20px}.lc-pilot-head p{margin:0;color:#607386;font-size:13px}.lc-pilot-progress{font-weight:900;color:#0b2d4d;white-space:nowrap}
+      .lc-pilot-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}.lc-pilot-item{display:flex;align-items:center;gap:9px;border:1px solid #dce5ed;border-radius:10px;padding:10px;background:#f8fbfe;font-size:13px;font-weight:700}.lc-pilot-item.done{background:#ecfdf5;border-color:#b7e4ca;color:#0f6238}.lc-pilot-dot{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:999px;background:#e8eef4;flex:0 0 22px}.lc-pilot-item.done .lc-pilot-dot{background:#198754;color:#fff}.lc-pilot-actions{display:flex;gap:8px;flex-wrap:wrap}.lc-pilot-actions a{display:inline-block;text-decoration:none;border-radius:9px;padding:9px 12px;font-size:12px;font-weight:800;background:#1677d2;color:#fff}.lc-pilot-actions a.secondary{background:#e8eef4;color:#102235}
       @media(max-width:720px){
         #timekeepingPage .tk-grid{grid-template-columns:1fr!important}
         #timekeepingPage .tk-summary{grid-template-columns:1fr 1fr!important}
@@ -40,6 +43,7 @@
         .section-header{gap:10px;align-items:flex-start!important;flex-wrap:wrap}
         #teamList .lc-team-member-row select{min-width:115px}
         .lc-team-tools{grid-template-columns:1fr 1fr}.lc-team-count{grid-column:1 / -1;text-align:left}
+        .lc-pilot-list{grid-template-columns:1fr}
       }
     `;document.head.appendChild(s);
   }
@@ -169,6 +173,56 @@
     });
   }
 
+  let pilotCheckRunning=false;let pilotCheckDone=false;let pilotLastAttempt=0;
+  async function countCompanyRows(table,companyId){
+    const {count,error}=await sb.from(table).select('id',{count:'exact',head:true}).eq('company_id',companyId);
+    if(error) throw error;
+    return Number(count)||0;
+  }
+  function addPilotChecklist(dashboard,items,trialEndsAt){
+    if(byId('lcPilotOnboarding')) return;
+    const card=document.createElement('section');card.id='lcPilotOnboarding';card.className='lc-pilot-onboarding';
+    const head=document.createElement('div');head.className='lc-pilot-head';
+    const copy=document.createElement('div');const title=document.createElement('h2');title.textContent='Beta Company Setup';const sub=document.createElement('p');sub.textContent='Complete these company basics before sending crews into the field.';copy.append(title,sub);
+    const progress=document.createElement('div');progress.className='lc-pilot-progress';const complete=items.filter(item=>item.done).length;progress.textContent=`${complete} of ${items.length} complete`;head.append(copy,progress);
+    const list=document.createElement('div');list.className='lc-pilot-list';
+    for(const item of items){const row=document.createElement('div');row.className='lc-pilot-item'+(item.done?' done':'');const dot=document.createElement('span');dot.className='lc-pilot-dot';dot.textContent=item.done?'✓':'○';const text=document.createElement('span');text.textContent=item.label;row.append(dot,text);list.append(row);}
+    const actions=document.createElement('div');actions.className='lc-pilot-actions';const billing=document.createElement('a');billing.href='billing.html?pilot_conversion=1';billing.textContent='Convert to Paid Plan';const refresh=document.createElement('a');refresh.href='#';refresh.className='secondary';refresh.textContent='Refresh Checklist';refresh.onclick=event=>{event.preventDefault();card.remove();pilotCheckDone=false;pilotLastAttempt=0;maybeInstallPilotOnboarding();};actions.append(billing,refresh);
+    if(trialEndsAt){const expiry=document.createElement('p');expiry.className='muted';expiry.style.margin='12px 0 0';expiry.textContent='Pilot access currently runs through '+new Date(trialEndsAt).toLocaleDateString()+'.';card.append(head,list,actions,expiry);}else card.append(head,list,actions);
+    dashboard.insertBefore(card,dashboard.firstChild);
+  }
+  async function maybeInstallPilotOnboarding(){
+    if(pilotCheckDone||pilotCheckRunning||byId('lcPilotOnboarding')) return;
+    const dashboard=byId('dashboardPage');if(!dashboard) return;
+    const now=Date.now();if(now-pilotLastAttempt<4000)return;pilotLastAttempt=now;
+    if(typeof sb==='undefined'||!sb?.auth) return;
+    pilotCheckRunning=true;
+    try{
+      const {data:{session}}=await sb.auth.getSession();if(!session)return;
+      const {data:profile,error:profileError}=await sb.from('profiles').select('company_id,role,active').eq('id',session.user.id).single();
+      if(profileError||!profile||profile.active===false||!['admin','owner'].includes(String(profile.role||'').toLowerCase())){pilotCheckDone=true;return;}
+      const {data:access,error:accessError}=await sb.rpc('my_company_subscription_access');if(accessError)return;
+      const subscription=Array.isArray(access)?access[0]:access;
+      if(String(subscription?.plan_code||'').toLowerCase()!=='pilot'){pilotCheckDone=true;return;}
+      const companyId=profile.company_id;
+      const [settingsResult,profiles,crews,equipment,customers,contracts,priceBooks,jobs]=await Promise.all([
+        sb.from('company_settings').select('display_name,logo_url').eq('company_id',companyId).maybeSingle(),
+        countCompanyRows('profiles',companyId),countCompanyRows('crews',companyId),countCompanyRows('timekeeping_equipment',companyId),countCompanyRows('customers',companyId),countCompanyRows('contracts',companyId),countCompanyRows('price_books',companyId),countCompanyRows('jobs',companyId)
+      ]);
+      const settings=settingsResult?.data||null;
+      const items=[
+        {label:'Company information & logo',done:Boolean(settings?.display_name&&settings?.logo_url)},
+        {label:'Leadership & users',done:profiles>1},
+        {label:'Crews & employees',done:crews>0},
+        {label:'Equipment',done:equipment>0},
+        {label:'Customers & contracts',done:customers>0&&contracts>0},
+        {label:'Price book / unit sheet',done:priceBooks>0},
+        {label:'First job',done:jobs>0}
+      ];
+      addPilotChecklist(dashboard,items,subscription?.trial_ends_at||null);pilotCheckDone=true;
+    }catch(error){console.warn('Pilot onboarding checklist unavailable.',error?.message||error);}finally{pilotCheckRunning=false;}
+  }
+
   let dirty=false;let dirtyScope=null;
   const tracked=['dailyReportForm','safetyJsaForm'];
   document.addEventListener('input',e=>{const form=e.target?.closest?.('form');if(form && tracked.includes(form.id)){dirty=true;dirtyScope=form.id;form.dataset.lcDirty='1';}},true);
@@ -176,7 +230,7 @@
   document.addEventListener('click',e=>{const id=e.target?.id||'';if(['saveDailyReportBtn','saveSafetyJsaBtn','saveDailyUnitBatchBtn'].includes(id)){setTimeout(()=>{dirty=false;dirtyScope=null;tracked.forEach(x=>{const f=byId(x);if(f)delete f.dataset.lcDirty;});},1700);}},true);
   window.addEventListener('beforeunload',e=>{if(!dirty)return;e.preventDefault();e.returnValue='';});
 
-  function harden(){ensureTopSignOut();hardenProductionLoader();makeDashboardTilesAccessible();compactTeamRoster();hookTeamLoader();}
+  function harden(){ensureTopSignOut();hardenProductionLoader();makeDashboardTilesAccessible();compactTeamRoster();hookTeamLoader();maybeInstallPilotOnboarding();}
 
   function init(){
     addStyles();
@@ -185,7 +239,7 @@
     harden();
     const obs=new MutationObserver(()=>{improveEmptyStates();harden();});
     obs.observe(document.body,{subtree:true,childList:true,characterData:true});
-    [250,750,1500,3000].forEach(delay=>setTimeout(harden,delay));
+    [250,750,1500,3000,6000].forEach(delay=>setTimeout(harden,delay));
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();

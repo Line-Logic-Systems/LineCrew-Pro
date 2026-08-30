@@ -1,0 +1,43 @@
+name: Beta Onboarding Validation
+
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "owner.html"
+      - "app-polish.js"
+      - "pilot-convert.html"
+      - "vercel.json"
+      - "supabase/migrations/20260830073000_beta_application_onboarding.sql"
+      - "supabase/functions/submit-beta-application/**"
+      - "supabase/functions/review-beta-application/**"
+      - "scripts/validate-beta-onboarding.mjs"
+      - ".github/workflows/validate-beta-onboarding.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "owner.html"
+      - "app-polish.js"
+      - "pilot-convert.html"
+      - "vercel.json"
+      - "supabase/migrations/20260830073000_beta_application_onboarding.sql"
+      - "supabase/functions/submit-beta-application/**"
+      - "supabase/functions/review-beta-application/**"
+      - "scripts/validate-beta-onboarding.mjs"
+      - ".github/workflows/validate-beta-onboarding.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - run: node scripts/validate-beta-onboarding.mjs
+      - run: node scripts/validate-marketing-site.mjs
+      - run: node scripts/validate-end-to-end-regressions.mjs
