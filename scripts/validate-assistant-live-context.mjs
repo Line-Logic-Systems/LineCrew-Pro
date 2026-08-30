@@ -4,6 +4,7 @@ import {
   assistantMemoryManagementRequested,
   assistantModelConfig,
   classifyAssistantRequest,
+  detectAssistantNavigation,
   detectAssistantMemoryProposal,
   sanitizeAssistantScreenContext
 } from '../supabase/functions/linecrew-assistant/assistant-logic.mjs';
@@ -68,6 +69,24 @@ assert.equal(assistantMemoryManagementRequested('Edit the reminder I saved.'),tr
 assert.equal(assistantMemoryManagementRequested('How do I import a Price Book?'),false);
 
 assert.deepEqual(
+  detectAssistantNavigation('Take me to Production.'),
+  {destination:'production',label:'Production',mode:'auto'}
+);
+assert.deepEqual(
+  detectAssistantNavigation('How do I import a Price Book?'),
+  {destination:'price_books',label:'Price Books',mode:'suggest'}
+);
+assert.deepEqual(
+  detectAssistantNavigation('Open Company Billing.'),
+  {destination:'company_billing',label:'Company Billing',mode:'auto'}
+);
+assert.deepEqual(
+  detectAssistantNavigation('Open billing batches for job WR2829868.'),
+  {destination:'billing_exports',label:'Billing Exports',mode:'auto',query:'WR2829868'}
+);
+assert.equal(detectAssistantNavigation('Explain the difference between yellow and green.'),null);
+
+assert.deepEqual(
   assistantModelConfig('fast',{OPENAI_MODEL:'gpt-5-mini'}),
   {model:'gpt-5-mini',effort:'low',fallbackModel:'gpt-5-mini'}
 );
@@ -79,7 +98,7 @@ assert.deepEqual(
 const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts','utf8');
 const app = fs.readFileSync('index.html','utf8');
 for(const marker of [
-  '2026-08-30-dashboard-memory-v7',
+  '2026-08-30-read-only-navigation-v8',
   'loadLiveCompanyContext(',
   'Authenticated Owner/Admin read-only snapshot constrained by company RLS',
   '.eq("company_id", companyId)',
@@ -102,8 +121,28 @@ for(const marker of [
   'permission-safe, read-only company data'
 ]) assert(app.includes(marker),`App screen-context marker missing: ${marker}`);
 
+for(const marker of [
+  'ASSISTANT_NAVIGATION_DESTINATIONS',
+  'normalizeAssistantNavigation(value)',
+  'performAssistantNavigation(rawNavigation)',
+  'Navigation only — no company data will be changed.',
+  "if(data?.navigation) renderAssistantNavigationAction(data.navigation)",
+  "window.openLineCrewTimekeeping",
+  "window.location.assign('/billing.html')",
+  "window.location.assign('/training/')"
+]) assert(app.includes(marker),`Assistant read-only navigation marker missing: ${marker}`);
+
+const navigationStart = app.indexOf('async function performAssistantNavigation(rawNavigation)');
+const navigationEnd = app.indexOf('function renderAssistantNavigationAction(rawNavigation)',navigationStart);
+assert(navigationStart >= 0 && navigationEnd > navigationStart,'Assistant navigation implementation could not be isolated.');
+const navigationImplementation = app.slice(navigationStart,navigationEnd);
+for(const mutation of ['.insert(','.update(','.upsert(','.delete(','.rpc(','Save','Approve','Submit','Import','Upload','Mark Paid']){
+  assert(!navigationImplementation.includes(mutation),`Assistant navigation must not contain a data-changing action: ${mutation}`);
+}
+
 console.log('Assistant live-context validation passed.');
 console.log('- Screen context allowlist strips unknown fields and invalid record IDs');
 console.log('- Job/report/team/pricing intents choose relevant read-only data');
 console.log('- Complex troubleshooting routes to balanced reasoning with safe fallback');
+console.log('- Allowlisted Assistant navigation cannot invoke data mutations');
 console.log('- Edge Function remains authenticated, tenant-scoped and non-mutating');
