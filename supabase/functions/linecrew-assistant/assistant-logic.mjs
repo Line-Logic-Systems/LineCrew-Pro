@@ -32,6 +32,22 @@ const LIVE_CONTEXT_TERMS = Object.freeze({
 
 const COMPLEX_REQUEST_PATTERN = /\b(why|diagnose|investigate|cannot|can't|won't|not working|failed|failure|error|blocked|preventing|missing|mismatch|incorrect|wrong|conflict|ready for|safe to|final bill|closeout)\b/i;
 const MEMORY_REQUEST_PATTERN = /\b(remember(?:\s+that)?|remind\s+me(?:\s+to)?|from\s+now\s+on|always\s+(?:remember|make\s+sure|check|include|attach|add|verify))\b/i;
+const EXPLICIT_NAVIGATION_PATTERN = /\b(?:(?:take|bring)\s+me\s+to|(?:go|navigate)\s+to|open|(?:show|view)\s+(?:the\s+)?(?:page|screen|dashboard))\b/i;
+const ASSISTANT_NAVIGATION_DESTINATIONS = Object.freeze([
+  { destination:'assistant_memory', label:'Assistant Memory', pattern:/\b(?:assistant\s+memor(?:y|ies)|saved\s+memor(?:y|ies)|saved\s+reminders?)\b/i },
+  { destination:'company_settings', label:'Company Settings', pattern:/\b(?:company\s+settings|admin\s+controls?|company\s+controls?)\b/i },
+  { destination:'company_billing', label:'Company Billing', pattern:/\b(?:company|subscription|stripe|plan|payment\s+method)\s+billing\b|\bbilling\s+(?:plan|subscription|payment\s+method)\b/i },
+  { destination:'completed_jobs', label:'Completed Jobs', pattern:/\b(?:completed|closed|archived)\s+jobs?\b/i },
+  { destination:'billing_exports', label:'Billing Exports', pattern:/\b(?:billing\s+(?:batch|batches|export|exports)|final\s+bill(?:ing)?|partial\s+bill(?:ing)?|invoice\s+batch)\b/i },
+  { destination:'price_books', label:'Price Books', pattern:/\b(?:price\s*books?|pricing|customers?|utilities|contracts?|unit\s+prices?)\b/i },
+  { destination:'timekeeping', label:'Timekeeping', pattern:/\b(?:timekeeping|crew\s+time|payroll|timesheets?|pay\s+periods?|employee\s+roster|equipment\s+roster)\b/i },
+  { destination:'safety', label:'Safety / JSA', pattern:/\b(?:safety|jsa|job\s+safety)\b/i },
+  { destination:'production', label:'Production', pattern:/\b(?:production|daily\s+reports?|report\s+review|review\s+reports?|approval\s+queue)\b/i },
+  { destination:'team', label:'Team', pattern:/\b(?:team|team\s+access|members?|roles?|permissions?|superintendents?|general\s+foremen|foremen)\b/i },
+  { destination:'training', label:'Training', pattern:/\b(?:training|training\s+center|training\s+videos?|how-to\s+videos?)\b/i },
+  { destination:'jobs', label:'Jobs', pattern:/\b(?:jobs?|job\s+progress|assigned\s+jobs?|utility\s+(?:job\s+)?packages?|work\s+points?)\b/i },
+  { destination:'dashboard', label:'Dashboard', pattern:/\b(?:dashboard|home\s+screen|main\s+screen)\b/i }
+]);
 
 function clippedText(value, maxLength) {
   return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
@@ -109,6 +125,23 @@ export function classifyAssistantRequest(question, page = '', screenContext = {}
     : 'fast';
 
   return { categories, route };
+}
+
+export function detectAssistantNavigation(question) {
+  const text = clippedText(question, 1200);
+  if (!text) return null;
+  const target = ASSISTANT_NAVIGATION_DESTINATIONS.find(destination => destination.pattern.test(text));
+  if (!target) return null;
+  const result = {
+    destination: target.destination,
+    label: target.label,
+    mode: EXPLICIT_NAVIGATION_PATTERN.test(text) ? 'auto' : 'suggest'
+  };
+  if (target.destination === 'jobs' || target.destination === 'billing_exports') {
+    const jobMatch = text.match(/\bjob\s+(?:number\s+)?([A-Za-z0-9][A-Za-z0-9._/-]{1,39})\b/i);
+    if (jobMatch && /\d/.test(jobMatch[1])) result.query = jobMatch[1];
+  }
+  return result;
 }
 
 export function assistantModelConfig(route, env = {}) {

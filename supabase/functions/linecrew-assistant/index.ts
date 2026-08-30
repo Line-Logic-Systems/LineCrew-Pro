@@ -4,11 +4,12 @@ import {
   assistantMemoryManagementRequested,
   assistantModelConfig,
   classifyAssistantRequest,
+  detectAssistantNavigation,
   detectAssistantMemoryProposal,
   sanitizeAssistantScreenContext,
 } from "./assistant-logic.mjs";
 
-const KNOWLEDGE_VERSION = "2026-08-30-dashboard-memory-v7";
+const KNOWLEDGE_VERSION = "2026-08-30-read-only-navigation-v8";
 
 const allowedOrigins = new Set([
   "https://app.linecrewpro.com",
@@ -56,6 +57,12 @@ ADMIN OPERATIONS COACH
 - Distinguish app behavior from company policy. Use "LineCrew Pro does..." for product behavior and "your company must decide/verify..." for safety, payroll, contract, utility or accounting policy.
 - Explain dependencies and downstream effects. Example: Customer -> Contract -> Price Book -> Job -> Utility Package -> Foreman Report -> GF/leadership Review -> Billing Batch -> Job Closeout.
 - If a requested action is not supported, say so plainly and give the closest safe supported workflow. Never invent a button, permission, automation or database fix.
+
+READ-ONLY NAVIGATION
+- The app may attach a deterministic, allowlisted navigation instruction to your answer. That instruction is generated outside the language model and is the only way the Assistant can move between screens.
+- Navigation may open an approved page, a job detail for viewing, a harmless filter or the saved-memory view. It never presses Save, Approve, Submit, Delete, Import, Invite, Upload, Mark Paid, Close Job or any other data-changing control.
+- A direct request such as “take me to Production” opens the approved destination. A workflow question may instead show an Open Page button so the user chooses whether to move.
+- Do not claim that you changed data because a page opened. Do not claim that a destination opened unless the app's navigation instruction says it will.
 
 ROLE OPERATING MODEL
 - Owner: final company authority. Has all operational access; governs Owners/Admins; may claim the first Owner when the company has none; is the only role that can authorize an unresolved-work job-close override. Must preserve at least one Owner.
@@ -641,6 +648,16 @@ Deno.serve(async (request) => {
     const page = String(screenContext.page || "dashboardPage");
     if (!question) throw new Error("Enter a question.");
     memoryProposal = detectAssistantMemoryProposal(question, screenContext) as Record<string, unknown> | null;
+    const navigation = memoryProposal ? null : detectAssistantNavigation(question);
+    if (navigation?.mode === "auto") {
+      return jsonResponse(request, {
+        answer: `Opening ${navigation.label}. This is navigation only; I will not change any company data.`,
+        route: "read-only-navigation",
+        live_context_categories: [],
+        memory_proposal: null,
+        navigation,
+      });
+    }
     const requestPlan = classifyAssistantRequest(question, page, screenContext);
 
     const history = Array.isArray(body?.history)
@@ -742,6 +759,7 @@ Deno.serve(async (request) => {
         route: "memory-management",
         live_context_categories: requestPlan.categories,
         memory_proposal: null,
+        navigation,
       });
     }
 
@@ -809,6 +827,7 @@ Deno.serve(async (request) => {
       route: usedRoute,
       live_context_categories: requestPlan.categories,
       memory_proposal: memoryProposal,
+      navigation,
     });
   } catch (error) {
     if (memoryProposal) {

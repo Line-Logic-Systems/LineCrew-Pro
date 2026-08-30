@@ -156,7 +156,7 @@ assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must a
 assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
 assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
 assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
-assert(assistant.includes('2026-08-30-dashboard-memory-v7'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('2026-08-30-read-only-navigation-v8'), 'AI assistant knowledge version marker must track the current workflow release.');
 assert(assistant.includes('loadLiveCompanyContext('), 'AI assistant must load permission-scoped live company context.');
 assert(assistant.includes('assistantModelConfig(requestPlan.route'), 'AI assistant must route complex questions to the reasoning model.');
 assert(assistant.includes('safety_identifier: safetyIdentifier'), 'AI assistant requests must include a privacy-preserving safety identifier.');

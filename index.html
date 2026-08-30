@@ -683,6 +683,27 @@ gap:8px;
 .assistant-quick-actions button{
 width:auto;
 }
+.assistant-navigation-action{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:10px;
+padding:10px 12px;
+border:1px solid #9fc2df;
+border-radius:12px;
+background:#eef7ff;
+}
+.assistant-navigation-action span{
+font-size:12px;
+color:var(--muted);
+}
+.assistant-navigation-action button{
+width:auto;
+flex:0 0 auto;
+margin:0;
+padding:9px 12px;
+font-size:14px;
+}
 .assistant-memory-list{
 display:flex;
 flex-direction:column;
@@ -8371,6 +8392,153 @@ assistantConversation.push({ role, content:String(text || '').slice(0, 1600) });
 assistantConversation = assistantConversation.slice(-10);
 }
 }
+const ASSISTANT_NAVIGATION_DESTINATIONS = Object.freeze({
+dashboard:{label:'Dashboard'},
+team:{label:'Team'},
+jobs:{label:'Jobs'},
+completed_jobs:{label:'Completed Jobs'},
+production:{label:'Production'},
+safety:{label:'Safety / JSA'},
+price_books:{label:'Price Books'},
+timekeeping:{label:'Timekeeping'},
+billing_exports:{label:'Billing Exports'},
+company_settings:{label:'Company Settings'},
+assistant_memory:{label:'Assistant Memory'},
+company_billing:{label:'Company Billing'},
+training:{label:'Training'}
+});
+function normalizeAssistantNavigation(value){
+if(!value || typeof value !== 'object') return null;
+const destination = String(value.destination || '');
+const config = ASSISTANT_NAVIGATION_DESTINATIONS[destination];
+if(!config) return null;
+const mode = value.mode === 'auto' ? 'auto' : 'suggest';
+const query = String(value.query || '').replace(/[\u0000-\u001f\u007f]/g,'').trim().slice(0,80);
+return {destination,label:config.label,mode,query};
+}
+function hideAssistantAuxiliaryPages(){
+['timekeepingPage','remainingUnitsPage'].forEach(id => {
+const page = $(id);
+if(page) page.classList.add('hidden');
+});
+}
+async function assistantNavigateToMainPage(page,state = {}){
+hideAssistantAuxiliaryPages();
+setAppHistory({lineCrewPage:page,...state});
+await displayAppPage(page,state);
+}
+function assistantFindJob(query){
+const normalized = String(query || '').trim().toLowerCase();
+if(!normalized) return null;
+const exact = currentJobsCatalog.find(job =>
+String(job.job_number || '').trim().toLowerCase() === normalized
+);
+if(exact) return exact;
+const matches = currentJobsCatalog.filter(job =>
+String(job.job_number || '').toLowerCase().includes(normalized) ||
+String(job.job_name || '').toLowerCase().includes(normalized)
+);
+return matches.length === 1 ? matches[0] : null;
+}
+async function performAssistantNavigation(rawNavigation){
+const navigation = normalizeAssistantNavigation(rawNavigation);
+if(!navigation) throw new Error('That Assistant destination is not allowed.');
+if(navigation.destination === 'dashboard'){
+hideAssistantAuxiliaryPages();
+await returnToDashboard();
+return;
+}
+if(navigation.destination === 'team') return assistantNavigateToMainPage('teamPage');
+if(navigation.destination === 'completed_jobs'){
+await assistantNavigateToMainPage('completedJobsPage');
+if(navigation.query && $('completedJobsSearch')){
+$('completedJobsSearch').value = navigation.query;
+renderCompletedJobs();
+}
+return;
+}
+if(navigation.destination === 'production') return assistantNavigateToMainPage('productionPage');
+if(navigation.destination === 'safety') return assistantNavigateToMainPage('safetyPage');
+if(navigation.destination === 'price_books') return assistantNavigateToMainPage('priceBooksPage');
+if(navigation.destination === 'jobs' || navigation.destination === 'billing_exports'){
+await assistantNavigateToMainPage('jobsPage');
+const job = assistantFindJob(navigation.query);
+if(navigation.destination === 'billing_exports'){
+await openBillingExportCenter();
+if(job && $('billingExportJob')){
+$('billingExportJob').value = job.id;
+await loadBillingReconciliation(job.id);
+}
+return;
+}
+if(job){
+openJobFromProgress(job.id);
+}else if(navigation.query && $('jobProgressSearch')){
+$('jobProgressSearch').value = navigation.query;
+renderJobProgressDashboard(currentJobsCatalog,true);
+$('jobProgressSearch').focus();
+}
+return;
+}
+if(navigation.destination === 'timekeeping'){
+hideAssistantAuxiliaryPages();
+if(typeof window.openLineCrewTimekeeping !== 'function') throw new Error('Timekeeping is still loading.');
+await window.openLineCrewTimekeeping();
+return;
+}
+if(navigation.destination === 'company_settings'){
+hideAssistantAuxiliaryPages();
+await returnToDashboard();
+$('adminNotice').open = true;
+$('adminNotice').scrollIntoView({behavior:'smooth',block:'start'});
+return;
+}
+if(navigation.destination === 'assistant_memory'){
+hideAssistantAuxiliaryPages();
+await returnToDashboard();
+setAssistantOpen(true);
+$('assistantMemorySection').open = true;
+return;
+}
+if(navigation.destination === 'company_billing'){
+window.location.assign('/billing.html');
+return;
+}
+if(navigation.destination === 'training'){
+window.location.assign('/training/');
+return;
+}
+throw new Error('That Assistant destination is not available.');
+}
+function renderAssistantNavigationAction(rawNavigation){
+const navigation = normalizeAssistantNavigation(rawNavigation);
+if(!navigation) return;
+const action = document.createElement('div');
+action.className = 'assistant-navigation-action';
+const note = document.createElement('span');
+note.textContent = 'Navigation only — no company data will be changed.';
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'secondary small';
+button.textContent = `Open ${navigation.label}`;
+button.onclick = async () => {
+if(button.disabled) return;
+button.disabled = true;
+button.textContent = `Opening ${navigation.label}...`;
+try{
+await performAssistantNavigation(navigation);
+button.textContent = `Opened ${navigation.label}`;
+}catch(error){
+button.disabled = false;
+button.textContent = `Open ${navigation.label}`;
+addAssistantMessage('assistant',error?.message || 'That page could not be opened.',false);
+}
+};
+action.append(note,button);
+$('assistantMessages').appendChild(action);
+action.scrollIntoView({block:'nearest'});
+if(navigation.mode === 'auto') button.click();
+}
 const ASSISTANT_MEMORY_TRIGGER_LABELS = {
 always:'Always',
 job_open:'When the job is open',
@@ -8747,6 +8915,7 @@ const answer = String(data?.answer || '').trim();
 if(!answer) throw new Error('No answer returned');
 addAssistantMessage('assistant', answer);
 if(data?.memory_proposal) renderAssistantMemoryProposal(data.memory_proposal);
+if(data?.navigation) renderAssistantNavigationAction(data.navigation);
 }catch(error){
 console.warn('Secure assistant unavailable; using built-in help.', error);
 addAssistantMessage(
