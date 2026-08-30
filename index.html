@@ -80,10 +80,44 @@ header p{
 margin:6px 0 0;
 opacity:.85;
 }
+.company-brand-badge{
+margin-left:auto;
+display:flex;
+align-items:center;
+gap:10px;
+max-width:310px;
+padding:8px 11px;
+border:1px solid rgba(255,255,255,.28);
+border-radius:12px;
+background:rgba(255,255,255,.1);
+}
+.company-brand-badge img{
+display:block;
+width:46px;
+height:46px;
+object-fit:contain;
+border-radius:9px;
+background:white;
+padding:4px;
+}
+.company-brand-badge span{
+font-size:14px;
+font-weight:800;
+line-height:1.2;
+overflow-wrap:anywhere;
+}
 @media(max-width:600px){
 header{padding:18px 16px;}
+header .app-brand{flex-wrap:wrap;gap:12px;}
 header .app-brand-logo{width:56px;height:56px;border-radius:10px;}
 header h1{font-size:26px;}
+.company-brand-badge{
+width:100%;
+max-width:none;
+margin-left:0;
+padding:7px 9px;
+}
+.company-brand-badge img{width:38px;height:38px;}
 }
 main{
 max-width:850px;
@@ -1348,6 +1382,43 @@ background:#e8f2fb;
 .file-drop input{
 margin-top:10px;
 }
+.company-logo-upload{
+grid-column:1 / -1;
+border:1px solid var(--border);
+border-radius:14px;
+padding:14px;
+background:#f8fafc;
+}
+.company-logo-actions{
+display:flex;
+align-items:center;
+flex-wrap:wrap;
+gap:8px;
+margin-top:10px;
+}
+.company-logo-actions button{margin:0;}
+.company-logo-preview{
+display:flex;
+align-items:center;
+gap:12px;
+margin-top:12px;
+padding:10px;
+border:1px solid var(--border);
+border-radius:12px;
+background:white;
+}
+.company-logo-preview img{
+display:block;
+width:84px;
+height:84px;
+object-fit:contain;
+border-radius:10px;
+background:white;
+}
+.company-logo-preview-details{min-width:0;}
+.company-logo-preview-details strong,
+.company-logo-preview-details span{display:block;overflow-wrap:anywhere;}
+.company-logo-preview-details span{font-size:12px;margin-top:4px;}
 @media(max-width:600px){
 .grid,
 .mapping-grid{
@@ -1408,6 +1479,10 @@ margin:4px 0;
 <div>
 <h1>LineCrew Pro</h1>
 <p>Powerline Management Platform</p>
+</div>
+<div id="companyBrandBadge" class="company-brand-badge hidden" aria-label="Current company">
+<img id="companyBrandLogo" alt="">
+<span id="companyBrandNameHeader"></span>
 </div>
 </div>
 </header>
@@ -1659,9 +1734,21 @@ These details appear in LineCrew Pro and on printed daily reports.
 <label for="companyContactPhone">Company Phone</label>
 <input id="companyContactPhone" type="tel" maxlength="40">
 </div>
-<div>
-<label for="companyLogoUrl">Logo Image URL</label>
-<input id="companyLogoUrl" type="url" maxlength="1000" placeholder="https://...">
+<div class="company-logo-upload">
+<label for="companyLogoFile">Company Logo</label>
+<input id="companyLogoFile" class="hidden" type="file" accept="image/png,image/jpeg,image/webp">
+<p class="muted" style="font-size:12px;margin:5px 0 0">Upload a PNG, JPG or WebP up to 2 MB. A square image works best on phones and reports.</p>
+<div class="company-logo-actions">
+<button id="chooseCompanyLogo" class="secondary small" type="button">Choose Logo</button>
+<button id="removeCompanyLogo" class="danger small hidden" type="button">Remove Logo</button>
+</div>
+<div id="companyLogoPreview" class="company-logo-preview hidden">
+<img id="companyLogoPreviewImage" alt="Company logo preview">
+<div class="company-logo-preview-details">
+<strong id="companyLogoPreviewName">Company logo</strong>
+<span id="companyLogoPreviewStatus" class="muted">Current logo</span>
+</div>
+</div>
 </div>
 <div>
 <label for="companyPrimaryColor">Brand Color</label>
@@ -3514,6 +3601,12 @@ applyInvitationMode();
 /* CURRENT USER STATE */
 let currentProfile = null;
 let currentCompany = null;
+let pendingCompanyLogoFile = null;
+let removeCompanyLogoRequested = false;
+let companyLogoPreviewObjectUrl = '';
+const COMPANY_LOGO_BUCKET = 'company-logos';
+const COMPANY_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+const COMPANY_LOGO_TYPES = new Set(['image/png','image/jpeg','image/webp']);
 let currentStormModeAssigned = false;
 let stormAssignableMembers = [];
 let currentSafetyJsas = [];
@@ -4291,7 +4384,7 @@ await loadStormModeAssignments();
 $('companyDisplayName').value = company?.name || '';
 $('companyContactEmail').value = company?.contact_email || '';
 $('companyContactPhone').value = company?.contact_phone || '';
-$('companyLogoUrl').value = company?.logo_url || '';
+resetCompanyLogoEditor(company);
 $('companyPrimaryColor').value =
 /^#[0-9a-f]{6}$/i.test(company?.primary_color || '')
 ? company.primary_color
@@ -8118,7 +8211,7 @@ answer:'Open Production and choose Show Filters. Filter by status, dates, job, F
 },
 {
 terms:['company settings','logo','brand color','time zone','company name'],
-answer:'Admin steps: open Admin Controls > Company Settings, enter the display name, time zone, email, phone, logo image URL and brand color, then choose Save Company Settings. Confirm the branding and company details on the dashboard and printed reports.'
+answer:'Admin steps: open Admin Controls > Company Settings, enter the display name, time zone, email and phone, choose Company Logo to select a PNG, JPG or WebP, choose the brand color, then select Save Company Settings. The uploaded company logo appears in the app header on desktop and mobile and on printed daily reports; the LineCrew Pro product logo remains separate.'
 },
 {
 terms:['delete job','cannot delete','foreign key','archive'],
@@ -8502,7 +8595,130 @@ const primaryColor =
 document.documentElement.style.setProperty('--navy', primaryColor);
 document.querySelector('meta[name="theme-color"]')
 ?.setAttribute('content', primaryColor);
+const companyName = String(company?.name || 'Company').trim();
+const logoUrl = String(company?.logo_url || '').trim();
+const badge = $('companyBrandBadge');
+const logo = $('companyBrandLogo');
+if(!badge || !logo) return;
+$('companyBrandNameHeader').textContent = companyName;
+badge.classList.toggle('hidden', !logoUrl);
+if(logoUrl){
+logo.alt = companyName + ' logo';
+logo.onerror = () => badge.classList.add('hidden');
+logo.onload = () => badge.classList.remove('hidden');
+logo.src = logoUrl;
+}else{
+logo.removeAttribute('src');
+logo.alt = '';
 }
+}
+function revokeCompanyLogoPreviewObjectUrl(){
+if(!companyLogoPreviewObjectUrl) return;
+URL.revokeObjectURL(companyLogoPreviewObjectUrl);
+companyLogoPreviewObjectUrl = '';
+}
+function showCompanyLogoPreview(url,name,status){
+const preview = $('companyLogoPreview');
+const image = $('companyLogoPreviewImage');
+const hasLogo = Boolean(url);
+preview.classList.toggle('hidden', !hasLogo);
+if(hasLogo){
+image.src = url;
+image.alt = String(name || 'Company') + ' logo preview';
+$('companyLogoPreviewName').textContent = name || 'Company logo';
+$('companyLogoPreviewStatus').textContent = status || 'Current logo';
+}else{
+image.removeAttribute('src');
+image.alt = 'Company logo preview';
+}
+}
+function resetCompanyLogoEditor(company){
+revokeCompanyLogoPreviewObjectUrl();
+pendingCompanyLogoFile = null;
+removeCompanyLogoRequested = false;
+$('companyLogoFile').value = '';
+const existingLogo = String(company?.logo_url || '').trim();
+showCompanyLogoPreview(
+existingLogo,
+company?.name || 'Company logo',
+'Current logo'
+);
+$('removeCompanyLogo').classList.toggle('hidden', !existingLogo);
+$('chooseCompanyLogo').textContent = existingLogo ? 'Change Logo' : 'Choose Logo';
+}
+function companyLogoExtension(file){
+if(file?.type === 'image/png') return 'png';
+if(file?.type === 'image/jpeg') return 'jpg';
+if(file?.type === 'image/webp') return 'webp';
+return '';
+}
+function companyLogoStoragePathFromUrl(url,companyId){
+const marker = '/storage/v1/object/public/' + COMPANY_LOGO_BUCKET + '/';
+const value = String(url || '');
+const markerIndex = value.indexOf(marker);
+if(markerIndex < 0) return '';
+let path = value.slice(markerIndex + marker.length).split('?')[0];
+try{ path = decodeURIComponent(path); }catch{}
+return path.startsWith(String(companyId || '') + '/') ? path : '';
+}
+async function uploadPendingCompanyLogo(file){
+if(!currentCompany?.id) throw new Error('Your company could not be identified.');
+const extension = companyLogoExtension(file);
+if(!extension) throw new Error('Choose a PNG, JPG or WebP image.');
+const storagePath = currentCompany.id + '/logo-' + Date.now() + '.' + extension;
+const upload = await sb.storage.from(COMPANY_LOGO_BUCKET).upload(
+storagePath,
+file,
+{ upsert:false, contentType:file.type, cacheControl:'3600' }
+);
+if(upload.error) throw upload.error;
+const publicResult = sb.storage.from(COMPANY_LOGO_BUCKET).getPublicUrl(storagePath);
+const publicUrl = String(publicResult?.data?.publicUrl || '').trim();
+if(!publicUrl){
+await sb.storage.from(COMPANY_LOGO_BUCKET).remove([storagePath]);
+throw new Error('The uploaded logo URL could not be created.');
+}
+return { storagePath, publicUrl };
+}
+$('chooseCompanyLogo').onclick = () => {
+if(!userCanManageCompanySettings()) return;
+$('companyLogoFile').click();
+};
+$('companyLogoFile').onchange = () => {
+const file = $('companyLogoFile').files?.[0];
+if(!file) return;
+if(!COMPANY_LOGO_TYPES.has(file.type)){
+$('companyLogoFile').value = '';
+alert('Choose a PNG, JPG or WebP logo image.');
+return;
+}
+if(file.size <= 0 || file.size > COMPANY_LOGO_MAX_BYTES){
+$('companyLogoFile').value = '';
+alert('The company logo must be 2 MB or smaller.');
+return;
+}
+revokeCompanyLogoPreviewObjectUrl();
+pendingCompanyLogoFile = file;
+removeCompanyLogoRequested = false;
+companyLogoPreviewObjectUrl = URL.createObjectURL(file);
+showCompanyLogoPreview(
+companyLogoPreviewObjectUrl,
+file.name,
+'Ready to upload when you save company settings'
+);
+$('removeCompanyLogo').classList.remove('hidden');
+$('chooseCompanyLogo').textContent = 'Change Logo';
+};
+$('removeCompanyLogo').onclick = () => {
+if(!userCanManageCompanySettings()) return;
+revokeCompanyLogoPreviewObjectUrl();
+pendingCompanyLogoFile = null;
+removeCompanyLogoRequested = true;
+$('companyLogoFile').value = '';
+showCompanyLogoPreview('','','');
+$('removeCompanyLogo').classList.add('hidden');
+$('chooseCompanyLogo').textContent = 'Choose Logo';
+};
 $('saveCompanySettings').onclick = async () => {
 if(!userCanManageCompanySettings()) return;
 const name = $('companyDisplayName').value.trim();
@@ -8512,34 +8728,60 @@ return;
 }
 const button = $('saveCompanySettings');
 button.disabled = true;
+button.textContent = pendingCompanyLogoFile ? 'Uploading Logo...' : 'Saving...';
+const previousLogoUrl = String(currentCompany?.logo_url || '').trim();
+let uploadedLogo = null;
+let logoUrl = removeCompanyLogoRequested ? null : (previousLogoUrl || null);
+if(pendingCompanyLogoFile){
+try{
+uploadedLogo = await uploadPendingCompanyLogo(pendingCompanyLogoFile);
+logoUrl = uploadedLogo.publicUrl;
+}catch(error){
+button.disabled = false;
+button.textContent = 'Save Company Settings';
+alert('Unable to upload the company logo: ' + error.message);
+return;
+}
+}
 button.textContent = 'Saving...';
 const { data, error } = await sb.rpc('update_company_settings', {
 p_name:name,
 p_contact_email:$('companyContactEmail').value.trim() || null,
 p_contact_phone:$('companyContactPhone').value.trim() || null,
-p_logo_url:$('companyLogoUrl').value.trim() || null,
+p_logo_url:logoUrl,
 p_primary_color:$('companyPrimaryColor').value,
 p_timezone:$('companyTimezone').value
 });
+if(error){
+if(uploadedLogo){
+await sb.storage.from(COMPANY_LOGO_BUCKET).remove([uploadedLogo.storagePath]);
+}
 button.disabled = false;
 button.textContent = 'Save Company Settings';
-if(error){
 alert('Unable to save company settings: ' + error.message);
 return;
 }
 const weekStartDay = Number($('companyWeekStartDay').value || 1);
 const { error:weekStartError } = await sb.rpc('update_company_week_start', { p_week_start_day:weekStartDay });
-if(weekStartError){
-alert('Company details saved, but the workweek start day could not be saved: ' + weekStartError.message);
-return;
-}
 currentCompany = {
 ...currentCompany,
 ...(Array.isArray(data) ? data[0] : data),
 week_start_day:weekStartDay
 };
+const previousStoragePath = companyLogoStoragePathFromUrl(previousLogoUrl,currentCompany.id);
+if(previousStoragePath && previousLogoUrl !== String(currentCompany.logo_url || '')){
+const cleanup = await sb.storage.from(COMPANY_LOGO_BUCKET).remove([previousStoragePath]);
+if(cleanup.error) console.warn('Unable to remove the previous company logo:',cleanup.error);
+}
 $('companyName').textContent = currentCompany.name || 'LineCrew Pro';
 applyCompanyBranding(currentCompany);
+resetCompanyLogoEditor(currentCompany);
+button.disabled = false;
+button.textContent = 'Save Company Settings';
+if(weekStartError){
+alert('Company details and logo were saved, but the workweek start day could not be saved: ' + weekStartError.message);
+return;
+}
 alert('Company settings saved.');
 };
 $('saveCompanyMhRate').onclick = async () => {
