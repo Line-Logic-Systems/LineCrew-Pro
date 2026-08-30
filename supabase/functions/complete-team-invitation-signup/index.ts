@@ -37,10 +37,6 @@ Deno.serve(async (request) => {
     return jsonResponse(request, { error: "Origin not allowed." }, 403);
   }
 
-  if (!request.headers.get("Authorization")) {
-    return jsonResponse(request, { error: "Authorization is required." }, 401);
-  }
-
   try {
     const body = await request.json().catch(() => ({}));
     const email = String(body?.email || "").trim().toLowerCase();
