@@ -15,6 +15,7 @@ const mustExist = [
   'supabase/functions/linecrew-assistant/index.ts',
   'scripts/validate-assistant-memory.mjs',
   'supabase/migrations/20260830174354_assistant_memory_reminders.sql',
+  'supabase/migrations/20260830175934_index_assistant_memory_foreign_keys.sql',
   'supabase/functions/send-team-invitation/index.ts',
   'supabase/functions/notify-pilot-feedback/index.ts',
   'supabase/functions/complete-team-invitation-signup/index.ts',
