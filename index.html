@@ -628,21 +628,31 @@ position:fixed;
 right:20px;
 bottom:78px;
 width:min(440px, calc(100vw - 32px));
-max-height:min(680px, calc(100vh - 110px));
+min-width:min(360px, calc(100vw - 32px));
+min-height:320px;
+max-width:min(1100px, 70vw);
+max-height:calc(100vh - 110px);
 overflow:auto;
 z-index:29;
 border:1px solid var(--border);
 box-shadow:0 18px 48px rgba(11,45,77,.25);
 }
-.assistant-panel.expanded{
-inset:20px;
-width:auto;
-max-height:none;
-}
-.assistant-panel-actions{
+.assistant-resize-handle{
 display:flex;
 align-items:center;
-gap:6px;
+justify-content:center;
+gap:5px;
+margin:-6px 0 8px;
+padding:5px 8px;
+border:1px dashed #9eb3c5;
+border-radius:8px;
+background:#f3f6f8;
+color:var(--muted);
+font-size:12px;
+font-weight:700;
+cursor:nwse-resize;
+touch-action:none;
+user-select:none;
 }
 .assistant-messages{
 display:flex;
@@ -708,8 +718,8 @@ box-shadow:0 10px 30px rgba(11,45,77,.18);
 .assistant-panel:not(.hidden) + .assistant-reminder-banner{display:none;}
 @media (max-width:600px){
 .assistant-launcher{right:12px;bottom:12px;}
-.assistant-panel{right:8px;bottom:66px;width:calc(100vw - 16px);}
-.assistant-panel.expanded{inset:8px;width:auto;}
+.assistant-panel{right:8px;bottom:66px;width:calc(100vw - 16px);min-width:0;min-height:0;max-width:none;max-height:calc(100vh - 74px);}
+.assistant-resize-handle{display:none;}
 .assistant-reminder-banner{right:8px;bottom:66px;width:calc(100vw - 16px);}
 .pilot-feedback-launcher{left:12px;bottom:12px;}
 }
@@ -3406,15 +3416,13 @@ Send Pilot Feedback
 Ask LineCrew AI
 </button>
 <section id="assistantPanel" class="card assistant-panel hidden" aria-label="LineCrew Assistant">
+<div id="assistantResizeHandle" class="assistant-resize-handle" role="separator" tabindex="0" aria-label="Drag to resize the Assistant. Double-click to reset its size." title="Drag to resize · Double-click to reset">↖ Drag to resize</div>
 <div class="section-header">
 <div>
 <h2>LineCrew Assistant</h2>
 <p class="muted">Leadership help using the current screen and permission-safe, read-only company data.</p>
 </div>
-<div class="assistant-panel-actions">
-<button id="expandAssistant" class="secondary small" type="button" aria-pressed="false">Expand</button>
 <button id="closeAssistant" class="secondary small">Close</button>
-</div>
 </div>
 <div class="assistant-quick-actions" id="assistantQuickActions">
 <button class="secondary small" data-assistant-question="How do I import a Price Book?">Import Price Book</button>
@@ -8651,16 +8659,61 @@ $('assistantQuestion').focus();
 }
 renderAssistantReminderBanner();
 }
-function setAssistantExpanded(expanded){
-$('assistantPanel').classList.toggle('expanded', expanded);
-$('expandAssistant').textContent = expanded ? 'Restore' : 'Expand';
-$('expandAssistant').setAttribute('aria-pressed', String(expanded));
-}
 $('assistantLauncher').onclick = () => setAssistantOpen(true);
 $('closeAssistant').onclick = () => setAssistantOpen(false);
-$('expandAssistant').onclick = () => {
-setAssistantExpanded(!$('assistantPanel').classList.contains('expanded'));
+function resizeAssistantPanel(width, height){
+const panel = $('assistantPanel');
+const maxWidth = Math.min(1100, window.innerWidth * 0.7);
+const maxHeight = window.innerHeight - 110;
+panel.style.width = `${Math.round(Math.max(360, Math.min(width, maxWidth)))}px`;
+panel.style.height = `${Math.round(Math.max(320, Math.min(height, maxHeight)))}px`;
+}
+function resetAssistantPanelSize(){
+$('assistantPanel').style.removeProperty('width');
+$('assistantPanel').style.removeProperty('height');
+}
+$('assistantResizeHandle').addEventListener('pointerdown', event => {
+if(window.matchMedia('(max-width:600px)').matches) return;
+event.preventDefault();
+const handle = $('assistantResizeHandle');
+const rect = $('assistantPanel').getBoundingClientRect();
+const startX = event.clientX;
+const startY = event.clientY;
+const move = moveEvent => {
+resizeAssistantPanel(
+rect.width + startX - moveEvent.clientX,
+rect.height + startY - moveEvent.clientY
+);
 };
+const stop = stopEvent => {
+if(handle.hasPointerCapture?.(stopEvent.pointerId)){
+handle.releasePointerCapture(stopEvent.pointerId);
+}
+handle.removeEventListener('pointermove', move);
+};
+handle.setPointerCapture?.(event.pointerId);
+handle.addEventListener('pointermove', move);
+handle.addEventListener('pointerup', stop, {once:true});
+handle.addEventListener('pointercancel', stop, {once:true});
+});
+$('assistantResizeHandle').addEventListener('dblclick', resetAssistantPanelSize);
+$('assistantResizeHandle').addEventListener('keydown', event => {
+const changes = {
+ArrowLeft:[24,0],
+ArrowRight:[-24,0],
+ArrowUp:[0,24],
+ArrowDown:[0,-24]
+};
+if(event.key === 'Enter'){
+event.preventDefault();
+resetAssistantPanelSize();
+return;
+}
+if(!changes[event.key]) return;
+event.preventDefault();
+const rect = $('assistantPanel').getBoundingClientRect();
+resizeAssistantPanel(rect.width + changes[event.key][0], rect.height + changes[event.key][1]);
+});
 $('openAssistantMemories').onclick = () => {
 setAssistantOpen(true);
 $('assistantMemorySection').open = true;
