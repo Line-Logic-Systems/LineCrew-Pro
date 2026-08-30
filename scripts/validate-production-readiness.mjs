@@ -168,8 +168,10 @@ assert(index.includes("$('assistantMemoryTile').classList.toggle('hidden', !user
 assert(index.includes("['loginEmail','loginPassword'].forEach"), 'Sign-in fields must submit through the Sign In button when Enter is pressed.');
 assert(index.includes("event.key === 'Enter' && !event.shiftKey && !event.isComposing"), 'Assistant must send on Enter while preserving Shift+Enter for a new line and IME composition.');
 assert(index.includes('Enter to send · Shift+Enter for a new line'), 'Assistant must explain its keyboard shortcut.');
-assert(index.includes('id="expandAssistant"'), 'Assistant panel must provide an accessible Expand/Restore control.');
-assert(index.includes("$('assistantPanel').classList.toggle('expanded', expanded)"), 'Assistant Expand/Restore control must resize the panel.');
+assert(index.includes('id="assistantResizeHandle"'), 'Assistant panel must provide an accessible drag-to-resize handle.');
+assert(index.includes('window.innerWidth * 0.7'), 'Assistant resizing must remain capped below full-page width.');
+assert(index.includes("$('assistantResizeHandle').addEventListener('pointerdown'"), 'Assistant resize handle must support pointer dragging.');
+assert(index.includes("$('assistantResizeHandle').addEventListener('dblclick', resetAssistantPanelSize)"), 'Assistant resize handle must support returning to its default size.');
 assert(assistant.includes('ADMIN OPERATIONS COACH'), 'AI assistant must include Admin operations-coach guidance.');
 assert(assistant.includes('ROLE OPERATING MODEL'), 'AI assistant must describe the complete company role model.');
 assert(assistant.includes('BILLING BATCHES AND JOB CLOSEOUT'), 'AI assistant must distinguish operational billing and closeout.');
