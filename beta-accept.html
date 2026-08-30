@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Set Up LineCrew Pro Beta Admin</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
+  <style>
+    :root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754;--red:#b83232}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Arial,Helvetica,sans-serif}main{max-width:620px;margin:0 auto;padding:38px 16px}.brand{text-align:center;margin-bottom:22px}.brand img{width:72px;height:72px;border-radius:14px}.card{background:#fff;border:1px solid var(--border);border-radius:18px;padding:24px;box-shadow:0 5px 22px #1231}h1{color:var(--navy);font-size:26px;margin:0 0 10px}.muted{color:var(--muted);line-height:1.5}label{display:block;font-weight:700;margin:14px 0 6px}input,button{width:100%;font:inherit;border-radius:10px;padding:12px}input{border:1px solid #b8c6d2}button{border:0;background:var(--blue);color:white;font-weight:800;margin-top:16px;cursor:pointer}button:disabled{opacity:.55;cursor:wait}.success{border-left:5px solid var(--green)}.error{color:var(--red);font-weight:700}.hidden{display:none!important}.ready{font-size:18px;font-weight:800;color:var(--green)}
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand"><img src="/icons/linecrew-pro-192.png" alt="LineCrew Pro"></div>
+  <section id="setupCard" class="card">
+    <h1>Set Up Your Beta Admin Account</h1>
+    <p class="muted">Create the password you will use to sign in to LineCrew Pro. Your email is locked to this private invitation.</p>
+    <label for="email">Email</label><input id="email" type="email" readonly autocomplete="email">
+    <label for="password">Password</label><input id="password" type="password" minlength="8" maxlength="128" autocomplete="new-password">
+    <label for="confirm">Confirm Password</label><input id="confirm" type="password" minlength="8" maxlength="128" autocomplete="new-password">
+    <button id="createBtn">Create My Admin Account</button>
+    <p id="status" class="error" aria-live="polite"></p>
+  </section>
+  <section id="readyCard" class="card success hidden">
+    <h1>Your LineCrew Pro account is ready!</h1>
+    <p class="ready">Setup complete.</p>
+    <p>Your company account has been created and your Admin login is ready.</p>
+    <p><strong>No additional email is required.</strong> You do not need to wait for another message.</p>
+    <p class="muted">Continue to LineCrew Pro to finish secure Admin setup, including authenticator verification.</p>
+    <button id="continueBtn">Continue to LineCrew Pro</button>
+  </section>
+</main>
+<script>
+const PROD_HOSTS=new Set(['linecrewpro.com','www.linecrewpro.com','app.linecrewpro.com']);
+const prod=PROD_HOSTS.has(location.hostname.toLowerCase());
+const url=prod?'https://ldgkyxuozbozgkvwzadg.supabase.co':'https://yvuxrqrdprquxypiffpa.supabase.co';
+const key=prod?'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF':'sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx';
+const sb=supabase.createClient(url,key);
+const params=new URLSearchParams(location.search);
+const token=String(params.get('invite')||'');
+const email=String(params.get('email')||'').trim().toLowerCase();
+const validToken=/^[A-Za-z0-9_-]{43}$/.test(token);
+const validEmail=/^\S+@\S+\.\S+$/.test(email)&&email.length<=254;
+document.getElementById('email').value=validEmail?email:'';
+if(!validToken||!validEmail){document.getElementById('createBtn').disabled=true;document.getElementById('status').textContent='This setup link is invalid or incomplete. Request a new Beta invitation.'}
+document.getElementById('createBtn').onclick=async()=>{
+  const password=document.getElementById('password').value;
+  const confirm=document.getElementById('confirm').value;
+  const status=document.getElementById('status');
+  if(password.length<8)return status.textContent='Use a password with at least 8 characters.';
+  if(password!==confirm)return status.textContent='The passwords do not match.';
+  const button=document.getElementById('createBtn');button.disabled=true;button.textContent='Creating Account...';status.textContent='';
+  const {error:createError}=await sb.functions.invoke('complete-team-invitation-signup',{body:{email,password,token}});
+  if(createError){button.disabled=false;button.textContent='Create My Admin Account';status.textContent='Unable to create this account. The invitation may be expired or already used.';return}
+  const {error:signInError}=await sb.auth.signInWithPassword({email,password});
+  if(signInError){button.disabled=false;button.textContent='Create My Admin Account';status.textContent='Your account was created, but automatic sign-in failed. Use the Sign In page with the password you just created.';return}
+  history.replaceState(null,'','/beta-accept.html');
+  document.getElementById('setupCard').classList.add('hidden');
+  document.getElementById('readyCard').classList.remove('hidden');
+};
+document.getElementById('continueBtn').onclick=()=>location.replace('/');
+</script>
+</body>
+</html>
