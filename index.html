@@ -663,9 +663,43 @@ gap:8px;
 .assistant-quick-actions button{
 width:auto;
 }
+.assistant-memory-list{
+display:flex;
+flex-direction:column;
+gap:8px;
+margin:10px 0;
+}
+.assistant-memory-card{
+padding:10px 12px;
+border:1px solid var(--border);
+border-radius:12px;
+background:#fffaf0;
+}
+.assistant-memory-card p{
+margin:5px 0;
+}
+.assistant-memory-proposal{
+border-color:#d99a2b;
+background:#fff7df;
+}
+.assistant-reminder-banner{
+position:fixed;
+right:20px;
+bottom:78px;
+width:min(440px, calc(100vw - 32px));
+z-index:28;
+padding:12px 14px;
+border:1px solid #d99a2b;
+border-radius:12px;
+background:#fff7df;
+box-shadow:0 10px 30px rgba(11,45,77,.18);
+}
+.assistant-reminder-banner p{margin:5px 0;}
+.assistant-panel:not(.hidden) + .assistant-reminder-banner{display:none;}
 @media (max-width:600px){
 .assistant-launcher{right:12px;bottom:12px;}
 .assistant-panel{right:8px;bottom:66px;width:calc(100vw - 16px);}
+.assistant-reminder-banner{right:8px;bottom:66px;width:calc(100vw - 16px);}
 .pilot-feedback-launcher{left:12px;bottom:12px;}
 }
 button{
@@ -3368,12 +3402,22 @@ Ask LineCrew AI
 <button class="secondary small" data-assistant-question="How do I review and approve a daily report?">Review Reports</button>
 <button class="secondary small" data-assistant-question="What does a redline mean?">Redlines</button>
 </div>
+<details id="assistantMemorySection">
+<summary><strong>Saved Memories</strong> <span id="assistantMemoryCount" class="muted"></span></summary>
+<p class="muted">Confirmed company workflows and job reminders. These are advisory only and never edit operational records.</p>
+<div id="assistantMemoryList" class="assistant-memory-list"></div>
+</details>
 <div id="assistantMessages" class="assistant-messages" aria-live="polite"></div>
 <label for="assistantQuestion">Ask a question</label>
 <textarea id="assistantQuestion" rows="3" maxlength="1200" placeholder="Example: Why is this daily report pending?"></textarea>
 <button id="sendAssistantQuestion">Ask Assistant</button>
 <p class="muted">The assistant provides app guidance. Verify contract, safety and billing decisions before acting.</p>
 </section>
+<aside id="assistantReminderBanner" class="assistant-reminder-banner hidden" aria-live="polite">
+<strong>Assistant reminder</strong>
+<p id="assistantReminderText"></p>
+<button id="openAssistantMemories" class="secondary small">View Memories</button>
+</aside>
 </main>
 <script>
 /* LINECREW PRO SUPABASE */
@@ -4089,6 +4133,7 @@ $('productionPage').classList.add('hidden');
 $('safetyPage').classList.add('hidden');
 $('priceBooksPage').classList.add('hidden');
 $(page).classList.remove('hidden');
+setTimeout(()=>renderAssistantReminderBanner(),0);
 }
 function setAppHistory(state, replace = false){
 const nextState = {
@@ -4416,7 +4461,8 @@ $('adminNotice').classList.toggle('hidden', !userHasAnyCompanyControls());
 await Promise.all([
 loadDashboardReviewAlert(),
 loadCompanyOnboarding(),
-primeOfflineJsaJobs()
+primeOfflineJsaJobs(),
+userCanUseAssistant() ? loadAssistantMemories() : Promise.resolve([])
 ]);
 if(requestedBillingReturn && userIsCompanyAdmin()){
 window.location.replace('/billing.html');
@@ -7395,12 +7441,14 @@ $('billingExportIsFinal').checked = false;
 $('billingBatchArchiveFilter').value='active';
 await loadBillingExportBatches();
 await loadBillingReconciliation();
+renderAssistantReminderBanner();
 $('billingExportCenter').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 function closeBillingExportCenter(){
 $('billingExportCenter').classList.add('hidden');
 currentBillingBatch = null;
 currentBillingBatchLines = [];
+renderAssistantReminderBanner();
 }
 async function loadBillingExportBatches(){
 const archiveFilter=userIsCompanyAdmin() ? ($('billingBatchArchiveFilter')?.value || 'active') : 'active';
@@ -7443,6 +7491,20 @@ if(Number(reconciliation.awaiting_review_count)>0) blockers.push(reconciliation.
 if(Number(reconciliation.draft_report_count)>0) blockers.push(reconciliation.draft_report_count+' draft/returned report(s)');
 if(Number(reconciliation.pending_packet_count)>0) blockers.push(reconciliation.pending_packet_count+' pending job unit(s)');
 return blockers;
+}
+async function confirmAssistantFinalBillingReminders(jobId){
+await loadAssistantMemories();
+const reminders = assistantMemories.filter(memory =>
+memory.active === true &&
+memory.trigger_type === 'final_billing' &&
+(!memory.job_id || String(memory.job_id) === String(jobId))
+);
+if(!reminders.length) return true;
+return confirm(
+'Assistant reminder before Final Bill:\n\n• '+
+reminders.map(memory => memory.instruction).join('\n• ')+
+'\n\nThis reminder is advisory and makes no billing changes. Continue to the normal Final Bill checks?'
+);
 }
 function billingStatusLabel(status){
 return String(status || 'draft').replaceAll('_',' ').toUpperCase();
@@ -7529,6 +7591,7 @@ return;
 }
 const separateRedlineSummary = $('billingExportIncludeRedlines').checked;
 const isFinal = $('billingExportIsFinal').checked;
+if(isFinal && !(await confirmAssistantFinalBillingReminders(jobId))) return;
 const reconciliation=await loadBillingReconciliation(jobId);
 let finalOverrideReason=null;
 const blockers=isFinal ? billingFinalBlockers(reconciliation) : [];
@@ -8100,7 +8163,11 @@ $('createBillingCreditBtn').onclick = createBillingCredit;
 $('exportCompleteBillingExcelBtn').onclick = () => downloadCompleteJobBillingRecord('excel');
 $('exportCompleteBillingPdfBtn').onclick = () => downloadCompleteJobBillingRecord('pdf');
 $('downloadCompleteBillingArchiveBtn').onclick = () => downloadCompleteJobBillingRecord('archive');
-$('billingExportJob').addEventListener('change',()=>loadBillingReconciliation());
+$('billingExportJob').addEventListener('change',async()=>{
+await loadBillingReconciliation();
+renderAssistantReminderBanner();
+});
+$('billingExportIsFinal').addEventListener('change',renderAssistantReminderBanner);
 $('billingBatchArchiveFilter').addEventListener('change',loadBillingExportBatches);
 $('backToBillingHistoryBtn').onclick = () => {
 currentBillingBatch = null;
@@ -8242,11 +8309,16 @@ terms:['password','forgot','login','sign in'],
 answer:'On the Sign In screen, enter the account email and choose Forgot Password. Open the recovery email on the same device, enter matching passwords with at least eight characters, and save.'
 },
 {
+terms:['assistant memory','remember workflow','remind me','saved memories','job reminder'],
+answer:'Owner/Admin can tell LineCrew Assistant “remember…” for a company workflow or “on this job, remind me…” for a job reminder. The assistant prepares a Not saved yet card; review its scope and trigger, then choose Save Reminder or Save Workflow Memory. Saved Memories lets leadership mark a job reminder complete or remove a memory. Reminders are advisory and in-app only: they never edit, approve, submit, bill, close or block operational records.'
+},
+{
 terms:['customer','utility','contract'],
 answer:'Open Price Books to manage Customers / Utilities and Contracts. Create the customer first, create its contract second, then create a Price Book tied to that contract. Every record remains scoped to the signed-in contractor company.'
 }
 ];
 let assistantConversation = [];
+let assistantMemories = [];
 function addAssistantMessage(role, text, remember = true){
 const message = document.createElement('div');
 message.className = 'assistant-message ' + role;
@@ -8257,6 +8329,175 @@ if(remember && (role === 'user' || role === 'assistant')){
 assistantConversation.push({ role, content:String(text || '').slice(0, 1600) });
 assistantConversation = assistantConversation.slice(-10);
 }
+}
+const ASSISTANT_MEMORY_TRIGGER_LABELS = {
+always:'Always',
+job_open:'When the job is open',
+production_review:'During production review',
+final_billing:'Before final billing',
+timekeeping:'During timekeeping',
+billing:'During billing',
+manual:'Only in Saved Memories'
+};
+function assistantMemoryTriggerLabel(trigger){
+return ASSISTANT_MEMORY_TRIGGER_LABELS[String(trigger || '')] || 'Saved reminder';
+}
+function assistantMemoryJobLabel(memory){
+const job = Array.isArray(memory?.jobs) ? memory.jobs[0] : memory?.jobs;
+if(!job) return 'Selected job';
+return [job.job_number,job.job_name].filter(Boolean).join(' — ') || 'Selected job';
+}
+function currentAssistantMemoryState(){
+const context = collectAssistantScreenContext();
+const jobId = context.selected_ids?.job_id || null;
+let trigger = jobId ? 'job_open' : 'always';
+if(!$('billingExportCenter').classList.contains('hidden')){
+trigger = $('billingExportIsFinal').checked ? 'final_billing' : 'billing';
+}else if(context.page === 'productionPage'){
+trigger = 'production_review';
+}
+return {trigger,jobId};
+}
+function activeAssistantReminders(trigger,jobId){
+return assistantMemories.filter(memory => {
+if(memory.active !== true) return false;
+if(memory.memory_type !== 'job_reminder') return false;
+if(memory.job_id && String(memory.job_id) !== String(jobId || '')) return false;
+if(memory.trigger_type === 'manual') return false;
+return memory.trigger_type === 'always' || memory.trigger_type === trigger ||
+(trigger === 'final_billing' && memory.trigger_type === 'billing') ||
+(trigger !== 'always' && memory.trigger_type === 'job_open' && Boolean(jobId));
+});
+}
+function renderAssistantReminderBanner(){
+const banner = $('assistantReminderBanner');
+if(!userCanUseAssistant() || !currentProfile){
+banner.classList.add('hidden');
+return;
+}
+const state = currentAssistantMemoryState();
+const reminders = activeAssistantReminders(state.trigger,state.jobId);
+if(!reminders.length){
+banner.classList.add('hidden');
+return;
+}
+const first = reminders[0];
+$('assistantReminderText').textContent = first.instruction +
+(reminders.length > 1 ? ` (+${reminders.length - 1} more)` : '');
+banner.classList.remove('hidden');
+}
+function renderAssistantMemories(){
+const list = $('assistantMemoryList');
+list.innerHTML = '';
+$('assistantMemoryCount').textContent = assistantMemories.length ? `(${assistantMemories.length})` : '';
+if(!assistantMemories.length){
+list.innerHTML = '<p class="muted">No saved memories yet. Tell the assistant “remember…” or “remind me…” to prepare one.</p>';
+renderAssistantReminderBanner();
+return;
+}
+assistantMemories.forEach(memory => {
+const card = document.createElement('div');
+card.className = 'assistant-memory-card';
+const title = document.createElement('strong');
+title.textContent = memory.title;
+const detail = document.createElement('p');
+detail.textContent = memory.instruction;
+const meta = document.createElement('p');
+meta.className = 'muted';
+meta.textContent = (memory.memory_type === 'job_reminder' ? assistantMemoryJobLabel(memory) : 'Company workflow') +
+' · ' + assistantMemoryTriggerLabel(memory.trigger_type);
+card.append(title,detail,meta);
+if(memory.memory_type === 'job_reminder'){
+const complete = document.createElement('button');
+complete.className = 'success small';
+complete.textContent = 'Mark Complete';
+complete.onclick = () => updateAssistantMemory(memory.id,'complete');
+card.appendChild(complete);
+}
+const remove = document.createElement('button');
+remove.className = 'secondary small';
+remove.textContent = 'Remove';
+remove.onclick = () => updateAssistantMemory(memory.id,'remove');
+card.appendChild(remove);
+list.appendChild(card);
+});
+renderAssistantReminderBanner();
+}
+async function loadAssistantMemories(){
+if(!userCanUseAssistant() || !currentProfile?.company_id){
+assistantMemories = [];
+renderAssistantMemories();
+return [];
+}
+const {data,error} = await sb.from('assistant_memories')
+.select('id,job_id,memory_type,title,instruction,trigger_type,active,created_at,jobs(job_number,job_name)')
+.eq('company_id',currentProfile.company_id)
+.eq('active',true)
+.order('created_at',{ascending:false});
+if(error){
+console.warn('Unable to load Assistant Memory.',error);
+return assistantMemories;
+}
+assistantMemories = data || [];
+renderAssistantMemories();
+return assistantMemories;
+}
+async function updateAssistantMemory(memoryId,action){
+if(action === 'remove' && !confirm('Remove this Assistant Memory? This does not change any operational record.')) return;
+const rpc = action === 'complete' ? 'complete_assistant_memory' : 'remove_assistant_memory';
+const {error} = await sb.rpc(rpc,{p_memory_id:memoryId});
+if(error){
+alert('Unable to update Assistant Memory: ' + error.message);
+return;
+}
+await loadAssistantMemories();
+}
+function renderAssistantMemoryProposal(proposal){
+const allowedTypes = new Set(['company_workflow','job_reminder']);
+const allowedTriggers = new Set(Object.keys(ASSISTANT_MEMORY_TRIGGER_LABELS));
+if(!proposal?.requires_confirmation || !allowedTypes.has(proposal.memory_type) ||
+!allowedTriggers.has(proposal.trigger_type) || !proposal.title || !proposal.instruction) return;
+const card = document.createElement('div');
+card.className = 'assistant-memory-card assistant-memory-proposal';
+const heading = document.createElement('strong');
+heading.textContent = 'Not saved yet — review this memory';
+const detail = document.createElement('p');
+detail.textContent = String(proposal.instruction).slice(0,800);
+const meta = document.createElement('p');
+meta.className = 'muted';
+meta.textContent = (proposal.memory_type === 'job_reminder' ? String(proposal.job_label || 'Selected job') : 'Company workflow') +
+' · ' + assistantMemoryTriggerLabel(proposal.trigger_type);
+const save = document.createElement('button');
+save.className = 'success small';
+save.textContent = proposal.memory_type === 'job_reminder' ? 'Save Reminder' : 'Save Workflow Memory';
+const cancel = document.createElement('button');
+cancel.className = 'secondary small';
+cancel.textContent = 'Cancel';
+cancel.onclick = () => card.remove();
+save.onclick = async () => {
+save.disabled = true;
+save.textContent = 'Saving...';
+const {error} = await sb.rpc('create_assistant_memory',{
+p_memory_type:proposal.memory_type,
+p_title:String(proposal.title).slice(0,160),
+p_instruction:String(proposal.instruction).slice(0,800),
+p_trigger_type:proposal.trigger_type,
+p_job_id:proposal.memory_type === 'job_reminder' ? proposal.job_id : null
+});
+if(error){
+save.disabled = false;
+save.textContent = proposal.memory_type === 'job_reminder' ? 'Save Reminder' : 'Save Workflow Memory';
+alert('Unable to save Assistant Memory: ' + error.message);
+return;
+}
+card.remove();
+addAssistantMessage('assistant','Saved to Assistant Memory. This is an advisory reminder only; no job, report, timekeeping or billing record was changed.');
+await loadAssistantMemories();
+$('assistantMemorySection').open = true;
+};
+card.append(heading,detail,meta,save,cancel);
+$('assistantMessages').appendChild(card);
+card.scrollIntoView({block:'nearest'});
 }
 function findBuiltInAssistantAnswer(question){
 const normalized = String(question || '')
@@ -8371,10 +8612,18 @@ addAssistantMessage(
 false
 );
 }
-if(open) $('assistantQuestion').focus();
+if(open){
+void loadAssistantMemories();
+$('assistantQuestion').focus();
+}
+renderAssistantReminderBanner();
 }
 $('assistantLauncher').onclick = () => setAssistantOpen(true);
 $('closeAssistant').onclick = () => setAssistantOpen(false);
+$('openAssistantMemories').onclick = () => {
+setAssistantOpen(true);
+$('assistantMemorySection').open = true;
+};
 document.querySelectorAll('[data-assistant-question]').forEach(button => {
 button.onclick = () => {
 $('assistantQuestion').value = button.dataset.assistantQuestion || '';
@@ -8403,6 +8652,7 @@ if(error) throw error;
 const answer = String(data?.answer || '').trim();
 if(!answer) throw new Error('No answer returned');
 addAssistantMessage('assistant', answer);
+if(data?.memory_proposal) renderAssistantMemoryProposal(data.memory_proposal);
 }catch(error){
 console.warn('Secure assistant unavailable; using built-in help.', error);
 addAssistantMessage(
@@ -8443,6 +8693,8 @@ $('assistantPanel').classList.add('hidden');
 $('assistantMessages').innerHTML = '';
 $('assistantQuestion').value = '';
 assistantConversation = [];
+assistantMemories = [];
+renderAssistantReminderBanner();
 currentProfile = null;
 currentCompany = null;
 if(!pendingInviteToken){
