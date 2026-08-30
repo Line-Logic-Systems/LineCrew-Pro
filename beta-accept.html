@@ -53,7 +53,7 @@ document.getElementById('createBtn').onclick=async()=>{
   if(password!==confirm)return status.textContent='The passwords do not match.';
   const button=document.getElementById('createBtn');button.disabled=true;button.textContent='Creating Account...';status.textContent='';
   const {error:createError}=await sb.functions.invoke('complete-team-invitation-signup',{body:{email,password,token}});
-  if(createError){button.disabled=false;button.textContent='Create My Admin Account';status.textContent='Unable to create this account. The invitation may be expired or already used.';return}
+  if(createError){button.disabled=false;button.textContent='Create My Admin Account';status.textContent='Unable to create this account right now. Your invitation may still be valid. Please try again, or contact LineCrew Pro Support if the problem continues.';return}
   const {error:signInError}=await sb.auth.signInWithPassword({email,password});
   if(signInError){button.disabled=false;button.textContent='Create My Admin Account';status.textContent='Your account was created, but automatic sign-in failed. Use the Sign In page with the password you just created.';return}
   history.replaceState(null,'','/beta-accept.html');
