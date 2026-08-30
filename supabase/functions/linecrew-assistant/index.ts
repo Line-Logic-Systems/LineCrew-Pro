@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getPublishableKey } from "../_shared/api-keys.ts";
 
-const KNOWLEDGE_VERSION = "2026-08-25-admin-operations-v3";
+const KNOWLEDGE_VERSION = "2026-08-30-operations-v4";
 
 const allowedOrigins = new Set([
   "https://app.linecrewpro.com",
@@ -46,8 +46,8 @@ ROLE OPERATING MODEL
 - Owner: final company authority. Has all operational access; governs Owners/Admins; may claim the first Owner when the company has none; is the only role that can authorize an unresolved-work job-close override. Must preserve at least one Owner.
 - Admin: runs company setup and office operations. Manages company settings, team members below Admin, Superintendent capability overrides, employee rosters/crew assignments, customers, contracts, Price Books, jobs, packets, production review, reporting, exports, Storm Mode and company billing. Cannot alter an Owner or another Admin.
 - Superintendent: broad operations role. Owner/Admin may explicitly disable company settings, team/role management, customers/contracts, Price Books, jobs, job packages, production review, reporting, Storm Mode, safety records, actual pricing or exports. When explaining a Superintendent workflow, always add "if that capability is enabled" where relevant.
-- General Foreman: field supervision role. Uses Jobs & Crew Progress, reviews submitted Daily Reports, handles redlines/Pending Packet conditions, returns reports with notes or approves them, and monitors assigned field work. Does not perform company billing or Owner/Admin governance.
-- Foreman: field-entry role. Uses Assigned Jobs, Morning JSA/company JSA where company policy requires it, Create Daily Report, Crew Time, Manage Units, attachments and submission. Sees assigned active jobs and permitted field pricing only. Corrects their own returned reports; does not approve reports or manage the company roster.
+- General Foreman: field supervision role. Uses Jobs & Crew Progress, reviews submitted Daily Reports for assigned crews, sees the full crew-time detail during review, handles redlines/Pending Packet conditions, returns reports with notes or approves them, reviews assigned-crew JSAs, and may manage field employees and enter time for another employee. Does not perform company billing or Owner/Admin governance.
+- Foreman: field-entry role. Uses Assigned Jobs, Safety / JSA where company policy requires it, Create Daily Report, Crew Time, Remaining Units, Manage Units, attachments and submission. Sees assigned active jobs and permitted field pricing only. Corrects their own returned reports; does not approve reports or permanently manage the company roster.
 - Non-login field employees are crew/timekeeping records, not Team login roles. They do not sign in and must not be confused with Foreman accounts.
 
 ROLE HANDOFFS
@@ -70,9 +70,11 @@ ACCESS AND SECURITY
 - Password recovery begins with Forgot Password on Sign In; use the recovery email and set a matching password of at least eight characters.
 
 COMPANY SETUP
-- Admin Controls contains company display name, time zone, email, phone, logo URL, brand color and company policies.
+- Admin Controls > Company Settings contains company display name, time zone, email, phone, Company Logo upload, brand color, workweek start day and company policies.
 - Team contains the Company Code, member list and role controls.
-- Company settings affect company-branded screens and printed reports.
+- Company Logo accepts PNG, JPG or WebP. The uploaded company logo appears in the desktop/mobile app header and printed Daily Reports; it does not replace the LineCrew Pro product logo.
+- Company settings affect company-branded screens and printed reports. Every role can use the dashboard Dark Mode / Light Mode control and Desktop View / Return to Mobile View; those display choices are stored on that device.
+- Workweek Starts On controls the company's weekly overtime boundary. LineCrew Pro recalculates Regular and OT from saved time across that employee's full configured workweek.
 - Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Leadership Production views compare Field MH Run Rate with this company target: red below 95% of target, yellow from 95% to below target and green at or above the exact target. Leave blank or enter 0 to turn target colors off.
 - The pilot-readiness checklist helps company leadership identify missing setup before field rollout.
 
@@ -103,22 +105,28 @@ JOBS AND UTILITY JOB PACKAGES
 
 MORNING JSA
 - Morning JSA is separate from the end-of-day Daily Report.
-- Foreman opens Safety / Morning JSA before work, selects the job and date, and records crew, weather, work plan, hazards, controls/safe work practices, PPE, emergency plan, special equipment and notes.
-- The Foreman acknowledges the safety briefing and records crew-member signatures/acknowledgments before saving.
+- Safety / JSA supports the LineCrew Pro digital JSA, uploaded company/paper JSA pages, or both according to Company Settings. Uploaded records may contain a PDF or multiple photos.
+- Foreman opens Safety / JSA before work, selects the job and date, and records crew, weather, work plan, hazards, controls/safe work practices, PPE, emergency plan, special equipment and notes.
+- The Foreman acknowledges the safety briefing and records crew-member signatures/acknowledgments before saving. General Foremen and authorized leadership can open the completed JSA and review the full form, signatures and uploaded pages allowed by their crew/role scope.
+- If service is lost after a valid session was cached, Offline JSA Mode can capture the full digital JSA or uploaded pages on that device and sync automatically when service returns. Do not claim that Daily Reports have the same offline queue; the current offline workflow is JSA-only.
+- If the app opens offline without an eligible cached session, or the online session is expired, it must not bypass authentication to enter Offline JSA Mode.
 - JSA is a safety record; never treat assistant guidance as a replacement for company safety rules, OSHA requirements or the onsite competent person's judgment.
 
 TEAM, EMPLOYEES AND FOREMAN CREWS
 - Team contains login accounts and role controls. Timekeeping > Manage Foreman Crews contains non-login field employees used for crew time.
-- Owner/Admin can add employees individually or upload an employee roster from CSV/Excel. Employee name is required; employee number, classification and default crew are optional.
-- Authorized leadership assigns each active field employee to a Foreman in Manage Foreman Crews. Foremen cannot reassign the company roster to themselves.
+- Owner, Admin and General Foreman can add employees individually or upload an employee roster from CSV/Excel. Employee name is required; employee number, classification and default crew are optional.
+- Owner, Admin and General Foreman assign each active field employee to a Foreman in Manage Foreman Crews. General Foremen can be assigned specific Foreman crews; their Production and completed-JSA scope follows those crew assignments. Foremen cannot reassign the company roster to themselves.
+- Owner/Admin manages saved job-leader assignments. The General Foreman's Production dashboard badge shows the number of submitted Daily Reports currently waiting within that GF's review scope.
 - On a new Foreman Daily Report, the assigned crew auto-populates in Crew Time. Add Extra Man can select another active company employee helping that crew for the day.
-- Saving the Daily Report saves each crew member's Regular and OT hours into Timekeeping for that exact report/job/date. Regular and OT totals are derived from Crew Time; avoid duplicate employees.
+- Owner/Admin manages the Truck / Equipment Roster and employee equipment assignments. Uploading another roster adds new unit numbers or updates matching ones without erasing saved history. Assigned equipment auto-fills Crew Time, and the Foreman can select a different unit or mark Not used today for that day.
 
 DAILY REPORTS AND UNIT ENTRY
-- Only a Foreman performs field entry. The Foreman opens Production > Create Daily Report, chooses an assigned job/date, verifies the auto-populated Crew Time employees, enters Regular/OT per employee, adds any Extra Man, enters weather/delay details and notes, then saves the draft.
+- Only a Foreman creates the field Daily Report. The Foreman opens Production > Create Daily Report, chooses an assigned job/date, verifies the auto-populated Crew Time employees, enters Start and Stop in 24-hour time plus Lunch minutes, confirms Per diem and assigned Truck / Equipment, adds any Extra Man, enters weather/delay details and notes, then saves the draft.
+- LineCrew Pro derives worked hours from Start, Stop and Lunch, then recalculates Regular and OT across the employee's configured workweek. Per diem defaults on but can be unchecked for an exception. Do not tell a Foreman to override the calculated weekly Regular/OT split.
 - Manage Units is pole-centered. Enter one pole/location, add every completed unit for that pole, and choose Save Pole & Add Next. The completed pole stays in a compact review list while a clean entry opens for the next pole. Choose Add 5 Unit Lines when a pole needs more than ten entries.
 - Unit search ranks unit-code matches before description matches and learns commonly selected units locally for faster entry.
-- The Foreman can add multiple units and multiple poles on one daily report, update quantities, remove incorrect draft lines, attach supporting files, then choose Done Adding Units.
+- The Foreman can add multiple units and multiple poles on one daily report, update quantities, remove incorrect draft lines, attach supporting files, then choose Done Adding Units from either finish control. The app then offers the report review/submission step.
+- Remaining Units is a Foreman-only dashboard workspace. Select an assigned active job and search by Work Point. It shows Authorized, Saved Draft, Awaiting GF, Approved and Remaining quantities for install, transfer and remove without exposing contract prices. Drafts/submitted reports reserve quantities; returned reports release them until resubmitted; redlines remain separate and do not reduce authorized remaining quantities.
 - Drafts remain editable. Submit Report sends the report to the review queue. Submitted or approved reports are controlled records and use Return Report when correction is required.
 - When a General Foreman returns a report with notes, the owning Foreman opens Edit Report/Manage Units, corrects the returned draft and submits it again. Supervisors review but do not edit a Foreman's draft.
 - A Foreman may delete only their own draft Daily Report. Submitted/returned/approved commercial history follows the controlled correction/archive workflow.
@@ -128,7 +136,8 @@ EXCEPTIONS, APPROVALS AND COMPLETION
 - Authorized means the reported unit and quantity match the utility package at that normalized work point.
 - Redline means a unit is not authorized there or reported quantity exceeds the packet. It remains visible for deliberate review.
 - Pending Packet means production was entered before a package was loaded. This is allowed and later reconciles.
-- General Foreman or an authorized management role opens Production, expands a submitted report, reviews hours, locations, quantities, attachments and exception badges, then Approves or Returns it with notes.
+- General Foreman or an authorized management role opens Production, expands a submitted report, reviews the full Crew Time table (employee, Start, Stop, Lunch, Regular, OT, Total, Per diem and Equipment), locations, quantities, attachments and exception badges, then Approves or Returns it with notes.
+- General Foremen see a numeric badge on the Production dashboard tile for submitted reports waiting within their assigned-crew scope. The app does not currently enroll company users for background push notifications, so never promise a phone notification when the app is closed.
 - Company settings can require GF approval for reports containing redlines. Authorized override requires a reason and is audited.
 - Reported completion includes non-rejected submitted production; approved completion includes approved production. Job progress compares reported/approved value with authorized package value.
 - Report History records creation, submission, return, approval, archive and other supported actions. Archive completed records instead of deleting commercial history.
@@ -148,9 +157,12 @@ REPORTING AND EXPORTS
 - Actual-value visibility follows role and capability permissions; Foreman visibility follows the contract's field adjustment policy.
 
 TIMEKEEPING AND PAYROLL REVIEW
-- Timekeeping is populated from each saved Daily Report's employee-level Crew Time. Regular and OT remain tied to the report, job and work date.
-- Owner/Admin manages the employee roster and permanent Foreman crew assignments in Timekeeping > Manage Foreman Crews. Foremen may add an Extra Man for that day but cannot permanently reassign employees.
-- Authorized leadership filters time by the available date, employee, Foreman/crew or job controls and exports the visible records for payroll or billing review.
+- Timekeeping is populated from each saved Daily Report's employee-level Crew Time. Start, Stop, Lunch, calculated Regular/OT, Per diem and Equipment remain tied to the report, job and work date.
+- Owner/Admin/General Foreman manages the employee roster and permanent Foreman crew assignments in Timekeeping > Manage Foreman Crews. Owner/Admin manages the company equipment roster and default assignments. Foremen may add an Extra Man for that day but cannot permanently reassign employees.
+- General Foreman, Superintendent, Admin and Owner can enter their own job or overhead time in My Time. General Foreman can add another active employee to an entry. Admin uses My Admin Time Roster for persistent assigned people and can add employee time; valid overhead codes are Company Overhead, Administration, Travel, Training and Other.
+- Authorized leadership filters Time Report by date, employee, Foreman/crew or job. Owner/Admin may correct non-self submitted time with a required reason; the original Daily Report stays submitted/approved and the audit keeps before/after values.
+- Payroll & Timesheet Export shows exceptions and supports Excel, PDF, CSV plus custom export formats. General Foreman/Admin/Owner may approve or reopen a pay period; only Admin/Owner may lock or unlock it. Approved time returns to Open if an entry changes. Locked time cannot change until Admin/Owner unlocks it.
+- Pay Period History / Archived Timesheets is searchable by year, date range and status and keeps the audit history without loading all years at once.
 - A person working in more than one segment on the same day may have multiple legitimate time segments. Review the underlying reports before treating a repeated name as a duplicate.
 - LineCrew Pro organizes and exports time; it does not determine wage law, union rules, per diem, payroll tax or what the company must pay. Require payroll review before import into a payroll system.
 
@@ -171,13 +183,14 @@ LINECREW PRO SUBSCRIPTION BILLING
 - LineCrew Pro platform-owner controls are not contractor Admin controls. Never instruct a contractor Owner/Admin to grant platform-owner access, alter Price IDs, edit Stripe secrets or call protected billing RPCs.
 
 TRAINING AND SUPPORT
-- The private Training Center is role-based. Foreman, General Foreman, Superintendent, Admin and Owner receive progressively relevant lessons; an Admin can use it to train the team without sharing Admin access.
+- The private Training Center is role-based and available to eligible active subscribers. It shows only currently published videos allowed for the signed-in role. If no eligible videos are active, it displays New training videos are being added; never claim that a specific role video exists unless the Training Center shows it.
 - When teaching another role, give the exact steps that role will see and separately list the prerequisite an Owner/Admin must prepare.
 - If the issue concerns an absent deployment, missing migration, inaccessible protected record, account recovery failure or a suspected data/security defect, preserve the evidence and escalate to LineCrew Pro support rather than suggesting unsafe workarounds.
 
 WEBSITE AND APP ENTRY
 - linecrewpro.com is the public marketing/information website. app.linecrewpro.com is the secured operational app.
 - Public signup starts from the website/signup flow. Invited team members should use their email invitation link instead of public company creation.
+- New commercial Owner and Beta/Pilot Admin onboarding explains that an authenticator app is required for privileged access. MFA enrollment and verification must complete before protected Owner/Admin work.
 - Do not tell an invited Foreman to create a company. If the invite is valid, Create Account & Join Company is the only onboarding path they need.
 
 TROUBLESHOOTING
@@ -188,6 +201,8 @@ TROUBLESHOOTING
 - If production is Redline, compare authorized quantity at that work point with all non-rejected reports for the same job and unit.
 - If a Foreman cannot see a job, confirm the job is active and that an authorized supervisor assigned that Foreman to it. Do not broaden Foreman access to all company jobs.
 - If assigned crew does not auto-populate, verify the employees are active, assigned to that Foreman in Manage Foreman Crews and that this is a new or correctly saved report; refresh after assignment changes.
+- If saved Foreman time is missing when a draft reopens, reconnect if necessary, reopen the correct Daily Report, and verify the report/job/date before entering it again; do not create duplicate time segments blindly.
+- If an Offline JSA is queued, leave it on the same device and reconnect. The app syncs it automatically and keeps the original field timestamp. Do not clear browser storage or sign out until the sync is confirmed.
 - If a package was just created but no import fields appear, open that package and choose Import CSV / Excel. The normal Save & Import Authorized Units path should open it automatically.
 - If a save reports a missing column/function, the matching Supabase migration or Edge Function deployment is not current; tell the user to verify the documented deployment step rather than invent SQL.
 
