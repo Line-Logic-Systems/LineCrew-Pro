@@ -24,9 +24,28 @@ function jsonResponse(request: Request, body: Record<string, unknown>, status = 
   });
 }
 
-function randomHex(bytes = 32) {
-  const data = crypto.getRandomValues(new Uint8Array(bytes));
-  return Array.from(data, byte => byte.toString(16).padStart(2, "0")).join("");
+function base64Url(bytes: Uint8Array) {
+  let binary = "";
+  bytes.forEach(byte => binary += String.fromCharCode(byte));
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+}
+
+function bytesToHex(bytes: Uint8Array) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return bytesToHex(new Uint8Array(digest));
 }
 
 Deno.serve(async request => {
@@ -51,7 +70,8 @@ Deno.serve(async request => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const secretKey = getSecretKey();
   const publishableKey = getPublishableKey();
-  if (!supabaseUrl || !secretKey || !publishableKey) {
+  const resendApiKey = Deno.env.get("RESEND_API_KEY");
+  if (!supabaseUrl || !secretKey || !publishableKey || !resendApiKey) {
     console.error("Beta review service is missing server configuration.");
     return jsonResponse(request, { error: "Review service is unavailable." }, 503);
   }
@@ -96,7 +116,8 @@ Deno.serve(async request => {
     return jsonResponse(request, { declined: true });
   }
 
-  const tokenHash = randomHex(32);
+  const rawToken = base64Url(crypto.getRandomValues(new Uint8Array(32)));
+  const tokenHash = await sha256Hex(rawToken);
   const inviteExpiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
   const pilotEndsAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
   const { data: prepared, error: prepareError } = await ownerClient.rpc(
@@ -114,20 +135,41 @@ Deno.serve(async request => {
     return jsonResponse(request, { error: "Unable to approve this application." }, 400);
   }
 
-  const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(
-    String(row.applicant_email),
-    {
-      redirectTo: "https://app.linecrewpro.com/",
-      data: {
-        team_invitation_token_hash: tokenHash,
-        beta_pilot: true,
-        full_name: String(row.applicant_name || ""),
-      },
-    },
-  );
+  const applicantEmail = String(row.applicant_email).trim().toLowerCase();
+  const applicantName = String(row.applicant_name || "").trim();
+  const appUrl = `https://app.linecrewpro.com/beta-accept.html?invite=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(applicantEmail)}`;
+  const subject = "Your LineCrew Pro Beta access is approved";
+  const text = [
+    "Your LineCrew Pro Beta/Pilot application has been approved.",
+    "",
+    `Set up your Admin account: ${appUrl}`,
+    "",
+    "Create your password on that page. After it succeeds, your account is ready immediately—there is no second email to wait for.",
+    "Your private setup link expires in 48 hours.",
+    "",
+    "Do not forward this private setup link.",
+  ].join("\n");
+  const html = `<!doctype html><html><body style="margin:0;background:#f4f7f5;font-family:Arial,sans-serif;color:#15231b"><div style="max-width:620px;margin:0 auto;padding:32px 20px"><div style="background:#fff;border:1px solid #dce6df;border-radius:12px;padding:30px"><h1 style="margin:0 0 16px;font-size:24px">Your Beta access is approved</h1><p>${applicantName ? `Hi ${escapeHtml(applicantName)},` : "Welcome,"}</p><p>Your LineCrew Pro Beta/Pilot company is ready for its first Admin account.</p><p><a href="${appUrl}" style="display:inline-block;background:#168a52;color:#fff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:8px">Set Up My Admin Account</a></p><p>Create your password on that page. <strong>Once setup succeeds, your account is ready immediately—there is no second email to wait for.</strong></p><p style="font-size:14px;color:#526158">This private one-time link expires in 48 hours. Do not forward it.</p></div></div></body></html>`;
 
-  if (inviteError) {
-    console.error("Beta admin invitation email failed.", inviteError.code || "INVITE_FAILED");
+  const resendResponse = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": `beta-admin-invite-${applicationId}`,
+    },
+    body: JSON.stringify({
+      from: "LineCrew Pro <invites@auth.linecrewpro.com>",
+      to: [applicantEmail],
+      reply_to: "support@linecrewpro.com",
+      subject,
+      text,
+      html,
+    }),
+  });
+
+  if (!resendResponse.ok) {
+    console.error("Resend rejected the Beta admin invitation.", resendResponse.status);
     return jsonResponse(
       request,
       {

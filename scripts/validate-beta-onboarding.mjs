@@ -10,6 +10,7 @@ function rejectText(text,needle,message){if(text.includes(needle))throw new Erro
 const migration=read('supabase/migrations/20260830073000_beta_application_onboarding.sql');
 const submit=read('supabase/functions/submit-beta-application/index.ts');
 const review=read('supabase/functions/review-beta-application/index.ts');
+const accept=read('beta-accept.html');
 const owner=read('owner.html');
 const polish=read('app-polish.js');
 const convert=read('pilot-convert.html');
@@ -47,8 +48,12 @@ for(const marker of ['ALLOWED_ORIGINS','content-length','website','request_finge
 }
 rejectText(submit,'SUPABASE_SERVICE_ROLE_KEY','Public submission function must use the shared server secret helper, not a legacy hard-coded service-role variable.');
 
-for(const marker of ['Authorization','admin.auth.getUser','platform_owners','platform_owner_prepare_beta_company','inviteUserByEmail','randomHex','team_invitation_token_hash']){
+for(const marker of ['Authorization','admin.auth.getUser','platform_owners','platform_owner_prepare_beta_company','RESEND_API_KEY','base64Url','sha256Hex','beta-accept.html?invite=']){
   requireText(review,marker,`Owner review protection missing: ${marker}`);
+}
+rejectText(review,'inviteUserByEmail','Beta approval must not pre-create an Auth user before the applicant chooses a password.');
+for(const marker of ['complete-team-invitation-signup','signInWithPassword','No additional email is required','autocomplete="new-password"']){
+  requireText(accept,marker,`Beta account setup requirement missing: ${marker}`);
 }
 requireText(owner,"rpc('platform_owner_beta_applications')",'Platform Owner console must load Beta applications through the owner-only RPC.');
 requireText(owner,"functions.invoke('review-beta-application'",'Platform Owner console must review Beta applications through the secured Edge Function.');
