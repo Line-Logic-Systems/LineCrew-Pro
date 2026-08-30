@@ -35,6 +35,8 @@ for(const marker of [
   '.from("assistant_memories")',
   'pending_memory_proposal: memoryProposal',
   'memory_proposal: memoryProposal',
+  'route: "memory-management"',
+  'There is no Edit button, date/time scheduling, attachment field or visible audit-detail screen',
   'must choose Save in the app',
   'advisory data'
 ]) assert(edge.includes(marker),`Assistant Edge memory boundary is missing: ${marker}`);
@@ -53,6 +55,12 @@ for(const marker of [
   'This reminder is advisory and makes no billing changes',
   'Saved Memories'
 ]) assert(app.includes(marker),`Assistant Memory UI is missing: ${marker}`);
+for(const marker of [
+  'id="assistantMemoryTile"',
+  "$('assistantMemoryTile').classList.toggle('hidden', !userCanUseAssistant())",
+  "$('assistantMemoryTile').onclick",
+  "$('assistantMemorySection').open = true"
+]) assert(app.includes(marker),`Dashboard Assistant Memory access is missing: ${marker}`);
 
 const createRpcIndex = app.indexOf("sb.rpc('create_assistant_memory'");
 const saveHandlerIndex = app.lastIndexOf('save.onclick',createRpcIndex);
