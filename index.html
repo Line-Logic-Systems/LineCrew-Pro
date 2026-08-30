@@ -3358,7 +3358,7 @@ Ask LineCrew AI
 <div class="section-header">
 <div>
 <h2>LineCrew Assistant</h2>
-<p class="muted">Leadership help for setup, pricing, jobs and production.</p>
+<p class="muted">Leadership help using the current screen and permission-safe, read-only company data.</p>
 </div>
 <button id="closeAssistant" class="secondary small">Close</button>
 </div>
@@ -8285,6 +8285,82 @@ bestScore = score;
 return best?.answer ||
 'I could not match that question to an offline help article. Try naming the screen and action, such as “create a job,” “promote a Foreman,” “import a Price Book,” or “approve a Daily Report.”';
 }
+function assistantSelectedOption(selectId){
+const select = $(selectId);
+if(!select || select.closest('.hidden') || !select.value || select.selectedIndex < 0) return null;
+return {
+value:String(select.value || '').trim(),
+label:String(select.options?.[select.selectedIndex]?.textContent || '').replace(/\s+/g,' ').trim().slice(0,160)
+};
+}
+function collectAssistantScreenContext(){
+const page = currentErrorPage();
+const visiblePage = $(page);
+const context = {
+page,
+title:String(visiblePage?.querySelector('h1,h2')?.textContent || '').replace(/\s+/g,' ').trim().slice(0,120),
+selected_ids:{},
+selected_labels:{},
+visible_messages:[]
+};
+const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim())
+? String(value).trim()
+: '';
+const rememberId = (key, ...values) => {
+for(const value of values){
+const valid = uuid(value);
+if(valid){ context.selected_ids[key] = valid; break; }
+}
+};
+const selectedJob = [
+assistantSelectedOption('remainingUnitsJob'),
+assistantSelectedOption('billingExportJob'),
+assistantSelectedOption('productionJobFilter'),
+assistantSelectedOption('tkJobFilter'),
+assistantSelectedOption('myTimeJob'),
+assistantSelectedOption('dailyJobId'),
+assistantSelectedOption('safetyJsaJob'),
+assistantSelectedOption('jobPackageJob')
+].find(option => uuid(option?.value));
+rememberId('job_id',
+selectedJob?.value,
+window.history.state?.lineCrewPage === page ? window.history.state?.jobId : null,
+page === 'productionPage' ? currentDailyUnitReport?.job_id : null,
+page === 'jobsPage' ? currentOpenJobId : null
+);
+rememberId('report_id',page === 'productionPage' ? currentDailyUnitReport?.id : null,window.history.state?.lineCrewPage === page ? window.history.state?.reportId : null);
+rememberId('job_package_id',page === 'jobsPage' ? currentOpenJobPackage?.id : null);
+rememberId('price_book_id',page === 'priceBooksPage' ? currentOpenPriceBook?.id : null,window.history.state?.lineCrewPage === page ? window.history.state?.priceBookId : null);
+rememberId('billing_batch_id',page === 'jobsPage' ? currentBillingBatch?.id : null,page === 'jobsPage' ? currentBillingBatch?.batch_id : null);
+const payPeriod = assistantSelectedOption('tkPayPeriodFilter');
+rememberId('pay_period_id',payPeriod?.value);
+if(selectedJob?.label) context.selected_labels.job = selectedJob.label;
+if(payPeriod?.label) context.selected_labels.pay_period = payPeriod.label;
+const crew = assistantSelectedOption('productionCrewFilter') || assistantSelectedOption('tkCrewFilter');
+if(crew?.label && crew.value) context.selected_labels.crew = crew.label;
+const productionStatus = assistantSelectedOption('productionStatusFilter');
+if(productionStatus?.label && productionStatus.value) context.selected_labels.production_status = productionStatus.label;
+[
+'tkReportStatus',
+'myTimeStatus',
+'billingAttachmentStatus',
+'completeBillingRecordStatus',
+'priceBookLibraryStatus',
+'companyJsaUploadStatus',
+'jobsEmpty',
+'safetyJsaEmpty'
+].forEach(id => {
+const element = $(id);
+if(!element || element.classList.contains('hidden')) return;
+const message = String(element.textContent || '').replace(/\s+/g,' ').trim().slice(0,240);
+if(message && !context.visible_messages.includes(message)) context.visible_messages.push(message);
+});
+context.visible_messages = context.visible_messages.slice(0,5);
+if(lastRecordedError && Date.now() - lastRecordedErrorAt < 15 * 60 * 1000){
+context.last_error = String(lastRecordedError).slice(0,300);
+}
+return context;
+}
 function setAssistantOpen(open){
 $('assistantPanel').classList.toggle('hidden', !open);
 $('assistantLauncher').setAttribute('aria-expanded', String(open));
@@ -8316,7 +8392,12 @@ button.disabled = true;
 button.textContent = 'Thinking...';
 try{
 const { data, error } = await sb.functions.invoke('linecrew-assistant', {
-body:{ question, history, page:window.history.state?.lineCrewPage || 'dashboardPage' }
+body:{
+question,
+history,
+page:currentErrorPage(),
+screen_context:collectAssistantScreenContext()
+}
 });
 if(error) throw error;
 const answer = String(data?.answer || '').trim();
