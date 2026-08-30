@@ -2,7 +2,7 @@
 
 ## What works immediately
 
-The Owner/Admin-only assistant is an operations coach for the full LineCrew Pro role model. It understands Owner, Admin, Superintendent, General Foreman and Foreman responsibilities; role handoffs; company setup; Team roles; Customers; Contracts; Price Books; Jobs; utility job packets; Morning JSA; daily reports; timekeeping; approvals; redlines; pending packets; billing batches; job closeout; Storm Mode; reporting; company subscription billing; exports; training and password recovery. If the AI service is not deployed or is unavailable, core answers remain available.
+The Owner/Admin-only assistant is an operations coach for the full LineCrew Pro role model. Knowledge release `2026-08-30-operations-v4` understands Owner, Admin, Superintendent, General Foreman and Foreman responsibilities; role handoffs; company setup and logo upload; Team and GF crew scope; Customers; Contracts; Price Books; Jobs; utility job packets; complete/offline JSA behavior; Daily Reports; Remaining Units; clock-time entry and weekly overtime; equipment; leadership My Time; payroll approval/locking/history; GF review badges and full crew-time review; approvals; redlines; pending packets; billing batches; job closeout; Storm Mode; reporting; company subscription billing; exports; training and password recovery. If the AI service is not deployed or is unavailable, the matching built-in help remains available.
 
 The live assistant receives only the authenticated caller's role, current app page, company name and company-scoped aggregate counts. It does not receive raw production rows, employee details, prices, attachments or another contractor's context. Aggregate report-status counts help it identify likely setup and review-queue conditions without exposing report content.
 
@@ -51,9 +51,18 @@ Supabase supplies `SUPABASE_URL` and the named `SUPABASE_PUBLISHABLE_KEYS` JSON 
 11. Ask: “What can a Superintendent do if Price Books permission is disabled?”
 12. Ask: “What is the difference between a production Billing Batch and our LineCrew Pro Stripe subscription?”
 13. Ask: “How do I review time before payroll export?” Confirm the answer requires company/payroll verification and does not invent wage rules.
-14. Ask an ambiguous question such as “Why is this stuck?” Confirm it asks one focused question or offers the two most likely paths rather than inventing a record status.
-15. Temporarily disable the Edge Function and confirm built-in answers still appear for the role questions.
-16. Re-enable the function and confirm live answers return.
+14. Ask: “Can a Foreman save a JSA with no service?” Confirm it explains the JSA-only offline queue and does not claim Daily Reports queue offline.
+15. Ask: “What does the number on the GF Production tile mean?” Confirm it describes the in-app review count and does not promise background phone push notifications.
+16. Ask: “How does a Foreman check Remaining Units?” Confirm it says to search by Work Point and does not expose contract pricing.
+17. Ask: “How do weekly overtime and the company workweek work?” Confirm it explains Start/Stop/Lunch calculation without inventing payroll law.
+18. Ask: “How do I add equipment and make it fill Crew Time?” Confirm it limits roster/default assignment management to Owner/Admin.
+19. Ask an ambiguous question such as “Why is this stuck?” Confirm it asks one focused question or offers the two most likely paths rather than inventing a record status.
+20. Temporarily disable the Edge Function and confirm built-in answers still appear for the role questions.
+21. Re-enable the function and confirm live answers return.
+
+## Keeping knowledge current
+
+Any release that changes a role, permission, screen label, workflow, offline behavior, notification behavior, training availability or payroll/billing behavior must update both `supabase/functions/linecrew-assistant/index.ts` and `assistantBuiltInHelp` in `index.html`. Increment `KNOWLEDGE_VERSION` and add or update a role scenario in `scripts/validate-assistant-knowledge.mjs`. Production readiness CI runs that validator so stale or contradictory help blocks the release.
 
 ## Real-world use
 
