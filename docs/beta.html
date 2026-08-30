@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Beta / Pilot Application | LineCrew Pro</title>
+<meta name="description" content="Apply for a limited LineCrew Pro Beta/Pilot company spot.">
+<link rel="canonical" href="https://linecrewpro.com/beta.html">
+<link rel="icon" href="linecrew-pro-logo.png" type="image/png">
+<link rel="stylesheet" href="styles.css?v=site7">
+<link rel="stylesheet" href="accessibility.css?v=site5">
+<style>
+.beta-wrap{max-width:760px;margin:auto}.beta-form{background:#fff;border:1px solid #dce5ed;border-radius:18px;padding:24px;box-shadow:0 4px 18px rgba(0,0,0,.06)}.beta-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.beta-form label{display:block;font-weight:800;margin:0 0 6px}.beta-form input,.beta-form textarea{width:100%;padding:12px;border:1px solid #cfd9e2;border-radius:10px;font:inherit}.beta-form textarea{min-height:120px;resize:vertical}.beta-form .full{grid-column:1/-1}.beta-form .hp{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}.beta-note{padding:13px 15px;border-radius:10px;background:#eef6fd;color:#173a5a;margin-bottom:18px}.beta-status{margin-top:14px;font-weight:700}.beta-status.ok{color:#116b3a}.beta-status.error{color:#9b1c1c}@media(max-width:650px){.beta-grid{grid-template-columns:1fr}.beta-form .full{grid-column:auto}}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<header class="site-header">
+<div class="nav-wrap">
+<a class="brand" href="index.html"><img class="brand-mark" src="linecrew-pro-logo.png" alt=""><span class="brand-copy"><b>LINECREW <em>PRO</em></b><small>FIELD · SAFETY · PRODUCTION · PROFIT</small></span></a>
+<nav class="navlinks"><a href="features.html">Features</a><a href="index.html#workflow">How It Works</a><a href="pricing.html">Pricing</a><a href="training.html">Training</a><a href="contact.html">Contact</a><a class="nav-btn ghost" href="https://app.linecrewpro.com/">Open App</a></nav>
+</div>
+</header>
+<main id="main-content">
+<section class="page-hero"><div class="wrap"><div class="eyebrow">Limited Beta / Pilot</div><h1>Apply to pilot LineCrew Pro with your company.</h1><p>Approved pilot companies receive guided onboarding and full company access without a credit card while the pilot is active.</p></div></section>
+<section class="section"><div class="wrap beta-wrap">
+<div class="beta-form">
+<div class="beta-note"><strong>No payment information is collected here.</strong> Submitting this form is an application, not an automatic account activation. LineCrew Pro reviews each pilot company before access is created.</div>
+<form id="betaForm" novalidate>
+<div class="beta-grid">
+<div><label for="companyName">Company name *</label><input id="companyName" name="company_name" maxlength="120" autocomplete="organization" required></div>
+<div><label for="contactName">Your name *</label><input id="contactName" name="contact_name" maxlength="120" autocomplete="name" required></div>
+<div><label for="email">Work email *</label><input id="email" name="email" type="email" maxlength="254" autocomplete="email" required></div>
+<div><label for="phone">Phone</label><input id="phone" name="phone" type="tel" maxlength="30" autocomplete="tel"></div>
+<div><label for="crews">Active crew count *</label><input id="crews" name="active_crew_count" type="number" min="1" max="500" step="1" inputmode="numeric" required></div>
+<div class="full"><label for="notes">What would you like to test?</label><textarea id="notes" name="testing_notes" maxlength="2000" placeholder="Tell us a little about your operation or what you want to evaluate."></textarea></div>
+<div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+<div class="full"><button id="submitBtn" class="btn" type="submit">Submit Beta Application</button><p id="status" class="beta-status" role="status" aria-live="polite"></p></div>
+</div>
+</form>
+</div>
+</div></section>
+</main>
+<footer class="footer"><div class="wrap footer-grid"><div><b>LINECREW PRO</b><br>Powerline contractor operations software.</div><div>© 2026 LineCrew Pro LLC · <a href="privacy.html">Privacy</a> · <a href="terms.html">Terms</a> · <a href="contact.html">Contact</a></div></div></footer>
+<script>
+const PROD_URL='https://ldgkyxuozbozgkvwzadg.supabase.co';
+const PROD_KEY='sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF';
+const TEST_URL='https://yvuxrqrdprquxypiffpa.supabase.co';
+const TEST_KEY='sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx';
+const isLocal=['localhost','127.0.0.1'].includes(location.hostname);
+const endpoint=(isLocal?TEST_URL:PROD_URL)+'/functions/v1/submit-beta-application';
+const apiKey=isLocal?TEST_KEY:PROD_KEY;
+const form=document.getElementById('betaForm');
+const statusEl=document.getElementById('status');
+const submitBtn=document.getElementById('submitBtn');
+form.addEventListener('submit',async event=>{
+  event.preventDefault();
+  statusEl.className='beta-status';
+  if(!form.reportValidity()) return;
+  const fd=new FormData(form);
+  const payload={
+    company_name:String(fd.get('company_name')||''),
+    contact_name:String(fd.get('contact_name')||''),
+    email:String(fd.get('email')||''),
+    phone:String(fd.get('phone')||''),
+    active_crew_count:Number(fd.get('active_crew_count')),
+    testing_notes:String(fd.get('testing_notes')||''),
+    website:String(fd.get('website')||'')
+  };
+  submitBtn.disabled=true;statusEl.textContent='Submitting your application…';
+  try{
+    const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json','apikey':apiKey},body:JSON.stringify(payload)});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(result.error||'Unable to submit the application.');
+    form.reset();statusEl.className='beta-status ok';statusEl.textContent='Application received. LineCrew Pro will review it and email you if your company is approved.';
+  }catch(error){statusEl.className='beta-status error';statusEl.textContent=error.message||'Unable to submit the application right now.';}
+  finally{submitBtn.disabled=false;}
+});
+</script>
+</body>
+</html>
