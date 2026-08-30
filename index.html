@@ -1698,6 +1698,12 @@ Morning job safety briefings
 Manage plans, payment methods and subscription status
 </span>
 </div>
+<div class="metric hidden" id="assistantMemoryTile">
+<strong>Assistant Memory</strong>
+<span class="muted">
+Saved company workflows and job reminders
+</span>
+</div>
 </div>
 <div id="dashboardReviewAlert" class="card hidden" role="status">
 <div class="section-header">
@@ -4456,6 +4462,7 @@ String(profile.role || 'foreman').toLowerCase() === 'employee'
 $('completedJobsTile').classList.toggle('hidden', !userCanViewCompletedJobs());
 $('billingTile').classList.toggle('hidden', !userIsCompanyAdmin());
 $('assistantLauncher').classList.toggle('hidden', !userCanUseAssistant());
+$('assistantMemoryTile').classList.toggle('hidden', !userCanUseAssistant());
 if(!userCanUseAssistant()) $('assistantPanel').classList.add('hidden');
 $('adminNotice').classList.toggle('hidden', !userHasAnyCompanyControls());
 await Promise.all([
@@ -4740,6 +4747,10 @@ await navigateToAppPage('safetyPage');
 };
 $('billingTile').onclick = () => {
 window.location.assign('/billing.html');
+};
+$('assistantMemoryTile').onclick = () => {
+setAssistantOpen(true);
+$('assistantMemorySection').open = true;
 };
 $('backFromSafety').onclick = () => returnToDashboard();
 $('refreshSafetyBtn').onclick = loadSafetyJsas;
@@ -8309,8 +8320,8 @@ terms:['password','forgot','login','sign in'],
 answer:'On the Sign In screen, enter the account email and choose Forgot Password. Open the recovery email on the same device, enter matching passwords with at least eight characters, and save.'
 },
 {
-terms:['assistant memory','remember workflow','remind me','saved memories','job reminder'],
-answer:'Owner/Admin can tell LineCrew Assistant “remember…” for a company workflow or “on this job, remind me…” for a job reminder. The assistant prepares a Not saved yet card; review its scope and trigger, then choose Save Reminder or Save Workflow Memory. Saved Memories lets leadership mark a job reminder complete or remove a memory. Reminders are advisory and in-app only: they never edit, approve, submit, bill, close or block operational records.'
+terms:['assistant memory','assistant memories','saved assistant memories','remember workflow','remind me','saved memories','job reminder'],
+answer:'Owner/Admin opens Assistant Memory from the Dashboard, or opens Ask LineCrew AI in the lower-right corner and expands Saved Memories. To create one, tell the assistant “remember…” for a company workflow or open the intended job and say “on this job, remind me…”. The assistant prepares a Not saved yet card; nothing is stored until Save Reminder or Save Workflow Memory is chosen. Saved Memories shows the title, instruction, scope and trigger. A job reminder can be marked complete and any memory can be removed. This release has no Edit button, date/time scheduling or visible audit-detail screen; remove and resave a memory to change it. Memories are advisory and never edit operational records.'
 },
 {
 terms:['customer','utility','contract'],

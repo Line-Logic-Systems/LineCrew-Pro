@@ -170,3 +170,11 @@ export function detectAssistantMemoryProposal(question, screenContext = {}) {
     requires_confirmation: true,
   };
 }
+
+export function assistantMemoryManagementRequested(question) {
+  const text = clippedText(question, 1200);
+  if (!text) return false;
+  return /\b(saved\s+memor(?:y|ies)|assistant\s+memor(?:y|ies))\b/i.test(text) ||
+    /\b(where|find|view|show|list|open|manage|edit|change|delete|remove|complete)\b.{0,100}\b(reminder|reminders|memor(?:y|ies))\b/i.test(text) ||
+    /\b(reminder|reminders|memor(?:y|ies))\b.{0,100}\b(where|find|view|show|list|open|manage|edit|change|delete|remove|complete)\b/i.test(text);
+}

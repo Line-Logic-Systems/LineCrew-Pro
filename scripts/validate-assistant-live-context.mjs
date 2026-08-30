@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {
+  assistantMemoryManagementRequested,
   assistantModelConfig,
   classifyAssistantRequest,
   detectAssistantMemoryProposal,
@@ -62,6 +63,9 @@ assert.equal(workflowMemory.memory_type,'company_workflow');
 assert.equal(workflowMemory.job_id,null);
 assert.equal(workflowMemory.trigger_type,'always');
 assert.equal(detectAssistantMemoryProposal('How do reminders work?',{}),null);
+assert.equal(assistantMemoryManagementRequested('Where can I find Saved Memories?'),true);
+assert.equal(assistantMemoryManagementRequested('Edit the reminder I saved.'),true);
+assert.equal(assistantMemoryManagementRequested('How do I import a Price Book?'),false);
 
 assert.deepEqual(
   assistantModelConfig('fast',{OPENAI_MODEL:'gpt-5-mini'}),
@@ -75,7 +79,7 @@ assert.deepEqual(
 const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts','utf8');
 const app = fs.readFileSync('index.html','utf8');
 for(const marker of [
-  '2026-08-30-assistant-memory-v6',
+  '2026-08-30-dashboard-memory-v7',
   'loadLiveCompanyContext(',
   'Authenticated Owner/Admin read-only snapshot constrained by company RLS',
   '.eq("company_id", companyId)',

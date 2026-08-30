@@ -82,6 +82,11 @@ const scenarios = [
     expected: ['Only Admin/Owner may lock or unlock it', 'Pay Period History / Archived Timesheets']
   },
   {
+    role: 'Admin',
+    question: 'Where can I find Saved Memories?',
+    expected: ['Assistant Memory from the Dashboard', 'no Edit button', 'remove and resave']
+  },
+  {
     role: 'Superintendent',
     question: 'How does a Superintendent enter overhead time in My Time?',
     expected: ['General Foreman, Superintendent, Admin and Owner', 'Company Overhead']
