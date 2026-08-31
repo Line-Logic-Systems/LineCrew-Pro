@@ -109,7 +109,9 @@
       const desiredIds=desiredTiles.map(el=>el.id);
       const currentIds=Array.from(grid.children).filter(el=>desiredIds.includes(el.id)).map(el=>el.id);
       const tilesNeedReordering=desiredIds.length!==currentIds.length || desiredIds.some((id,index)=>id!==currentIds[index]);
-      if(tilesNeedReordering) desiredTiles.forEach(el=>grid.appendChild(el));
+      const preservePersonalOrder=['admin','owner'].includes(r) &&
+        (grid.dataset.userDashboardCustomOrder==='true' || grid.classList.contains('dashboard-arrange-active'));
+      if(tilesNeedReordering&&!preservePersonalOrder) desiredTiles.forEach(el=>grid.appendChild(el));
       if(r==='foreman'){
         setDescription('jobsTile','Open assigned jobs and work points');
         setDescription('productionTile','Create and review your Daily Reports');

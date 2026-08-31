@@ -878,6 +878,35 @@ border-color:var(--blue);
 display:block;
 font-size:24px;
 }
+#dashboardTileGrid.dashboard-arrange-active .metric{
+position:relative;
+cursor:grab;
+border-color:var(--blue);
+padding-bottom:62px;
+touch-action:manipulation;
+}
+#dashboardTileGrid.dashboard-arrange-active .metric.dashboard-tile-dragging{
+opacity:.55;
+cursor:grabbing;
+}
+.dashboard-arrange-controls{
+display:none;
+position:absolute;
+left:12px;
+right:12px;
+bottom:10px;
+gap:7px;
+}
+#dashboardTileGrid.dashboard-arrange-active .dashboard-arrange-controls{
+display:flex;
+}
+.dashboard-arrange-controls button{
+flex:1;
+width:auto;
+margin:0;
+padding:8px 9px;
+font-size:12px;
+}
 .job-card{
 background:white;
 border:1px solid var(--border);
@@ -1763,6 +1792,15 @@ Sign Out
 <button id="desktopViewToggle" class="secondary small" type="button">
 Desktop View
 </button>
+<button id="arrangeDashboardBtn" class="secondary small hidden" type="button">
+Arrange Dashboard
+</button>
+<button id="saveDashboardOrderBtn" class="success small hidden" type="button">
+Save Layout
+</button>
+<button id="cancelDashboardOrderBtn" class="secondary small hidden" type="button">
+Cancel
+</button>
 </div>
 <div id="myProfileEditor" class="job-card hidden">
 <label for="myProfileName">Display Name</label>
@@ -1771,7 +1809,7 @@ Desktop View
 <button id="cancelMyProfile" class="secondary small">Cancel</button>
 </div>
 </div>
-<div class="grid">
+<div class="grid" id="dashboardTileGrid">
 <div class="metric" id="jobsTile">
 <strong>Jobs</strong>
 <span class="muted">
@@ -1809,9 +1847,9 @@ Morning job safety briefings
 </span>
 </div>
 <div class="metric hidden" id="billingTile">
-<strong>Company Billing</strong>
+<strong>LineCrew Pro Subscription</strong>
 <span class="muted">
-Manage plans, payment methods and subscription status
+Manage your company’s plan, payment method and subscription status
 </span>
 </div>
 <div class="metric hidden" id="assistantMemoryTile">
@@ -2881,7 +2919,7 @@ Complete these steps in order. LineCrew Pro will move you to the next step after
 <div class="contract-setup-step active" data-setup-step="customer"><span class="contract-setup-step-number">1</span><span>Customer</span></div>
 <div class="contract-setup-step" data-setup-step="contract"><span class="contract-setup-step-number">2</span><span>Contract</span></div>
 <div class="contract-setup-step" data-setup-step="pricing"><span class="contract-setup-step-number">3</span><span>Unit Pricing</span></div>
-<div class="contract-setup-step" data-setup-step="review"><span class="contract-setup-step-number">4</span><span>Review &amp; Save</span></div>
+<div class="contract-setup-step" data-setup-step="review"><span class="contract-setup-step-number">4</span><span>Review &amp; Finish</span></div>
 </div>
 <div id="contractSetupStart" class="contract-setup-start">
 <h3>Step 1: Choose the Customer / Utility</h3>
@@ -2896,6 +2934,17 @@ Complete these steps in order. LineCrew Pro will move you to the next step after
 </div>
 </div>
 <div id="contractSetupFormHost"></div>
+<div id="contractSetupReview" class="contract-setup-start hidden">
+<h3>Step 4: Review &amp; Finish</h3>
+<p id="contractSetupReviewMessage" class="muted">
+Your customer, contract and Unit Pricing record have been saved.
+</p>
+<div id="contractSetupReviewSummary" class="job-info"></div>
+<div class="button-row">
+<button id="reviewSetupPriceBookBtn" class="secondary">Review Unit Pricing</button>
+<button id="finishContractSetupBtn" class="success">Finish Contract Setup</button>
+</div>
+</div>
 </div>
 <details class="card collapsible-card" id="manageExistingContracts">
 <summary>
@@ -4155,6 +4204,214 @@ return String(currentProfile?.role || 'foreman').toLowerCase();
 }
 function userIsOwner(){ return currentUserRole() === 'owner'; }
 function userIsCompanyAdmin(){ return ['owner','admin'].includes(currentUserRole()); }
+let dashboardTileOrder = [];
+let dashboardArrangementSnapshot = [];
+let dashboardArrangeMode = false;
+let dashboardDraggedTile = null;
+let dashboardTileObserver = null;
+function dashboardTiles(){
+return [...$('dashboardTileGrid').querySelectorAll(':scope > .metric')];
+}
+function applyDashboardTileOrder(order){
+const grid = $('dashboardTileGrid');
+const tiles = dashboardTiles();
+const byId = new Map(tiles.map(tile => [tile.id, tile]));
+const normalized = [...new Set(
+(Array.isArray(order) ? order : [])
+.map(value => String(value || '').trim())
+.filter(value => byId.has(value))
+)];
+const desired = [
+...normalized.map(id => byId.get(id)),
+...tiles.filter(tile => !normalized.includes(tile.id))
+];
+if(desired.some((tile,index) => tiles[index] !== tile)){
+desired.forEach(tile => grid.appendChild(tile));
+}
+}
+function moveDashboardTile(tile,direction){
+const visibleTiles = dashboardTiles().filter(item => !item.classList.contains('hidden'));
+const index = visibleTiles.indexOf(tile);
+const target = visibleTiles[index + direction];
+if(index < 0 || !target){
+return;
+}
+if(direction < 0){
+$('dashboardTileGrid').insertBefore(tile,target);
+}else{
+$('dashboardTileGrid').insertBefore(target,tile);
+}
+}
+function ensureDashboardArrangeControls(){
+dashboardTiles().forEach(tile => {
+if(tile.querySelector(':scope > .dashboard-arrange-controls')){
+return;
+}
+const controls = document.createElement('div');
+controls.className = 'dashboard-arrange-controls';
+const earlier = document.createElement('button');
+earlier.type = 'button';
+earlier.className = 'secondary';
+earlier.textContent = '← Earlier';
+earlier.setAttribute('aria-label','Move ' + (tile.querySelector('strong')?.textContent || 'dashboard card') + ' earlier');
+earlier.onclick = event => {
+event.preventDefault();
+event.stopPropagation();
+moveDashboardTile(tile,-1);
+};
+const later = document.createElement('button');
+later.type = 'button';
+later.className = 'secondary';
+later.textContent = 'Later →';
+later.setAttribute('aria-label','Move ' + (tile.querySelector('strong')?.textContent || 'dashboard card') + ' later');
+later.onclick = event => {
+event.preventDefault();
+event.stopPropagation();
+moveDashboardTile(tile,1);
+};
+controls.append(earlier,later);
+tile.appendChild(controls);
+tile.draggable = dashboardArrangeMode;
+});
+}
+function setDashboardArrangeMode(enabled){
+dashboardArrangeMode = enabled === true && userIsCompanyAdmin();
+const grid = $('dashboardTileGrid');
+grid.classList.toggle('dashboard-arrange-active',dashboardArrangeMode);
+$('arrangeDashboardBtn').classList.toggle('hidden',dashboardArrangeMode || !userIsCompanyAdmin());
+$('saveDashboardOrderBtn').classList.toggle('hidden',!dashboardArrangeMode);
+$('cancelDashboardOrderBtn').classList.toggle('hidden',!dashboardArrangeMode);
+ensureDashboardArrangeControls();
+dashboardTiles().forEach(tile => {
+tile.draggable = dashboardArrangeMode;
+tile.classList.remove('dashboard-tile-dragging');
+});
+dashboardDraggedTile = null;
+}
+async function loadDashboardTileOrder(){
+if(dashboardTileObserver){
+dashboardTileObserver.disconnect();
+dashboardTileObserver = null;
+}
+dashboardTileOrder = [];
+setDashboardArrangeMode(false);
+if(!userIsCompanyAdmin() || !currentProfile?.id){
+return;
+}
+$('arrangeDashboardBtn').classList.remove('hidden');
+const { data,error } = await sb
+.from('user_dashboard_preferences')
+.select('tile_order')
+.eq('user_id',currentProfile.id)
+.maybeSingle();
+if(error){
+console.warn('Dashboard layout could not be loaded:',error.message);
+}else{
+dashboardTileOrder = Array.isArray(data?.tile_order) ? data.tile_order : [];
+}
+$('dashboardTileGrid').dataset.userDashboardCustomOrder =
+dashboardTileOrder.length ? 'true' : 'false';
+applyDashboardTileOrder(dashboardTileOrder);
+ensureDashboardArrangeControls();
+dashboardTileObserver = new MutationObserver(() => {
+ensureDashboardArrangeControls();
+if(!dashboardArrangeMode){
+applyDashboardTileOrder(dashboardTileOrder);
+}
+});
+dashboardTileObserver.observe($('dashboardTileGrid'),{childList:true});
+}
+$('arrangeDashboardBtn').onclick = () => {
+dashboardArrangementSnapshot = dashboardTiles().map(tile => tile.id);
+setDashboardArrangeMode(true);
+};
+$('cancelDashboardOrderBtn').onclick = () => {
+applyDashboardTileOrder(dashboardArrangementSnapshot);
+setDashboardArrangeMode(false);
+};
+$('saveDashboardOrderBtn').onclick = async () => {
+if(!userIsCompanyAdmin() || !currentProfile?.id || !currentProfile?.company_id){
+return;
+}
+const tileOrder = dashboardTiles().map(tile => tile.id).slice(0,32);
+$('saveDashboardOrderBtn').disabled = true;
+$('saveDashboardOrderBtn').textContent = 'Saving...';
+const { error } = await sb
+.from('user_dashboard_preferences')
+.upsert({
+user_id:currentProfile.id,
+company_id:currentProfile.company_id,
+tile_order:tileOrder,
+updated_at:new Date().toISOString()
+},{onConflict:'user_id'});
+$('saveDashboardOrderBtn').disabled = false;
+$('saveDashboardOrderBtn').textContent = 'Save Layout';
+if(error){
+alert('Unable to save your dashboard layout: ' + error.message);
+return;
+}
+dashboardTileOrder = tileOrder;
+$('dashboardTileGrid').dataset.userDashboardCustomOrder = 'true';
+setDashboardArrangeMode(false);
+alert('Dashboard layout saved for your account.');
+};
+const dashboardTileGrid = $('dashboardTileGrid');
+dashboardTileGrid.addEventListener('click',event => {
+if(
+dashboardArrangeMode &&
+event.target.closest('.metric') &&
+!event.target.closest('.dashboard-arrange-controls')
+){
+event.preventDefault();
+event.stopPropagation();
+}
+},true);
+dashboardTileGrid.addEventListener('keydown',event => {
+if(
+dashboardArrangeMode &&
+event.target.closest('.metric') &&
+!event.target.closest('.dashboard-arrange-controls')
+){
+event.preventDefault();
+event.stopPropagation();
+}
+},true);
+dashboardTileGrid.addEventListener('dragstart',event => {
+const tile = event.target.closest('.metric');
+if(!dashboardArrangeMode || !tile){
+event.preventDefault();
+return;
+}
+dashboardDraggedTile = tile;
+tile.classList.add('dashboard-tile-dragging');
+event.dataTransfer.effectAllowed = 'move';
+event.dataTransfer.setData('text/plain',tile.id);
+});
+dashboardTileGrid.addEventListener('dragover',event => {
+const target = event.target.closest('.metric');
+if(!dashboardArrangeMode || !dashboardDraggedTile || !target || target === dashboardDraggedTile){
+return;
+}
+event.preventDefault();
+const bounds = target.getBoundingClientRect();
+const nearSameRow = Math.abs(event.clientY - (bounds.top + bounds.height / 2)) < bounds.height * .35;
+const before = nearSameRow
+? event.clientX < bounds.left + bounds.width / 2
+: event.clientY < bounds.top + bounds.height / 2;
+$('dashboardTileGrid').insertBefore(
+dashboardDraggedTile,
+before ? target : target.nextSibling
+);
+});
+dashboardTileGrid.addEventListener('drop',event => {
+if(dashboardArrangeMode){
+event.preventDefault();
+}
+});
+dashboardTileGrid.addEventListener('dragend',() => {
+dashboardDraggedTile?.classList.remove('dashboard-tile-dragging');
+dashboardDraggedTile = null;
+});
 function userHasCapability(capability){
 const role = currentUserRole();
 if(role === 'owner' || role === 'admin') return true;
@@ -4475,7 +4732,7 @@ if(['owner','admin'].includes(blockedRole)){
 window.location.replace('/billing.html?billing=access-blocked');
 return;
 }
-alert('This company’s LineCrew Pro access is inactive. Ask your company Owner or Admin to open Company Billing.');
+alert('This company’s LineCrew Pro access is inactive. Ask your company Owner or Admin to open LineCrew Pro Subscription.');
 return;
 }
 alert('Unable to verify account access: ' + accessStatusError.message);
@@ -4527,7 +4784,7 @@ const {data:checkout,error:checkoutError}=await sb.functions.invoke(
 {body:{requested_plan:selectedPlan}}
 );
 if(checkoutError || checkout?.error || !checkout?.url){
-alert('Your company is ready, but secure checkout could not be opened. Use Company Billing on the dashboard to try again.');
+alert('Your company is ready, but secure checkout could not be opened. Use LineCrew Pro Subscription on the dashboard to try again.');
 }else{
 requestedSignupPlan = '';
 try{ sessionStorage.removeItem('linecrew_requested_plan'); }catch{}
@@ -4629,6 +4886,7 @@ await Promise.all([
 loadDashboardReviewAlert(),
 loadCompanyOnboarding(),
 primeOfflineJsaJobs(),
+loadDashboardTileOrder(),
 userCanUseAssistant() ? loadAssistantMemories() : Promise.resolve([])
 ]);
 if(requestedBillingReturn && userIsCompanyAdmin()){
@@ -8535,7 +8793,7 @@ timekeeping:{label:'Timekeeping'},
 billing_exports:{label:'Billing Exports'},
 company_settings:{label:'Company Settings'},
 assistant_memory:{label:'Assistant Memory'},
-company_billing:{label:'Company Billing'},
+company_billing:{label:'LineCrew Pro Subscription'},
 training:{label:'Training'}
 });
 function normalizeAssistantNavigation(value){
@@ -9697,6 +9955,38 @@ step.classList.toggle('active', stepIndex === activeIndex);
 step.classList.toggle('complete', stepIndex < activeIndex);
 });
 $('contractSetupStart').classList.toggle('hidden', stage !== 'customer');
+$('contractSetupReview').classList.toggle('hidden', stage !== 'review');
+}
+function showContractSetupReview(
+priceBook,
+contract,
+customer,
+options = {}
+){
+if(!priceBook){
+return;
+}
+$('contractSetupReview').dataset.priceBookId = priceBook.id;
+$('contractSetupReviewMessage').textContent =
+options.message ||
+'Your customer, contract and Unit Pricing record are saved. Review them or finish setup.';
+const importedCount = Number(options.importedCount);
+$('contractSetupReviewSummary').innerHTML =
+'Customer / Utility: <strong>' +
+escapeHtml(customer?.name || 'Not assigned') +
+'</strong><br>Contract: <strong>' +
+escapeHtml(contract?.contract_name || 'Not assigned') +
+'</strong>' +
+(contract?.contract_number
+? ' (' + escapeHtml(contract.contract_number) + ')'
+: '') +
+'<br>Unit Pricing: <strong>' +
+escapeHtml(priceBook.name || 'Price Book') +
+'</strong>' +
+(Number.isFinite(importedCount)
+? '<br>Units saved: <strong>' + escapeHtml(importedCount) + '</strong>'
+: '');
+setContractSetupStage('review');
 }
 function showContractSetupForm(formId, stage){
 const host = $('contractSetupFormHost');
@@ -9717,8 +10007,27 @@ $('contractSetupCard').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 function resetContractSetup(){
 ['customerForm', 'contractForm', 'priceBookForm'].forEach(id => $(id)?.classList.add('hidden'));
+$('contractSetupReview').removeAttribute('data-price-book-id');
+$('contractSetupReviewSummary').innerHTML = '';
 setContractSetupStage('customer');
 }
+$('reviewSetupPriceBookBtn').onclick = () => {
+const priceBookId = $('contractSetupReview').dataset.priceBookId;
+const record = priceBookNavigationRecords.get(priceBookId);
+if(!record){
+alert('Refresh the page, then open the saved Price Book under Manage Existing Contracts.');
+return;
+}
+openPriceBook(record.priceBook, record.contract, record.customer);
+};
+$('finishContractSetupBtn').onclick = () => {
+$('priceBookDetail').classList.add('hidden');
+currentOpenPriceBook = null;
+resetContractSetup();
+$('manageExistingContracts').open = true;
+$('contractSetupCard').scrollIntoView({ behavior:'smooth', block:'start' });
+alert('Contract setup complete. The customer, contract and unit pricing are saved.');
+};
 function populateSetupCustomerSelect(selectedCustomerId = ''){
 const select = $('setupCustomerSelect');
 if(!select) return;
@@ -10566,8 +10875,16 @@ await loadPriceBooks();
 const savedRecord =
 priceBookNavigationRecords.get(savedPriceBook?.id);
 if(savedRecord){
-$('manageExistingContracts').open = true;
-setContractSetupStage('review');
+showContractSetupReview(
+savedRecord.priceBook,
+savedRecord.contract,
+savedRecord.customer,
+{
+message:selectedImportFile
+? 'The customer, contract and Unit Pricing record are saved. Review the detected units below, then import the valid units.'
+: 'The customer, contract and Unit Pricing record are saved. Add or review unit prices below, then finish setup.'
+}
+);
 openPriceBook(
 savedRecord.priceBook,
 savedRecord.contract,
@@ -13218,6 +13535,19 @@ refreshed.contract,
 refreshed.customer,
 false
 );
+showContractSetupReview(
+refreshed.priceBook,
+refreshed.contract,
+refreshed.customer,
+{
+importedCount:Number(importResult?.total || writeRows.length),
+message:'Unit pricing was imported successfully. Everything is saved—review it or finish contract setup.'
+}
+);
+$('contractSetupCard').scrollIntoView({
+behavior:'smooth',
+block:'start'
+});
 }else{
 await loadPriceBookItems(priceBookId);
 }
