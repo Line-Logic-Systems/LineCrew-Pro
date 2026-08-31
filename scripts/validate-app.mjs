@@ -75,6 +75,51 @@ for (const marker of [
 ]) {
   assert(html.includes(marker), `Missing smart Unit Pricing import marker: ${marker}`);
 }
+for (const marker of [
+  'normalizedPriceWorkType',
+  'importHeaderMatchConfidence',
+  'combinedStructuredHeaderRow',
+  'consolidatePriceBookImportRows',
+  'mapWorkType',
+  'xferlabor'
+]) {
+  assert(html.includes(marker), `Missing adaptive Unit Pricing import marker: ${marker}`);
+}
+for (const marker of [
+  'jobMapTransferQuantity',
+  'authorized-transfer',
+  'save_job_package_authorized_unit_v2',
+  'get_job_package_work_points_v2',
+  'import_price_book_items_atomic',
+  'transfer_quantity'
+]) {
+  assert(html.includes(marker), `Missing Utility Package Transfer marker: ${marker}`);
+}
+
+const transferMigrationPath =
+  'supabase/migrations/20260831050000_smart_pricebook_and_packet_transfers.sql';
+assert(fs.existsSync(transferMigrationPath), 'Missing packet Transfer database migration.');
+if (fs.existsSync(transferMigrationPath)) {
+  const transferMigration = fs.readFileSync(transferMigrationPath, 'utf8');
+  for (const marker of [
+    "work_type in ('install', 'transfer', 'remove')",
+    "when 'transfer' then 'T'",
+    'authorized_transfer_quantity',
+    'validate_job_package_import',
+    'import_job_package_units',
+    'save_job_package_authorized_unit_v2',
+    'get_job_package_work_points_v2',
+    'price_book_items_book_code_unique',
+    'import_price_book_items_atomic',
+    'for update',
+    'from public, anon'
+  ]) {
+    assert(
+      transferMigration.includes(marker),
+      `Missing guarded packet Transfer migration marker: ${marker}`
+    );
+  }
+}
 
 const ids = [...html.matchAll(/\sid=["']([^"']+)["']/g)].map(match => match[1]);
 const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
@@ -88,6 +133,121 @@ if (scriptStart >= 0 && scriptEnd > scriptStart) {
     new Function(applicationCode);
   } catch (error) {
     failures.push('Application JavaScript syntax error: ' + error.message);
+  }
+  try {
+    const coreStart = applicationCode.indexOf('function normalizeImportHeader');
+    const coreEnd = applicationCode.indexOf('function loadImportWorksheet');
+    const coreCode = applicationCode.slice(coreStart, coreEnd);
+    const testElements = new Map();
+    const testElement = id => {
+      if (!testElements.has(id)) {
+        testElements.set(id, {
+          value: id === 'priceBookImportMode' ? 'add-only' : '',
+          innerHTML: '',
+          textContent: '',
+          classList: { add() {}, remove() {}, toggle() {} }
+        });
+      }
+      return testElements.get(id);
+    };
+    const core = new Function(
+      '$',
+      'currentPriceBookItems',
+      coreCode +
+      '; return {importHeaderMatchConfidence,mapImportRow,' +
+      'consolidatePriceBookImportRows,normalizedPriceWorkType,' +
+      'findStructuredPricingBlocks,extractStructuredPricingRows};'
+    )(testElement, []);
+    assert(
+      core.importHeaderMatchConfidence('Instal Price', ['installprice']) >= 0.8,
+      'Smart Price Book import must recognize a close Install heading.'
+    );
+    assert(
+      core.importHeaderMatchConfidence('Xfer Labor', ['xferlabor']) === 1,
+      'Smart Price Book import must recognize Xfer Labor.'
+    );
+    const longRows = [
+      core.mapImportRow({
+        'Unit Code':'A-10',
+        'Description':'Pole framing',
+        'Unit Price':'125.00',
+        'Work Type':'Install'
+      }, 2),
+      core.mapImportRow({
+        'Unit Code':'A-10',
+        'Description':'Pole framing',
+        'Unit Price':'75.00',
+        'Work Type':'Transfer'
+      }, 3),
+      core.mapImportRow({
+        'Unit Code':'A-10',
+        'Description':'Pole framing',
+        'Unit Price':'40.00',
+        'Work Type':'Remove'
+      }, 4)
+    ];
+    const consolidated = core.consolidatePriceBookImportRows(longRows);
+    assert(
+      consolidated.length === 1 &&
+      consolidated[0].install_price === 125 &&
+      consolidated[0].transfer_price === 75 &&
+      consolidated[0].retirement_price === 40 &&
+      consolidated[0].errors.length === 0,
+      'Long-format Install/Transfer/Remove rows must consolidate safely.'
+    );
+    const conflictRows = core.consolidatePriceBookImportRows([
+      core.mapImportRow({
+        'Unit Code':'A-11','Description':'Anchor',
+        'Unit Price':'50','Work Type':'Transfer'
+      }, 5),
+      core.mapImportRow({
+        'Unit Code':'A-11','Description':'Anchor',
+        'Unit Price':'60','Work Type':'Transfer'
+      }, 6)
+    ]);
+    assert(
+      conflictRows[0].errors.some(error => error.includes('Conflicting Transfer Prices')),
+      'Conflicting action prices must be blocked instead of silently merged.'
+    );
+    const priceLeftBlocks = core.findStructuredPricingBlocks([
+      ['Install Price','Unit Code','Description'],
+      ['125.00','A-12','Crossarm']
+    ]);
+    assert(
+      priceLeftBlocks.length === 1 &&
+      priceLeftBlocks[0].codeColumn === 1 &&
+      priceLeftBlocks[0].installColumn === 0,
+      'Structured pricing must recognize a price column left of Unit Code.'
+    );
+    const multiHeaderBlocks = core.findStructuredPricingBlocks([
+      ['Unit Code','Labor Rates',''],
+      ['', 'Instal Price','Xfer Labor'],
+      ['A-13','100','65']
+    ]);
+    assert(
+      multiHeaderBlocks.length === 1 &&
+      multiHeaderBlocks[0].installColumn === 1 &&
+      multiHeaderBlocks[0].transferColumn === 2,
+      'Structured pricing must recognize merged/multi-row action headings.'
+    );
+    const longStructured = core.extractStructuredPricingRows('Long Rates',[
+      ['Unit Code','Description','Work Type','Rate'],
+      ['A-14','Transformer','Install','900'],
+      ['A-14','Transformer','Transfer','425'],
+      ['A-14','Transformer','Remove','300']
+    ]);
+    const longStructuredMapped = core.consolidatePriceBookImportRows(
+      longStructured.rows.map(entry => core.mapImportRow(entry.row,entry.rowNumber))
+    );
+    assert(
+      longStructuredMapped.length === 1 &&
+      longStructuredMapped[0].install_price === 900 &&
+      longStructuredMapped[0].transfer_price === 425 &&
+      longStructuredMapped[0].retirement_price === 300,
+      'Structured long-format pricing must consolidate all three actions.'
+    );
+  } catch (error) {
+    failures.push('Smart Price Book functional validation error: ' + error.message);
   }
 }
 
@@ -210,5 +370,7 @@ console.log('- Required application pages are present');
 console.log('- Owner/Admin/Superintendent/GF/Foreman team wiring is present');
 console.log('- Flexible JSA camera/viewer wiring is present');
 console.log('- Multi-table and multi-sheet Unit Pricing import wiring is present');
+console.log('- Adaptive wide/long Unit Pricing import behavior is verified');
+console.log('- Utility Package Transfer wiring is present');
 console.log('- HTML ids are unique');
 console.log('- No known server-side secret patterns are exposed');
