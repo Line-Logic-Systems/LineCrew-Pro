@@ -59,6 +59,23 @@ for (const marker of [
   assert(html.includes(marker), `Missing critical JSA/mobile marker: ${marker}`);
 }
 
+// Real utility pricing workbooks often contain repeated side-by-side tables,
+// section restarts, multiple sheets, and a description row below the priced row.
+for (const marker of [
+  'findStructuredPricingBlocks',
+  'extractStructuredPricingRows',
+  'analyzeStructuredPricingWorkbook',
+  'All Recognized Unit Sheets',
+  'constructionlaborprice',
+  'removallaborprice',
+  'installationcost',
+  'retirementcost',
+  'transfer-only rate',
+  'fileCodeCounts'
+]) {
+  assert(html.includes(marker), `Missing smart Unit Pricing import marker: ${marker}`);
+}
+
 const ids = [...html.matchAll(/\sid=["']([^"']+)["']/g)].map(match => match[1]);
 const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 assert(duplicateIds.length === 0, 'Duplicate HTML ids: ' + duplicateIds.join(', '));
@@ -192,5 +209,6 @@ console.log('- JavaScript syntax is valid');
 console.log('- Required application pages are present');
 console.log('- Owner/Admin/Superintendent/GF/Foreman team wiring is present');
 console.log('- Flexible JSA camera/viewer wiring is present');
+console.log('- Multi-table and multi-sheet Unit Pricing import wiring is present');
 console.log('- HTML ids are unique');
 console.log('- No known server-side secret patterns are exposed');
