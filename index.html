@@ -2796,10 +2796,15 @@ Refresh
 <div class="card">
 <div class="section-header">
 <div>
-<h2>Contracts & Price Books</h2>
+<h2>Company Contracts &amp; Unit Pricing</h2>
 <p class="muted">
-Manage utilities, contracts and company pricing.
+Set up each customer, create its contract, then upload the unit prices used on Daily Reports.
 </p>
+<ol>
+<li><strong>Add the Customer / Utility.</strong></li>
+<li><strong>Create the Contract.</strong> This stores the agreement, dates and Foreman field-value percentage.</li>
+<li><strong>Add Unit Pricing.</strong> Upload the contract's Excel or CSV pricing file and confirm the preview.</li>
+</ol>
 </div>
 </div>
 </div>
@@ -2894,7 +2899,7 @@ placeholder="Name, type, contact, email, phone or notes">
 <div>
 <h2>Contracts</h2>
 <p class="muted">
-Contracts tied to each customer or utility.
+Create the agreement first. After saving it, LineCrew Pro takes you directly to its Unit Pricing upload.
 </p>
 </div>
 <div class="import-actions">
@@ -2985,26 +2990,26 @@ placeholder="Contract, number, customer or notes">
 <div class="card">
 <div class="section-header">
 <div>
-<h2>Price Books</h2>
+<h2>Unit Pricing</h2>
 <p class="muted">
-Contractor-managed pricing for each contract.
+The unit-price list attached to each contract. Pricing versions are kept here when rates change.
 </p>
 </div>
 <button id="addPriceBookBtn" class="success">
-+ Add Price Book
++ Add Unit Pricing
 </button>
 </div>
-<label for="priceBookLibrarySearch">Search Price Books</label>
+<label for="priceBookLibrarySearch">Search Unit Pricing</label>
 <input
 id="priceBookLibrarySearch"
 type="search"
-placeholder="Search Price Book, customer, contract, version or notes"
+placeholder="Search unit pricing, customer, contract, version or notes"
 >
 <div class="unit-filter-toolbar">
 <div>
 <label for="priceBookLibraryStatus">Status</label>
 <select id="priceBookLibraryStatus">
-<option value="all">All Price Books</option>
+<option value="all">All Unit Pricing</option>
 <option value="active">Has active version</option>
 <option value="inactive">No active version</option>
 </select>
@@ -3017,16 +3022,17 @@ placeholder="Search Price Book, customer, contract, version or notes"
 </div>
 </div>
 <div id="priceBookForm" class="form-card hidden">
-<h3>Add Price Book</h3>
+<h3 id="priceBookFormTitle">Add Unit Pricing</h3>
+<p class="muted">Choose the contract, name this pricing version, and upload the unit-price spreadsheet.</p>
 <label for="priceBookContract">Contract</label>
 <select id="priceBookContract">
 <option value="">Select contract</option>
 </select>
-<label for="priceBookName">Price Book Name</label>
+<label for="priceBookName">Pricing Version Name</label>
 <input
 id="priceBookName"
 type="text"
-placeholder="Example: United Electric 2026 Pricing"
+placeholder="Example: 2026 Contract Unit Prices"
 >
 <label for="priceBookEffectiveDate">Effective Date</label>
 <input
@@ -3050,7 +3056,7 @@ type="file"
 accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
 >
 <button id="savePriceBookBtn" class="success">
-Save Price Book &amp; Continue
+Save Unit Pricing &amp; Continue
 </button>
 <button id="cancelPriceBookBtn" class="secondary">
 Cancel
@@ -3218,10 +3224,9 @@ class="success small hidden"
 </div>
 </div>
 <div id="priceBookImportCard" class="card hidden">
-<h3>Import Unit Pricing</h3>
+<h3>Upload Contract Unit Prices</h3>
 <p class="muted">
-Upload a CSV, XLSX or XLS file. The first worksheet will be used.
-Nothing is saved until you review the preview and confirm the import.
+Upload CSV, TSV, TXT, XLSX, XLS or ODS. LineCrew Pro finds the worksheet and header row, then lets you match the columns before anything is saved.
 </p>
 <label for="priceBookImportFile">Pricing File</label>
 <div id="priceBookFileDrop" class="file-drop">
@@ -10007,11 +10012,23 @@ fieldValueError.message
 );
 return;
 }
-alert(contractId ? 'Contract updated.' : 'Contract saved.');
+const wasNewContract = !contractId;
 $('contractForm').classList.add('hidden');
 delete $('contractForm').dataset.contractId;
 await loadContracts();
 await loadPriceBooks();
+if(wasNewContract && savedContractId){
+await openPriceBookFormForContract({
+id:savedContractId,
+contract_name:name,
+contract_number:contractNumber,
+start_date:startDate,
+active:true
+});
+alert('Contract saved. Next, upload this contract\'s unit prices.');
+return;
+}
+alert('Contract updated.');
 };
 async function loadContracts(){
 const loadSequence = ++contractLoadSequence;
@@ -10119,6 +10136,11 @@ statusButton.className =
 statusButton.textContent =
 contract.active ? 'Deactivate' : 'Activate';
 statusButton.onclick = () => changeContractStatus(contract);
+const pricingButton = document.createElement('button');
+pricingButton.className = 'success small';
+pricingButton.textContent = 'Add Unit Pricing';
+pricingButton.onclick = () => openPriceBookFormForContract(contract);
+actions.appendChild(pricingButton);
 actions.appendChild(editButton);
 actions.appendChild(statusButton);
 card.querySelector('.report-card-details').appendChild(actions);
@@ -10240,11 +10262,16 @@ return;
 await loadContracts();
 await loadPriceBooks();
 }
-/* PRICE BOOK FORM */
-$('addPriceBookBtn').onclick = async () => {
+/* UNIT PRICING FORM */
+async function openPriceBookFormForContract(selectedContract = null){
 $('priceBookForm').classList.remove('hidden');
-$('priceBookName').value = '';
-$('priceBookEffectiveDate').value = '';
+$('priceBookFormTitle').textContent = selectedContract
+? 'Add Unit Pricing for ' + selectedContract.contract_name
+: 'Add Unit Pricing';
+$('priceBookName').value = selectedContract
+? selectedContract.contract_name + ' Unit Pricing'
+: '';
+$('priceBookEffectiveDate').value = selectedContract?.start_date || '';
 $('priceBookNotes').value = '';
 $('newPriceBookImportFile').value = '';
 $('priceBookContract').innerHTML =
@@ -10254,7 +10281,7 @@ data: contracts,
 error
 } = await sb
 .from('contracts')
-.select('id, contract_name, contract_number')
+.select('id, contract_name, contract_number, start_date')
 .eq('company_id', currentProfile.company_id)
 .eq('active', true)
 .order('contract_name', { ascending: true });
@@ -10272,7 +10299,12 @@ contract.contract_name +
 : '');
 $('priceBookContract').appendChild(option);
 });
-};
+if(selectedContract?.id){
+$('priceBookContract').value = selectedContract.id;
+}
+$('priceBookForm').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+$('addPriceBookBtn').onclick = () => openPriceBookFormForContract();
 $('cancelPriceBookBtn').onclick = () => {
 $('priceBookForm').classList.add('hidden');
 $('newPriceBookImportFile').value = '';
@@ -10315,7 +10347,7 @@ active: true
 .select('id')
 .single();
 $('savePriceBookBtn').disabled = false;
-$('savePriceBookBtn').textContent = 'Save Price Book & Continue';
+$('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
 if(error){
 alert(
 'Unable to save price book: ' +
@@ -10340,11 +10372,11 @@ $('priceBookImportCard').scrollIntoView({
 behavior:'smooth',
 block:'start'
 });
-alert('Price Book saved. Review the unit-pricing preview, match the columns, and confirm the import.');
+alert('Unit Pricing saved. Review the preview, match the columns, and confirm the import.');
 return;
 }
 }
-alert('Price Book saved. You can now add or upload unit pricing.');
+alert('Unit Pricing saved. You can now add or upload contract unit prices.');
 };
 /* LOAD PRICE BOOKS */
 async function loadPriceBooks(){
@@ -11925,12 +11957,33 @@ validateImportDuplicates(currentPriceBookImportRows);
 renderPriceBookImportPreview();
 }
 $('applyImportColumnMappingBtn').onclick=applyImportColumnMapping;
+function importHeaderScore(row){
+const normalized = row.map(normalizeImportHeader).filter(Boolean);
+const aliases = new Set(importMappingDefinitions.flatMap(definition => definition.aliases));
+let score = normalized.filter(value => aliases.has(value)).length;
+if(normalized.some(value => importMappingDefinitions[0].aliases.includes(value))) score += 3;
+if(normalized.some(value => [
+...importMappingDefinitions[3].aliases,
+...importMappingDefinitions[4].aliases,
+...importMappingDefinitions[5].aliases
+].includes(value))) score += 3;
+return score;
+}
 function loadImportWorksheet(sheetName){
 if(!currentPriceBookWorkbook||!currentPriceBookWorkbook.Sheets[sheetName]) throw new Error('The selected worksheet could not be read.');
-const parsedRows=XLSX.utils.sheet_to_json(currentPriceBookWorkbook.Sheets[sheetName],{defval:'',raw:false,blankrows:false});
-const rawRows=parsedRows.map((row,index)=>({row:row,rowNumber:index+2})).filter(entry=>Object.values(entry.row).some(value=>String(value??'').trim()!==''));
-if(rawRows.length===0) throw new Error('No pricing rows were found. Make sure the first row contains column names and at least one completed pricing row.');
-if(rawRows.length>1000) throw new Error('This first release imports up to 1,000 completed rows at a time. Split the pricing into smaller groups and try again.');
+const sheet=currentPriceBookWorkbook.Sheets[sheetName];
+const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false,blankrows:false});
+if(!matrix.length) throw new Error('No pricing rows were found in this worksheet.');
+let headerIndex=0;
+let bestScore=-1;
+matrix.slice(0,25).forEach((row,index)=>{
+const score=importHeaderScore(row);
+if(score>bestScore){ bestScore=score; headerIndex=index; }
+});
+const parsedRows=XLSX.utils.sheet_to_json(sheet,{range:headerIndex,defval:'',raw:false,blankrows:false});
+const rawRows=parsedRows.map((row,index)=>({row:row,rowNumber:headerIndex+index+2})).filter(entry=>Object.values(entry.row).some(value=>String(value??'').trim()!==''));
+if(rawRows.length===0) throw new Error('No completed pricing rows were found below the spreadsheet headings.');
+if(rawRows.length>5000) throw new Error('Import up to 5,000 completed pricing rows at a time. Split larger files and try again.');
 currentPriceBookSourceRows=rawRows;
 configureImportColumnMappings(Object.keys(rawRows[0].row));
 applyImportColumnMapping();
@@ -12035,6 +12088,34 @@ setTimeout(
 1000
 );
 };
+function workbookFromPricingText(text, sourceLabel){
+const trimmed=String(text || '').trim();
+if(!trimmed) throw new Error('No pricing data was found in ' + sourceLabel + '.');
+if(/^\s*</.test(trimmed)){
+const documentCopy=new DOMParser().parseFromString(trimmed,'text/html');
+const table=documentCopy.querySelector('table');
+if(!table){
+throw new Error(sourceLabel + ' is a web page, not a pricing spreadsheet. Open it in Excel and save it as XLSX or CSV, then upload the saved file.');
+}
+return XLSX.utils.table_to_book(table,{sheet:'Pricing'});
+}
+return XLSX.read(trimmed,{type:'string',raw:true});
+}
+async function workbookFromPricingFile(file,extension){
+if(['csv','tsv','txt'].includes(extension)){
+return workbookFromPricingText(await file.text(),file.name || 'the file');
+}
+const buffer=await file.arrayBuffer();
+try{
+return XLSX.read(buffer,{type:'array'});
+}catch(primaryError){
+const text=new TextDecoder('utf-8').decode(buffer);
+if(/^\s*</.test(text)||text.includes('\t')||text.includes(',')){
+return workbookFromPricingText(text,file.name || 'the file');
+}
+throw primaryError;
+}
+}
 $('previewPastedPriceBookItemsBtn').onclick = () => {
 const pastedText =
 $('priceBookImportPaste').value.trim();
@@ -12065,9 +12146,9 @@ $('previewPastedPriceBookItemsBtn').textContent =
 'Reading Pasted Units...';
 try{
 const workbook =
-XLSX.read(
+workbookFromPricingText(
 pastedText,
-{ type: 'string' }
+'The pasted data'
 );
 prepareImportWorkbook(
 workbook,
@@ -12130,7 +12211,7 @@ $('priceBookImportPreview').innerHTML =
 '<p class="muted">Reading file...</p>';
 try{
 const workbook =
-XLSX.read(await file.arrayBuffer());
+await workbookFromPricingFile(file,extension);
 prepareImportWorkbook(
 workbook,
 true
