@@ -202,6 +202,25 @@ if (scriptStart >= 0 && scriptEnd > scriptStart) {
       core.importHeaderMatchConfidence('Xfer Labor', ['xferlabor']) === 1,
       'Smart Price Book import must recognize Xfer Labor.'
     );
+    // A work-type suffix is only meaningful where it follows a digit, the way
+    // real utility unit codes are built. Reading a bare final letter filed
+    // word-style codes from other utilities under a price type nobody chose.
+    assert(
+      core.normalizedPriceWorkType('', 'CV3030I') === 'install' &&
+      core.normalizedPriceWorkType('', 'OH4112R') === 'retirement' &&
+      core.normalizedPriceWorkType('', 'PS1095T') === 'transfer',
+      'Digit-delimited unit code suffixes must still resolve their work type.'
+    );
+    assert(
+      ['CONDUIT', 'ANCHOR', 'TRANSFORMER', 'POLE40FT'].every(
+        code => core.normalizedPriceWorkType('', code) === ''
+      ),
+      'A trailing letter that is part of a word must not be read as a work type.'
+    );
+    assert(
+      core.normalizedPriceWorkType('Transfer', 'CONDUIT') === 'transfer',
+      'An explicit Work Type column must still win over the unit code.'
+    );
     const longRows = [
       core.mapImportRow({
         'Unit Code':'A-10',
