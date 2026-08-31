@@ -3343,6 +3343,7 @@ accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
 <div><label for="mapDescription">Description *</label><select id="mapDescription"></select></div>
 <div><label for="mapUnitName">Unit Name</label><select id="mapUnitName"></select></div>
 <div><label for="mapInstallPrice">Install Price</label><select id="mapInstallPrice"></select></div>
+<div><label for="mapTransferPrice">Transfer Price</label><select id="mapTransferPrice"></select></div>
 <div><label for="mapRetirementPrice">Retirement / Remove Price</label><select id="mapRetirementPrice"></select></div>
 <div><label for="mapUnitPrice">Single Unit Price</label><select id="mapUnitPrice"></select></div>
 <div><label for="mapUnitOfMeasure">Unit of Measure</label><select id="mapUnitOfMeasure"></select></div>
@@ -3352,7 +3353,7 @@ accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
 </div>
 <p class="muted">
 Expected columns: Unit Code, Unit Name, Description,
-Install Price, Retirement Price, Unit of Measure and Category.
+Install Price, Transfer Price, Retirement Price, Unit of Measure and Category.
 Common variations such as Item Code and Remove Price are recognized.
 </p>
 <label for="priceBookImportMode">Existing Unit Codes</label>
@@ -3433,6 +3434,8 @@ placeholder="Search code, name, description or category"
 <option value="code-desc">Unit code Z–A</option>
 <option value="install-desc">Install price high–low</option>
 <option value="install-asc">Install price low–high</option>
+<option value="transfer-desc">Transfer price high–low</option>
+<option value="transfer-asc">Transfer price low–high</option>
 <option value="retirement-desc">Retirement high–low</option>
 <option value="retirement-asc">Retirement low–high</option>
 </select>
@@ -3467,6 +3470,16 @@ Install Price
 </label>
 <input
 id="priceBookItemInstallPrice"
+type="number"
+min="0"
+step="0.01"
+value="0"
+>
+<label for="priceBookItemTransferPrice">
+Transfer Price
+</label>
+<input
+id="priceBookItemTransferPrice"
 type="number"
 min="0"
 step="0.01"
@@ -11177,6 +11190,8 @@ priceBookComparisonValueChanged(previous?.[field], current?.[field])
 const priceChanged =
 Number(previous?.install_price || 0) !==
 Number(current?.install_price || 0) ||
+Number(previous?.transfer_price || 0) !==
+Number(current?.transfer_price || 0) ||
 Number(previous?.retirement_price || 0) !==
 Number(current?.retirement_price || 0);
 if(detailsChanged || priceChanged){
@@ -11221,6 +11236,8 @@ html +=
 '<th>Unit Code</th>' +
 '<th>Install (' + escapeHtml(comparisonLabel) + ' → ' +
 escapeHtml(openLabel) + ')</th>' +
+'<th>Transfer (' + escapeHtml(comparisonLabel) + ' → ' +
+escapeHtml(openLabel) + ')</th>' +
 '<th>Retirement (' + escapeHtml(comparisonLabel) + ' → ' +
 escapeHtml(openLabel) + ')</th>' +
 '<th>Description / Details</th>' +
@@ -11245,6 +11262,11 @@ html +=
 escapeHtml(previous ? formatCurrency(previous.install_price) : '—') +
 ' → ' +
 escapeHtml(current ? formatCurrency(current.install_price) : '—') +
+'</td>' +
+'<td>' +
+escapeHtml(previous ? formatCurrency(previous.transfer_price) : '—') +
+' → ' +
+escapeHtml(current ? formatCurrency(current.transfer_price) : '—') +
 '</td>' +
 '<td>' +
 escapeHtml(previous ? formatCurrency(previous.retirement_price) : '—') +
@@ -11274,6 +11296,8 @@ const headers = [
 'Unit Code',
 report.comparisonLabel + ' Install Price',
 report.openLabel + ' Install Price',
+report.comparisonLabel + ' Transfer Price',
+report.openLabel + ' Transfer Price',
 report.comparisonLabel + ' Retirement Price',
 report.openLabel + ' Retirement Price',
 report.comparisonLabel + ' Description',
@@ -11293,6 +11317,8 @@ change.type,
 current?.item_code || previous?.item_code || change.code,
 previous ? Number(previous.install_price || 0).toFixed(2) : '',
 current ? Number(current.install_price || 0).toFixed(2) : '',
+previous ? Number(previous.transfer_price || 0).toFixed(2) : '',
+current ? Number(current.transfer_price || 0).toFixed(2) : '',
 previous ? Number(previous.retirement_price || 0).toFixed(2) : '',
 current ? Number(current.retirement_price || 0).toFixed(2) : '',
 previous?.description || '',
@@ -11662,6 +11688,7 @@ item_code: item.item_code,
 item_name: item.item_name,
 description: item.description,
 install_price: item.install_price,
+transfer_price: item.transfer_price,
 retirement_price: item.retirement_price,
 unit_of_measure: item.unit_of_measure,
 category: item.category,
@@ -11865,6 +11892,16 @@ row,
 'new'
 ]
 );
+const transferPriceCell = importCell(
+row,
+[
+'transferprice',
+'transfercost',
+'transferlaborprice',
+'transferlaborcost',
+'transfer'
+]
+);
 const retirementPriceCell = importCell(
 row,
 [
@@ -11891,10 +11928,13 @@ row,
 );
 let installPrice =
 importPrice(installPriceCell);
+let transferPrice =
+importPrice(transferPriceCell);
 let retirementPrice =
 importPrice(retirementPriceCell);
 const hasSeparatePriceColumns =
 String(installPriceCell ?? '').trim() !== '' ||
+String(transferPriceCell ?? '').trim() !== '' ||
 String(retirementPriceCell ?? '').trim() !== '';
 if(
 !hasSeparatePriceColumns &&
@@ -11906,9 +11946,11 @@ if(
 itemCode.toUpperCase().endsWith('R')
 ){
 installPrice = 0;
+transferPrice = 0;
 retirementPrice = unitPrice;
 }else{
 installPrice = unitPrice;
+transferPrice = 0;
 retirementPrice = 0;
 }
 }
@@ -11944,6 +11986,12 @@ installPrice < 0
 errors.push('Invalid Install Price');
 }
 if(
+!Number.isFinite(transferPrice) ||
+transferPrice < 0
+){
+errors.push('Invalid Transfer Price');
+}
+if(
 !Number.isFinite(retirementPrice) ||
 retirementPrice < 0
 ){
@@ -11957,6 +12005,7 @@ description: description || null,
 category: category || null,
 unit_of_measure: unitOfMeasure || null,
 install_price: installPrice,
+transfer_price: transferPrice,
 retirement_price: retirementPrice,
 errors: errors
 };
@@ -12040,6 +12089,7 @@ html +=
 '<th>Unit Code</th>' +
 '<th>Name</th>' +
 '<th>Install</th>' +
+'<th>Transfer</th>' +
 '<th>Retirement</th>' +
 '<th>Status</th>' +
 '</tr></thead><tbody>';
@@ -12055,6 +12105,13 @@ html +=
 escapeHtml(
 Number.isFinite(row.install_price)
 ? formatCurrency(row.install_price)
+: 'Invalid'
+) +
+'</td>' +
+'<td>' +
+escapeHtml(
+Number.isFinite(row.transfer_price)
+? formatCurrency(row.transfer_price)
 : 'Invalid'
 ) +
 '</td>' +
@@ -12099,6 +12156,7 @@ const importMappingDefinitions=[
 {id:'mapDescription',aliases:['description','unitdescription','itemdescription','desc','workunitdescription']},
 {id:'mapUnitName',aliases:['unitname','itemname','name','title','workunitname']},
 {id:'mapInstallPrice',aliases:['installprice','installationprice','installationcost','constructionlaborprice','constructionprice','install','newprice','new']},
+{id:'mapTransferPrice',aliases:['transferprice','transfercost','transferlaborprice','transferlaborcost','transfer']},
 {id:'mapRetirementPrice',aliases:['retirementprice','retirementcost','removeprice','removalprice','removallaborprice','removalcost','retireprice','retirement','remove']},
 {id:'mapUnitPrice',aliases:['unitprice','price','rate','unitrate','laborrate']},
 {id:'mapUnitOfMeasure',aliases:['unitofmeasure','uom','measure','unit']},
@@ -12130,8 +12188,8 @@ if(!$('mapDescription').value&&!$('mapUnitName').value){
 $('priceBookImportPreview').innerHTML='<p class="import-error">Select a Description or Unit Name column.</p>';
 $('confirmPriceBookImportBtn').classList.add('hidden'); return;
 }
-if(!$('mapInstallPrice').value&&!$('mapRetirementPrice').value&&!$('mapUnitPrice').value){
-$('priceBookImportPreview').innerHTML='<p class="import-error">Select an Install Price, Retirement Price or Single Unit Price column.</p>';
+if(!$('mapInstallPrice').value&&!$('mapTransferPrice').value&&!$('mapRetirementPrice').value&&!$('mapUnitPrice').value){
+$('priceBookImportPreview').innerHTML='<p class="import-error">Select an Install, Transfer, Retirement or Single Unit Price column.</p>';
 $('confirmPriceBookImportBtn').classList.add('hidden'); return;
 }
 currentPriceBookImportRows=currentPriceBookSourceRows.map(entry=>{
@@ -12140,6 +12198,7 @@ const mappedRow={
 'Description':mappedImportValue(entry.row,'mapDescription'),
 'Unit Name':mappedImportValue(entry.row,'mapUnitName'),
 'Install Price':mappedImportValue(entry.row,'mapInstallPrice'),
+'Transfer Price':mappedImportValue(entry.row,'mapTransferPrice'),
 'Retirement Price':mappedImportValue(entry.row,'mapRetirementPrice'),
 'Unit Price':mappedImportValue(entry.row,'mapUnitPrice'),
 'Unit of Measure':mappedImportValue(entry.row,'mapUnitOfMeasure'),
@@ -12197,11 +12256,11 @@ const codeAliases = importMappingDefinitions[0].aliases;
 const descriptionAliases = importMappingDefinitions[1].aliases;
 const nameAliases = importMappingDefinitions[2].aliases;
 const installAliases = importMappingDefinitions[3].aliases;
-const retirementAliases = importMappingDefinitions[4].aliases;
-const unitPriceAliases = importMappingDefinitions[5].aliases;
-const uomAliases = importMappingDefinitions[6].aliases;
-const categoryAliases = importMappingDefinitions[7].aliases;
-const transferAliases = ['transfer','transferprice','transferlaborprice','transfercost'];
+const transferAliases = importMappingDefinitions[4].aliases;
+const retirementAliases = importMappingDefinitions[5].aliases;
+const unitPriceAliases = importMappingDefinitions[6].aliases;
+const uomAliases = importMappingDefinitions[7].aliases;
+const categoryAliases = importMappingDefinitions[8].aliases;
 const blocks = [];
 matrix.forEach((row,rowIndex) => {
 row.forEach((value,codeColumn) => {
@@ -12211,7 +12270,7 @@ const installColumn = findImportHeaderColumn(row,codeColumn,installAliases);
 const retirementColumn = findImportHeaderColumn(row,codeColumn,retirementAliases);
 const unitPriceColumn = findImportHeaderColumn(row,codeColumn,unitPriceAliases);
 const transferColumn = findImportHeaderColumn(row,codeColumn,transferAliases);
-if(installColumn < 0 && retirementColumn < 0 && unitPriceColumn < 0) return;
+if(installColumn < 0 && transferColumn < 0 && retirementColumn < 0 && unitPriceColumn < 0) return;
 const looksLikeCodeHeader =
 codeAliases.includes(codeHeader) ||
 codeHeader === 'unit' ||
@@ -12268,10 +12327,7 @@ const transferPrice = numericImportPrice(transferValue);
 if(transferPrice !== null){
 transferRateCount += 1;
 }
-if(installPrice === null && retirementPrice === null && unitPrice === null){
-if(transferPrice !== null){
-transferOnly += 1;
-}else{
+if(installPrice === null && retirementPrice === null && unitPrice === null && transferPrice === null){
 const normalizedCode = normalizeImportHeader(itemCode);
 if(
 normalizedCode !== 'unit' &&
@@ -12280,8 +12336,10 @@ normalizedCode !== 'miscunits' &&
 ){
 skippedNoPrice += 1;
 }
-}
 continue;
+}
+if(transferPrice !== null && installPrice === null && retirementPrice === null && unitPrice === null){
+transferOnly += 1;
 }
 let description = block.descriptionColumn >= 0
 ? String(sourceRow[block.descriptionColumn] ?? '').trim()
@@ -12307,6 +12365,7 @@ const mappedRow = {
 'Unit Name':itemName,
 'Description':description || category,
 'Install Price':installPrice === null ? '' : installValue,
+'Transfer Price':transferPrice === null ? '' : transferValue,
 'Retirement Price':retirementPrice === null ? '' : retirementValue,
 'Unit Price':unitPrice === null ? '' : unitPriceValue,
 'Unit of Measure':block.uomColumn >= 0 ? sourceRow[block.uomColumn] : '',
@@ -12362,7 +12421,7 @@ notice += ' Found ' + transferRateCount + ' transfer rate' + (transferRateCount 
 (transferOnly
 ? ', including ' + transferOnly + ' transfer-only rate' + (transferOnly === 1 ? '' : 's')
 : '') +
-'. Transfer prices were not imported because this Unit Pricing record stores install and retirement prices.';
+'. Transfer prices will be imported as their own billable rate.';
 }
 return notice;
 }
@@ -12374,7 +12433,8 @@ if(normalized.some(value => importMappingDefinitions[0].aliases.includes(value))
 if(normalized.some(value => [
 ...importMappingDefinitions[3].aliases,
 ...importMappingDefinitions[4].aliases,
-...importMappingDefinitions[5].aliases
+...importMappingDefinitions[5].aliases,
+...importMappingDefinitions[6].aliases
 ].includes(value))) score += 3;
 return score;
 }
@@ -12492,6 +12552,7 @@ const headings = [
 'Unit Name',
 'Description',
 'Install Price',
+'Transfer Price',
 'Retirement Price',
 'Unit of Measure',
 'Category'
@@ -12500,6 +12561,7 @@ const example = [
 'EXAMPLE-001',
 'Example Unit',
 'Replace or delete this example row',
+'0.00',
 '0.00',
 '0.00',
 'EA',
@@ -12836,6 +12898,7 @@ description: row.description,
 category: row.category,
 unit_of_measure: row.unit_of_measure,
 install_price: row.install_price,
+transfer_price: row.transfer_price,
 retirement_price: row.retirement_price,
 active: existingItem?.active ?? true
 };
@@ -12920,6 +12983,7 @@ String(expected.item_code || '').trim().toLowerCase()
 if(
 !saved ||
 Number(saved.install_price) !== Number(expected.install_price) ||
+Number(saved.transfer_price) !== Number(expected.transfer_price) ||
 Number(saved.retirement_price) !== Number(expected.retirement_price)
 ){
 error = {
@@ -13117,6 +13181,10 @@ case 'install-desc':
 return Number(b.install_price || 0) - Number(a.install_price || 0);
 case 'install-asc':
 return Number(a.install_price || 0) - Number(b.install_price || 0);
+case 'transfer-desc':
+return Number(b.transfer_price || 0) - Number(a.transfer_price || 0);
+case 'transfer-asc':
+return Number(a.transfer_price || 0) - Number(b.transfer_price || 0);
 case 'retirement-desc':
 return Number(b.retirement_price || 0) - Number(a.retirement_price || 0);
 case 'retirement-asc':
@@ -13133,10 +13201,14 @@ if(canSeeActual && item.has_adjustment){
 return (
 'Actual I: <strong>' +
 escapeHtml(formatCurrency(item.actual_install_price)) +
+'</strong> T: <strong>' +
+escapeHtml(formatCurrency(item.actual_transfer_price)) +
 '</strong> R: <strong>' +
 escapeHtml(formatCurrency(item.actual_retirement_price)) +
 '</strong><br>Field I: <strong>' +
 escapeHtml(formatCurrency(item.adjusted_install_price)) +
+'</strong> T: <strong>' +
+escapeHtml(formatCurrency(item.adjusted_transfer_price)) +
 '</strong> R: <strong>' +
 escapeHtml(formatCurrency(item.adjusted_retirement_price)) +
 '</strong>'
@@ -13149,6 +13221,8 @@ canSeeActual || !item.has_adjustment
 return (
 label + ' I: <strong>' +
 escapeHtml(formatCurrency(item.install_price)) +
+'</strong> T: <strong>' +
+escapeHtml(formatCurrency(item.transfer_price)) +
 '</strong> R: <strong>' +
 escapeHtml(formatCurrency(item.retirement_price)) +
 '</strong>'
@@ -13394,8 +13468,10 @@ const headers = includeBothPrices
 'Unit Name',
 'Description',
 'Actual Install Price',
+'Actual Transfer Price',
 'Actual Retirement Price',
 'Field Install Value',
+'Field Transfer Value',
 'Field Retirement Value',
 'Unit of Measure',
 'Category',
@@ -13409,6 +13485,9 @@ userCanSeeActualContractPrices() || !hasFieldAdjustment
 ? 'Actual Install Price'
 : 'Field Install Value',
 userCanSeeActualContractPrices() || !hasFieldAdjustment
+? 'Actual Transfer Price'
+: 'Field Transfer Value',
+userCanSeeActualContractPrices() || !hasFieldAdjustment
 ? 'Actual Retirement Price'
 : 'Field Retirement Value',
 'Unit of Measure',
@@ -13421,8 +13500,10 @@ item.item_code,
 item.item_name,
 item.description,
 Number(item.actual_install_price || 0).toFixed(2),
+Number(item.actual_transfer_price || 0).toFixed(2),
 Number(item.actual_retirement_price || 0).toFixed(2),
 Number(item.adjusted_install_price || 0).toFixed(2),
+Number(item.adjusted_transfer_price || 0).toFixed(2),
 Number(item.adjusted_retirement_price || 0).toFixed(2),
 item.unit_of_measure,
 item.category,
@@ -13433,6 +13514,7 @@ item.item_code,
 item.item_name,
 item.description,
 Number(item.install_price || 0).toFixed(2),
+Number(item.transfer_price || 0).toFixed(2),
 Number(item.retirement_price || 0).toFixed(2),
 item.unit_of_measure,
 item.category,
@@ -13473,6 +13555,7 @@ $('priceBookItemDescription').value = '';
 $('priceBookItemCategory').value = '';
 $('priceBookItemUnitOfMeasure').value = '';
 $('priceBookItemInstallPrice').value = 0;
+$('priceBookItemTransferPrice').value = 0;
 $('priceBookItemRetirementPrice').value = 0;
 }
 $('addPriceBookItemBtn').onclick = () => {
@@ -13501,6 +13584,8 @@ $('priceBookItemUnitOfMeasure').value =
 item.unit_of_measure || '';
 $('priceBookItemInstallPrice').value =
 Number(item.install_price || 0);
+$('priceBookItemTransferPrice').value =
+Number(item.transfer_price || 0);
 $('priceBookItemRetirementPrice').value =
 Number(item.retirement_price || 0);
 $('priceBookItemForm')
@@ -13544,6 +13629,10 @@ const installPrice =
 Number(
 $('priceBookItemInstallPrice').value || 0
 );
+const transferPrice =
+Number(
+$('priceBookItemTransferPrice').value || 0
+);
 const retirementPrice =
 Number(
 $('priceBookItemRetirementPrice').value || 0
@@ -13562,8 +13651,10 @@ return;
 }
 if(
 !Number.isFinite(installPrice) ||
+!Number.isFinite(transferPrice) ||
 !Number.isFinite(retirementPrice) ||
 installPrice < 0 ||
+transferPrice < 0 ||
 retirementPrice < 0
 ){
 alert('Enter valid prices of zero or greater.');
@@ -13576,6 +13667,7 @@ description: description,
 category: category,
 unit_of_measure: unitOfMeasure,
 install_price: installPrice,
+transfer_price: transferPrice,
 retirement_price: retirementPrice
 };
 $('savePriceBookItemBtn').disabled = true;
