@@ -666,9 +666,9 @@ for (const marker of [
   "$('createCompanyCard').classList.toggle('hidden', invited)",
   "$('joinCompanyCard').classList.toggle('hidden', invited)",
   'id="newPriceBookImportFile"',
-  'Save Price Book &amp; Continue',
+  'Save Unit Pricing &amp; Continue',
   'await handlePriceBookImportFile(selectedImportFile)',
-  'Review the unit-pricing preview'
+  'Review the preview'
 ]) assert(marker instanceof RegExp ? marker.test(index) : index.includes(marker), `Onboarding workflow marker missing: ${marker}`);
 
 assert(expandedJsa.includes("loginButton.textContent = 'Signing In...'"), 'Sign-in must prevent duplicate submissions while authentication is running.');
@@ -716,7 +716,7 @@ console.log('- Superintendent Customers & Contracts table writes are company-sco
 console.log('- Actual pricing remains independently gated');
 console.log('- Team, job, package, reporting, storm and assistant UI capability wiring present');
 console.log('- Email-bound, one-time Resend team invitations bypass company creation and code entry');
-console.log('- First-run Price Book upload workflow present');
+console.log('- Guided Contract to Unit Pricing upload workflow present');
 console.log('- Foreman job visibility is assignment-scoped with manager and timestamp audit history');
 console.log('- Supervisor job-progress cards list every assigned Foreman / Job Leader');
 console.log('- Field employees are leadership-assigned; Foremen can add extra active crew only on assigned jobs');
