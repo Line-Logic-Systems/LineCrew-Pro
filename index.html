@@ -2300,6 +2300,7 @@ entries and calculate reported and approved job completion.
 <div><label for="jobMapWorkType">Work Type</label><select id="jobMapWorkType"></select></div>
 <div><label for="jobMapQuantity">Quantity</label><select id="jobMapQuantity"></select></div>
 <div><label for="jobMapInstallQuantity">Install Quantity</label><select id="jobMapInstallQuantity"></select></div>
+<div><label for="jobMapTransferQuantity">Transfer Quantity</label><select id="jobMapTransferQuantity"></select></div>
 <div><label for="jobMapRemoveQuantity">Remove Quantity</label><select id="jobMapRemoveQuantity"></select></div>
 </div>
 <button id="previewJobPackageImportBtn" class="secondary hidden">Preview Mapped Packet</button>
@@ -3346,6 +3347,7 @@ accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
 <div><label for="mapTransferPrice">Transfer Price</label><select id="mapTransferPrice"></select></div>
 <div><label for="mapRetirementPrice">Retirement / Remove Price</label><select id="mapRetirementPrice"></select></div>
 <div><label for="mapUnitPrice">Single Unit Price</label><select id="mapUnitPrice"></select></div>
+<div><label for="mapWorkType">Work Type / Action</label><select id="mapWorkType"></select></div>
 <div><label for="mapUnitOfMeasure">Unit of Measure</label><select id="mapUnitOfMeasure"></select></div>
 <div><label for="mapCategory">Category / Type</label><select id="mapCategory"></select></div>
 </div>
@@ -3827,6 +3829,7 @@ let currentPriceBookWorkbook = null;
 let currentPriceBookSourceRows = [];
 let currentPriceBookStructuredSheets = new Map();
 let currentPriceBookImportNotice = '';
+let currentPriceBookMappingNeedsReview = false;
 let priceBookNavigationRecords = new Map();
 let currentPriceBookCatalog = [];
 let currentPriceBookContractsById = new Map();
@@ -6571,7 +6574,7 @@ if(!currentOpenJobPackage){
 return;
 }
 const { data:lines, error } = await sb.rpc(
-'get_job_package_work_points',
+'get_job_package_work_points_v2',
 { p_package_id:currentOpenJobPackage.id }
 );
 if(error){
@@ -6647,10 +6650,13 @@ row.innerHTML = `
 ${escapeHtml(unit.unit_name || unit.unit_description || '')}
 <div class="muted">
 Authorized I: ${unit.authorized_install_quantity} ·
+T: ${unit.authorized_transfer_quantity} ·
 R: ${unit.authorized_retirement_quantity} ·
 Reported I: ${unit.reported_install_quantity} ·
+T: ${unit.reported_transfer_quantity} ·
 R: ${unit.reported_retirement_quantity} ·
 Approved I: ${unit.approved_install_quantity} ·
+T: ${unit.approved_transfer_quantity} ·
 R: ${unit.approved_retirement_quantity}
 </div>
 `;
@@ -6670,6 +6676,7 @@ form.className = 'grid';
 form.innerHTML = `
 <div><label>Unit Code</label><input class="authorized-unit-code" placeholder="Contract unit code"></div>
 <div><label>Install Quantity</label><input class="authorized-install" type="number" min="0" step="0.01" value="0"></div>
+<div><label>Transfer Quantity</label><input class="authorized-transfer" type="number" min="0" step="0.01" value="0"></div>
 <div><label>Remove Quantity</label><input class="authorized-retirement" type="number" min="0" step="0.01" value="0"></div>
 <div><button class="success add-authorized-unit">Add Authorized Unit</button></div>
 `;
@@ -6714,15 +6721,18 @@ await loadJobPackageWorkPoints();
 async function saveJobPackageAuthorizedUnit(workPointId, form){
 const unitCode = form.querySelector('.authorized-unit-code').value.trim();
 const installQuantity = Number(form.querySelector('.authorized-install').value || 0);
+const transferQuantity = Number(form.querySelector('.authorized-transfer').value || 0);
 const retirementQuantity = Number(form.querySelector('.authorized-retirement').value || 0);
-if(!unitCode || installQuantity < 0 || retirementQuantity < 0 ||
-installQuantity + retirementQuantity <= 0){
+if(!unitCode || installQuantity < 0 || transferQuantity < 0 ||
+retirementQuantity < 0 ||
+installQuantity + transferQuantity + retirementQuantity <= 0){
 return alert('Enter a unit code and an authorized quantity greater than zero.');
 }
-const { error } = await sb.rpc('save_job_package_authorized_unit', {
+const { error } = await sb.rpc('save_job_package_authorized_unit_v2', {
 p_work_point_id:workPointId,
 p_unit_code:unitCode,
 p_install_quantity:installQuantity,
+p_transfer_quantity:transferQuantity,
 p_retirement_quantity:retirementQuantity
 });
 if(error){
@@ -6758,6 +6768,7 @@ const jobPacketMappingDefinitions = [
 { id:'jobMapWorkType', aliases:['worktype','action','type','installremove'] },
 { id:'jobMapQuantity', aliases:['quantity','qty','authorizedquantity'] },
 { id:'jobMapInstallQuantity', aliases:['installquantity','installqty','installedquantity','install'] },
+{ id:'jobMapTransferQuantity', aliases:['transferquantity','transferqty','transferredquantity','transfer','xferquantity','xferqty','xfer'] },
 { id:'jobMapRemoveQuantity', aliases:['removequantity','removeqty','retirementquantity','retireqty','remove','retirement'] }
 ];
 function resetJobPackageImport(){
@@ -6817,9 +6828,10 @@ return alert('Select the Pole / Work Point and Unit Code columns.');
 if(
 !$('jobMapQuantity').value &&
 !$('jobMapInstallQuantity').value &&
+!$('jobMapTransferQuantity').value &&
 !$('jobMapRemoveQuantity').value
 ){
-return alert('Select a Quantity column or separate Install / Remove quantity columns.');
+return alert('Select a Quantity column or separate Install / Transfer / Remove quantity columns.');
 }
 const sheetName = $('jobPackageImportWorksheet').value;
 const sheet = currentJobPackageImportWorkbook?.Sheets?.[sheetName];
@@ -6835,11 +6847,14 @@ const workPoint = String(jobPacketMappedValue(source, 'jobMapWorkPoint') || '').
 const unitCode = String(jobPacketMappedValue(source, 'jobMapUnitCode') || '').trim();
 const description = String(jobPacketMappedValue(source, 'jobMapDescription') || '').trim();
 let installQuantity = importPrice(jobPacketMappedValue(source, 'jobMapInstallQuantity'));
+let transferQuantity = importPrice(jobPacketMappedValue(source, 'jobMapTransferQuantity'));
 let retirementQuantity = importPrice(jobPacketMappedValue(source, 'jobMapRemoveQuantity'));
 const genericQuantity = importPrice(jobPacketMappedValue(source, 'jobMapQuantity'));
 const workType = String(jobPacketMappedValue(source, 'jobMapWorkType') || '').toLowerCase();
 if($('jobMapQuantity').value){
-if(/remove|retire|retirement|demo/.test(workType)){
+if(/^(transfer|xfer|move|reframe|relocate)/.test(workType)){
+transferQuantity += genericQuantity;
+}else if(/^(remove|removal|retire|retirement|demo|salvage)/.test(workType)){
 retirementQuantity += genericQuantity;
 }else{
 installQuantity += genericQuantity;
@@ -6853,16 +6868,19 @@ work_point_code:workPoint,
 work_point_description:description || null,
 unit_code:unitCode,
 install_quantity:0,
+transfer_quantity:0,
 retirement_quantity:0,
 errors:[]
 });
 }
 const row = grouped.get(key);
 row.install_quantity += Number.isFinite(installQuantity) ? installQuantity : 0;
+row.transfer_quantity += Number.isFinite(transferQuantity) ? transferQuantity : 0;
 row.retirement_quantity += Number.isFinite(retirementQuantity) ? retirementQuantity : 0;
 if(!workPoint) row.errors.push('Missing work point');
 if(!unitCode) row.errors.push('Missing unit code');
-if(!Number.isFinite(installQuantity) || !Number.isFinite(retirementQuantity)){
+if(!Number.isFinite(installQuantity) || !Number.isFinite(transferQuantity) ||
+!Number.isFinite(retirementQuantity)){
 row.errors.push('Invalid quantity');
 }
 });
@@ -6888,7 +6906,7 @@ const result = validationByRow.get(Number(row.row_number));
 if(result && !result.is_valid){
 row.errors.push(result.error_message || 'Unit could not be validated');
 }
-if(row.install_quantity + row.retirement_quantity <= 0){
+if(row.install_quantity + row.transfer_quantity + row.retirement_quantity <= 0){
 row.errors.push('Quantity must be greater than zero');
 }
 });
@@ -6899,12 +6917,12 @@ const invalid = currentJobPackageImportRows.filter(row => row.errors.length);
 let html = `<div class="import-summary"><strong>${currentJobPackageImportRows.length - invalid.length} ready</strong><br>` +
 `${invalid.length} need attention. Nothing has been saved.</div>`;
 html += '<div class="import-table-wrap"><table class="import-table"><thead><tr>' +
-'<th>Row</th><th>Work Point</th><th>Unit</th><th>Install</th><th>Remove</th><th>Status</th>' +
+'<th>Row</th><th>Work Point</th><th>Unit</th><th>Install</th><th>Transfer</th><th>Remove</th><th>Status</th>' +
 '</tr></thead><tbody>';
 currentJobPackageImportRows.slice(0, 100).forEach(row => {
 html += `<tr><td>${row.row_number}</td><td>${escapeHtml(row.work_point_code || '—')}</td>` +
 `<td>${escapeHtml(row.unit_code || '—')}</td><td>${row.install_quantity}</td>` +
-`<td>${row.retirement_quantity}</td><td class="${row.errors.length ? 'import-error' : ''}">` +
+`<td>${row.transfer_quantity}</td><td>${row.retirement_quantity}</td><td class="${row.errors.length ? 'import-error' : ''}">` +
 `${escapeHtml(row.errors.length ? row.errors.join('; ') : 'Ready')}</td></tr>`;
 });
 html += '</tbody></table></div>';
@@ -11770,6 +11788,7 @@ currentPriceBookSourceRows = [];
 currentPriceBookWorkbook = null;
 currentPriceBookStructuredSheets = new Map();
 currentPriceBookImportNotice = '';
+currentPriceBookMappingNeedsReview = false;
 $('priceBookImportFile').value = '';
 $('priceBookImportPaste').value = '';
 $('priceBookImportMode').value = 'add-only';
@@ -11806,6 +11825,50 @@ return String(value || '')
 .toLowerCase()
 .replace(/[^a-z0-9]+/g, '');
 }
+function importEditDistance(left,right){
+const a=String(left || ''); const b=String(right || '');
+const row=Array.from({length:b.length+1},(_,index)=>index);
+for(let i=1;i<=a.length;i++){
+let previous=row[0]; row[0]=i;
+for(let j=1;j<=b.length;j++){
+const held=row[j];
+row[j]=Math.min(
+row[j]+1,
+row[j-1]+1,
+previous+(a[i-1]===b[j-1]?0:1)
+);
+previous=held;
+}
+}
+return row[b.length];
+}
+function importHeaderMatchConfidence(value,aliases){
+const normalized=normalizeImportHeader(value);
+if(!normalized) return 0;
+if(aliases.includes(normalized)) return 1;
+if(aliases.some(alias =>
+alias.length >= 5 &&
+(
+normalized.includes(alias) ||
+(normalized.length >= 6 && alias.includes(normalized))
+)
+)) return .92;
+if(normalized.length >= 5 && aliases.some(alias =>
+alias.length >= 5 && importEditDistance(normalized,alias) === 1
+)) return .82;
+return 0;
+}
+function normalizedPriceWorkType(value,itemCode=''){
+const workType=normalizeImportHeader(value);
+if(/^(transfer|xfer|move|reframe|relocate)/.test(workType)) return 'transfer';
+if(/^(remove|removal|retire|retirement|demo|salvage)/.test(workType)) return 'retirement';
+if(/^(install|installation|new|construct|construction|set)/.test(workType)) return 'install';
+const suffix=String(itemCode || '').trim().toUpperCase().slice(-1);
+if(suffix === 'T') return 'transfer';
+if(suffix === 'R') return 'retirement';
+if(suffix === 'I') return 'install';
+return workType ? 'unknown' : '';
+}
 function importCell(row, aliases){
 const keys = Object.keys(row);
 const foundKey = keys.find(key =>
@@ -11838,7 +11901,11 @@ row,
 'code',
 'unitnumber',
 'itemnumber',
-'workunit'
+'workunit',
+'contractorunit',
+'contractunit',
+'assemblycode',
+'unitid'
 ]
 ) || '').trim();
 const itemName = String(importCell(
@@ -11926,6 +11993,16 @@ row,
 'laborrate'
 ]
 );
+const workTypeCell = importCell(
+row,
+[
+'worktype',
+'action',
+'activity',
+'operation',
+'pricingaction'
+]
+);
 let installPrice =
 importPrice(installPriceCell);
 let transferPrice =
@@ -11936,15 +12013,24 @@ const hasSeparatePriceColumns =
 String(installPriceCell ?? '').trim() !== '' ||
 String(transferPriceCell ?? '').trim() !== '' ||
 String(retirementPriceCell ?? '').trim() !== '';
+const providedPriceTypes = [];
+if(String(installPriceCell ?? '').trim() !== '') providedPriceTypes.push('install');
+if(String(transferPriceCell ?? '').trim() !== '') providedPriceTypes.push('transfer');
+if(String(retirementPriceCell ?? '').trim() !== '') providedPriceTypes.push('retirement');
+let detectedWorkType = '';
 if(
 !hasSeparatePriceColumns &&
 String(unitPriceCell ?? '').trim() !== ''
 ){
 const unitPrice =
 importPrice(unitPriceCell);
-if(
-itemCode.toUpperCase().endsWith('R')
-){
+detectedWorkType = normalizedPriceWorkType(workTypeCell,itemCode);
+if(detectedWorkType === 'transfer'){
+installPrice = 0;
+transferPrice = unitPrice;
+retirementPrice = 0;
+providedPriceTypes.push('transfer');
+}else if(detectedWorkType === 'retirement'){
 installPrice = 0;
 transferPrice = 0;
 retirementPrice = unitPrice;
@@ -11953,6 +12039,13 @@ installPrice = unitPrice;
 transferPrice = 0;
 retirementPrice = 0;
 }
+providedPriceTypes.push(
+detectedWorkType === 'transfer'
+? 'transfer'
+: detectedWorkType === 'retirement'
+? 'retirement'
+: 'install'
+);
 }
 if(!unitOfMeasure && description){
 const measureMatch =
@@ -11978,6 +12071,12 @@ errors.push('Missing Unit Code');
 }
 if(!itemName && !description){
 errors.push('Missing Unit Name or Description');
+}
+if(
+String(unitPriceCell ?? '').trim() !== '' &&
+detectedWorkType === 'unknown'
+){
+errors.push('Unrecognized Work Type — choose Install, Transfer or Remove');
 }
 if(
 !Number.isFinite(installPrice) ||
@@ -12007,8 +12106,84 @@ unit_of_measure: unitOfMeasure || null,
 install_price: installPrice,
 transfer_price: transferPrice,
 retirement_price: retirementPrice,
+provided_price_types: [...new Set(providedPriceTypes)],
+source_rows: [rowNumber],
 errors: errors
 };
+}
+function consolidatePriceBookImportRows(rows){
+const groups=new Map();
+rows.forEach(row=>{
+const key=String(row.item_code || '').trim().toLowerCase();
+if(!key){
+groups.set('__missing__'+row.rowNumber,[row]);
+return;
+}
+if(!groups.has(key)) groups.set(key,[]);
+groups.get(key).push(row);
+});
+return [...groups.values()].map(group=>{
+if(group.length===1) return group[0];
+const merged={...group[0]};
+merged.errors=[...new Set(group.flatMap(row=>row.errors || []))];
+merged.source_rows=group.flatMap(row=>row.source_rows || [row.rowNumber]);
+merged.rowNumber=merged.source_rows.join(', ');
+const labels={
+install:'Install',
+transfer:'Transfer',
+retirement:'Retirement'
+};
+const fields={
+install:'install_price',
+transfer:'transfer_price',
+retirement:'retirement_price'
+};
+Object.keys(fields).forEach(type=>{
+const providers=group.filter(row=>
+(row.provided_price_types || []).includes(type)
+);
+if(providers.length > 1){
+merged.errors.push(
+'Duplicate ' + labels[type] + ' Price for this Unit Code across rows ' +
+providers.flatMap(row=>row.source_rows || [row.rowNumber]).join(', ')
+);
+}
+if(providers.length){
+const values=[...new Set(providers.map(row=>Number(row[fields[type]])))];
+if(values.length > 1){
+merged.errors.push(
+'Conflicting ' + labels[type] + ' Prices for this Unit Code'
+);
+}
+merged[fields[type]]=providers[0][fields[type]];
+}
+});
+['item_name','description','unit_of_measure','category'].forEach(field=>{
+const values=[...new Set(group.map(row=>
+String(row[field] || '').trim()
+).filter(Boolean))];
+if(values.length > 1){
+merged.errors.push(
+'Conflicting ' +
+field.replaceAll('_',' ') +
+' across rows for this Unit Code'
+);
+}else if(values.length === 1){
+merged[field]=values[0];
+}
+});
+merged.provided_price_types=[
+...new Set(group.flatMap(row=>row.provided_price_types || []))
+];
+if(merged.item_name || merged.description){
+merged.errors=merged.errors.filter(error=>
+error!=='Missing Unit Name or Description'
+);
+}
+merged.errors=[...new Set(merged.errors)];
+merged.import_note='Combined ' + group.length + ' action rows';
+return merged;
+});
 }
 function validateImportDuplicates(rows){
 const updateExisting =
@@ -12152,26 +12327,38 @@ validRows.length +
 (validRows.length === 1 ? '' : 's');
 }
 const importMappingDefinitions=[
-{id:'mapUnitCode',aliases:['unitcode','itemcode','code','unitnumber','itemnumber','workunit']},
-{id:'mapDescription',aliases:['description','unitdescription','itemdescription','desc','workunitdescription']},
+{id:'mapUnitCode',aliases:['unitcode','itemcode','code','unitnumber','itemnumber','workunit','contractorunit','contractunit','assemblycode','unitid','cu']},
+{id:'mapDescription',aliases:['description','unitdescription','itemdescription','desc','workunitdescription','scope','workdescription']},
 {id:'mapUnitName',aliases:['unitname','itemname','name','title','workunitname']},
-{id:'mapInstallPrice',aliases:['installprice','installationprice','installationcost','constructionlaborprice','constructionprice','install','newprice','new']},
-{id:'mapTransferPrice',aliases:['transferprice','transfercost','transferlaborprice','transferlaborcost','transfer']},
-{id:'mapRetirementPrice',aliases:['retirementprice','retirementcost','removeprice','removalprice','removallaborprice','removalcost','retireprice','retirement','remove']},
-{id:'mapUnitPrice',aliases:['unitprice','price','rate','unitrate','laborrate']},
+{id:'mapInstallPrice',aliases:['installprice','installationprice','installationcost','constructionlaborprice','constructionprice','installlabor','installrate','installationrate','newlabor','install','newprice','new']},
+{id:'mapTransferPrice',aliases:['transferprice','transfercost','transferlaborprice','transferlaborcost','transferlabor','transferrate','xferrate','xferlabor','xferprice','xfer','transfer']},
+{id:'mapRetirementPrice',aliases:['retirementprice','retirementcost','removeprice','removalprice','removallaborprice','removalcost','removerate','retirerate','demoprice','demorate','salvageprice','retireprice','retirement','removal','remove']},
+{id:'mapUnitPrice',aliases:['unitprice','price','cost','rate','unitrate','laborrate','laborprice','contractorrate']},
+{id:'mapWorkType',aliases:['worktype','action','activity','operation','pricingaction']},
 {id:'mapUnitOfMeasure',aliases:['unitofmeasure','uom','measure','unit']},
 {id:'mapCategory',aliases:['category','type','itemtype','unittype']}
 ];
 function configureImportColumnMappings(headers){
+currentPriceBookMappingNeedsReview=false;
 importMappingDefinitions.forEach(definition=>{
 const select=$(definition.id);
 select.innerHTML='<option value="">Not provided</option>';
+let bestHeader=''; let bestConfidence=0;
 headers.forEach(header=>{
 const option=document.createElement('option');
 option.value=header; option.textContent=header;
-if(definition.aliases.includes(normalizeImportHeader(header))) option.selected=true;
 select.appendChild(option);
+const confidence=importHeaderMatchConfidence(header,definition.aliases);
+if(confidence>bestConfidence){
+bestConfidence=confidence; bestHeader=header;
+}
 });
+if(bestConfidence>=.8){
+select.value=bestHeader;
+if(bestConfidence<.9){
+currentPriceBookMappingNeedsReview=true;
+}
+}
 });
 $('priceBookColumnMapping').classList.remove('hidden');
 }
@@ -12179,7 +12366,14 @@ function mappedImportValue(row,selectId){
 const columnName=$(selectId).value;
 return columnName?row[columnName]:'';
 }
-function applyImportColumnMapping(){
+function applyImportColumnMapping(userConfirmed=false){
+if(currentPriceBookMappingNeedsReview && !userConfirmed){
+$('priceBookImportPreview').innerHTML=
+'<div class="import-summary"><strong>Review the detected headings</strong><br>' +
+'One or more headings were recognized from a close match. Confirm the selections above, then click Apply Column Mapping. Nothing has been saved.</div>';
+$('confirmPriceBookImportBtn').classList.add('hidden');
+return;
+}
 if(!$('mapUnitCode').value){
 $('priceBookImportPreview').innerHTML='<p class="import-error">Select the spreadsheet column that contains the Unit Code.</p>';
 $('confirmPriceBookImportBtn').classList.add('hidden'); return;
@@ -12201,15 +12395,19 @@ const mappedRow={
 'Transfer Price':mappedImportValue(entry.row,'mapTransferPrice'),
 'Retirement Price':mappedImportValue(entry.row,'mapRetirementPrice'),
 'Unit Price':mappedImportValue(entry.row,'mapUnitPrice'),
+'Work Type':mappedImportValue(entry.row,'mapWorkType'),
 'Unit of Measure':mappedImportValue(entry.row,'mapUnitOfMeasure'),
 'Category':mappedImportValue(entry.row,'mapCategory')
 };
 return mapImportRow(mappedRow,entry.rowNumber);
 });
+currentPriceBookImportRows=consolidatePriceBookImportRows(
+currentPriceBookImportRows
+);
 validateImportDuplicates(currentPriceBookImportRows);
 renderPriceBookImportPreview();
 }
-$('applyImportColumnMappingBtn').onclick=applyImportColumnMapping;
+$('applyImportColumnMappingBtn').onclick=()=>applyImportColumnMapping(true);
 function spreadsheetColumnName(columnIndex){
 let index = columnIndex + 1;
 let name = '';
@@ -12226,11 +12424,50 @@ const price = importPrice(value);
 return Number.isFinite(price) && price >= 0 ? price : null;
 }
 function findImportHeaderColumn(row,startColumn,aliases,maxDistance=7){
-const endColumn = Math.min(row.length,startColumn + maxDistance + 1);
-for(let column = startColumn + 1; column < endColumn; column++){
-if(aliases.includes(normalizeImportHeader(row[column]))) return column;
+let bestColumn=-1; let bestConfidence=0; let bestDistance=Infinity;
+row.forEach((value,column)=>{
+if(column===startColumn || Math.abs(column-startColumn)>maxDistance) return;
+const confidence=importHeaderMatchConfidence(value,aliases);
+const distance=Math.abs(column-startColumn);
+if(
+confidence>bestConfidence ||
+(confidence===bestConfidence && confidence>0 && distance<bestDistance)
+){
+bestColumn=column; bestConfidence=confidence; bestDistance=distance;
 }
-return -1;
+});
+return bestConfidence>=.8 ? bestColumn : -1;
+}
+function combinedStructuredHeaderRow(matrix,rowIndex){
+const current=matrix[rowIndex] || [];
+const previous=matrix[rowIndex-1] || [];
+const width=Math.max(current.length,previous.length);
+return Array.from({length:width},(_,column)=>{
+const child=String(current[column] ?? '').trim();
+if(!child){
+const carried=String(previous[column] ?? '').trim();
+if(!carried) return '';
+const carriedConfidence=Math.max(...importMappingDefinitions.map(
+definition=>importHeaderMatchConfidence(carried,definition.aliases)
+));
+return carriedConfidence>=.8 ? carried : '';
+}
+if(numericImportPrice(child)!==null) return child;
+const childHeaderConfidence=Math.max(...importMappingDefinitions.map(
+definition=>importHeaderMatchConfidence(child,definition.aliases)
+));
+if(childHeaderConfidence>=.8) return child;
+let parent=String(previous[column] ?? '').trim();
+if(!parent){
+for(let offset=1;offset<=3 && column-offset>=0;offset++){
+const candidate=String(previous[column-offset] ?? '').trim();
+if(candidate){ parent=candidate; break; }
+}
+}
+return parent && normalizeImportHeader(parent)!==normalizeImportHeader(child)
+? parent + ' ' + child
+: child;
+});
 }
 function structuredPricingCategory(matrix,headerRow,codeColumn,sheetName){
 for(let rowIndex = headerRow - 1; rowIndex >= Math.max(0,headerRow - 5); rowIndex--){
@@ -12259,40 +12496,85 @@ const installAliases = importMappingDefinitions[3].aliases;
 const transferAliases = importMappingDefinitions[4].aliases;
 const retirementAliases = importMappingDefinitions[5].aliases;
 const unitPriceAliases = importMappingDefinitions[6].aliases;
-const uomAliases = importMappingDefinitions[7].aliases;
-const categoryAliases = importMappingDefinitions[8].aliases;
+const workTypeAliases = importMappingDefinitions[7].aliases;
+const uomAliases = importMappingDefinitions[8].aliases;
+const categoryAliases = importMappingDefinitions[9].aliases;
 const blocks = [];
 matrix.forEach((row,rowIndex) => {
-row.forEach((value,codeColumn) => {
+const headerRow=combinedStructuredHeaderRow(matrix,rowIndex);
+const codeColumns=headerRow.map((value,column)=>{
+const rawValue=String(row[column] ?? '').trim();
+const rawHeader=normalizeImportHeader(rawValue);
+const combinedHeader=normalizeImportHeader(value);
+const matches=
+importHeaderMatchConfidence(rawValue,codeAliases)>=.8 ||
+rawHeader === 'unit' ||
+rawHeader.endsWith('unit') ||
+(
+rawHeader.startsWith('misc') &&
+rawHeader.endsWith('units')
+) ||
+rawHeader.includes('equipment') ||
+(
+rawHeader === '' &&
+importHeaderMatchConfidence(value,codeAliases)>=.8
+) ||
+(
+importHeaderMatchConfidence(value,codeAliases)>=.8 &&
+/(code|number|unitid|contractor|assembly)/.test(rawHeader)
+);
+return matches && combinedHeader ? column : -1;
+}).filter(column=>column>=0);
+headerRow.forEach((value,codeColumn) => {
 const codeHeader = normalizeImportHeader(value);
-if(!codeHeader) return;
-const installColumn = findImportHeaderColumn(row,codeColumn,installAliases);
-const retirementColumn = findImportHeaderColumn(row,codeColumn,retirementAliases);
-const unitPriceColumn = findImportHeaderColumn(row,codeColumn,unitPriceAliases);
-const transferColumn = findImportHeaderColumn(row,codeColumn,transferAliases);
+if(!codeHeader || !codeColumns.includes(codeColumn)) return;
+const codeIndex=codeColumns.indexOf(codeColumn);
+const previousCode=codeColumns[codeIndex-1];
+const nextCode=codeColumns[codeIndex+1];
+const minimumColumn=typeof previousCode==='number'
+? codeColumn
+: Math.max(0,codeColumn-7);
+const maximumColumn=typeof nextCode==='number'
+? nextCode-1
+: headerRow.length-1;
+const blockHeaderRow=headerRow.map((header,column)=>
+column>=minimumColumn && column<=maximumColumn ? header : ''
+);
+const installColumn = findImportHeaderColumn(blockHeaderRow,codeColumn,installAliases);
+const retirementColumn = findImportHeaderColumn(blockHeaderRow,codeColumn,retirementAliases);
+const unitPriceColumn = findImportHeaderColumn(blockHeaderRow,codeColumn,unitPriceAliases);
+const transferColumn = findImportHeaderColumn(blockHeaderRow,codeColumn,transferAliases);
+const workTypeColumn = findImportHeaderColumn(blockHeaderRow,codeColumn,workTypeAliases);
 if(installColumn < 0 && transferColumn < 0 && retirementColumn < 0 && unitPriceColumn < 0) return;
-const looksLikeCodeHeader =
-codeAliases.includes(codeHeader) ||
-codeHeader === 'unit' ||
-codeHeader.endsWith('unit') ||
-codeHeader.endsWith('units') ||
-codeHeader.includes('equipment');
-if(!looksLikeCodeHeader) return;
 blocks.push({
 headerRow:rowIndex,
 codeColumn,
-descriptionColumn:findImportHeaderColumn(row,codeColumn,descriptionAliases),
-nameColumn:findImportHeaderColumn(row,codeColumn,nameAliases),
+descriptionColumn:findImportHeaderColumn(blockHeaderRow,codeColumn,descriptionAliases,30),
+nameColumn:findImportHeaderColumn(blockHeaderRow,codeColumn,nameAliases,30),
 installColumn,
 retirementColumn,
 unitPriceColumn,
 transferColumn,
-uomColumn:findImportHeaderColumn(row,codeColumn,uomAliases),
-categoryColumn:findImportHeaderColumn(row,codeColumn,categoryAliases)
+workTypeColumn,
+uomColumn:findImportHeaderColumn(blockHeaderRow,codeColumn,uomAliases,30),
+categoryColumn:findImportHeaderColumn(blockHeaderRow,codeColumn,categoryAliases,30)
 });
 });
 });
-return blocks;
+return blocks.filter(block=>!blocks.some(candidate=>
+candidate.codeColumn===block.codeColumn &&
+candidate.headerRow===block.headerRow+1 &&
+[
+candidate.installColumn,
+candidate.transferColumn,
+candidate.retirementColumn
+].filter(column=>column>=0).length >
+[
+block.installColumn,
+block.transferColumn,
+block.retirementColumn
+].filter(column=>column>=0).length
+));
 }
 function extractStructuredPricingRows(sheetName,matrix){
 const blocks = findStructuredPricingBlocks(matrix);
@@ -12320,6 +12602,7 @@ const installValue = block.installColumn >= 0 ? sourceRow[block.installColumn] :
 const retirementValue = block.retirementColumn >= 0 ? sourceRow[block.retirementColumn] : '';
 const unitPriceValue = block.unitPriceColumn >= 0 ? sourceRow[block.unitPriceColumn] : '';
 const transferValue = block.transferColumn >= 0 ? sourceRow[block.transferColumn] : '';
+const workTypeValue = block.workTypeColumn >= 0 ? sourceRow[block.workTypeColumn] : '';
 const installPrice = numericImportPrice(installValue);
 const retirementPrice = numericImportPrice(retirementValue);
 const unitPrice = numericImportPrice(unitPriceValue);
@@ -12368,6 +12651,7 @@ const mappedRow = {
 'Transfer Price':transferPrice === null ? '' : transferValue,
 'Retirement Price':retirementPrice === null ? '' : retirementValue,
 'Unit Price':unitPrice === null ? '' : unitPriceValue,
+'Work Type':workTypeValue,
 'Unit of Measure':block.uomColumn >= 0 ? sourceRow[block.uomColumn] : '',
 'Category':block.categoryColumn >= 0
 ? sourceRow[block.categoryColumn]
@@ -12426,16 +12710,21 @@ notice += ' Found ' + transferRateCount + ' transfer rate' + (transferRateCount 
 return notice;
 }
 function importHeaderScore(row){
-const normalized = row.map(normalizeImportHeader).filter(Boolean);
-const aliases = new Set(importMappingDefinitions.flatMap(definition => definition.aliases));
-let score = normalized.filter(value => aliases.has(value)).length;
-if(normalized.some(value => importMappingDefinitions[0].aliases.includes(value))) score += 3;
-if(normalized.some(value => [
+let score = row.reduce((total,value)=>{
+const best=Math.max(...importMappingDefinitions.map(definition=>
+importHeaderMatchConfidence(value,definition.aliases)
+));
+return total+best;
+},0);
+if(row.some(value => importHeaderMatchConfidence(
+value,importMappingDefinitions[0].aliases
+)>=.8)) score += 3;
+if(row.some(value => [
 ...importMappingDefinitions[3].aliases,
 ...importMappingDefinitions[4].aliases,
 ...importMappingDefinitions[5].aliases,
 ...importMappingDefinitions[6].aliases
-].includes(value))) score += 3;
+].some(alias=>importHeaderMatchConfidence(value,[alias])>=.8))) score += 3;
 return score;
 }
 function loadImportWorksheet(sheetName){
@@ -12882,171 +13171,42 @@ if(!confirmed){
 renderPriceBookImportPreview();
 return;
 }
-const writeRows =
-validRows.map(row => {
-const existingItem =
-latestItemsByCode.get(
-row.item_code.toLowerCase()
-);
-return {
-id: existingItem?.id,
-company_id: currentProfile.company_id,
-price_book_id: priceBookId,
-item_code: existingItem?.item_code || row.item_code,
-item_name: row.item_name,
-description: row.description,
-category: row.category,
-unit_of_measure: row.unit_of_measure,
-install_price: row.install_price,
-transfer_price: row.transfer_price,
-retirement_price: row.retirement_price,
-active: existingItem?.active ?? true
-};
-});
-const updateRows = writeRows.filter(row => row.id);
-const newRows = writeRows
-.filter(row => !row.id)
-.map(({ id, ...row }) => row);
+const writeRows = validRows.map(row => ({
+item_code:row.item_code,
+item_name:row.item_name,
+description:row.description,
+category:row.category,
+unit_of_measure:row.unit_of_measure,
+install_price:row.install_price,
+transfer_price:row.transfer_price,
+retirement_price:row.retirement_price
+}));
+const originalImportSource =
+currentOpenPriceBook?.source_filename ||
+currentPriceBookImportSource ||
+null;
 $('confirmPriceBookImportBtn').disabled = true;
 $('confirmPriceBookImportBtn').textContent =
 'Importing...';
-let error = null;
-let completedUpdateCount = 0;
-if(updateExisting && updateRows.length){
-const updateBatchSize = 15;
-for(
-let start = 0;
-start < updateRows.length && !error;
-start += updateBatchSize
-){
-const batch = updateRows.slice(
-start,
-start + updateBatchSize
+const { data:importResult, error } = await sb.rpc(
+'import_price_book_items_atomic',
+{
+p_price_book_id:priceBookId,
+p_rows:writeRows,
+p_update_existing:updateExisting,
+p_source_filename:originalImportSource
+}
 );
-$('confirmPriceBookImportBtn').textContent =
-'Updating ' +
-(start + 1) +
-'–' +
-Math.min(start + batch.length, updateRows.length) +
-' of ' +
-updateRows.length +
-'...';
-const results = await Promise.all(
-batch.map(row => {
-const { id, ...changes } = row;
-return sb
-.from('price_book_items')
-.update(changes)
-.eq('id', id)
-.eq('company_id', currentProfile.company_id)
-.eq('price_book_id', priceBookId)
-.select('id');
-})
-);
-for(let index = 0; index < results.length; index++){
-const result = results[index];
-const expected = batch[index];
-const saved = result.data?.[0];
-if(result.error){
-error = result.error;
-break;
-}
-if(!saved){
-error = {
-message:
-'LineCrew Pro could not verify the saved Unit Code ' +
-expected.item_code +
-'.'
-};
-break;
-}
-completedUpdateCount += 1;
-}
-}
-}
-if(!error && updateExisting && updateRows.length){
-const verificationResult =
-await fetchPriceBookItemsForCurrentUser(priceBookId);
-if(verificationResult.error){
-error = verificationResult.error;
-}else{
-const savedByCode = new Map(
-(verificationResult.data || []).map(item => [
-String(item.item_code || '').trim().toLowerCase(),
-item
-])
-);
-for(const expected of updateRows){
-const saved = savedByCode.get(
-String(expected.item_code || '').trim().toLowerCase()
-);
-if(
-!saved ||
-Number(saved.install_price) !== Number(expected.install_price) ||
-Number(saved.transfer_price) !== Number(expected.transfer_price) ||
-Number(saved.retirement_price) !== Number(expected.retirement_price)
-){
-error = {
-message:
-'LineCrew Pro could not verify the saved prices for Unit Code ' +
-expected.item_code + '.'
-};
-break;
-}
-}
-}
-}
-if(!error && newRows.length){
-$('confirmPriceBookImportBtn').textContent =
-'Adding ' +
-newRows.length +
-' new unit' +
-(newRows.length === 1 ? '' : 's') +
-'...';
-const insertResult = await sb
-.from('price_book_items')
-.insert(newRows)
-.select('id');
-error = insertResult.error;
-if(
-!error &&
-(insertResult.data || []).length !== newRows.length
-){
-error = {
-message:
-'LineCrew Pro could not verify that every new unit was saved.'
-};
-}
-}
 $('confirmPriceBookImportBtn').disabled = false;
 if(error){
 renderPriceBookImportPreview();
 alert(
 'The import could not be completed: ' +
 error.message +
-(completedUpdateCount
-? '\n\n' + completedUpdateCount +
-' matching unit' +
-(completedUpdateCount === 1 ? '' : 's') +
-' were updated before the import stopped.'
-: '')
+'\n\nNothing from this import was saved.'
 );
 return;
 }
-const auditTimestamp =
-new Date().toISOString();
-const originalImportSource =
-currentOpenPriceBook?.source_filename ||
-currentPriceBookImportSource ||
-null;
-const { error:auditError } = await sb
-.from('price_books')
-.update({
-source_filename:originalImportSource,
-updated_at:auditTimestamp
-})
-.eq('id', priceBookId)
-.eq('company_id', currentProfile.company_id);
 resetPriceBookImport();
 await loadPriceBooks();
 const refreshed =
@@ -13062,16 +13222,12 @@ false
 await loadPriceBookItems(priceBookId);
 }
 alert(
-writeRows.length +
+Number(importResult?.total || writeRows.length) +
 ' unit' +
 (writeRows.length === 1 ? '' : 's') +
 (updateExisting
 ? ' updated or added successfully.'
-: ' imported successfully.') +
-(auditError
-? '\n\nThe units were saved, but the import audit details could not be updated: ' +
-auditError.message
-: '')
+: ' imported successfully.')
 );
 };
 async function loadPriceBookItems(priceBookId){
