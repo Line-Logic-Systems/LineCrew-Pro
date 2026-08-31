@@ -135,6 +135,11 @@ Checkout instead:
 
 The plan map fails closed: no configured mapping means no Checkout.
 
+Checkout also sets `save_default_payment_method=on_subscription`, so whichever
+card actually settles an invoice becomes the subscription default. Without it a
+company that rescues a past-due invoice with a new card on the hosted invoice
+page would keep the old failing card on file and fail again the next cycle.
+
 ### Upgrade-only Stripe Portal configuration
 
 Create a normal Customer Portal configuration for **Manage Billing**, keep subscription plan switching **off**, and label it with metadata `linecrew_purpose=linecrew_manage_only_v1`. You may put its `bpc_...` ID in `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID`. The function verifies the configuration on every request and fails closed if plan switching is enabled.
