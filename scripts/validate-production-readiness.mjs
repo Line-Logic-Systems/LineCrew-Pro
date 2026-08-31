@@ -666,7 +666,9 @@ for (const marker of [
   "$('createCompanyCard').classList.toggle('hidden', invited)",
   "$('joinCompanyCard').classList.toggle('hidden', invited)",
   'id="newPriceBookImportFile"',
+  'id="newPriceBookFileCheck"',
   'Save Unit Pricing &amp; Continue',
+  'No numeric unit prices were found.',
   'await handlePriceBookImportFile(selectedImportFile)',
   'Review the preview'
 ]) assert(marker instanceof RegExp ? marker.test(index) : index.includes(marker), `Onboarding workflow marker missing: ${marker}`);

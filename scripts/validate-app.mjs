@@ -71,7 +71,10 @@ for (const marker of [
   'installationcost',
   'retirementcost',
   'transfer-only rate',
-  'fileCodeCounts'
+  'fileCodeCounts',
+  'id="newPriceBookFileCheck"',
+  'inspectNewPriceBookImportFile',
+  'No numeric unit prices were found.'
 ]) {
   assert(html.includes(marker), `Missing smart Unit Pricing import marker: ${marker}`);
 }
@@ -300,6 +303,27 @@ if (scriptStart >= 0 && scriptEnd > scriptStart) {
       longStructuredMapped[0].transfer_price === 425 &&
       longStructuredMapped[0].retirement_price === 300,
       'Structured long-format pricing must consolidate all three actions.'
+    );
+    const actionFlagsWithoutPrices = core.extractStructuredPricingRows('Utility Units',[
+      ['Unit ID','Unit Description','Install','Remove','Transfer'],
+      ['015-QA','Fuse Expulsion','X','X',''],
+      ['020-QA','Fuse Expulsion','X','X','']
+    ]);
+    assert(
+      actionFlagsWithoutPrices.tableCount === 1 &&
+      actionFlagsWithoutPrices.rows.length === 0 &&
+      actionFlagsWithoutPrices.skippedNoPrice === 2,
+      'Install/Remove/Transfer availability flags must not be mistaken for numeric pricing.'
+    );
+    const weightedPriceRows = core.extractStructuredPricingRows('Historical Prices',[
+      ['Item Number','Weighted Unit Price','Description','Unit','Item Class'],
+      ['1020004','2750','WOOD POLE (35 FEET)','ea.','ELECTRICAL WORK AND LIGHTING'],
+      ['1003997','292','REMOVE POLE','ea.','ELECTRICAL WORK AND LIGHTING']
+    ]);
+    assert(
+      weightedPriceRows.rows.length === 2 &&
+      weightedPriceRows.rows[0].row['Unit Price'] === '2750',
+      'A real historical Weighted Unit Price column must produce a priced preview.'
     );
   } catch (error) {
     failures.push('Smart Price Book functional validation error: ' + error.message);

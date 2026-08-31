@@ -3196,6 +3196,11 @@ id="newPriceBookImportFile"
 type="file"
 accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
 >
+<div
+id="newPriceBookFileCheck"
+class="hidden"
+aria-live="polite"
+></div>
 <button id="savePriceBookBtn" class="success">
 Save Unit Pricing &amp; Continue
 </button>
@@ -3879,6 +3884,8 @@ let currentPriceBookSourceRows = [];
 let currentPriceBookStructuredSheets = new Map();
 let currentPriceBookImportNotice = '';
 let currentPriceBookMappingNeedsReview = false;
+let newPriceBookFilePreflight = null;
+let newPriceBookFileCheckSequence = 0;
 let priceBookNavigationRecords = new Map();
 let currentPriceBookCatalog = [];
 let currentPriceBookContractsById = new Map();
@@ -10788,6 +10795,145 @@ await loadContracts();
 await loadPriceBooks();
 }
 /* UNIT PRICING FORM */
+function newPriceBookFileSignature(file){
+return [
+String(file?.name || ''),
+Number(file?.size || 0),
+Number(file?.lastModified || 0)
+].join(':');
+}
+function resetNewPriceBookFileCheck(invalidatePending = true){
+if(invalidatePending) newPriceBookFileCheckSequence += 1;
+newPriceBookFilePreflight = null;
+const check = $('newPriceBookFileCheck');
+check.className = 'hidden';
+check.replaceChildren();
+}
+function newPriceBookPreviewPrice(value){
+const price = numericImportPrice(value);
+return price === null ? '—' : formatCurrency(price);
+}
+function renderNewPriceBookFileCheck(result){
+const check = $('newPriceBookFileCheck');
+check.className = 'import-summary';
+if(result.error){
+check.innerHTML =
+'<p class="import-error">This pricing file could not be read.</p>' +
+'<p>' + escapeHtml(result.error) + '</p>' +
+'<p class="muted">Nothing has been saved. Choose a different spreadsheet or correct the file and try again.</p>';
+return;
+}
+if(result.tableCount > 0 && result.pricedRowCount === 0){
+check.innerHTML =
+'<p class="import-error">No numeric unit prices were found.</p>' +
+'<p>This workbook contains unit codes or action columns, but no numeric Install, Transfer, Remove or Unit Price values. It cannot create contract pricing until prices are supplied.</p>' +
+'<p class="muted">Nothing has been saved.</p>';
+return;
+}
+if(result.pricedRowCount === 0){
+check.innerHTML =
+'<strong>File ready for column review</strong>' +
+'<p>No standard pricing table was detected automatically. Save and continue to choose the worksheet and match its columns before anything imports.</p>';
+return;
+}
+let html =
+'<strong>' + result.pricedRowCount + ' priced unit' +
+(result.pricedRowCount === 1 ? '' : 's') + ' detected</strong>' +
+'<p class="muted">Found across ' + result.recognizedSheetCount + ' worksheet' +
+(result.recognizedSheetCount === 1 ? '' : 's') +
+'. Review the sample below. You will confirm the complete import after saving this pricing record.</p>';
+html +=
+'<div class="import-table-wrap"><table class="import-table">' +
+'<thead><tr><th>Unit Code</th><th>Description</th><th>Install</th><th>Transfer</th><th>Remove</th></tr></thead><tbody>';
+result.sampleRows.forEach(entry => {
+const row = entry.row || {};
+html +=
+'<tr>' +
+'<td>' + escapeHtml(row['Unit Code'] || '—') + '</td>' +
+'<td>' + escapeHtml(row.Description || row['Unit Name'] || '—') + '</td>' +
+'<td>' + escapeHtml(newPriceBookPreviewPrice(row['Install Price'])) + '</td>' +
+'<td>' + escapeHtml(newPriceBookPreviewPrice(row['Transfer Price'])) + '</td>' +
+'<td>' + escapeHtml(newPriceBookPreviewPrice(row['Retirement Price'])) + '</td>' +
+'</tr>';
+});
+html += '</tbody></table></div>';
+check.innerHTML = html;
+}
+async function inspectNewPriceBookImportFile(file){
+const extension = String(file?.name || '')
+.toLowerCase()
+.split('.')
+.pop();
+if(!['csv','tsv','txt','xlsx','xls','ods'].includes(extension)){
+throw new Error('Choose a CSV, TSV, TXT, XLSX, XLS or ODS pricing file.');
+}
+if(typeof XLSX === 'undefined'){
+throw new Error('The spreadsheet reader did not load. Refresh the page and try again.');
+}
+const workbook = await workbookFromPricingFile(file,extension);
+let tableCount = 0;
+let pricedRowCount = 0;
+let recognizedSheetCount = 0;
+const sampleRows = [];
+workbook.SheetNames.forEach(sheetName => {
+const matrix = XLSX.utils.sheet_to_json(
+workbook.Sheets[sheetName],
+{ header:1,defval:'',raw:false,blankrows:true }
+);
+const analysis = extractStructuredPricingRows(sheetName,matrix);
+tableCount += analysis.tableCount;
+pricedRowCount += analysis.rows.length;
+if(analysis.rows.length){
+recognizedSheetCount += 1;
+analysis.rows.forEach(entry => {
+if(sampleRows.length < 5) sampleRows.push(entry);
+});
+}
+});
+return {
+fileSignature:newPriceBookFileSignature(file),
+tableCount,
+pricedRowCount,
+recognizedSheetCount,
+sampleRows,
+error:null
+};
+}
+async function checkNewPriceBookImportFile(file){
+const sequence = ++newPriceBookFileCheckSequence;
+resetNewPriceBookFileCheck(false);
+if(!file) return null;
+const check = $('newPriceBookFileCheck');
+check.className = 'import-summary';
+check.innerHTML = '<strong>Checking the pricing file...</strong>';
+$('savePriceBookBtn').disabled = true;
+$('savePriceBookBtn').textContent = 'Checking Pricing File...';
+try{
+const result = await inspectNewPriceBookImportFile(file);
+if(sequence !== newPriceBookFileCheckSequence) return null;
+newPriceBookFilePreflight = result;
+renderNewPriceBookFileCheck(result);
+return result;
+}catch(error){
+if(sequence !== newPriceBookFileCheckSequence) return null;
+const result = {
+fileSignature:newPriceBookFileSignature(file),
+tableCount:0,
+pricedRowCount:0,
+recognizedSheetCount:0,
+sampleRows:[],
+error:error?.message || 'Unable to read this pricing file.'
+};
+newPriceBookFilePreflight = result;
+renderNewPriceBookFileCheck(result);
+return result;
+}finally{
+if(sequence === newPriceBookFileCheckSequence){
+$('savePriceBookBtn').disabled = false;
+$('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
+}
+}
+}
 async function openPriceBookFormForContract(selectedContract = null){
 showContractSetupForm('priceBookForm', 'pricing');
 $('priceBookFormTitle').textContent = selectedContract
@@ -10799,6 +10945,7 @@ $('priceBookName').value = selectedContract
 $('priceBookEffectiveDate').value = selectedContract?.start_date || '';
 $('priceBookNotes').value = '';
 $('newPriceBookImportFile').value = '';
+resetNewPriceBookFileCheck();
 $('priceBookContract').innerHTML =
 '<option value="">Select contract</option>';
 const {
@@ -10829,9 +10976,13 @@ $('priceBookContract').value = selectedContract.id;
 }
 }
 $('addPriceBookBtn').onclick = () => openPriceBookFormForContract();
+$('newPriceBookImportFile').onchange = async event => {
+await checkNewPriceBookImportFile(event.target.files?.[0] || null);
+};
 $('cancelPriceBookBtn').onclick = () => {
 $('priceBookForm').classList.add('hidden');
 $('newPriceBookImportFile').value = '';
+resetNewPriceBookFileCheck();
 resetContractSetup();
 $('manageExistingContracts').open = true;
 };
@@ -10852,10 +11003,29 @@ if(!name){
 alert('Enter a unit-pricing version name.');
 return;
 }
-$('savePriceBookBtn').disabled = true;
-$('savePriceBookBtn').textContent = 'Saving...';
 const selectedImportFile =
 $('newPriceBookImportFile').files?.[0] || null;
+if(selectedImportFile){
+const selectedSignature = newPriceBookFileSignature(selectedImportFile);
+if(newPriceBookFilePreflight?.fileSignature !== selectedSignature){
+await checkNewPriceBookImportFile(selectedImportFile);
+}
+if(newPriceBookFilePreflight?.error){
+$('newPriceBookFileCheck').scrollIntoView({ behavior:'auto',block:'center' });
+alert('The pricing file could not be read. Nothing was saved.');
+return;
+}
+if(
+newPriceBookFilePreflight?.tableCount > 0 &&
+newPriceBookFilePreflight?.pricedRowCount === 0
+){
+$('newPriceBookFileCheck').scrollIntoView({ behavior:'auto',block:'center' });
+alert('This workbook has unit information but no numeric prices. Nothing was saved.');
+return;
+}
+}
+$('savePriceBookBtn').disabled = true;
+$('savePriceBookBtn').textContent = 'Saving...';
 const {
 data:savedPriceBook,
 error
@@ -10870,7 +11040,20 @@ effective_start: effectiveDate,
 notes: notes,
 active: true
 })
-.select('id')
+.select(`
+id,
+contract_id,
+name,
+effective_date,
+effective_start,
+effective_end,
+version_name,
+notes,
+source_filename,
+active,
+created_at,
+updated_at
+`)
 .single();
 $('savePriceBookBtn').disabled = false;
 $('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
@@ -10883,8 +11066,23 @@ return;
 }
 $('priceBookForm').classList.add('hidden');
 await loadPriceBooks();
-const savedRecord =
+let savedRecord =
 priceBookNavigationRecords.get(savedPriceBook?.id);
+if(!savedRecord && savedPriceBook?.id){
+const contract =
+currentPriceBookContractsById.get(contractId) ||
+currentContractCatalog.find(item => item.id === contractId) ||
+null;
+const customer = contract
+? currentPriceBookCustomersById.get(contract.customer_id) || null
+: null;
+savedRecord = {
+priceBook:savedPriceBook,
+contract,
+customer
+};
+priceBookNavigationRecords.set(savedPriceBook.id,savedRecord);
+}
 if(savedRecord){
 showContractSetupReview(
 savedRecord.priceBook,
@@ -10904,13 +11102,29 @@ savedRecord.customer
 if(selectedImportFile){
 $('priceBookImportCard').classList.remove('hidden');
 await handlePriceBookImportFile(selectedImportFile);
+const validUnitCount = currentPriceBookImportRows.filter(
+row => row.errors.length === 0
+).length;
+showContractSetupReview(
+savedRecord.priceBook,
+savedRecord.contract,
+savedRecord.customer,
+{
+message:validUnitCount
+? validUnitCount + ' valid unit' + (validUnitCount === 1 ? '' : 's') + ' are ready below. Review the column matches and click Import to finish.'
+: 'The file is open below. Review the detected headings or correct the displayed pricing errors before importing.'
+}
+);
 $('priceBookImportCard').scrollIntoView({
-behavior:'smooth',
+behavior:'auto',
 block:'start'
 });
-alert('Unit Pricing saved. Review the preview, match the columns, and confirm the import.');
 return;
 }
+}
+if(savedPriceBook?.id && !savedRecord){
+alert('Unit Pricing was saved, but its review screen could not open. Open the saved Unit Pricing record and choose Upload Unit Prices.');
+return;
 }
 alert('Unit Pricing saved. You can now add or upload contract unit prices.');
 };
