@@ -12191,7 +12191,14 @@ const workType=normalizeImportHeader(value);
 if(/^(transfer|xfer|move|reframe|relocate)/.test(workType)) return 'transfer';
 if(/^(remove|removal|retire|retirement|demo|salvage)/.test(workType)) return 'retirement';
 if(/^(install|installation|new|construct|construction|set)/.test(workType)) return 'install';
-const suffix=String(itemCode || '').trim().toUpperCase().slice(-1);
+// Only read a work-type suffix where it follows a digit, which is how real
+// utility unit codes are built (CV3030I, OH4112R, PS1095I). Matching a bare
+// final letter classified word-style codes from other utilities silently and
+// confidently: CONDUIT as a transfer, ANCHOR as a retirement. Those now fall
+// through to the ordinary default instead of being filed under a price type
+// the Admin never chose.
+const suffixMatch=String(itemCode || '').trim().toUpperCase().match(/[0-9]([IRT])$/);
+const suffix=suffixMatch ? suffixMatch[1] : '';
 if(suffix === 'T') return 'transfer';
 if(suffix === 'R') return 'retirement';
 if(suffix === 'I') return 'install';
