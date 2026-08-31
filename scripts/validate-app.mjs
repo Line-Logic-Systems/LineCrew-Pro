@@ -121,6 +121,42 @@ if (fs.existsSync(transferMigrationPath)) {
   }
 }
 
+for (const marker of [
+  'id="arrangeDashboardBtn"',
+  'id="saveDashboardOrderBtn"',
+  'id="dashboardTileGrid"',
+  'loadDashboardTileOrder',
+  'user_dashboard_preferences',
+  'dashboard-arrange-active',
+  'LineCrew Pro Subscription',
+  'Finish Contract Setup'
+]) {
+  assert(html.includes(marker), `Missing Admin dashboard/setup usability marker: ${marker}`);
+}
+const dashboardPreferenceMigrationPath =
+  'supabase/migrations/20260831143000_user_dashboard_preferences.sql';
+assert(
+  fs.existsSync(dashboardPreferenceMigrationPath),
+  'Missing per-account dashboard preference migration.'
+);
+if (fs.existsSync(dashboardPreferenceMigrationPath)) {
+  const dashboardMigration = fs.readFileSync(dashboardPreferenceMigrationPath, 'utf8');
+  for (const marker of [
+    'enable row level security',
+    'user_dashboard_preferences_select_own',
+    'user_dashboard_preferences_insert_own',
+    'user_dashboard_preferences_update_own',
+    "in ('admin', 'owner')",
+    'from public, anon',
+    'to authenticated'
+  ]) {
+    assert(
+      dashboardMigration.includes(marker),
+      `Missing guarded dashboard preference marker: ${marker}`
+    );
+  }
+}
+
 const ids = [...html.matchAll(/\sid=["']([^"']+)["']/g)].map(match => match[1]);
 const duplicateIds = [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 assert(duplicateIds.length === 0, 'Duplicate HTML ids: ' + duplicateIds.join(', '));
@@ -332,6 +368,11 @@ if (fs.existsSync('role-workspace-polish.js')) {
       roleWorkspaceCode.includes('finally{') &&
       roleWorkspaceCode.includes('observe();'),
     'Role workspace must not observe its own dashboard mutations.'
+  );
+  assert(
+    roleWorkspaceCode.includes('preservePersonalOrder') &&
+      roleWorkspaceCode.includes("grid.dataset.userDashboardCustomOrder==='true'"),
+    'Role workspace must preserve each Admin or Owner dashboard layout.'
   );
 }
 
