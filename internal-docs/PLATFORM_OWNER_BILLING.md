@@ -227,34 +227,58 @@ If a manually processed downgrade leaves a company above its new limit, LineCrew
 
 ## 10. Current access policy
 
-Current billing-foundation behavior:
-- existing companies are seeded as `pilot`, `trialing`, access enabled
-- manual/pilot account records can be configured by the platform owner
-- `my_company_subscription_access()` returns effective access
-- Stripe status updates are stored when the webhook is deployed
-- `active`, `trialing`, `past_due`, and `incomplete` currently retain base access during pilot
-- `paused` and `canceled` disable base access
-- an owner override can always force allow or force block without being overwritten by Stripe
+Billing access **is enforced in production**. `enforce_linecrew_company_access()`
+(`20260825133736_harden_subscription_entitlements.sql`) runs as a database
+pre-request hook and fails closed:
 
-The production app does **not** yet enforce this billing value. That omission is deliberate.
+- `access_override` is authoritative when set: `coalesce(access_override, access_enabled)`.
+- Otherwise access requires a subscription row with `access_enabled` and one of:
+  - `status = 'active'`;
+  - `status = 'trialing'` **and** `trial_ends_at > now()`;
+  - `status = 'past_due'` **and** `past_due_since > now() - interval '7 days'`.
+- `paused` and `canceled` disable base access.
+- `/rpc/my_company_billing_summary` is exempt so a blocked Owner/Admin can still
+  reach the Company Billing recovery page.
 
-Before hard-blocking contractor sign-in, choose a grace/dunning policy for past-due accounts. A practical first-launch policy is usually a grace period rather than immediate field lockout, because crews may need continued access to safety and production records while an office payment issue is resolved.
+The past-due grace policy is therefore settled at **seven days**, not an
+immediate field lockout.
 
-## 11. What is intentionally not automatic yet
+### Legacy `companies.subscription_status` projection
 
-The branch does not silently block the existing production app. Wiring `access_enabled=false` into `index.html` should be done as a separate reviewed release only after:
+The webhook also projects a coarse status onto `companies.subscription_status`
+(`active` / `trial` / `suspended`). `company_subscriptions` remains the access
+source of truth, but `index.html` still reads the legacy column as a secondary
+gate. A blocked Owner or Admin is routed to
+`/billing.html?billing=access-blocked` with their session intact; other roles
+are signed out and told to ask their Owner or Admin.
 
-1. the migration passes in the disposable Supabase test project,
-2. a test platform-owner account is granted,
-3. a normal contractor Admin is proven unable to open `owner.html`,
-4. manual plan/access changes are proven company-specific,
-5. Stripe test-mode Checkout succeeds,
-6. signed webhook state changes and retries are verified,
-7. Customer Portal succeeds,
-8. the two-company isolation test still passes, and
-9. the past-due grace policy is approved.
+Note that `platform_owner_set_subscription()` does **not** write the legacy
+column. Restoring a company that the webhook marked `suspended` requires either
+a new Stripe subscription reaching `active` or a direct update to
+`companies.subscription_status`. An owner access override alone will not clear it.
 
-This sequence prevents a billing configuration mistake from becoming a field-operations outage.
+## 11. Verified in production
+
+The full live-mode revenue path was exercised end to end on 2026-08-31 against a
+test contractor company on the real Starter price, discounted to $20 with a
+single-use promotion code:
+
+1. Checkout completed on `price_...` for Starter; the promotion code affected
+   only the invoice amount, never the Price ID.
+2. `checkout.session.completed`, `customer.subscription.created` and
+   `invoice.paid` were signature-validated and processed without error.
+3. The company row moved to `status=active`, `access_enabled=true`,
+   `included_crew_limit=5`, and `monthly_price_cents` was rewritten from the
+   Stripe Price rather than from client input.
+4. Cancellation produced `customer.subscription.deleted`; base access dropped to
+   `false` while a deliberate owner override correctly continued to hold.
+
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_ENVIRONMENT` and
+`BILLING_PLAN_PRICE_MAP` are confirmed correct in production by that run.
+
+Still unexercised: `create-billing-portal` (Customer Portal), `create-plan-upgrade`
+(the upgrade/proration flow), and the active-crew ceiling, which has never been
+reached with real crew records.
 
 ## 12. Recommended B2B plan setup
 
