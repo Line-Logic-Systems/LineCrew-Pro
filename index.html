@@ -3317,7 +3317,7 @@ class="success small hidden"
 <div id="priceBookImportCard" class="card hidden">
 <h3>Upload Contract Unit Prices</h3>
 <p class="muted">
-Upload CSV, TSV, TXT, XLSX, XLS or ODS. LineCrew Pro finds the worksheet and header row, then lets you match the columns before anything is saved.
+Upload CSV, TSV, TXT, XLSX, XLS or ODS. LineCrew Pro finds pricing tables across the workbook, combines repeated sections, and matches their columns before anything is saved.
 </p>
 <label for="priceBookImportFile">Pricing File</label>
 <div id="priceBookFileDrop" class="file-drop">
@@ -3332,7 +3332,7 @@ accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
 >
 </div>
 <div id="priceBookWorksheetWrap" class="hidden">
-<label for="priceBookWorksheet">Worksheet / Tab</label>
+<label for="priceBookWorksheet">Worksheet / Import Scope</label>
 <select id="priceBookWorksheet"></select>
 </div>
 <div id="priceBookColumnMapping" class="hidden">
@@ -3812,6 +3812,8 @@ let currentPriceBookImportSource = null;
 let currentOpenPriceBook = null;
 let currentPriceBookWorkbook = null;
 let currentPriceBookSourceRows = [];
+let currentPriceBookStructuredSheets = new Map();
+let currentPriceBookImportNotice = '';
 let priceBookNavigationRecords = new Map();
 let currentPriceBookCatalog = [];
 let currentPriceBookContractsById = new Map();
@@ -11739,6 +11741,8 @@ currentPriceBookImportRows = [];
 currentPriceBookImportSource = null;
 currentPriceBookSourceRows = [];
 currentPriceBookWorkbook = null;
+currentPriceBookStructuredSheets = new Map();
+currentPriceBookImportNotice = '';
 $('priceBookImportFile').value = '';
 $('priceBookImportPaste').value = '';
 $('priceBookImportMode').value = 'add-only';
@@ -11853,16 +11857,23 @@ row,
 [
 'installprice',
 'installationprice',
+'installationcost',
+'constructionlaborprice',
+'constructionprice',
 'install',
-'newprice'
+'newprice',
+'new'
 ]
 );
 const retirementPriceCell = importCell(
 row,
 [
 'retirementprice',
+'retirementcost',
 'removeprice',
 'removalprice',
+'removallaborprice',
+'removalcost',
 'retireprice',
 'retirement',
 'remove'
@@ -11961,7 +11972,13 @@ String(item.item_code || '')
 .toLowerCase()
 )
 );
-const fileCodes = new Set();
+const fileCodeCounts = new Map();
+rows.forEach(row => {
+const code = String(row.item_code || '').trim().toLowerCase();
+if(code){
+fileCodeCounts.set(code,(fileCodeCounts.get(code) || 0) + 1);
+}
+});
 rows.forEach(row => {
 row.errors = row.errors.filter(error =>
 error !== 'Unit Code already exists in this Price Book' &&
@@ -11977,12 +11994,11 @@ row.errors.push(
 'Unit Code already exists in this Price Book'
 );
 }
-if(fileCodes.has(code)){
+if((fileCodeCounts.get(code) || 0) > 1){
 row.errors.push(
 'Duplicate Unit Code in file'
 );
 }
-fileCodes.add(code);
 });
 }
 $('priceBookImportMode').onchange = () => {
@@ -12012,6 +12028,9 @@ invalidRows.length +
 ' row' +
 (invalidRows.length === 1 ? '' : 's') +
 ' need attention and will not be imported.' +
+(currentPriceBookImportNotice
+? '<br><span class="muted">' + escapeHtml(currentPriceBookImportNotice) + '</span>'
+: '') +
 '</div>';
 html +=
 '<div class="import-table-wrap">' +
@@ -12079,8 +12098,8 @@ const importMappingDefinitions=[
 {id:'mapUnitCode',aliases:['unitcode','itemcode','code','unitnumber','itemnumber','workunit']},
 {id:'mapDescription',aliases:['description','unitdescription','itemdescription','desc','workunitdescription']},
 {id:'mapUnitName',aliases:['unitname','itemname','name','title','workunitname']},
-{id:'mapInstallPrice',aliases:['installprice','installationprice','install','newprice']},
-{id:'mapRetirementPrice',aliases:['retirementprice','removeprice','removalprice','retireprice','retirement','remove']},
+{id:'mapInstallPrice',aliases:['installprice','installationprice','installationcost','constructionlaborprice','constructionprice','install','newprice','new']},
+{id:'mapRetirementPrice',aliases:['retirementprice','retirementcost','removeprice','removalprice','removallaborprice','removalcost','retireprice','retirement','remove']},
 {id:'mapUnitPrice',aliases:['unitprice','price','rate','unitrate','laborrate']},
 {id:'mapUnitOfMeasure',aliases:['unitofmeasure','uom','measure','unit']},
 {id:'mapCategory',aliases:['category','type','itemtype','unittype']}
@@ -12132,6 +12151,221 @@ validateImportDuplicates(currentPriceBookImportRows);
 renderPriceBookImportPreview();
 }
 $('applyImportColumnMappingBtn').onclick=applyImportColumnMapping;
+function spreadsheetColumnName(columnIndex){
+let index = columnIndex + 1;
+let name = '';
+while(index > 0){
+const remainder = (index - 1) % 26;
+name = String.fromCharCode(65 + remainder) + name;
+index = Math.floor((index - 1) / 26);
+}
+return name;
+}
+function numericImportPrice(value){
+if(String(value ?? '').trim() === '') return null;
+const price = importPrice(value);
+return Number.isFinite(price) && price >= 0 ? price : null;
+}
+function findImportHeaderColumn(row,startColumn,aliases,maxDistance=7){
+const endColumn = Math.min(row.length,startColumn + maxDistance + 1);
+for(let column = startColumn + 1; column < endColumn; column++){
+if(aliases.includes(normalizeImportHeader(row[column]))) return column;
+}
+return -1;
+}
+function structuredPricingCategory(matrix,headerRow,codeColumn,sheetName){
+for(let rowIndex = headerRow - 1; rowIndex >= Math.max(0,headerRow - 5); rowIndex--){
+const value = String(matrix[rowIndex]?.[codeColumn] ?? '').trim();
+if(!value) continue;
+const normalized = normalizeImportHeader(value);
+if(
+value.length <= 80 &&
+(
+normalized.includes('unit') ||
+normalized.includes('assembl') ||
+normalized.includes('equipment') ||
+normalized === 'conductor'
+)
+){
+return value;
+}
+}
+return sheetName;
+}
+function findStructuredPricingBlocks(matrix){
+const codeAliases = importMappingDefinitions[0].aliases;
+const descriptionAliases = importMappingDefinitions[1].aliases;
+const nameAliases = importMappingDefinitions[2].aliases;
+const installAliases = importMappingDefinitions[3].aliases;
+const retirementAliases = importMappingDefinitions[4].aliases;
+const unitPriceAliases = importMappingDefinitions[5].aliases;
+const uomAliases = importMappingDefinitions[6].aliases;
+const categoryAliases = importMappingDefinitions[7].aliases;
+const transferAliases = ['transfer','transferprice','transferlaborprice','transfercost'];
+const blocks = [];
+matrix.forEach((row,rowIndex) => {
+row.forEach((value,codeColumn) => {
+const codeHeader = normalizeImportHeader(value);
+if(!codeHeader) return;
+const installColumn = findImportHeaderColumn(row,codeColumn,installAliases);
+const retirementColumn = findImportHeaderColumn(row,codeColumn,retirementAliases);
+const unitPriceColumn = findImportHeaderColumn(row,codeColumn,unitPriceAliases);
+const transferColumn = findImportHeaderColumn(row,codeColumn,transferAliases);
+if(installColumn < 0 && retirementColumn < 0 && unitPriceColumn < 0) return;
+const looksLikeCodeHeader =
+codeAliases.includes(codeHeader) ||
+codeHeader === 'unit' ||
+codeHeader.endsWith('unit') ||
+codeHeader.endsWith('units') ||
+codeHeader.includes('equipment');
+if(!looksLikeCodeHeader) return;
+blocks.push({
+headerRow:rowIndex,
+codeColumn,
+descriptionColumn:findImportHeaderColumn(row,codeColumn,descriptionAliases),
+nameColumn:findImportHeaderColumn(row,codeColumn,nameAliases),
+installColumn,
+retirementColumn,
+unitPriceColumn,
+transferColumn,
+uomColumn:findImportHeaderColumn(row,codeColumn,uomAliases),
+categoryColumn:findImportHeaderColumn(row,codeColumn,categoryAliases)
+});
+});
+});
+return blocks;
+}
+function extractStructuredPricingRows(sheetName,matrix){
+const blocks = findStructuredPricingBlocks(matrix);
+const rows = [];
+let skippedNoPrice = 0;
+let transferOnly = 0;
+let transferRateCount = 0;
+blocks.forEach(block => {
+const nextHeader = blocks.find(candidate =>
+candidate.codeColumn === block.codeColumn &&
+candidate.headerRow > block.headerRow
+);
+const endRow = nextHeader?.headerRow ?? matrix.length;
+const category = structuredPricingCategory(
+matrix,
+block.headerRow,
+block.codeColumn,
+sheetName
+);
+for(let rowIndex = block.headerRow + 1; rowIndex < endRow; rowIndex++){
+const sourceRow = matrix[rowIndex] || [];
+const itemCode = String(sourceRow[block.codeColumn] ?? '').trim();
+if(!itemCode) continue;
+const installValue = block.installColumn >= 0 ? sourceRow[block.installColumn] : '';
+const retirementValue = block.retirementColumn >= 0 ? sourceRow[block.retirementColumn] : '';
+const unitPriceValue = block.unitPriceColumn >= 0 ? sourceRow[block.unitPriceColumn] : '';
+const transferValue = block.transferColumn >= 0 ? sourceRow[block.transferColumn] : '';
+const installPrice = numericImportPrice(installValue);
+const retirementPrice = numericImportPrice(retirementValue);
+const unitPrice = numericImportPrice(unitPriceValue);
+const transferPrice = numericImportPrice(transferValue);
+if(transferPrice !== null){
+transferRateCount += 1;
+}
+if(installPrice === null && retirementPrice === null && unitPrice === null){
+if(transferPrice !== null){
+transferOnly += 1;
+}else{
+const normalizedCode = normalizeImportHeader(itemCode);
+if(
+normalizedCode !== 'unit' &&
+normalizedCode !== 'miscunits' &&
+!normalizedCode.includes('continued')
+){
+skippedNoPrice += 1;
+}
+}
+continue;
+}
+let description = block.descriptionColumn >= 0
+? String(sourceRow[block.descriptionColumn] ?? '').trim()
+: '';
+if(!description && rowIndex + 1 < endRow){
+const nextRow = matrix[rowIndex + 1] || [];
+const nextText = String(nextRow[block.codeColumn] ?? '').trim();
+const nextHasPrice = [
+block.installColumn,
+block.retirementColumn,
+block.unitPriceColumn,
+block.transferColumn
+].some(column => column >= 0 && numericImportPrice(nextRow[column]) !== null);
+if(nextText && !nextHasPrice){
+description = nextText;
+}
+}
+const itemName = block.nameColumn >= 0
+? String(sourceRow[block.nameColumn] ?? '').trim() || itemCode
+: itemCode;
+const mappedRow = {
+'Unit Code':itemCode,
+'Unit Name':itemName,
+'Description':description || category,
+'Install Price':installPrice === null ? '' : installValue,
+'Retirement Price':retirementPrice === null ? '' : retirementValue,
+'Unit Price':unitPrice === null ? '' : unitPriceValue,
+'Unit of Measure':block.uomColumn >= 0 ? sourceRow[block.uomColumn] : '',
+'Category':block.categoryColumn >= 0
+? sourceRow[block.categoryColumn]
+: category
+};
+rows.push({
+row:mappedRow,
+rowNumber:
+sheetName + '!' +
+spreadsheetColumnName(block.codeColumn) +
+(rowIndex + 1)
+});
+}
+});
+return {
+rows,
+tableCount:blocks.length,
+skippedNoPrice,
+transferOnly,
+transferRateCount
+};
+}
+function analyzeStructuredPricingWorkbook(workbook){
+const recognizedSheets = new Map();
+workbook.SheetNames.forEach(sheetName => {
+const matrix = XLSX.utils.sheet_to_json(
+workbook.Sheets[sheetName],
+{ header:1,defval:'',raw:false,blankrows:true }
+);
+const analysis = extractStructuredPricingRows(sheetName,matrix);
+if(analysis.rows.length){
+recognizedSheets.set(sheetName,analysis);
+}
+});
+return recognizedSheets;
+}
+function structuredImportNotice(analyses){
+const tableCount = analyses.reduce((total,analysis) => total + analysis.tableCount,0);
+const rowCount = analyses.reduce((total,analysis) => total + analysis.rows.length,0);
+const skippedNoPrice = analyses.reduce((total,analysis) => total + analysis.skippedNoPrice,0);
+const transferOnly = analyses.reduce((total,analysis) => total + analysis.transferOnly,0);
+const transferRateCount = analyses.reduce((total,analysis) => total + analysis.transferRateCount,0);
+let notice =
+'Detected ' + tableCount + ' pricing table' + (tableCount === 1 ? '' : 's') +
+' and combined ' + rowCount + ' priced row' + (rowCount === 1 ? '' : 's') + ' automatically.';
+if(skippedNoPrice){
+notice += ' Skipped ' + skippedNoPrice + ' heading or nonnumeric-price row' + (skippedNoPrice === 1 ? '' : 's') + '.';
+}
+if(transferRateCount){
+notice += ' Found ' + transferRateCount + ' transfer rate' + (transferRateCount === 1 ? '' : 's') +
+(transferOnly
+? ', including ' + transferOnly + ' transfer-only rate' + (transferOnly === 1 ? '' : 's')
+: '') +
+'. Transfer prices were not imported because this Unit Pricing record stores install and retirement prices.';
+}
+return notice;
+}
 function importHeaderScore(row){
 const normalized = row.map(normalizeImportHeader).filter(Boolean);
 const aliases = new Set(importMappingDefinitions.flatMap(definition => definition.aliases));
@@ -12145,7 +12379,27 @@ if(normalized.some(value => [
 return score;
 }
 function loadImportWorksheet(sheetName){
-if(!currentPriceBookWorkbook||!currentPriceBookWorkbook.Sheets[sheetName]) throw new Error('The selected worksheet could not be read.');
+if(!currentPriceBookWorkbook) throw new Error('The selected worksheet could not be read.');
+if(sheetName === '__all_recognized_pricing__'){
+const analyses = Array.from(currentPriceBookStructuredSheets.values());
+const combinedRows = analyses.flatMap(analysis => analysis.rows);
+if(combinedRows.length > 5000) throw new Error('Import up to 5,000 completed pricing rows at a time. Split larger files and try again.');
+currentPriceBookSourceRows = combinedRows;
+currentPriceBookImportNotice = structuredImportNotice(analyses);
+configureImportColumnMappings(Object.keys(combinedRows[0].row));
+applyImportColumnMapping();
+return;
+}
+if(!currentPriceBookWorkbook.Sheets[sheetName]) throw new Error('The selected worksheet could not be read.');
+const structuredAnalysis = currentPriceBookStructuredSheets.get(sheetName);
+if(structuredAnalysis?.rows.length){
+if(structuredAnalysis.rows.length > 5000) throw new Error('Import up to 5,000 completed pricing rows at a time. Split larger files and try again.');
+currentPriceBookSourceRows = structuredAnalysis.rows;
+currentPriceBookImportNotice = structuredImportNotice([structuredAnalysis]);
+configureImportColumnMappings(Object.keys(structuredAnalysis.rows[0].row));
+applyImportColumnMapping();
+return;
+}
 const sheet=currentPriceBookWorkbook.Sheets[sheetName];
 const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false,blankrows:false});
 if(!matrix.length) throw new Error('No pricing rows were found in this worksheet.');
@@ -12160,6 +12414,7 @@ const rawRows=parsedRows.map((row,index)=>({row:row,rowNumber:headerIndex+index+
 if(rawRows.length===0) throw new Error('No completed pricing rows were found below the spreadsheet headings.');
 if(rawRows.length>5000) throw new Error('Import up to 5,000 completed pricing rows at a time. Split larger files and try again.');
 currentPriceBookSourceRows=rawRows;
+currentPriceBookImportNotice = '';
 configureImportColumnMappings(Object.keys(rawRows[0].row));
 applyImportColumnMapping();
 }
@@ -12173,7 +12428,15 @@ throw new Error(
 );
 }
 currentPriceBookWorkbook = workbook;
+currentPriceBookStructuredSheets = analyzeStructuredPricingWorkbook(workbook);
 $('priceBookWorksheet').innerHTML = '';
+if(currentPriceBookStructuredSheets.size > 1){
+const allOption = document.createElement('option');
+allOption.value = '__all_recognized_pricing__';
+allOption.textContent =
+'All Recognized Unit Sheets (' + currentPriceBookStructuredSheets.size + ')';
+$('priceBookWorksheet').appendChild(allOption);
+}
 workbook.SheetNames.forEach(sheetName => {
 const option =
 document.createElement('option');
@@ -12187,11 +12450,16 @@ $('priceBookWorksheetWrap')
 .toggle(
 'hidden',
 !showWorksheetPicker ||
-workbook.SheetNames.length < 2
+(
+workbook.SheetNames.length < 2 &&
+currentPriceBookStructuredSheets.size < 2
+)
 );
-loadImportWorksheet(
-workbook.SheetNames[0]
-);
+const initialSheet = currentPriceBookStructuredSheets.size > 1
+? '__all_recognized_pricing__'
+: currentPriceBookStructuredSheets.keys().next().value || workbook.SheetNames[0];
+$('priceBookWorksheet').value = initialSheet;
+loadImportWorksheet(initialSheet);
 }
 function showImportReadError(error){
 currentPriceBookImportRows = [];
@@ -12297,6 +12565,8 @@ $('priceBookImportPaste').value.trim();
 currentPriceBookImportRows = [];
 currentPriceBookImportSource = 'Pasted spreadsheet data';
 currentPriceBookWorkbook = null;
+currentPriceBookStructuredSheets = new Map();
+currentPriceBookImportNotice = '';
 $('priceBookWorksheetWrap')
 .classList
 .add('hidden');
@@ -12340,6 +12610,8 @@ async function handlePriceBookImportFile(file){
 currentPriceBookImportRows = [];
 currentPriceBookImportSource = null;
 currentPriceBookWorkbook = null;
+currentPriceBookStructuredSheets = new Map();
+currentPriceBookImportNotice = '';
 $('priceBookWorksheetWrap')
 .classList
 .add('hidden');
