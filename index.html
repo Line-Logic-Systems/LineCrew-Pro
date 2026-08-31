@@ -271,6 +271,73 @@ content:'− Hide History';
 #safetyJsaHistoryCard .collapsible-card-content{
 padding:0 12px 12px;
 }
+#manageExistingContracts > summary::after{
+content:'+ Manage Existing';
+}
+#manageExistingContracts[open] > summary::after{
+content:'− Hide Existing';
+}
+.contract-setup-card{
+border:2px solid rgba(16,92,63,.16);
+}
+.contract-setup-steps{
+display:grid;
+grid-template-columns:repeat(4,1fr);
+gap:8px;
+margin:18px 0;
+}
+.contract-setup-step{
+display:flex;
+align-items:center;
+gap:8px;
+padding:10px;
+border:1px solid var(--border);
+border-radius:12px;
+background:var(--card);
+color:var(--muted);
+font-weight:700;
+}
+.contract-setup-step-number{
+display:grid;
+place-items:center;
+width:28px;
+height:28px;
+border-radius:999px;
+background:#e9f0f6;
+color:var(--navy);
+flex:0 0 auto;
+}
+.contract-setup-step.active{
+border-color:#178a5b;
+background:#eef9f3;
+color:#105c3f;
+}
+.contract-setup-step.complete .contract-setup-step-number{
+background:#178a5b;
+color:white;
+}
+.contract-setup-start{
+padding:16px;
+border:1px solid var(--border);
+border-radius:14px;
+background:#f8fafc;
+}
+.contract-setup-start .button-row{
+margin-top:8px;
+}
+.contract-management-content{
+padding-top:18px;
+}
+.contract-management-section{
+padding-bottom:18px;
+margin-bottom:18px;
+border-bottom:1px solid var(--border);
+}
+.contract-management-section:last-child{
+padding-bottom:0;
+margin-bottom:0;
+border-bottom:0;
+}
 #safetyJsaRecordChooser{
 padding:12px 0;
 }
@@ -1496,6 +1563,13 @@ background:white;
 .company-logo-preview-details span{display:block;overflow-wrap:anywhere;}
 .company-logo-preview-details span{font-size:12px;margin-top:4px;}
 @media(max-width:600px){
+.contract-setup-steps{
+grid-template-columns:1fr 1fr;
+}
+.contract-setup-step{
+font-size:13px;
+padding:8px;
+}
 .grid,
 .mapping-grid{
 grid-template-columns:1fr;
@@ -2793,23 +2867,43 @@ id="backFromPriceBooks"
 Refresh
 </button>
 </div>
-<div class="card">
+<div class="card contract-setup-card" id="contractSetupCard">
 <div class="section-header">
 <div>
-<h2>Company Contracts &amp; Unit Pricing</h2>
+<h2>Set Up a Contract &amp; Unit Pricing</h2>
 <p class="muted">
-Set up each customer, create its contract, then upload the unit prices used on Daily Reports.
+Complete these steps in order. LineCrew Pro will move you to the next step after each save.
 </p>
-<ol>
-<li><strong>Add the Customer / Utility.</strong></li>
-<li><strong>Create the Contract.</strong> This stores the agreement, dates and Foreman field-value percentage.</li>
-<li><strong>Add Unit Pricing.</strong> Upload the contract's Excel or CSV pricing file and confirm the preview.</li>
-</ol>
 </div>
 </div>
+<div class="contract-setup-steps" aria-label="Contract setup progress">
+<div class="contract-setup-step active" data-setup-step="customer"><span class="contract-setup-step-number">1</span><span>Customer</span></div>
+<div class="contract-setup-step" data-setup-step="contract"><span class="contract-setup-step-number">2</span><span>Contract</span></div>
+<div class="contract-setup-step" data-setup-step="pricing"><span class="contract-setup-step-number">3</span><span>Unit Pricing</span></div>
+<div class="contract-setup-step" data-setup-step="review"><span class="contract-setup-step-number">4</span><span>Review &amp; Save</span></div>
 </div>
+<div id="contractSetupStart" class="contract-setup-start">
+<h3>Step 1: Choose the Customer / Utility</h3>
+<p class="muted">Select an existing customer, or add a new one without leaving this setup.</p>
+<label for="setupCustomerSelect">Customer / Utility</label>
+<select id="setupCustomerSelect">
+<option value="">Select customer / utility</option>
+</select>
+<div class="button-row">
+<button id="useSetupCustomerBtn" class="success">Use Selected Customer</button>
+<button id="addCustomerBtn" class="secondary">+ Add New Customer</button>
+</div>
+</div>
+<div id="contractSetupFormHost"></div>
+</div>
+<details class="card collapsible-card" id="manageExistingContracts">
+<summary>
+<span>Manage Existing Contracts</span>
+<span id="existingContractSummary" class="collapsible-summary-count">Customers, contracts and saved unit pricing</span>
+</summary>
+<div class="collapsible-card-content contract-management-content">
 <!-- CUSTOMERS / UTILITIES -->
-<div class="card">
+<div class="contract-management-section">
 <div class="section-header">
 <div>
 <h2>Customers / Utilities</h2>
@@ -2820,9 +2914,6 @@ Utilities and customers your company contracts with.
 <div class="import-actions">
 <button id="exportCustomersBtn" class="secondary">
 Export Customers
-</button>
-<button id="addCustomerBtn" class="success">
-+ Add Customer
 </button>
 </div>
 </div>
@@ -2894,7 +2985,7 @@ placeholder="Name, type, contact, email, phone or notes">
 <div id="customersList"></div>
 </div>
 <!-- CONTRACTS -->
-<div class="card">
+<div class="contract-management-section">
 <div class="section-header">
 <div>
 <h2>Contracts</h2>
@@ -2906,7 +2997,7 @@ Create the agreement first. After saving it, LineCrew Pro takes you directly to 
 <button id="exportContractsBtn" class="secondary">
 Export Contracts
 </button>
-<button id="addContractBtn" class="success">
+<button id="addContractBtn" class="success hidden">
 + Add Contract
 </button>
 </div>
@@ -2987,7 +3078,7 @@ placeholder="Contract, number, customer or notes">
 <div id="contractsList"></div>
 </div>
 <!-- PRICE BOOKS -->
-<div class="card">
+<div class="contract-management-section">
 <div class="section-header">
 <div>
 <h2>Unit Pricing</h2>
@@ -2995,7 +3086,7 @@ placeholder="Contract, number, customer or notes">
 The unit-price list attached to each contract. Pricing versions are kept here when rates change.
 </p>
 </div>
-<button id="addPriceBookBtn" class="success">
+<button id="addPriceBookBtn" class="success hidden">
 + Add Unit Pricing
 </button>
 </div>
@@ -3047,7 +3138,7 @@ placeholder="Optional notes"
 ></textarea>
 <label for="newPriceBookImportFile">Unit Pricing File (optional)</label>
 <p class="muted">
-Upload pricing now, or add it later from inside the saved Price Book.
+Upload pricing now, or add it later from inside the saved Unit Pricing record.
 You will review and match the spreadsheet columns before anything imports.
 </p>
 <input
@@ -3065,8 +3156,8 @@ Cancel
 <div id="priceBookDetail" class="card hidden">
 <div class="section-header">
 <div>
-<h3 id="priceBookDetailName">Price Book</h3>
-<p class="muted">Price Book details</p>
+<h3 id="priceBookDetailName">Unit Pricing</h3>
+<p class="muted">Unit Pricing details</p>
 </div>
 <div class="import-actions">
 <button
@@ -3103,7 +3194,7 @@ Close
 </div>
 <div id="priceBookDetailContent"></div>
 <div id="priceBookComparisonCard" class="card hidden">
-<h3>Compare Price Book Versions</h3>
+<h3>Compare Unit Pricing Versions</h3>
 <p class="muted">
 Compare the open version against another saved version in this
 contract. Prices are shown from the selected older version to the
@@ -3126,10 +3217,10 @@ Close Comparison
 <div id="priceBookComparisonResults"></div>
 </div>
 <div id="editPriceBookDetailsForm" class="card hidden">
-<h3>Edit Price Book Version</h3>
+<h3>Edit Unit Pricing Version</h3>
 <p class="muted">
 Update this version's label, dates and notes. Its contract,
-Price Book name and units will not change.
+pricing name and units will not change.
 </p>
 <label for="editPriceBookVersionName">Version Name</label>
 <input
@@ -3155,12 +3246,12 @@ Cancel
 </button>
 </div>
 <div id="duplicatePriceBookForm" class="card hidden">
-<h3>Create New Price Book Version</h3>
+<h3>Create New Unit Pricing Version</h3>
 <p class="muted">
-The original Price Book will remain unchanged. The new version
+The original Unit Pricing will remain unchanged. The new version
 will start inactive so it can be reviewed before use.
 </p>
-<label for="duplicatePriceBookName">Price Book Name</label>
+<label for="duplicatePriceBookName">Unit Pricing Name</label>
 <input id="duplicatePriceBookName" type="text">
 <label for="duplicatePriceBookVersion">New Version Name</label>
 <input
@@ -3408,6 +3499,8 @@ Cancel
 </div>
 <div id="priceBooksList"></div>
 </div>
+</div>
+</details>
 </section>
 <button id="pilotFeedbackLauncher" class="pilot-feedback-launcher hidden" aria-controls="pilotFeedbackDialog" aria-expanded="false">
 Send Pilot Feedback
@@ -8381,7 +8474,7 @@ answer:'Owner/Admin opens Assistant Memory from the Dashboard, or opens Ask Line
 },
 {
 terms:['customer','utility','contract'],
-answer:'Open Price Books to manage Customers / Utilities and Contracts. Create the customer first, create its contract second, then create a Price Book tied to that contract. Every record remains scoped to the signed-in contractor company.'
+answer:'Open Customers & Contracts and use Set Up a Contract & Unit Pricing. Choose or add the Customer / Utility, enter the Contract, upload the Unit Pricing file, then review and save it. Use Manage Existing Contracts only when you need to edit or review saved records. Every record remains scoped to the signed-in contractor company.'
 }
 ];
 let assistantConversation = [];
@@ -9066,7 +9159,7 @@ action:() => navigateToAppPage('priceBooksPage')
 {
 label:'Create and activate a Price Book',
 complete:Number(priceBooks.count || 0) > 0,
-actionLabel:'Open Price Books',
+actionLabel:'Open Contract Setup',
 action:() => navigateToAppPage('priceBooksPage')
 },
 {
@@ -9562,12 +9655,67 @@ await loadCustomers();
 await loadContracts();
 await loadPriceBooks();
 };
+const contractSetupStageOrder = ['customer', 'contract', 'pricing', 'review'];
+function setContractSetupStage(stage){
+const activeIndex = Math.max(0, contractSetupStageOrder.indexOf(stage));
+document.querySelectorAll('[data-setup-step]').forEach(step => {
+const stepIndex = contractSetupStageOrder.indexOf(step.dataset.setupStep);
+step.classList.toggle('active', stepIndex === activeIndex);
+step.classList.toggle('complete', stepIndex < activeIndex);
+});
+$('contractSetupStart').classList.toggle('hidden', stage !== 'customer');
+}
+function showContractSetupForm(formId, stage){
+const host = $('contractSetupFormHost');
+['customerForm', 'contractForm', 'priceBookForm'].forEach(id => {
+const form = $(id);
+if(form && form.id !== formId){
+form.classList.add('hidden');
+}
+});
+const form = $(formId);
+if(form){
+host.appendChild(form);
+form.classList.remove('hidden');
+}
+setContractSetupStage(stage);
+$('manageExistingContracts').open = false;
+$('contractSetupCard').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function resetContractSetup(){
+['customerForm', 'contractForm', 'priceBookForm'].forEach(id => $(id)?.classList.add('hidden'));
+setContractSetupStage('customer');
+}
+function populateSetupCustomerSelect(selectedCustomerId = ''){
+const select = $('setupCustomerSelect');
+if(!select) return;
+select.innerHTML = '<option value="">Select customer / utility</option>';
+currentCustomerCatalog
+.filter(customer => customer.active)
+.forEach(customer => {
+const option = document.createElement('option');
+option.value = customer.id;
+option.textContent = customer.name;
+select.appendChild(option);
+});
+if(selectedCustomerId){
+select.value = selectedCustomerId;
+}
+}
+$('useSetupCustomerBtn').onclick = async () => {
+const customerId = $('setupCustomerSelect').value;
+if(!customerId){
+alert('Select a customer or utility, or add a new one.');
+return;
+}
+await openContractFormForCustomer(customerId);
+};
 /* CUSTOMER / UTILITY FORM */
 $('addCustomerBtn').onclick = () => {
 if(!userCanManageCustomersContracts()){
 return;
 }
-$('customerForm').classList.remove('hidden');
+showContractSetupForm('customerForm', 'customer');
 delete $('customerForm').dataset.customerId;
 $('customerFormTitle').textContent = 'Add Customer / Utility';
 $('saveCustomerBtn').textContent = 'Save Customer';
@@ -9579,8 +9727,13 @@ $('customerContactPhone').value = '';
 $('customerNotes').value = '';
 };
 $('cancelCustomerBtn').onclick = () => {
+const wasEditing = Boolean($('customerForm').dataset.customerId);
 $('customerForm').classList.add('hidden');
 delete $('customerForm').dataset.customerId;
+resetContractSetup();
+if(wasEditing){
+$('manageExistingContracts').open = true;
+}
 };
 $('saveCustomerBtn').onclick = async () => {
 if(!userCanManageCustomersContracts()){
@@ -9627,8 +9780,10 @@ const customerWrite = customerId
 .insert({
 ...customerValues,
 active: true
-});
-const { error } = await customerWrite;
+})
+.select('id')
+.single();
+const { data:savedCustomer, error } = await customerWrite;
 $('saveCustomerBtn').disabled = false;
 $('saveCustomerBtn').textContent = 'Save Customer';
 if(error){
@@ -9638,15 +9793,18 @@ error.message
 );
 return;
 }
-alert(
-customerId
-? 'Customer updated.'
-: 'Customer saved.'
-);
 $('customerForm').classList.add('hidden');
 delete $('customerForm').dataset.customerId;
 await loadCustomers();
 await loadContracts();
+if(!customerId && savedCustomer?.id){
+await openContractFormForCustomer(savedCustomer.id);
+alert('Customer saved. Next, enter the contract information.');
+return;
+}
+$('manageExistingContracts').open = true;
+resetContractSetup();
+alert('Customer updated.');
 };
 /* LOAD CUSTOMERS */
 async function loadCustomers(){
@@ -9681,6 +9839,14 @@ error.message
 return;
 }
 currentCustomerCatalog = customers || [];
+populateSetupCustomerSelect();
+$('contractSetupCard').classList.toggle(
+'hidden',
+!userCanManageCustomersContracts()
+);
+if(!userCanManageCustomersContracts()){
+$('manageExistingContracts').open = true;
+}
 $('addCustomerBtn').classList.toggle(
 'hidden',
 !userCanManageCustomersContracts()
@@ -9811,6 +9977,7 @@ function editCustomer(customer){
 if(!userCanManageCustomersContracts()){
 return;
 }
+showContractSetupForm('customerForm', 'customer');
 $('customerForm').dataset.customerId = customer.id;
 $('customerFormTitle').textContent = 'Edit Customer / Utility';
 $('customerName').value = customer.name || '';
@@ -9820,11 +9987,6 @@ $('customerContactEmail').value = customer.contact_email || '';
 $('customerContactPhone').value = customer.contact_phone || '';
 $('customerNotes').value = customer.notes || '';
 $('saveCustomerBtn').textContent = 'Save Changes';
-$('customerForm').classList.remove('hidden');
-$('customerForm').scrollIntoView({
-behavior:'smooth',
-block:'start'
-});
 }
 async function changeCustomerStatus(customer){
 if(!userCanManageCustomersContracts()){
@@ -9874,11 +10036,11 @@ await loadCustomers();
 await loadContracts();
 }
 /* CONTRACT FORM */
-$('addContractBtn').onclick = async () => {
+async function openContractFormForCustomer(selectedCustomerId = ''){
 if(!userCanManageCustomersContracts()){
 return;
 }
-$('contractForm').classList.remove('hidden');
+showContractSetupForm('contractForm', 'contract');
 delete $('contractForm').dataset.contractId;
 $('contractFormTitle').textContent = 'Add Contract';
 $('saveContractBtn').textContent = 'Save Contract';
@@ -9913,10 +10075,19 @@ option.value = customer.id;
 option.textContent = customer.name;
 $('contractCustomer').appendChild(option);
 });
-};
+if(selectedCustomerId){
+$('contractCustomer').value = selectedCustomerId;
+}
+}
+$('addContractBtn').onclick = () => openContractFormForCustomer();
 $('cancelContractBtn').onclick = () => {
+const wasEditing = Boolean($('contractForm').dataset.contractId);
 $('contractForm').classList.add('hidden');
 delete $('contractForm').dataset.contractId;
+resetContractSetup();
+if(wasEditing){
+$('manageExistingContracts').open = true;
+}
 };
 $('saveContractBtn').onclick = async () => {
 if(!userCanManageCustomersContracts()){
@@ -10028,6 +10199,8 @@ active:true
 alert('Contract saved. Next, upload this contract\'s unit prices.');
 return;
 }
+$('manageExistingContracts').open = true;
+resetContractSetup();
 alert('Contract updated.');
 };
 async function loadContracts(){
@@ -10214,6 +10387,7 @@ function editContract(contract){
 if(!userCanManageCustomersContracts()){
 return;
 }
+showContractSetupForm('contractForm', 'contract');
 $('contractForm').dataset.contractId = contract.id;
 $('contractFormTitle').textContent = 'Edit Contract';
 populateContractCustomers(contract.customer_id);
@@ -10225,8 +10399,6 @@ $('contractFieldValuePercent').value =
 currentContractFieldSettings.get(contract.id) ?? '';
 $('contractNotes').value = contract.notes || '';
 $('saveContractBtn').textContent = 'Save Changes';
-$('contractForm').classList.remove('hidden');
-$('contractForm').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 async function changeContractStatus(contract){
 if(!userCanManageCustomersContracts()){
@@ -10264,7 +10436,7 @@ await loadPriceBooks();
 }
 /* UNIT PRICING FORM */
 async function openPriceBookFormForContract(selectedContract = null){
-$('priceBookForm').classList.remove('hidden');
+showContractSetupForm('priceBookForm', 'pricing');
 $('priceBookFormTitle').textContent = selectedContract
 ? 'Add Unit Pricing for ' + selectedContract.contract_name
 : 'Add Unit Pricing';
@@ -10302,12 +10474,13 @@ $('priceBookContract').appendChild(option);
 if(selectedContract?.id){
 $('priceBookContract').value = selectedContract.id;
 }
-$('priceBookForm').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 $('addPriceBookBtn').onclick = () => openPriceBookFormForContract();
 $('cancelPriceBookBtn').onclick = () => {
 $('priceBookForm').classList.add('hidden');
 $('newPriceBookImportFile').value = '';
+resetContractSetup();
+$('manageExistingContracts').open = true;
 };
 $('savePriceBookBtn').onclick = async () => {
 const contractId =
@@ -10323,7 +10496,7 @@ alert('Select a contract.');
 return;
 }
 if(!name){
-alert('Enter a price book name.');
+alert('Enter a unit-pricing version name.');
 return;
 }
 $('savePriceBookBtn').disabled = true;
@@ -10360,6 +10533,8 @@ await loadPriceBooks();
 const savedRecord =
 priceBookNavigationRecords.get(savedPriceBook?.id);
 if(savedRecord){
+$('manageExistingContracts').open = true;
+setContractSetupStage('review');
 openPriceBook(
 savedRecord.priceBook,
 savedRecord.contract,
