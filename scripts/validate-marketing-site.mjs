@@ -159,7 +159,11 @@ for (const marker of ['LineCrew Pro LLC', 'process commercial subscriptions and 
 
 const sitemap = readFileSync(join(docsDir, 'sitemap.xml'), 'utf8');
 for (const page of requiredCanonical) {
-  const url = page === 'index.html' ? 'https://linecrewpro.com/' : `https://linecrewpro.com/${page}`;
+  const url = page === 'index.html'
+    ? 'https://linecrewpro.com/'
+    : page === 'demo.html'
+      ? 'https://linecrewpro.com/demo'
+      : `https://linecrewpro.com/${page}`;
   if (!sitemap.includes(`<loc>${url}</loc>`)) fail('sitemap.xml', `missing ${url}`);
 }
 if (sitemap.includes('/signup.html')) fail('sitemap.xml', 'must not include the noindex signup preview');

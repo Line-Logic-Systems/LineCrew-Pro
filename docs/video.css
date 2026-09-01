@@ -74,6 +74,83 @@
   color: #b9cbd9;
 }
 
+.demo-watch-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 70px 0 60px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(22, 119, 210, .23), transparent 42%),
+    linear-gradient(180deg, #071d31 0%, #0b2b47 68%, #f5f8fb 68%, #f5f8fb 100%);
+}
+
+.demo-watch-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1060px;
+}
+
+.demo-watch-copy {
+  max-width: 830px;
+  margin: 0 auto 30px;
+  text-align: center;
+}
+
+.demo-watch-copy h1 {
+  margin: 0 0 16px;
+  color: #fff;
+  font-size: 50px;
+  line-height: 1.08;
+}
+
+.demo-watch-copy p {
+  margin: 0;
+  color: #d8e5ef;
+  font-size: 18px;
+}
+
+.demo-player-shell {
+  border-color: rgba(255, 255, 255, .22);
+  box-shadow: 0 24px 70px rgba(2, 13, 31, .3);
+}
+
+.demo-reassurance {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.demo-reassurance span {
+  position: relative;
+  padding-left: 22px;
+  color: #3d5569;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.demo-reassurance span::before {
+  position: absolute;
+  left: 0;
+  color: #16834f;
+  content: "✓";
+  font-weight: 900;
+}
+
+.demo-next-step {
+  padding-top: 34px;
+}
+
+.demo-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.demo-secondary-btn {
+  border-color: rgba(255, 255, 255, .55);
+  background: transparent;
+}
+
 @media (max-width: 1000px) {
   .video-showcase {
     padding: 56px 0;
@@ -91,6 +168,19 @@
   .video-player-shell {
     max-width: 900px;
   }
+
+  .demo-watch-hero {
+    padding-top: 58px;
+  }
+
+  .demo-watch-copy h1 {
+    font-size: 44px;
+  }
+
+  .demo-next-step .cta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 600px) {
@@ -106,5 +196,35 @@
     align-items: flex-start;
     flex-direction: column;
     gap: 2px;
+  }
+
+  .demo-watch-hero {
+    padding: 44px 0 46px;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(22, 119, 210, .23), transparent 42%),
+      linear-gradient(180deg, #071d31 0%, #0b2b47 72%, #f5f8fb 72%, #f5f8fb 100%);
+  }
+
+  .demo-watch-copy h1 {
+    font-size: 36px;
+  }
+
+  .demo-watch-copy p {
+    font-size: 16px;
+  }
+
+  .demo-reassurance {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .demo-actions {
+    align-items: stretch;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .demo-actions .btn {
+    text-align: center;
   }
 }
