@@ -123,9 +123,9 @@
     });
     load('jsa-review.js?v=20260826a');
   });
-  load('timekeeping.js?v=20260901c', () => {
+  load('timekeeping.js?v=20260901d', () => {
     load('timekeeping-input-v2.js?v=20260901a', null, 'linecrew-timekeeping-input-v2');
-    load('foreman-field-tools.js?v=20260828b');
+    load('foreman-field-tools.js?v=20260901a');
     load('timekeeping-roster.js?v=20260823f');
     load('timekeeping-report-v2.js?v=20260829h', () => {
       load('leadership-my-time.js?v=20260829d');

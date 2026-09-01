@@ -506,6 +506,9 @@ assert(timekeeping.includes('id="tkCompleteRosterSearch"')&&timekeeping.includes
 assert(timekeeping.includes('Export Filtered Excel')&&timekeeping.includes('filteredCompleteRosterRecords()'), 'Complete roster export must honor the active filters.');
 assert(timekeeping.includes("XLSX.utils.book_append_sheet(workbook,sheet,'People')")&&timekeeping.includes("XLSX.utils.book_append_sheet(workbook,sheet,'Equipment')"), 'Complete roster Excel export must separate People and Equipment sheets.');
 assert(timekeeping.includes('safeRosterExportCell'), 'Complete roster exports must neutralize spreadsheet formulas.');
+assert(timekeeping.includes("<strong>Timekeeping / Roster</strong>")&&timekeeping.includes('<h2>Timekeeping / Roster</h2>'), 'The dashboard tile and page heading must identify the combined Timekeeping / Roster workspace.');
+assert(foremanFieldTools.includes("isForeman ? 'Crew Time' : 'Timekeeping / Roster'"), 'Leadership must see Timekeeping / Roster while Foremen retain the simpler Crew Time label.');
+assert(index.includes("timekeeping:{label:'Timekeeping / Roster'}"), 'Assistant navigation must use the Timekeeping / Roster label.');
 const completeRosterFilterStart = timekeeping.indexOf('function filteredCompleteRosterRecords(){');
 const completeRosterFilterEnd = timekeeping.indexOf('\n  function applyCompleteRosterFilters()', completeRosterFilterStart);
 assert(completeRosterFilterStart >= 0 && completeRosterFilterEnd > completeRosterFilterStart, 'Complete roster filter function could not be isolated for regression testing.');
@@ -541,8 +544,8 @@ assert(foremanFieldTools.includes("title.textContent = titleText"), 'Foreman Tim
 assert(foremanFieldTools.includes("rpc('get_remaining_job_units_for_field'"), 'Remaining Units must load through the scoped database function.');
 assert(foremanFieldTools.includes('Saved Draft') && foremanFieldTools.includes('Awaiting GF') && foremanFieldTools.includes('Approved') && foremanFieldTools.includes('Remaining'), 'Remaining Units must separate draft, submitted, approved and remaining quantities.');
 assert(foremanFieldTools.includes("role() !== 'foreman'"), 'Remaining Units dashboard access must remain Foreman-only in the client.');
-assert(expandedJsa.includes("foreman-field-tools.js?v=20260828b"), 'Foreman field tools must load as a versioned application asset.');
-assert(serviceWorker.includes("/foreman-field-tools.js?v=20260828b"), 'Offline app shell must cache the Foreman field tools asset.');
+assert(expandedJsa.includes("foreman-field-tools.js?v=20260901a"), 'Foreman field tools must load as a versioned application asset.');
+assert(serviceWorker.includes("/foreman-field-tools.js?v=20260901a"), 'Offline app shell must cache the Foreman field tools asset.');
 assert(foremanFieldTools.includes('@media(max-width:720px)') && foremanFieldTools.includes('.remaining-units-tools{grid-template-columns:1fr}'), 'Remaining Units must collapse its controls for phone screens.');
 assert(foremanFieldTools.includes('-webkit-line-clamp:2') && foremanFieldTools.includes('remaining-unit-toggle'), 'Remaining Unit descriptions must stay compact and expand on demand.');
 assert(foremanFieldTools.includes('aria-expanded="false"') && foremanFieldTools.includes("toggle.setAttribute('aria-expanded'"), 'Remaining Unit description expansion must remain keyboard and screen-reader accessible.');
