@@ -19,6 +19,25 @@ function corsHeaders(request: Request) {
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const PROFILE_VERSION = "oncor-tivoli-cu-estimate-v1";
 
+class PacketParseError extends Error {
+  code: string;
+  status: number;
+  retryOriginal: boolean;
+
+  constructor(
+    message: string,
+    code = "packet_parse_failed",
+    status = 400,
+    retryOriginal = false,
+  ) {
+    super(message);
+    this.name = "PacketParseError";
+    this.code = code;
+    this.status = status;
+    this.retryOriginal = retryOriginal;
+  }
+}
+
 const packetSchema = {
   type: "object",
   additionalProperties: false,
@@ -86,6 +105,7 @@ function outputText(result: Record<string, unknown>): string {
 }
 
 Deno.serve(async (request) => {
+  const requestId = crypto.randomUUID();
   const origin = request.headers.get("Origin") || "";
   if (origin && !allowedOrigins.has(origin)) {
     return new Response(JSON.stringify({ error: "Origin not allowed." }), {
@@ -122,21 +142,38 @@ Deno.serve(async (request) => {
     const sourceSha256 = String(body?.source_sha256 || "").toLowerCase();
     const pageOffset = Number(body?.page_offset || 0);
     const totalPages = Number(body?.total_pages || 0);
+    const suppliedPageCount = Number(body?.page_count || 0);
+    // Version 17 and older browsers sent two-page groups without page_count.
+    // Keep those sessions working while the five-page frontend rolls out.
+    const pageCount = Number.isInteger(suppliedPageCount) && suppliedPageCount > 0
+      ? suppliedPageCount
+      : Math.min(2, totalPages - pageOffset);
     if (!filename.toLowerCase().endsWith(".pdf")) throw new Error("This parser accepts PDF job packets only.");
     if (!/^data:application\/pdf;base64,[a-z0-9+/=\r\n]+$/i.test(fileData)) throw new Error("The PDF data is invalid.");
     const estimatedBytes = Math.floor((fileData.length - fileData.indexOf(",") - 1) * 0.75);
     if (estimatedBytes <= 0 || estimatedBytes > MAX_FILE_BYTES) throw new Error("The PDF must be 20 MB or smaller.");
     if (!/^[a-f0-9]{64}$/.test(sourceSha256)) throw new Error("The packet fingerprint is invalid.");
     if (!Number.isInteger(pageOffset) || pageOffset < 0 ||
+        !Number.isInteger(pageCount) || pageCount < 1 || pageCount > totalPages ||
+        pageOffset + pageCount > totalPages ||
         !Number.isInteger(totalPages) || totalPages < 1 || pageOffset >= totalPages) {
       throw new Error("The PDF page range is invalid.");
     }
+
+    console.log(JSON.stringify({
+      event: "packet_parse_started",
+      request_id: requestId,
+      page_offset: pageOffset,
+      page_count: pageCount,
+      total_pages: totalPages,
+      estimated_bytes: estimatedBytes,
+    }));
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: { "Authorization": `Bearer ${openAiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: Deno.env.get("OPENAI_DOCUMENT_MODEL") || "gpt-5.4",
+        model: Deno.env.get("OPENAI_DOCUMENT_MODEL") || "gpt-5.4-mini",
         instructions: `${instructions}\nThis request contains a page batch from the original PDF. ` +
           `The first page in this batch is original PDF page ${pageOffset + 1} of ${totalPages}. ` +
           `For every extracted row, source_page must be the original one-based PDF page number: ` +
@@ -146,7 +183,7 @@ Deno.serve(async (request) => {
           { type: "input_file", filename, file_data: fileData, detail: "high" },
           { type: "input_text", text: "Identify this packet and extract all supported authorized-unit source rows. Return no rows unless the provider/format is supported with confidence." },
         ] }],
-        reasoning: { effort: "high" },
+        reasoning: { effort: "medium" },
         text: { format: { type: "json_schema", name: "utility_packet", strict: true, schema: packetSchema } },
         max_output_tokens: 30000,
         store: false,
@@ -154,10 +191,73 @@ Deno.serve(async (request) => {
       signal: AbortSignal.timeout(140000),
     });
     if (!response.ok) {
-      console.error("OpenAI packet parse failed", response.status, (await response.text()).slice(0, 1000));
-      throw new Error("The packet could not be analyzed. Nothing was saved.");
+      const upstreamBody = (await response.text()).slice(0, 2000);
+      let upstreamCode = "unknown";
+      let upstreamType = "unknown";
+      try {
+        const upstreamError = JSON.parse(upstreamBody)?.error;
+        upstreamCode = String(upstreamError?.code || "unknown").slice(0, 100);
+        upstreamType = String(upstreamError?.type || "unknown").slice(0, 100);
+      } catch (_error) {
+        // The upstream status and request id still make a non-JSON response traceable.
+      }
+      console.error(JSON.stringify({
+        event: "packet_analyzer_rejected",
+        request_id: requestId,
+        upstream_status: response.status,
+        upstream_code: upstreamCode,
+        upstream_type: upstreamType,
+        page_offset: pageOffset,
+        total_pages: totalPages,
+      }));
+      if (response.status === 429 && upstreamCode === "insufficient_quota") {
+        throw new PacketParseError(
+          "The job-packet AI service is temporarily unavailable. Nothing was saved. Contact LineCrew Pro Support.",
+          "packet_analyzer_quota",
+          503,
+        );
+      }
+      if (response.status === 429) {
+        throw new PacketParseError(
+          "The job-packet AI service is busy right now. Nothing was saved. Wait a few minutes and try again.",
+          "packet_analyzer_rate_limited",
+          503,
+        );
+      }
+      if ([401, 403].includes(response.status)) {
+        throw new PacketParseError(
+          "The job-packet AI service is temporarily unavailable. Nothing was saved. Contact LineCrew Pro Support.",
+          "packet_analyzer_configuration",
+          503,
+        );
+      }
+      if (response.status >= 500) {
+        throw new PacketParseError(
+          "The job-packet AI service is temporarily unavailable. Nothing was saved. Try again shortly.",
+          "packet_analyzer_unavailable",
+          503,
+        );
+      }
+      throw new PacketParseError(
+        "The packet analyzer could not read this PDF page group.",
+        "packet_analyzer_rejected",
+        422,
+        true,
+      );
     }
     const result = await response.json();
+    const usage = result?.usage || {};
+    console.log(JSON.stringify({
+      event: "packet_parse_completed",
+      request_id: requestId,
+      model: Deno.env.get("OPENAI_DOCUMENT_MODEL") || "gpt-5.4-mini",
+      page_offset: pageOffset,
+      page_count: pageCount,
+      input_tokens: Number(usage.input_tokens || 0),
+      output_tokens: Number(usage.output_tokens || 0),
+      reasoning_tokens: Number(usage.output_tokens_details?.reasoning_tokens || 0),
+      total_tokens: Number(usage.total_tokens || 0),
+    }));
     const parsed = JSON.parse(outputText(result));
     if (parsed.status === "supported" && parsed.provider_key === "oncor") {
       if (parsed.profile_version !== PROFILE_VERSION || !Array.isArray(parsed.rows) || parsed.rows.length === 0) {
@@ -183,8 +283,24 @@ Deno.serve(async (request) => {
       headers: { ...corsHeaders(request), "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unable to analyze packet." }), {
-      status: 400, headers: { ...corsHeaders(request), "Content-Type": "application/json" },
+    const packetError = error instanceof PacketParseError ? error : null;
+    const message = error instanceof Error ? error.message : "Unable to analyze packet.";
+    const timeout = error instanceof DOMException && error.name === "TimeoutError";
+    const code = timeout ? "packet_analyzer_timeout" : packetError?.code || "packet_parse_failed";
+    const status = timeout ? 504 : packetError?.status || 400;
+    console.error(JSON.stringify({
+      event: "packet_parse_failed",
+      request_id: requestId,
+      code,
+      message: message.slice(0, 300),
+    }));
+    return new Response(JSON.stringify({
+      error: message,
+      code,
+      request_id: requestId,
+      retry_original: packetError?.retryOriginal === true,
+    }), {
+      status, headers: { ...corsHeaders(request), "Content-Type": "application/json" },
     });
   }
 });

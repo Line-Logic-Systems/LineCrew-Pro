@@ -419,6 +419,10 @@ assert(verifyPostRestoreSecurity.includes("has_function_privilege('anon', proc.o
 assert(verifyPostRestoreSecurity.includes("public.admin_update_user(uuid,text,boolean)"), 'The recovery verifier must keep the legacy role-escalation RPC closed after restore.');
 assert(packetParser.includes('if (origin && !allowedOrigins.has(origin))'), 'Job-packet parsing must reject unapproved browser origins.');
 assert(!packetParser.includes('"Access-Control-Allow-Origin": "*"'), 'Job-packet parsing must not allow every browser origin.');
+assert(packetParser.includes('|| "gpt-5.4-mini"'), 'Job-packet parsing must default to the cost-controlled document model.');
+assert(packetParser.includes('reasoning: { effort: "medium" }'), 'Job-packet parsing must not use high reasoning for every page group.');
+assert(packetParser.includes('event: "packet_parse_completed"') && packetParser.includes('reasoning_tokens:'), 'Job-packet parsing must log token usage for cost monitoring.');
+assert(packetParser.includes('Math.min(2, totalPages - pageOffset)'), 'Job-packet parsing must remain compatible with already-open two-page client sessions during rollout.');
 assert(appPolish.includes("tile.setAttribute('role','link')") && appPolish.includes("tile.addEventListener('keydown'"), 'Dashboard tiles must support keyboard and screen-reader navigation.');
 assert(index.includes('Create, review and report daily production'), 'The Production dashboard description must reflect the shipped workflow.');
 
