@@ -491,6 +491,10 @@ assert(!timekeeping.includes('setTimeout(() => persistCrewTime'), 'Crew time mus
 assert(index.includes('if(requestId !== teamLoadRequest) return;'), 'Team rendering must ignore stale overlapping refreshes.');
 assert(timekeeping.includes('+ Add Extra Man'), 'Foreman Crew Time must provide an explicit extra-man action.');
 assert(timekeeping.includes('tk-crew-group'), 'Leadership employee roster must group crew members by Foreman.');
+assert(timekeeping.includes('id="tkSaveAssignmentsBtn"'), 'Personnel assignments must provide one explicit batch-save action.');
+assert(timekeeping.includes('const rosterAssignmentDrafts = new Map();'), 'Personnel assignments must remain staged while several employees are selected.');
+assert(timekeeping.includes("select.onchange = () => updateRosterDraft"), 'Personnel assignment changes must not immediately reload and collapse the roster.');
+assert(timekeeping.includes('renderRoster(openGroups);'), 'Personnel assignment save must restore the groups that the manager had open.');
 assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time options must identify assigned crew members first.');
 assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
 assert(timekeeping.includes("const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;"), 'Foreman Daily Reports must identify the logged-in Foreman employee directly.');
