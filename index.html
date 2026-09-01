@@ -7937,12 +7937,18 @@ chunk?.status === 'supported' &&
 Array.isArray(chunk?.rows) && chunk.rows.length
 );
 if(!supported.length){
-const warning = [...new Set(parsedChunks
+const analyzerNotes = [...new Set(parsedChunks
 .flatMap(chunk => chunk?.warnings || [])
 .map(value => String(value || '').trim())
-.filter(Boolean))].join(' ') ||
-'No reliable authorized construction-unit rows were found in this packet.';
-throw new Error(warning + ' Nothing was added to the job.');
+.filter(Boolean))];
+const firstNote = analyzerNotes[0]
+? ' Analyzer note: ' + analyzerNotes[0].slice(0, 280) +
+  (analyzerNotes[0].length > 280 ? '…' : '')
+: '';
+throw new Error(
+'No reliable authorized construction-unit rows were available for review.' +
+firstNote + ' Nothing was added to the job.'
+);
 }
 const detectedProvider = parsedChunks
 .map(chunk => String(chunk?.provider_key || '').trim())
