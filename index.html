@@ -1522,6 +1522,30 @@ margin:12px 0;
 }
 .mapping-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .mapping-grid label{margin-top:8px}
+#priceBookImportCard.new-price-book-inline-mapping{
+margin:12px 0;
+padding:14px;
+border-color:#9fc7ad;
+background:#f7fbf8;
+}
+#priceBookImportCard.new-price-book-inline-mapping>h3:first-child,
+#priceBookImportCard.new-price-book-inline-mapping>p:first-of-type,
+#priceBookImportCard.new-price-book-inline-mapping>label[for="priceBookImportFile"],
+#priceBookImportCard.new-price-book-inline-mapping #priceBookFileDrop,
+#priceBookImportCard.new-price-book-inline-mapping>label[for="priceBookImportMode"],
+#priceBookImportCard.new-price-book-inline-mapping #priceBookImportMode,
+#priceBookImportCard.new-price-book-inline-mapping #priceBookImportMode+p,
+#priceBookImportCard.new-price-book-inline-mapping #downloadPriceBookTemplateBtn,
+#priceBookImportCard.new-price-book-inline-mapping>label[for="priceBookImportPaste"],
+#priceBookImportCard.new-price-book-inline-mapping #priceBookImportPaste,
+#priceBookImportCard.new-price-book-inline-mapping #previewPastedPriceBookItemsBtn,
+#priceBookImportCard.new-price-book-inline-mapping #confirmPriceBookImportBtn,
+#priceBookImportCard.new-price-book-inline-mapping #cancelPriceBookImportBtn{
+display:none!important;
+}
+#priceBookImportCard.new-price-book-inline-mapping #priceBookColumnMapping>h3:before{
+content:'Review and ';
+}
 .import-table-wrap{overflow-x:auto;margin-top:12px}
 .import-table{
 width:100%;
@@ -3886,6 +3910,13 @@ let currentPriceBookImportNotice = '';
 let currentPriceBookMappingNeedsReview = false;
 let newPriceBookFilePreflight = null;
 let newPriceBookFileCheckSequence = 0;
+let newPriceBookPreSaveMappingActive = false;
+let newPriceBookPendingMappings = null;
+let newPriceBookPendingWorksheet = '';
+let newPriceBookInlineMappingSequence = 0;
+let newPriceBookInlineMappingTask = Promise.resolve();
+const priceBookImportCardHome = $('priceBookImportCard').parentNode;
+const priceBookImportCardHomeNext = $('priceBookImportCard').nextSibling;
 let priceBookNavigationRecords = new Map();
 let currentPriceBookCatalog = [];
 let currentPriceBookContractsById = new Map();
@@ -10809,6 +10840,53 @@ const check = $('newPriceBookFileCheck');
 check.className = 'hidden';
 check.replaceChildren();
 }
+const priceBookMappingSelectIds = [
+'mapUnitCode','mapDescription','mapUnitName','mapInstallPrice',
+'mapTransferPrice','mapRetirementPrice','mapUnitPrice','mapWorkType',
+'mapUnitOfMeasure','mapCategory'
+];
+function capturePriceBookColumnMappings(){
+return Object.fromEntries(priceBookMappingSelectIds.map(id => [id,$(id).value]));
+}
+function restorePriceBookColumnMappings(mapping){
+if(!mapping) return;
+priceBookMappingSelectIds.forEach(id => {
+if(Array.from($(id).options).some(option => option.value === mapping[id])){
+$(id).value = mapping[id];
+}
+});
+}
+function restorePriceBookImportCardHome(){
+const card = $('priceBookImportCard');
+card.classList.remove('new-price-book-inline-mapping');
+newPriceBookPreSaveMappingActive = false;
+if(card.parentNode !== priceBookImportCardHome){
+priceBookImportCardHome.insertBefore(card,priceBookImportCardHomeNext);
+}
+}
+function closeNewPriceBookInlineMapping(){
+restorePriceBookImportCardHome();
+newPriceBookPendingMappings = null;
+newPriceBookPendingWorksheet = '';
+resetPriceBookImport();
+}
+async function showNewPriceBookInlineMapping(file,sequence){
+const card = $('priceBookImportCard');
+$('priceBookForm').insertBefore(card,$('savePriceBookBtn'));
+card.classList.remove('hidden');
+card.classList.add('new-price-book-inline-mapping');
+newPriceBookPreSaveMappingActive = true;
+await handlePriceBookImportFile(file);
+if(
+sequence !== newPriceBookInlineMappingSequence ||
+newPriceBookFileSignature($('newPriceBookImportFile').files?.[0]) !== newPriceBookFileSignature(file)
+) return;
+newPriceBookPendingMappings = capturePriceBookColumnMappings();
+newPriceBookPendingWorksheet = $('priceBookWorksheet').value;
+if(currentPriceBookImportRows.length){
+renderPriceBookImportPreview();
+}
+}
 function newPriceBookPreviewPrice(value){
 const price = numericImportPrice(value);
 return price === null ? '—' : formatCurrency(price);
@@ -10951,6 +11029,7 @@ $('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
 }
 }
 async function openPriceBookFormForContract(selectedContract = null){
+closeNewPriceBookInlineMapping();
 showContractSetupForm('priceBookForm', 'pricing');
 $('priceBookFormTitle').textContent = selectedContract
 ? 'Add Unit Pricing for ' + selectedContract.contract_name
@@ -10992,10 +11071,36 @@ $('priceBookContract').value = selectedContract.id;
 }
 }
 $('addPriceBookBtn').onclick = () => openPriceBookFormForContract();
-$('newPriceBookImportFile').onchange = async event => {
-await checkNewPriceBookImportFile(event.target.files?.[0] || null);
+$('newPriceBookImportFile').onchange = event => {
+const file = event.target.files?.[0] || null;
+const sequence = ++newPriceBookInlineMappingSequence;
+closeNewPriceBookInlineMapping();
+newPriceBookInlineMappingTask = newPriceBookInlineMappingTask.then(async () => {
+if(sequence !== newPriceBookInlineMappingSequence) return;
+const result = await checkNewPriceBookImportFile(file);
+if(sequence !== newPriceBookInlineMappingSequence) return;
+if(file && result && !result.error && result.rawRowCount > 0){
+$('savePriceBookBtn').disabled = true;
+$('savePriceBookBtn').textContent = 'Preparing Column Review...';
+try{
+await showNewPriceBookInlineMapping(file,sequence);
+}finally{
+if(sequence === newPriceBookInlineMappingSequence){
+$('savePriceBookBtn').disabled = false;
+$('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
+}
+}
+}
+}).catch(error => {
+if(sequence === newPriceBookInlineMappingSequence){
+showImportReadError(error);
+$('savePriceBookBtn').disabled = false;
+$('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
+}
+});
 };
 $('cancelPriceBookBtn').onclick = () => {
+closeNewPriceBookInlineMapping();
 $('priceBookForm').classList.add('hidden');
 $('newPriceBookImportFile').value = '';
 resetNewPriceBookFileCheck();
@@ -11022,6 +11127,8 @@ return;
 const selectedImportFile =
 $('newPriceBookImportFile').files?.[0] || null;
 if(selectedImportFile){
+newPriceBookPendingMappings = capturePriceBookColumnMappings();
+newPriceBookPendingWorksheet = $('priceBookWorksheet').value;
 const selectedSignature = newPriceBookFileSignature(selectedImportFile);
 if(newPriceBookFilePreflight?.fileSignature !== selectedSignature){
 await checkNewPriceBookImportFile(selectedImportFile);
@@ -11079,6 +11186,7 @@ error.message
 );
 return;
 }
+restorePriceBookImportCardHome();
 $('priceBookForm').classList.add('hidden');
 await loadPriceBooks();
 let savedRecord =
@@ -11117,6 +11225,16 @@ savedRecord.customer
 if(selectedImportFile){
 $('priceBookImportCard').classList.remove('hidden');
 await handlePriceBookImportFile(selectedImportFile);
+if(
+newPriceBookPendingWorksheet &&
+Array.from($('priceBookWorksheet').options).some(option => option.value === newPriceBookPendingWorksheet)
+){
+$('priceBookWorksheet').value = newPriceBookPendingWorksheet;
+loadImportWorksheet(newPriceBookPendingWorksheet);
+}
+restorePriceBookColumnMappings(newPriceBookPendingMappings);
+currentPriceBookMappingNeedsReview = false;
+applyImportColumnMapping(true);
 const validUnitCount = currentPriceBookImportRows.filter(
 row => row.errors.length === 0
 ).length;
@@ -12754,7 +12872,7 @@ const updateExisting =
 $('priceBookImportMode').value ===
 'update-existing';
 const existingCodes = new Set(
-currentPriceBookItems.map(item =>
+(newPriceBookPreSaveMappingActive ? [] : currentPriceBookItems).map(item =>
 String(item.item_code || '')
 .trim()
 .toLowerCase()
@@ -12819,6 +12937,9 @@ invalidRows.length +
 (currentPriceBookImportNotice
 ? '<br><span class="muted">' + escapeHtml(currentPriceBookImportNotice) + '</span>'
 : '') +
+(newPriceBookPreSaveMappingActive
+? '<br><span class="muted">Review or change the column matches above. The units will not import until you save this Unit Pricing record and confirm the import.</span>'
+: '') +
 '</div>';
 html +=
 '<div class="import-table-wrap">' +
@@ -12882,7 +13003,7 @@ $('confirmPriceBookImportBtn')
 .classList
 .toggle(
 'hidden',
-validRows.length === 0
+validRows.length === 0 || newPriceBookPreSaveMappingActive
 );
 $('confirmPriceBookImportBtn').textContent =
 'Import ' +
@@ -13629,11 +13750,20 @@ files[0]
 }
 );
 $('confirmPriceBookImportBtn').onclick = async () => {
+if(newPriceBookPreSaveMappingActive){
+alert('Save the Unit Pricing record before importing its units.');
+return;
+}
 const priceBookId =
 $('priceBookDetail')
 .dataset
 .priceBookId;
-if(!priceBookId || !currentProfile?.company_id){
+if(
+!priceBookId ||
+!currentProfile?.company_id ||
+!currentOpenPriceBook ||
+currentOpenPriceBook.id !== priceBookId
+){
 alert('Open a Price Book before importing units.');
 return;
 }

@@ -74,7 +74,14 @@ for (const marker of [
   'fileCodeCounts',
   'id="newPriceBookFileCheck"',
   'inspectNewPriceBookImportFile',
-  'spreadsheet rows were found.'
+  'spreadsheet rows were found.',
+  'new-price-book-inline-mapping',
+  'showNewPriceBookInlineMapping',
+  'restorePriceBookColumnMappings(newPriceBookPendingMappings)',
+  'loadImportWorksheet(newPriceBookPendingWorksheet)',
+  'newPriceBookInlineMappingTask',
+  'newPriceBookPreSaveMappingActive ? [] : currentPriceBookItems',
+  'validRows.length === 0 || newPriceBookPreSaveMappingActive'
 ]) {
   assert(html.includes(marker), `Missing smart Unit Pricing import marker: ${marker}`);
 }
