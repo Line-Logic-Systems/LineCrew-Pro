@@ -668,7 +668,7 @@ for (const marker of [
   'id="newPriceBookImportFile"',
   'id="newPriceBookFileCheck"',
   'Save Unit Pricing &amp; Continue',
-  'No numeric unit prices were found.',
+  'spreadsheet rows were found.',
   'await handlePriceBookImportFile(selectedImportFile)',
   'Review the preview'
 ]) assert(marker instanceof RegExp ? marker.test(index) : index.includes(marker), `Onboarding workflow marker missing: ${marker}`);
