@@ -33,6 +33,9 @@ jobs:
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
+      - name: Validate job-packet model fallback
+        run: node supabase/functions/parse-utility-job-packet/packet-logic.test.mjs
+
       - name: Verify GitHub Actions are commit-pinned
         run: node scripts/validate-github-action-pins.mjs
 

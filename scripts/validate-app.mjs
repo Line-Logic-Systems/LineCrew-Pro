@@ -725,6 +725,16 @@ if (
   }
 }
 
+const packetFallbackStart = html.indexOf('async function analyzePacketPageGroupsWithFallback(');
+const packetFallbackEnd = html.indexOf('async function parsePdfJobPacketForJob(', packetFallbackStart);
+let analyzePacketFallbackFixture = null;
+if (packetFallbackStart >= 0 && packetFallbackEnd >= 0) {
+  const packetFallbackCode = html.slice(packetFallbackStart, packetFallbackEnd);
+  analyzePacketFallbackFixture = new Function(
+    `${packetFallbackCode}; return analyzePacketPageGroupsWithFallback;`
+  )();
+}
+
 // Promise rejection does not cancel sibling PDF workers. The parser must wait
 // for them to settle before rendering its terminal error, or a late progress
 // update can overwrite the failure and leave the review stuck on "Reading".
@@ -749,6 +759,9 @@ if (packetPdfParserStart < 0 || packetPdfParserEnd < 0) {
       'sha256File',
       'sb',
       'packetFunctionErrorMessage',
+      'packetFunctionErrorDetails',
+      'fileAsDataUrl',
+      'analyzePacketPageGroupsWithFallback',
       'renderSmartPacketReview',
       `let currentUtilityPacketImportId = null;\n` +
         `${html.slice(packetPdfParserStart, packetPdfParserEnd)}\n` +
@@ -759,13 +772,15 @@ if (packetPdfParserStart < 0 || packetPdfParserEnd < 0) {
         createElement:()=>({
           className:'',
           innerHTML:'',
-          querySelector:()=>({ onclick:null })
+          querySelector:()=>({ onclick:null }),
+          remove:()=>{}
         })
       },
       value => String(value),
       async () => [0, 2, 4].map(pageOffset => ({
         file_data:'data:application/pdf;base64,fixture',
         page_offset:pageOffset,
+        page_count:2,
         total_pages:6
       })),
       async () => 'fixture-sha256',
@@ -794,6 +809,9 @@ if (packetPdfParserStart < 0 || packetPdfParserEnd < 0) {
         }
       },
       async error => error.message,
+      async error => ({ message:error.message, code:'fixture', retryOriginal:true }),
+      async () => 'data:application/pdf;base64,original-fixture',
+      analyzePacketFallbackFixture,
       ()=>{}
     );
     await pdfFixture(
@@ -838,6 +856,9 @@ if (packetPdfParserStart >= 0 && packetPdfParserEnd >= 0) {
       'sha256File',
       'sb',
       'packetFunctionErrorMessage',
+      'packetFunctionErrorDetails',
+      'fileAsDataUrl',
+      'analyzePacketPageGroupsWithFallback',
       'renderSmartPacketReview',
       'loadJobs',
       'openJobPackageDetails',
@@ -852,13 +873,15 @@ if (packetPdfParserStart >= 0 && packetPdfParserEnd >= 0) {
         createElement:()=>({
           className:'',
           innerHTML:'',
-          querySelector:()=>savedButton
+          querySelector:()=>savedButton,
+          remove:()=>{}
         })
       },
       value => String(value),
       async () => [{
         file_data:'data:application/pdf;base64,fixture',
         page_offset:0,
+        page_count:1,
         total_pages:1
       }],
       async () => 'saved-fixture-sha256',
@@ -889,6 +912,9 @@ if (packetPdfParserStart >= 0 && packetPdfParserEnd >= 0) {
           : { data:null, error:{ message:'canceling statement due to statement timeout' } }
       },
       async error => error.message,
+      async error => ({ message:error.message, code:'fixture', retryOriginal:true }),
+      async () => 'data:application/pdf;base64,original-saved-fixture',
+      analyzePacketFallbackFixture,
       ()=>{},
       async () => { loadCalls += 1; },
       async jobPackage => { openedPackage = jobPackage; },
@@ -1177,6 +1203,13 @@ for (const marker of [
 ]) {
   assert(html.includes(marker), `Missing Foreman authorized Job Jacket marker: ${marker}`);
 }
+
+assert(
+  html.includes('async function splitPdfForPacketImport(file, pagesPerChunk = 5)') &&
+    html.includes('page_count:packet.page_count') &&
+    html.includes('Math.min(completedPages, chunk.total_pages)'),
+  'PDF Job Jackets must use five-page groups and page-accurate progress reporting.'
+);
 for (const marker of [
   'const remainingInstall = Math.max(',
   'const remainingTransfer = Math.max(',
@@ -1261,6 +1294,58 @@ if (dailyLocationStart < 0 || dailyLocationEnd < 0) {
     }
   } catch (error) {
     failures.push('Foreman jacket work-point renderer regression test failed: ' + error.message);
+  }
+}
+
+// A rejected PDF page group must not abort the packet immediately. The browser
+// retries the untouched source PDF once and uses only that result, preventing
+// partial or duplicate rows from reaching database staging.
+if (packetFallbackStart < 0 || packetFallbackEnd < 0) {
+  failures.push('Missing executable utility packet original-PDF fallback.');
+} else {
+  try {
+    const analyzeWithFallback = analyzePacketFallbackFixture;
+    const chunkCalls = [];
+    let originalCalls = 0;
+    const progress = [];
+    const result = await analyzeWithFallback(
+      [{page_offset:0},{page_offset:2},{page_offset:4}],
+      async chunk => {
+        chunkCalls.push(chunk.page_offset);
+        throw new Error('Analyzer rejected page group ' + chunk.page_offset);
+      },
+      async failures => {
+        originalCalls += 1;
+        assert(failures.length === 3, 'Original-PDF retry must receive all failed page groups.');
+        return { status:'supported', provider_key:'oncor', rows:[{contractor_unit_code:'A1'}] };
+      },
+      (...args) => progress.push(args)
+    );
+    assert(chunkCalls.join(',') === '0,2,4', 'Packet fallback must attempt every page group before retrying.');
+    assert(originalCalls === 1, 'Packet fallback must retry the untouched original PDF exactly once.');
+    assert(result.retriedOriginal === true && result.failedCount === 3, 'Packet fallback must report the retry and failure count.');
+    assert(result.parsedChunks.length === 1 && result.parsedChunks[0].rows.length === 1, 'Packet fallback must discard failed/partial chunks and use only the original-PDF result.');
+    assert(progress.some(entry => entry[3] === true), 'Packet fallback must notify the UI when the original PDF retry starts.');
+
+    let quotaOriginalCalls = 0;
+    const quotaError = new Error('The job-packet AI service is temporarily unavailable.');
+    quotaError.retryOriginal = false;
+    let quotaFailure = null;
+    try {
+      await analyzeWithFallback(
+        [{page_offset:0},{page_offset:2},{page_offset:4}],
+        async () => { throw quotaError; },
+        async () => { quotaOriginalCalls += 1; return {}; }
+      );
+    } catch (error) {
+      quotaFailure = error;
+    }
+    assert(
+      quotaFailure === quotaError && quotaOriginalCalls === 0,
+      'Quota/service failures must stop without wasting an original-PDF retry or blaming the file.'
+    );
+  } catch (error) {
+    failures.push('Utility packet fallback regression test failed: ' + error.message);
   }
 }
 
