@@ -54,11 +54,20 @@ export function normalizePacketExtraction(parsed, options = {}) {
     return normalized;
   }
   if (normalized.status === "uncertain") {
-    if (!["no_candidate_table", "needs_review"].includes(normalized.batch_disposition)) {
-      normalized.batch_disposition = "needs_review";
+    if (Array.isArray(normalized.rows) && normalized.rows.length) {
+      normalized.status = "supported";
+      normalized.batch_disposition = "supported_rows";
+      pushUnique(
+        normalized.warnings,
+        "Extracted rows were retained for mandatory review because the source layout or code meaning needs confirmation.",
+      );
+    } else {
+      if (!["no_candidate_table", "needs_review"].includes(normalized.batch_disposition)) {
+        normalized.batch_disposition = "needs_review";
+      }
+      normalized.rows = [];
+      return normalized;
     }
-    normalized.rows = [];
-    return normalized;
   }
   if (normalized.status !== "supported") return normalized;
 
