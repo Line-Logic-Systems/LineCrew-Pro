@@ -74,7 +74,7 @@ for (const marker of [
   'fileCodeCounts',
   'id="newPriceBookFileCheck"',
   'inspectNewPriceBookImportFile',
-  'No numeric unit prices were found.'
+  'spreadsheet rows were found.'
 ]) {
   assert(html.includes(marker), `Missing smart Unit Pricing import marker: ${marker}`);
 }

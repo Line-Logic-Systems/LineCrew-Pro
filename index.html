@@ -10823,38 +10823,25 @@ check.innerHTML =
 '<p class="muted">Nothing has been saved. Choose a different spreadsheet or correct the file and try again.</p>';
 return;
 }
-if(result.tableCount > 0 && result.pricedRowCount === 0){
+if(result.rawRowCount === 0){
 check.innerHTML =
-'<p class="import-error">No numeric unit prices were found.</p>' +
-'<p>This workbook contains unit codes or action columns, but no numeric Install, Transfer, Remove or Unit Price values. It cannot create contract pricing until prices are supplied.</p>' +
-'<p class="muted">Nothing has been saved.</p>';
-return;
-}
-if(result.pricedRowCount === 0){
-check.innerHTML =
-'<strong>File ready for column review</strong>' +
-'<p>No standard pricing table was detected automatically. Save and continue to choose the worksheet and match its columns before anything imports.</p>';
+'<p class="import-error">No completed spreadsheet rows were found.</p>' +
+'<p class="muted">Nothing has been saved. Choose a worksheet that contains headings and unit rows.</p>';
 return;
 }
 let html =
-'<strong>' + result.pricedRowCount + ' priced unit' +
-(result.pricedRowCount === 1 ? '' : 's') + ' detected</strong>' +
-'<p class="muted">Found across ' + result.recognizedSheetCount + ' worksheet' +
-(result.recognizedSheetCount === 1 ? '' : 's') +
-'. Review the sample below. You will confirm the complete import after saving this pricing record.</p>';
+'<strong>' + result.rawRowCount + ' spreadsheet row' +
+(result.rawRowCount === 1 ? '' : 's') + ' detected</strong>' +
+'<p class="muted">Found across ' + result.rawSheetCount + ' worksheet' +
+(result.rawSheetCount === 1 ? '' : 's') +
+'. This is the spreadsheet as supplied. Save and continue to match or rename its columns before anything imports.</p>';
 html +=
 '<div class="import-table-wrap"><table class="import-table">' +
-'<thead><tr><th>Unit Code</th><th>Description</th><th>Install</th><th>Transfer</th><th>Remove</th></tr></thead><tbody>';
-result.sampleRows.forEach(entry => {
-const row = entry.row || {};
-html +=
-'<tr>' +
-'<td>' + escapeHtml(row['Unit Code'] || '—') + '</td>' +
-'<td>' + escapeHtml(row.Description || row['Unit Name'] || '—') + '</td>' +
-'<td>' + escapeHtml(newPriceBookPreviewPrice(row['Install Price'])) + '</td>' +
-'<td>' + escapeHtml(newPriceBookPreviewPrice(row['Transfer Price'])) + '</td>' +
-'<td>' + escapeHtml(newPriceBookPreviewPrice(row['Retirement Price'])) + '</td>' +
-'</tr>';
+'<thead><tr>' + result.rawHeaders.map(header => '<th>' + escapeHtml(header) + '</th>').join('') + '</tr></thead><tbody>';
+result.rawSampleRows.forEach(row => {
+html += '<tr>' + result.rawHeaders.map((header,index) =>
+'<td>' + escapeHtml(String(row[index] ?? '') || '—') + '</td>'
+).join('') + '</tr>';
 });
 html += '</tbody></table></div>';
 check.innerHTML = html;
@@ -10875,11 +10862,36 @@ let tableCount = 0;
 let pricedRowCount = 0;
 let recognizedSheetCount = 0;
 const sampleRows = [];
+let rawRowCount = 0;
+let rawSheetCount = 0;
+let rawHeaders = [];
+let rawSampleRows = [];
 workbook.SheetNames.forEach(sheetName => {
 const matrix = XLSX.utils.sheet_to_json(
 workbook.Sheets[sheetName],
 { header:1,defval:'',raw:false,blankrows:true }
 );
+const nonEmptyRows = matrix.filter(row =>
+row.some(value => String(value ?? '').trim() !== '')
+);
+if(nonEmptyRows.length){
+rawSheetCount += 1;
+let headerIndex = 0;
+let bestScore = -1;
+nonEmptyRows.slice(0,25).forEach((row,index) => {
+const score = importHeaderScore(row);
+if(score > bestScore){ bestScore = score; headerIndex = index; }
+});
+const headers = nonEmptyRows[headerIndex].map((value,index) =>
+String(value ?? '').trim() || spreadsheetColumnName(index)
+);
+const dataRows = nonEmptyRows.slice(headerIndex + 1);
+rawRowCount += dataRows.length;
+if(!rawHeaders.length){
+rawHeaders = headers;
+rawSampleRows = dataRows.slice(0,5);
+}
+}
 const analysis = extractStructuredPricingRows(sheetName,matrix);
 tableCount += analysis.tableCount;
 pricedRowCount += analysis.rows.length;
@@ -10896,6 +10908,10 @@ tableCount,
 pricedRowCount,
 recognizedSheetCount,
 sampleRows,
+rawRowCount,
+rawSheetCount,
+rawHeaders,
+rawSampleRows,
 error:null
 };
 }
@@ -11016,11 +11032,10 @@ alert('The pricing file could not be read. Nothing was saved.');
 return;
 }
 if(
-newPriceBookFilePreflight?.tableCount > 0 &&
-newPriceBookFilePreflight?.pricedRowCount === 0
+newPriceBookFilePreflight?.rawRowCount === 0
 ){
 $('newPriceBookFileCheck').scrollIntoView({ behavior:'auto',block:'center' });
-alert('This workbook has unit information but no numeric prices. Nothing was saved.');
+alert('This workbook does not contain any completed spreadsheet rows. Nothing was saved.');
 return;
 }
 }
@@ -13289,15 +13304,6 @@ applyImportColumnMapping();
 return;
 }
 if(!currentPriceBookWorkbook.Sheets[sheetName]) throw new Error('The selected worksheet could not be read.');
-const structuredAnalysis = currentPriceBookStructuredSheets.get(sheetName);
-if(structuredAnalysis?.rows.length){
-if(structuredAnalysis.rows.length > 5000) throw new Error('Import up to 5,000 completed pricing rows at a time. Split larger files and try again.');
-currentPriceBookSourceRows = structuredAnalysis.rows;
-currentPriceBookImportNotice = structuredImportNotice([structuredAnalysis]);
-configureImportColumnMappings(Object.keys(structuredAnalysis.rows[0].row));
-applyImportColumnMapping();
-return;
-}
 const sheet=currentPriceBookWorkbook.Sheets[sheetName];
 const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false,blankrows:false});
 if(!matrix.length) throw new Error('No pricing rows were found in this worksheet.');
@@ -13353,9 +13359,7 @@ workbook.SheetNames.length < 2 &&
 currentPriceBookStructuredSheets.size < 2
 )
 );
-const initialSheet = currentPriceBookStructuredSheets.size > 1
-? '__all_recognized_pricing__'
-: currentPriceBookStructuredSheets.keys().next().value || workbook.SheetNames[0];
+const initialSheet = workbook.SheetNames[0];
 $('priceBookWorksheet').value = initialSheet;
 loadImportWorksheet(initialSheet);
 }
