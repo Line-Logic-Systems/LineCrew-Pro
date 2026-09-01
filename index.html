@@ -10062,6 +10062,21 @@ setContractSetupStage('customer');
 }
 $('reviewSetupPriceBookBtn').onclick = () => {
 const priceBookId = $('contractSetupReview').dataset.priceBookId;
+$('manageExistingContracts').open = true;
+if(
+priceBookId &&
+currentOpenPriceBook?.id === priceBookId &&
+$('priceBookDetail').dataset.priceBookId === priceBookId
+){
+$('priceBookDetail').classList.remove('hidden');
+const reviewTarget =
+currentPriceBookImportRows.length > 0 &&
+!$('priceBookImportCard').classList.contains('hidden')
+? $('priceBookImportCard')
+: $('priceBookDetail');
+reviewTarget.scrollIntoView({ behavior:'auto',block:'start' });
+return;
+}
 const record = priceBookNavigationRecords.get(priceBookId);
 if(!record){
 alert('Refresh the page, then open the saved Price Book under Manage Existing Contracts.');
@@ -11592,6 +11607,7 @@ contract,
 customer,
 recordHistory = true
 ){
+$('manageExistingContracts').open = true;
 if(recordHistory){
 const currentState = window.history.state;
 if(
