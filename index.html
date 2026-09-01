@@ -5639,16 +5639,50 @@ return roleLabels[String(role || '').toLowerCase()] || 'Foreman';
 function roleOptionsForMember(member){
 const actor = currentUserRole();
 const target = String(member.role || 'foreman').toLowerCase();
-if(actor === 'owner') return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin'],['owner','Owner']];
+if(member.id === currentProfile.id) return [];
+if(member.active === false) return [];
+if(actor === 'owner'){
+if(target === 'owner') return [];
+return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];
+}
 if(actor === 'admin'){
 if(['owner','admin'].includes(target)) return [];
-return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent']];
+return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];
 }
 if(actor === 'superintendent' && userCanManageRoles()){
 if(!['foreman','gf'].includes(target)) return [];
 return [['foreman','Foreman'],['gf','General Foreman']];
 }
 return [];
+}
+function canTransferOwnershipTo(member){
+return userIsOwner() &&
+member.id !== currentProfile.id &&
+member.active !== false &&
+String(member.role || '').toLowerCase() === 'admin';
+}
+async function transferCompanyOwnership(member,button){
+if(!canTransferOwnershipTo(member) || button?.disabled) return;
+const memberName = member.full_name || 'this Admin';
+const confirmed = confirm(
+'Transfer company ownership to '+memberName+'?\n\n'
++'They will become the single Owner and your account will become Admin. This changes company governance immediately.'
+);
+if(!confirmed) return;
+const priorText = button?.textContent;
+if(button){ button.disabled = true; button.textContent = 'Transferring...'; }
+const { error } = await sb.rpc(
+'linecrew_transfer_company_owner',
+{ target_admin_id:member.id }
+);
+if(error){
+alert('Unable to transfer ownership: '+error.message);
+if(button){ button.disabled = false; button.textContent = priorText; }
+await loadTeamMembers();
+return;
+}
+alert('Ownership transferred to '+memberName+'. Your role is now Admin.');
+await loadApp();
 }
 function canChangeMemberAccess(member){
 if(member.id === currentProfile.id || !userCanManageTeam()) return false;
@@ -5699,11 +5733,16 @@ await loadTeamMembers();
 details.appendChild(save);
 card.appendChild(details);
 }
-async function claimInitialOwner(){
-if(currentUserRole() !== 'admin') return;
+async function claimInitialOwner(button){
+if(currentUserRole() !== 'admin' || button?.disabled) return;
 if(!confirm('Make your account the Owner for this company? The Owner controls Admin access and company governance.')) return;
+const priorText = button?.textContent;
+if(button){ button.disabled = true; button.textContent = 'Assigning Owner...'; }
 const { error } = await sb.rpc('linecrew_claim_initial_owner');
-if(error) return alert('Unable to assign Owner: ' + error.message);
+if(error){
+if(button){ button.disabled = false; button.textContent = priorText; }
+return alert('Unable to assign Owner: ' + error.message);
+}
 alert('You are now the company Owner.');
 await loadApp();
 }
@@ -5730,7 +5769,7 @@ notice.innerHTML = '<strong>Company Owner not assigned</strong><p class="muted">
 const button = document.createElement('button');
 button.className = 'success small';
 button.textContent = 'Make Me Company Owner';
-button.onclick = claimInitialOwner;
+button.onclick = ()=>claimInitialOwner(button);
 notice.appendChild(button);
 $('teamList').appendChild(notice);
 }
@@ -5749,8 +5788,15 @@ const controls=document.createElement('div'); controls.className='import-actions
 const roleSelect=document.createElement('select'); roleSelect.className='team-role-select';
 options.forEach(([value,label]) => { const option=document.createElement('option'); option.value=value; option.textContent=label; roleSelect.appendChild(option); });
 roleSelect.value=String(member.role||'foreman').toLowerCase();
-const save=document.createElement('button'); save.className='secondary small'; save.textContent='Save Role'; save.onclick=()=>updateTeamMemberRole(member,roleSelect.value);
+const save=document.createElement('button'); save.className='secondary small'; save.textContent='Save Role'; save.onclick=()=>updateTeamMemberRole(member,roleSelect.value,save,roleSelect);
 controls.append(roleSelect,save); card.appendChild(controls);
+}
+if(canTransferOwnershipTo(member)){
+const transfer=document.createElement('button');
+transfer.className='warning small';
+transfer.textContent='Transfer Ownership';
+transfer.onclick=()=>transferCompanyOwnership(member,transfer);
+card.appendChild(transfer);
 }
 if(canChangeMemberAccess(member)){
 const access=document.createElement('button'); access.className=(member.active===false?'success':'warning')+' small'; access.textContent=member.active===false?'Restore Access':'Suspend Access'; access.onclick=()=>changeTeamMemberAccess(member); card.appendChild(access);
@@ -5764,13 +5810,26 @@ $('manageFieldEmployeesBtn').onclick = () => {
 if(typeof window.openLineCrewTimekeeping === 'function') window.openLineCrewTimekeeping({ focusRoster:true });
 else alert('Employee roster is still loading. Please try again.');
 };
-async function updateTeamMemberRole(member,nextRole){
-if(!userCanManageRoles()) return;
+async function updateTeamMemberRole(member,nextRole,button,roleSelect){
+if(!userCanManageRoles() || button?.disabled) return;
 const currentRole=String(member.role||'foreman').toLowerCase();
 if(currentRole===nextRole) return alert('This team member already has that role.');
-if(!confirm('Change '+(member.full_name||'this team member')+' from '+formatTeamRole(currentRole)+' to '+formatTeamRole(nextRole)+'?')) return;
+const adminWarning = nextRole === 'admin'
+?'\n\nAdmins have full company access, including billing, pricing, contracts and team controls. If no Owner exists, an Admin can claim the initial Owner role.'
+:'';
+if(!confirm('Change '+(member.full_name||'this team member')+' from '+formatTeamRole(currentRole)+' to '+formatTeamRole(nextRole)+'?'+adminWarning)) return;
+const priorText = button?.textContent;
+if(button){ button.disabled = true; button.textContent = 'Saving...'; }
+if(roleSelect) roleSelect.disabled = true;
 const { error } = await sb.rpc('linecrew_set_member_role',{ target_user_id:member.id,new_role:nextRole });
-if(error){ alert('Unable to update the team member’s role: '+error.message); await loadTeamMembers(); return; }
+if(error){
+alert('Unable to update the team member’s role: '+error.message);
+if(button){ button.disabled = false; button.textContent = priorText; }
+if(roleSelect) roleSelect.disabled = false;
+await loadTeamMembers();
+return;
+}
+if(nextRole === 'admin') alert('Admin role assigned. Have the new Admin refresh or sign in again and complete authenticator setup when prompted.');
 if(member.id===currentProfile.id) await loadApp(); else await loadTeamMembers();
 }
 async function changeTeamMemberAccess(member){
@@ -8900,7 +8959,11 @@ answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General F
 },
 {
 terms:['add admin','more admins','new admin','promote admin','make admin'],
-answer:'Only an Owner can add, remove, promote, or demote an Admin. Open Team, find the member, choose Admin in the Role dropdown, and Save Role. Admins cannot change Owners or other Admins. Keep at least one active Owner at all times.'
+answer:'Owner or Admin opens Team, finds an active Foreman, General Foreman or Superintendent, chooses Admin in the Role dropdown and selects Save Role. An Admin cannot alter an existing Admin or assign Owner. The new Admin should refresh or sign in again and complete authenticator setup when prompted. If the company has no Owner, any active Admin sees Make Me Company Owner; after an Owner exists, only that Owner can use Transfer Ownership to hand the single Owner role to another active Admin.'
+},
+{
+terms:['claim owner','claim the owner role','make owner','become owner','transfer owner','transfer ownership','company owner'],
+answer:'Owner is a single company-governance role. When a company has no Owner, an active Admin can open Team and choose Make Me Company Owner. Once an Owner exists, no Admin can claim or assign Owner; the current Owner must open Team and choose Transfer Ownership on another active Admin. The transfer makes that Admin the Owner and changes the previous Owner to Admin in one step.'
 },
 {
 terms:['promote foreman','make general foreman','promote to general','change role','save role'],
@@ -8936,7 +8999,7 @@ answer:'Pending Job Units means production was reported before a utility job pac
 },
 {
 terms:['team','foreman','general foreman','role','permissions','superintendent permissions','change role'],
-answer:'Open Team for login accounts and role controls. Hierarchy: Owner > Admin > Superintendent > General Foreman > Foreman. Only Owner manages Owner/Admin roles; Admin manages Superintendent/GF/Foreman; a Superintendent with Role Management may manage GF/Foreman only. Owner/Admin can set each Superintendent capability. Role changes may require refresh or sign-out/sign-in.'
+answer:'Open Team for login accounts and role controls. Hierarchy: Owner > Admin > Superintendent > General Foreman > Foreman. Owner/Admin can promote a lower-role member to Admin, but only Owner can change an existing Admin. Admin cannot assign Owner. A company with no Owner lets one active Admin claim it; later changes use Owner-controlled Transfer Ownership. A Superintendent with Role Management may manage GF/Foreman only. Owner/Admin can set each Superintendent capability. Role changes may require refresh or sign-out/sign-in.'
 },
 {
 terms:['assign job','job assignment','multiple foremen','more than one foreman','assignment history','who assigned'],

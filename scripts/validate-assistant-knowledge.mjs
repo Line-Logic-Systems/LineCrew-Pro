@@ -87,6 +87,21 @@ const scenarios = [
     expected: ['Assistant Memory from the Dashboard', 'no Edit button', 'remove and resave']
   },
   {
+    role: 'Admin',
+    question: 'How do I make someone else an Admin?',
+    expected: ['Owner or Admin', 'authenticator setup']
+  },
+  {
+    role: 'Admin',
+    question: 'Can I claim the Owner role?',
+    expected: ['no Owner', 'Make Me Company Owner']
+  },
+  {
+    role: 'Owner',
+    question: 'How do I transfer company ownership?',
+    expected: ['Transfer Ownership', 'previous Owner to Admin']
+  },
+  {
     role: 'Superintendent',
     question: 'How does a Superintendent enter overhead time in My Time?',
     expected: ['General Foreman, Superintendent, Admin and Owner', 'Company Overhead']

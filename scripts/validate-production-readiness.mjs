@@ -6,6 +6,12 @@ const hasVersionedAsset = (source, assetName) => {
   const escapedName = assetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`${escapedName}\\?v=[A-Za-z0-9._-]+`).test(source);
 };
+const sourceBetween = (source, startMarker, endMarker) => {
+  const start = source.indexOf(startMarker);
+  if (start < 0) return '';
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  return end > start ? source.slice(start, end) : '';
+};
 
 const mustExist = [
   'index.html',
@@ -55,6 +61,7 @@ const mustExist = [
   'supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql',
   'supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql',
   'supabase/migrations/20260901045812_optimize_job_packet_review_import.sql',
+  'supabase/migrations/20260901055156_admin_promotion_and_single_owner_governance.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -73,7 +80,6 @@ const pilotFeedbackNotifier = fs.readFileSync('supabase/functions/notify-pilot-f
 const invitationSignup = fs.readFileSync('supabase/functions/complete-team-invitation-signup/index.ts', 'utf8');
 const edgeApiKeys = fs.readFileSync('supabase/functions/_shared/api-keys.ts', 'utf8');
 const roleMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_roles.sql', 'utf8');
-const accessMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_team_access.sql', 'utf8');
 const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', 'utf8');
 const superintendentCompat = fs.readFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
 const driftRepair = fs.readFileSync('supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql', 'utf8');
@@ -109,6 +115,7 @@ const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260827120
 const jobJacketIntegrity = fs.readFileSync('supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql', 'utf8');
 const jobJacketReimport = fs.readFileSync('supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql', 'utf8');
 const packetTimeoutFix = fs.readFileSync('supabase/migrations/20260901045812_optimize_job_packet_review_import.sql', 'utf8');
+const roleGovernance = fs.readFileSync('supabase/migrations/20260901055156_admin_promotion_and_single_owner_governance.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const dailyCompanyBackup = fs.readFileSync('.github/workflows/daily-company-data-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
@@ -162,7 +169,7 @@ assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must a
 assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
 assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
 assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
-assert(assistant.includes('2026-09-01-job-jacket-end-to-end-v9'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('2026-09-01-admin-owner-governance-v10'), 'AI assistant knowledge version marker must track the current workflow release.');
 assert(assistant.includes('loadLiveCompanyContext('), 'AI assistant must load permission-scoped live company context.');
 assert(assistant.includes('assistantModelConfig(requestPlan.route'), 'AI assistant must route complex questions to the reasoning model.');
 assert(assistant.includes('safety_identifier: safetyIdentifier'), 'AI assistant requests must include a privacy-preserving safety identifier.');
@@ -672,19 +679,109 @@ for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');
 assert(roleMigration.includes('linecrew_claim_initial_owner'), 'Role migration must provide a safe initial Owner claim path.');
 assert(roleMigration.includes('linecrew_set_member_role'), 'Role migration must centralize role changes.');
-assert(roleMigration.includes('Only an Owner can manage Owner or Admin roles'), 'Admins must not be able to manage Owners or peer Admins.');
-assert(roleMigration.includes('Assign another Owner before removing the last Owner'), 'The last Owner must be protected from removal.');
 assert(roleMigration.includes('A Superintendent can manage General Foreman and Foreman roles only'), 'Superintendent delegated role management must stop above GF/Foreman.');
 assert(roleMigration.includes("role_permissions ->> 'role_management'"), 'Superintendent role-management capability must be enforced server-side.');
 assert(roleMigration.includes('linecrew_set_superintendent_permissions'), 'Superintendent permission overrides must be server-enforced.');
 assert(roleMigration.includes("jsonb_typeof(item.value) <> 'boolean'"), 'Superintendent overrides must accept boolean values only.');
 assert(roleMigration.includes('actor.active is not true'), 'Role-management RPCs must reject suspended leadership profiles.');
 assert(roleMigration.includes('and p.active is true'), 'Capability checks must reject suspended profiles.');
+for (const marker of [
+  'profiles_one_owner_per_company_idx',
+  "requested_role not in ('foreman','gf','superintendent','admin')",
+  'Admins may promote a Foreman, General Foreman, or Superintendent to Admin.',
+  'Only the Owner can change an existing Admin.',
+  'linecrew_transfer_company_owner',
+  'company_ownership_transferred',
+  "Restore this team member''s access before changing their role.",
+  "'role_permissions', target.role_permissions",
+  'Your role or access changed while the access update was starting.',
+  "set search_path = ''",
+  'for update'
+]) assert(roleGovernance.includes(marker), `Current Owner/Admin governance is missing: ${marker}`);
+assert(!roleGovernance.includes("requested_role not in ('foreman','gf','superintendent','admin','owner')"), 'Generic role management must not assign Owner.');
+const setMemberRoleGovernance = sourceBetween(
+  roleGovernance,
+  'create or replace function public.linecrew_set_member_role(',
+  'create or replace function public.linecrew_transfer_company_owner('
+);
+const targetActiveGuard = setMemberRoleGovernance.indexOf('if target.active is not true then');
+const roleUpdate = setMemberRoleGovernance.indexOf('update public.profiles');
+assert(
+  targetActiveGuard >= 0 && roleUpdate > targetActiveGuard,
+  'The member-role RPC must reject every suspended target before updating their profile.'
+);
 
-assert(accessMigration.includes('set_company_member_active'), 'Team access changes need a secured hierarchy RPC.');
-assert(accessMigration.includes("target_role in ('owner','admin')"), 'Admins must not suspend Owners or peer Admins.');
-assert(accessMigration.includes("target_role not in ('foreman','gf')"), 'Superintendents must not suspend peers or higher roles.');
-assert(accessMigration.includes('Assign another active Owner before suspending the last Owner'), 'The final active Owner must be protected from suspension.');
+const teamRoleOptions = sourceBetween(
+  index,
+  'function roleOptionsForMember(member){',
+  'function canTransferOwnershipTo(member){'
+);
+const adminRoleOptions = sourceBetween(
+  teamRoleOptions,
+  "if(actor === 'admin'){",
+  "if(actor === 'superintendent'"
+);
+assert(
+  teamRoleOptions.indexOf('if(member.active === false) return [];') >= 0 &&
+    teamRoleOptions.indexOf('if(member.active === false) return [];') < teamRoleOptions.indexOf("if(actor === 'admin'){"),
+  'Team role controls must reject suspended members before evaluating Admin options.'
+);
+assert(
+  adminRoleOptions.includes("if(['owner','admin'].includes(target)) return [];") &&
+    adminRoleOptions.includes("return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];") &&
+    !adminRoleOptions.includes("['owner','Owner']"),
+  'The Admin branch must manage active lower roles through Admin without exposing Owner or peer-Admin controls.'
+);
+
+const transferOwnershipHandler = sourceBetween(
+  index,
+  'async function transferCompanyOwnership(member,button){',
+  'function canChangeMemberAccess(member){'
+);
+const claimOwnerHandler = sourceBetween(
+  index,
+  'async function claimInitialOwner(button){',
+  'let teamLoadRequest = 0;'
+);
+const updateRoleHandler = sourceBetween(
+  index,
+  'async function updateTeamMemberRole(member,nextRole,button,roleSelect){',
+  'async function changeTeamMemberAccess(member){'
+);
+const teamRenderer = sourceBetween(
+  index,
+  'async function loadTeamMembers(){',
+  "$('manageFieldEmployeesBtn').onclick"
+);
+for (const [handler, pendingLabel, restoreMarker, message] of [
+  [transferOwnershipHandler, "button.textContent = 'Transferring...'", 'button.textContent = priorText;', 'ownership transfer'],
+  [claimOwnerHandler, "button.textContent = 'Assigning Owner...'", 'button.textContent = priorText;', 'initial Owner claim'],
+  [updateRoleHandler, "button.textContent = 'Saving...'", 'roleSelect.disabled = false;', 'member role save']
+]) {
+  assert(
+    handler.includes('button?.disabled') &&
+      handler.includes('button.disabled = true') &&
+      handler.includes(pendingLabel) &&
+      handler.includes('button.disabled = false') &&
+      handler.includes(restoreMarker),
+    `The ${message} UI must prevent duplicate requests and restore controls after an error.`
+  );
+}
+assert(
+  updateRoleHandler.includes('roleSelect.disabled = true;') &&
+    teamRenderer.includes('button.onclick = ()=>claimInitialOwner(button);') &&
+    teamRenderer.includes('save.onclick=()=>updateTeamMemberRole(member,roleSelect.value,save,roleSelect);') &&
+    teamRenderer.includes('transfer.onclick=()=>transferCompanyOwnership(member,transfer);'),
+  'Team role controls must pass their rendered buttons/select into the single-flight handlers.'
+);
+assert(transferOwnershipHandler.includes("'linecrew_transfer_company_owner'"), 'Team UI must use the explicit ownership-transfer RPC.');
+assert(assistant.includes('May promote an active Foreman, General Foreman or Superintendent to Admin'), 'Live Assistant role guidance must explain Admin promotion safely.');
+assert(assistant.includes('single Owner role to another active Admin'), 'Live Assistant role guidance must explain explicit ownership transfer.');
+
+assert(roleGovernance.includes('set_company_member_active'), 'Current team access changes need the governance-serialized hierarchy RPC.');
+assert(roleGovernance.includes("target_role in ('owner','admin')"), 'Admins must not suspend Owners or peer Admins.');
+assert(roleGovernance.includes("target_role not in ('foreman','gf')"), 'Superintendents must not suspend peers or higher roles.');
+assert(roleGovernance.includes('Transfer ownership before suspending the company Owner.'), 'The single Owner must be protected from suspension.');
 
 assert(ownerCompat.includes("'owner'"), 'Legacy secured RPCs must recognize Owner.');
 assert(superintendentCompat.includes('linecrew_has_capability'), 'Legacy Superintendent RPC compatibility must be capability-gated.');
@@ -736,6 +833,7 @@ for (const marker of [
   "linecrew_set_member_role",
   "linecrew_set_superintendent_permissions",
   "linecrew_claim_initial_owner",
+  "linecrew_transfer_company_owner",
   "userCanManageCustomersContracts()",
   "userCanManagePriceBooks()",
   "userCanManageJobPackages()",

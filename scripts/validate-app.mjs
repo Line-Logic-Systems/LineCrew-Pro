@@ -1,9 +1,39 @@
 import fs from 'node:fs';
+import vm from 'node:vm';
 
 const html = fs.readFileSync('index.html', 'utf8');
 const failures = [];
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
+};
+
+const extractNamedFunction = (source, name) => {
+  const starts = [`async function ${name}(`, `function ${name}(`];
+  const start = starts
+    .map(marker => source.indexOf(marker))
+    .find(index => index >= 0);
+  if (start === undefined) return '';
+  const bodyStart = source.indexOf('{', start);
+  if (bodyStart < 0) return '';
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const character = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === quote) quote = '';
+      continue;
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character;
+      continue;
+    }
+    if (character === '{') depth += 1;
+    else if (character === '}' && --depth === 0) return source.slice(start, index + 1);
+  }
+  return '';
 };
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
@@ -44,9 +74,186 @@ for (const marker of [
   "foreman:'Foreman'",
   'linecrew_set_member_role',
   'linecrew_set_superintendent_permissions',
-  'linecrew_claim_initial_owner'
+  'linecrew_claim_initial_owner',
+  'linecrew_transfer_company_owner',
+  'Transfer Ownership'
 ]) {
   assert(html.includes(marker), `Missing critical role/team marker: ${marker}`);
+}
+const teamFunctionNames = [
+  'currentUserRole',
+  'userIsOwner',
+  'formatTeamRole',
+  'roleOptionsForMember',
+  'canTransferOwnershipTo',
+  'transferCompanyOwnership',
+  'claimInitialOwner',
+  'updateTeamMemberRole'
+];
+const teamFunctionSources = teamFunctionNames.map(name => extractNamedFunction(html, name));
+if (teamFunctionSources.some(source => !source)) {
+  failures.push('Missing executable Team role-management functions.');
+} else {
+  const teamContext = {
+    currentProfile:{ id:'actor-admin', role:'admin' },
+    alerts:[],
+    teamLoads:0,
+    appLoads:0,
+    confirm:()=>true,
+    alert:message => teamContext.alerts.push(String(message)),
+    userCanManageRoles:()=>true,
+    loadTeamMembers:async () => { teamContext.teamLoads += 1; },
+    loadApp:async () => { teamContext.appLoads += 1; },
+    sb:{ rpc:async () => ({ error:null }) }
+  };
+  try {
+    vm.createContext(teamContext);
+    teamFunctionSources.forEach(source => vm.runInContext(source, teamContext));
+    const roleValues = member =>
+      Array.from(teamContext.roleOptionsForMember(member), option => option[0]);
+    const allManagedRoles = ['foreman','gf','superintendent','admin'];
+    const lowerRoles = ['foreman','gf','superintendent'];
+    const expectRoles = (actual, expected, message) =>
+      assert(JSON.stringify(actual) === JSON.stringify(expected), message);
+
+    teamContext.currentProfile = { id:'actor-admin', role:'admin' };
+    lowerRoles.forEach(role => {
+      expectRoles(
+        roleValues({ id:`active-${role}`, role, active:true }),
+        allManagedRoles,
+        `Admin must be able to assign every managed role to an active ${role}.`
+      );
+    });
+    expectRoles(
+      roleValues({ id:'suspended-foreman', role:'foreman', active:false }),
+      [],
+      'Suspended team members must be restored before role controls are shown.'
+    );
+    expectRoles(
+      roleValues({ id:'peer-admin', role:'admin', active:true }),
+      [],
+      'Admin must not change a peer Admin.'
+    );
+    expectRoles(
+      roleValues({ id:'company-owner', role:'owner', active:true }),
+      [],
+      'Admin must not receive Owner controls.'
+    );
+    expectRoles(
+      roleValues({ id:'actor-admin', role:'foreman', active:true }),
+      [],
+      'Team role controls must not allow self-role changes.'
+    );
+
+    teamContext.currentProfile = { id:'actor-owner', role:'owner' };
+    expectRoles(
+      roleValues({ id:'peer-admin', role:'admin', active:true }),
+      allManagedRoles,
+      'Owner must be able to manage an active Admin without assigning Owner generically.'
+    );
+    expectRoles(
+      roleValues({ id:'suspended-admin', role:'admin', active:false }),
+      [],
+      'Owner must restore a suspended Admin before changing their role.'
+    );
+    assert(
+      teamContext.canTransferOwnershipTo({ id:'peer-admin', role:'admin', active:true }) &&
+        !teamContext.canTransferOwnershipTo({ id:'suspended-admin', role:'admin', active:false }) &&
+        !teamContext.canTransferOwnershipTo({ id:'active-foreman', role:'foreman', active:true }),
+      'Ownership transfer must be limited to another active Admin.'
+    );
+
+    const installDeferredRpc = () => {
+      const calls = [];
+      teamContext.sb.rpc = (name, args) => new Promise(resolve => {
+        calls.push({ name, args, resolve });
+      });
+      return calls;
+    };
+
+    teamContext.teamLoads = 0;
+    let calls = installDeferredRpc();
+    const transferButton = { disabled:false, textContent:'Transfer Ownership' };
+    const transferTarget = { id:'peer-admin', full_name:'Peer Admin', role:'admin', active:true };
+    const firstTransfer = teamContext.transferCompanyOwnership(transferTarget, transferButton);
+    const repeatedTransfer = teamContext.transferCompanyOwnership(transferTarget, transferButton);
+    assert(
+      calls.length === 1 &&
+        calls[0].name === 'linecrew_transfer_company_owner' &&
+        calls[0].args?.target_admin_id === transferTarget.id &&
+        transferButton.disabled &&
+        transferButton.textContent === 'Transferring...',
+      'Ownership transfer must enter a single-flight pending state before awaiting the RPC.'
+    );
+    calls.forEach(call => call.resolve({ error:{ message:'expected transfer failure' } }));
+    await Promise.all([firstTransfer, repeatedTransfer]);
+    assert(
+      !transferButton.disabled &&
+        transferButton.textContent === 'Transfer Ownership' &&
+        teamContext.teamLoads === 1,
+      'Ownership transfer errors must restore the button and reload authoritative Team state.'
+    );
+
+    teamContext.currentProfile = { id:'actor-admin', role:'admin' };
+    calls = installDeferredRpc();
+    const claimButton = { disabled:false, textContent:'Make Me Company Owner' };
+    const firstClaim = teamContext.claimInitialOwner(claimButton);
+    const repeatedClaim = teamContext.claimInitialOwner(claimButton);
+    assert(
+      calls.length === 1 &&
+        calls[0].name === 'linecrew_claim_initial_owner' &&
+        claimButton.disabled &&
+        claimButton.textContent === 'Assigning Owner...',
+      'Initial Owner claim must enter a single-flight pending state before awaiting the RPC.'
+    );
+    calls.forEach(call => call.resolve({ error:{ message:'expected claim failure' } }));
+    await Promise.all([firstClaim, repeatedClaim]);
+    assert(
+      !claimButton.disabled && claimButton.textContent === 'Make Me Company Owner',
+      'Initial Owner claim errors must restore the original button state.'
+    );
+
+    teamContext.teamLoads = 0;
+    calls = installDeferredRpc();
+    const saveButton = { disabled:false, textContent:'Save Role' };
+    const roleSelect = { disabled:false };
+    const roleTarget = { id:'active-foreman', full_name:'Active Foreman', role:'foreman', active:true };
+    const firstSave = teamContext.updateTeamMemberRole(roleTarget, 'admin', saveButton, roleSelect);
+    const repeatedSave = teamContext.updateTeamMemberRole(roleTarget, 'admin', saveButton, roleSelect);
+    assert(
+      calls.length === 1 &&
+        calls[0].name === 'linecrew_set_member_role' &&
+        calls[0].args?.target_user_id === roleTarget.id &&
+        calls[0].args?.new_role === 'admin' &&
+        saveButton.disabled &&
+        roleSelect.disabled &&
+        saveButton.textContent === 'Saving...',
+      'Save Role must disable both controls and remain single-flight while its RPC is pending.'
+    );
+    calls.forEach(call => call.resolve({ error:{ message:'expected role failure' } }));
+    await Promise.all([firstSave, repeatedSave]);
+    assert(
+      !saveButton.disabled &&
+        !roleSelect.disabled &&
+        saveButton.textContent === 'Save Role' &&
+        teamContext.teamLoads === 1,
+      'Save Role errors must restore both controls and reload authoritative Team state.'
+    );
+
+    const teamRendererStart = html.indexOf('async function loadTeamMembers(){');
+    const teamRendererEnd = html.indexOf("$('manageFieldEmployeesBtn').onclick", teamRendererStart);
+    const teamRenderer = teamRendererStart >= 0 && teamRendererEnd > teamRendererStart
+      ? html.slice(teamRendererStart, teamRendererEnd)
+      : '';
+    assert(
+      teamRenderer.includes('button.onclick = ()=>claimInitialOwner(button);') &&
+        teamRenderer.includes('save.onclick=()=>updateTeamMemberRole(member,roleSelect.value,save,roleSelect);') &&
+        teamRenderer.includes('transfer.onclick=()=>transferCompanyOwnership(member,transfer);'),
+      'Rendered Team buttons must pass their controls into the single-flight handlers.'
+    );
+  } catch (error) {
+    failures.push('Team role-management behavior regression test failed: ' + error.message);
+  }
 }
 
 // Flexible JSA/mobile capture and the in-app multi-page viewer are core pilot flows.
