@@ -19,12 +19,16 @@ function pushUnique(values, value) {
  * Deterministically checks a structured packet result. The model's own
  * confidence is only one signal: malformed rows, impossible page numbers,
  * review notes, and scan-quality warnings also trigger the full-model pass.
+ *
+ * @param {unknown} parsed
+ * @param {{profileVersion?: string, pageOffset?: number, pageCount?: number}} options
  */
-export function assessPacketExtraction(parsed, {
-  profileVersion,
-  pageOffset = 0,
-  pageCount = 1,
-} = {}) {
+export function assessPacketExtraction(parsed, options = {}) {
+  const {
+    profileVersion = "",
+    pageOffset = 0,
+    pageCount = 1,
+  } = options;
   const invalidReasons = [];
   const fallbackReasons = [];
 
