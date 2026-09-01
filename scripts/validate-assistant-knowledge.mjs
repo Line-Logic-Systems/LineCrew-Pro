@@ -97,6 +97,11 @@ const scenarios = [
     expected: ['no Owner', 'Make Me Company Owner']
   },
   {
+    role: 'Admin',
+    question: 'What do I do if the registered Owner leaves?',
+    expected: ['Ownership Recovery', 'active Admin', 'one transaction']
+  },
+  {
     role: 'Owner',
     question: 'How do I transfer company ownership?',
     expected: ['Transfer Ownership', 'previous Owner to Admin']

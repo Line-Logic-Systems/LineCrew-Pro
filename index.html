@@ -5671,6 +5671,11 @@ member.id !== currentProfile.id &&
 member.active !== false &&
 String(member.role || '').toLowerCase() === 'admin';
 }
+function canAdminReplaceOwner(member){
+return currentUserRole() === 'admin' &&
+member.id !== currentProfile.id &&
+String(member.role || '').toLowerCase() === 'owner';
+}
 async function transferCompanyOwnership(member,button){
 if(!canTransferOwnershipTo(member) || button?.disabled) return;
 const memberName = member.full_name || 'this Admin';
@@ -5693,6 +5698,38 @@ return;
 }
 alert('Ownership transferred to '+memberName+'. Your role is now Admin.');
 await loadApp();
+}
+async function replaceCompanyOwnerAsAdmin(owner,replacement,formerRole,button,replacementSelect,roleSelect){
+if(!canAdminReplaceOwner(owner) || button?.disabled) return;
+if(!replacement || replacement.active === false || String(replacement.role || '').toLowerCase() !== 'admin'){
+return alert('Choose an active Admin to become the new Owner.');
+}
+const ownerName = owner.full_name || 'the current Owner';
+const replacementName = replacement.full_name || 'the selected Admin';
+const confirmed = confirm(
+'Recover company ownership from '+ownerName+'?\n\n'
++replacementName+' will become the single Owner and '+ownerName+' will become '+formatTeamRole(formerRole)+'. Both changes happen together.'
+);
+if(!confirmed) return;
+const priorText = button?.textContent;
+if(button){ button.disabled = true; button.textContent = 'Recovering Ownership...'; }
+if(replacementSelect) replacementSelect.disabled = true;
+if(roleSelect) roleSelect.disabled = true;
+const { error } = await sb.rpc('linecrew_admin_replace_company_owner',{
+current_owner_id:owner.id,
+replacement_admin_id:replacement.id,
+former_owner_role:formerRole
+});
+if(error){
+alert('Unable to recover ownership: '+error.message);
+if(button){ button.disabled = false; button.textContent = priorText; }
+if(replacementSelect) replacementSelect.disabled = false;
+if(roleSelect) roleSelect.disabled = false;
+await loadTeamMembers();
+return;
+}
+alert('Ownership recovered. '+replacementName+' is now Owner and '+ownerName+' is now '+formatTeamRole(formerRole)+'.');
+if(replacement.id === currentProfile.id) await loadApp(); else await loadTeamMembers();
 }
 function canChangeMemberAccess(member){
 if(member.id === currentProfile.id || !userCanManageTeam()) return false;
@@ -5808,6 +5845,64 @@ return alert('Unable to assign Owner: ' + error.message);
 alert('You are now the company Owner.');
 await loadApp();
 }
+function renderAdminOwnershipRecovery(member,members,card){
+if(!canAdminReplaceOwner(member)) return;
+const activeAdmins = members.filter(candidate =>
+candidate.active !== false && String(candidate.role || '').toLowerCase() === 'admin'
+);
+const details = document.createElement('details');
+details.className = 'job-card';
+details.open = true;
+const summary = document.createElement('summary');
+summary.textContent = 'Ownership Recovery';
+details.appendChild(summary);
+const intro = document.createElement('p');
+intro.className = 'muted';
+intro.textContent = 'If this Owner has left or is unavailable, choose an active Admin to become Owner and choose the former Owner’s new role. The handoff saves together so the company always has one Owner.';
+details.appendChild(intro);
+if(!activeAdmins.length){
+const missing = document.createElement('p');
+missing.className = 'muted';
+missing.textContent = 'An active Admin is required before ownership can be recovered.';
+details.appendChild(missing);
+card.appendChild(details);
+return;
+}
+const replacementLabel = document.createElement('label');
+replacementLabel.textContent = 'New Owner (active Admin)';
+const replacementSelect = document.createElement('select');
+replacementSelect.className = 'team-role-select';
+activeAdmins.forEach(admin => {
+const option = document.createElement('option');
+option.value = admin.id;
+option.textContent = (admin.full_name || 'Unnamed Admin') + (admin.id === currentProfile.id ? ' (You)' : '');
+replacementSelect.appendChild(option);
+});
+if(activeAdmins.some(admin => admin.id === currentProfile.id)) replacementSelect.value = currentProfile.id;
+replacementLabel.appendChild(replacementSelect);
+details.appendChild(replacementLabel);
+const roleLabel = document.createElement('label');
+roleLabel.textContent = 'Former Owner’s new role';
+const roleSelect = document.createElement('select');
+roleSelect.className = 'team-role-select';
+[['admin','Admin'],['superintendent','Superintendent'],['gf','General Foreman'],['foreman','Foreman']].forEach(([value,label]) => {
+const option = document.createElement('option');
+option.value = value;
+option.textContent = label;
+roleSelect.appendChild(option);
+});
+roleLabel.appendChild(roleSelect);
+details.appendChild(roleLabel);
+const button = document.createElement('button');
+button.className = 'warning small';
+button.textContent = 'Change Owner & Transfer Ownership';
+button.onclick = () => {
+const replacement = activeAdmins.find(admin => admin.id === replacementSelect.value);
+replaceCompanyOwnerAsAdmin(member,replacement,roleSelect.value,button,replacementSelect,roleSelect);
+};
+details.appendChild(button);
+card.appendChild(details);
+}
 let teamLoadRequest = 0;
 async function loadTeamMembers(){
 const requestId = ++teamLoadRequest;
@@ -5860,6 +5955,7 @@ transfer.textContent='Transfer Ownership';
 transfer.onclick=()=>transferCompanyOwnership(member,transfer);
 card.appendChild(transfer);
 }
+renderAdminOwnershipRecovery(member,members,card);
 if(canChangeMemberAccess(member)){
 const access=document.createElement('button'); access.className=(member.active===false?'success':'warning')+' small'; access.textContent=member.active===false?'Restore Access':'Suspend Access'; access.onclick=()=>changeTeamMemberAccess(member); card.appendChild(access);
 }
@@ -9026,11 +9122,11 @@ answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General F
 },
 {
 terms:['add admin','more admins','new admin','promote admin','make admin'],
-answer:'Owner or Admin opens Team, finds an active Foreman, General Foreman or Superintendent, chooses Admin in the Role dropdown and selects Save Role. An Admin cannot alter an existing Admin or assign Owner. The new Admin should refresh or sign in again and complete authenticator setup when prompted. If the company has no Owner, any active Admin sees Make Me Company Owner; after an Owner exists, only that Owner can use Transfer Ownership to hand the single Owner role to another active Admin.'
+answer:'Owner or Admin opens Team, finds an active Foreman, General Foreman or Superintendent, chooses Admin in the Role dropdown and selects Save Role. An Admin cannot alter a peer Admin through the normal Role dropdown. The new Admin should refresh or sign in again and complete authenticator setup when prompted. If the company has no Owner, any active Admin sees Make Me Company Owner. If an existing Owner leaves or is unavailable, an active Admin uses Ownership Recovery on the Owner’s Team card to choose a new Owner and the former Owner’s new role in one transaction.'
 },
 {
-terms:['claim owner','claim the owner role','make owner','become owner','transfer owner','transfer ownership','company owner'],
-answer:'Owner is a single company-governance role. When a company has no Owner, an active Admin can open Team and choose Make Me Company Owner. Once an Owner exists, no Admin can claim or assign Owner; the current Owner must open Team and choose Transfer Ownership on another active Admin. The transfer makes that Admin the Owner and changes the previous Owner to Admin in one step.'
+terms:['claim owner','claim the owner role','make owner','become owner','transfer owner','transfer ownership','company owner','owner left','owner leaves','replace owner','ownership recovery','change owner role'],
+answer:'Owner is a single company-governance role. When a company has no Owner, an active Admin opens Team and chooses Make Me Company Owner. The current Owner can use Transfer Ownership on another active Admin; that normal handoff changes the previous Owner to Admin. If the registered Owner leaves or is unavailable, an active Admin opens that Owner’s Team card, expands Ownership Recovery, chooses the active Admin who will become Owner, chooses the former Owner’s new role, and selects Change Owner & Transfer Ownership. Both role changes save in one transaction, so the company always has exactly one Owner.'
 },
 {
 terms:['promote foreman','make general foreman','promote to general','change role','save role'],

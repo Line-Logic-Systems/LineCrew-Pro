@@ -66,6 +66,7 @@ const mustExist = [
   'supabase/migrations/20260901071000_fix_member_money_permission_update.sql',
   'supabase/migrations/20260901072000_preserve_field_role_money_permissions.sql',
   'supabase/migrations/20260901073000_mask_detailed_field_money.sql',
+  'supabase/migrations/20260901074000_admin_owner_recovery.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -124,6 +125,7 @@ const moneyVisibility = fs.readFileSync('supabase/migrations/20260901070000_memb
 const moneyVisibilityUpdateFix = fs.readFileSync('supabase/migrations/20260901071000_fix_member_money_permission_update.sql', 'utf8');
 const fieldRoleMoneyPermissions = fs.readFileSync('supabase/migrations/20260901072000_preserve_field_role_money_permissions.sql', 'utf8');
 const detailedFieldMoney = fs.readFileSync('supabase/migrations/20260901073000_mask_detailed_field_money.sql', 'utf8');
+const adminOwnerRecovery = fs.readFileSync('supabase/migrations/20260901074000_admin_owner_recovery.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const dailyCompanyBackup = fs.readFileSync('.github/workflows/daily-company-data-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
@@ -177,7 +179,7 @@ assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must a
 assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
 assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
 assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
-assert(assistant.includes('2026-09-01-member-money-visibility-v12'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('2026-09-01-admin-owner-recovery-v13'), 'AI assistant knowledge version marker must track the current workflow release.');
 assert(assistant.includes('loadLiveCompanyContext('), 'AI assistant must load permission-scoped live company context.');
 assert(assistant.includes('assistantModelConfig(requestPlan.route'), 'AI assistant must route complex questions to the reasoning model.');
 assert(assistant.includes('safety_identifier: safetyIdentifier'), 'AI assistant requests must include a privacy-preserving safety identifier.');
@@ -738,6 +740,25 @@ for (const marker of [
   'for update'
 ]) assert(roleGovernance.includes(marker), `Current Owner/Admin governance is missing: ${marker}`);
 assert(!roleGovernance.includes("requested_role not in ('foreman','gf','superintendent','admin','owner')"), 'Generic role management must not assign Owner.');
+for (const marker of [
+  'linecrew_admin_replace_company_owner',
+  "requested_former_role not in ('foreman','gf','superintendent','admin')",
+  "auth.jwt() ->> 'aal'",
+  "lower(coalesce(actor.role, '')) <> 'admin'",
+  "lower(coalesce(current_owner.role, '')) <> 'owner'",
+  "lower(coalesce(replacement.role, '')) <> 'admin'",
+  "and company_id = actor_company_id",
+  "select count(*)",
+  "company_ownership_recovered_by_admin",
+  "set search_path = ''",
+  'for update',
+  'from public, anon, authenticated',
+  'to authenticated'
+]) assert(adminOwnerRecovery.includes(marker), `Admin Owner recovery is missing: ${marker}`);
+assert(
+  adminOwnerRecovery.indexOf("set role = requested_former_role") < adminOwnerRecovery.indexOf("set role = 'owner'"),
+  'Admin Owner recovery must demote the previous Owner before promoting the replacement to satisfy the single-Owner index.'
+);
 const setMemberRoleGovernance = sourceBetween(
   roleGovernance,
   'create or replace function public.linecrew_set_member_role(',
@@ -777,6 +798,11 @@ const transferOwnershipHandler = sourceBetween(
   'async function transferCompanyOwnership(member,button){',
   'function canChangeMemberAccess(member){'
 );
+const adminOwnerRecoveryHandler = sourceBetween(
+  index,
+  'async function replaceCompanyOwnerAsAdmin(owner,replacement,formerRole,button,replacementSelect,roleSelect){',
+  'function canChangeMemberAccess(member){'
+);
 const claimOwnerHandler = sourceBetween(
   index,
   'async function claimInitialOwner(button){',
@@ -794,6 +820,7 @@ const teamRenderer = sourceBetween(
 );
 for (const [handler, pendingLabel, restoreMarker, message] of [
   [transferOwnershipHandler, "button.textContent = 'Transferring...'", 'button.textContent = priorText;', 'ownership transfer'],
+  [adminOwnerRecoveryHandler, "button.textContent = 'Recovering Ownership...'", 'replacementSelect.disabled = false;', 'Admin ownership recovery'],
   [claimOwnerHandler, "button.textContent = 'Assigning Owner...'", 'button.textContent = priorText;', 'initial Owner claim'],
   [updateRoleHandler, "button.textContent = 'Saving...'", 'roleSelect.disabled = false;', 'member role save']
 ]) {
@@ -810,12 +837,14 @@ assert(
   updateRoleHandler.includes('roleSelect.disabled = true;') &&
     teamRenderer.includes('button.onclick = ()=>claimInitialOwner(button);') &&
     teamRenderer.includes('save.onclick=()=>updateTeamMemberRole(member,roleSelect.value,save,roleSelect);') &&
-    teamRenderer.includes('transfer.onclick=()=>transferCompanyOwnership(member,transfer);'),
+    teamRenderer.includes('transfer.onclick=()=>transferCompanyOwnership(member,transfer);') &&
+    teamRenderer.includes('renderAdminOwnershipRecovery(member,members,card);'),
   'Team role controls must pass their rendered buttons/select into the single-flight handlers.'
 );
 assert(transferOwnershipHandler.includes("'linecrew_transfer_company_owner'"), 'Team UI must use the explicit ownership-transfer RPC.');
+assert(adminOwnerRecoveryHandler.includes("'linecrew_admin_replace_company_owner'"), 'Team UI must use the MFA-protected Admin ownership-recovery RPC.');
 assert(assistant.includes('May promote an active Foreman, General Foreman or Superintendent to Admin'), 'Live Assistant role guidance must explain Admin promotion safely.');
-assert(assistant.includes('single Owner role to another active Admin'), 'Live Assistant role guidance must explain explicit ownership transfer.');
+assert(assistant.includes('Ownership Recovery'), 'Live Assistant role guidance must explain Admin ownership recovery.');
 
 assert(roleGovernance.includes('set_company_member_active'), 'Current team access changes need the governance-serialized hierarchy RPC.');
 assert(roleGovernance.includes("target_role in ('owner','admin')"), 'Admins must not suspend Owners or peer Admins.');
