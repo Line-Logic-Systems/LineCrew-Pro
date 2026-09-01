@@ -1,6 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getPublishableKey } from "../_shared/api-keys.ts";
-import { assessPacketExtraction, parsePacketOutput, runPacketModelFallback } from "./packet-logic.mjs";
+import {
+  assessPacketExtraction,
+  normalizePacketExtraction,
+  parsePacketOutput,
+  runPacketModelFallback,
+} from "./packet-logic.mjs";
 
 const allowedOrigins = new Set([
   "https://app.linecrewpro.com",
@@ -93,12 +98,13 @@ Set batch_disposition precisely:
 
 ADAPTIVE EXTRACTION PROFILE (${PROFILE_VERSION}):
 - Read construction authorization/design tables. Ignore covers, maps, drawings, planned material/labor summaries, invoices, as-built/completed quantities, notes, and unrelated work orders.
-- Map the utility's location identifier (for example Work Point, Station, Pole, Structure, Location, Task, or Assembly location) to work_point_code. Preserve leading zeros exactly. If a table has authorized units but no location column, use the most specific visible section/location identifier. Never invent one.
+- Map the utility's location identifier (for example Work Point, Station, Pole, Structure, Location, Task, or Assembly location) to work_point_code. A valid identifier may be numeric, alphabetic, alphanumeric, or contain punctuation/spaces (examples: 1, R1, R3, A-002, WP 4B). Preserve the exact displayed identifier and leading zeros. Never interpret a letter inside the identifier as a work action; for example, R1 remains the location R1 and does not mean Retire 1. If a table has authorized units but no location column, use the most specific visible section/location identifier. Never invent one.
 - Map only the designed, estimated, planned, or authorized quantity to estimated_quantity. Never substitute an as-built, completed, installed-to-date, cost, labor-hour, or material quantity.
 - Map the contractor production/pay/billing unit to contractor_unit_code. Labels may include Contractor Unit, Contractor CU, Pay Unit, Billing Unit, Unit Code, Assembly, or a provider-specific equivalent.
 - A material, stock, catalog, or storeroom code belongs in material_cu, not contractor_unit_code. If a row is clearly material-only, retain it for audit with contractor_unit_code empty, include_in_import=false, and an explanatory review_note.
 - If the packet has one plausible unit-code column and no separate material-code column, preserve it as contractor_unit_code but lower confidence and add a review note so the reviewer confirms it against the contract Price Book.
 - Normalize work_type to install, transfer, or remove from headings, action columns, quantity columns, or section labels. Keep actions separate.
+- In columnar staking sheets, each column heading may define a separate work point. For example, "1 New OH 0 feet", "R1 Retire OH 129 feet", and "R3 Retire OH 372 feet" have work points 1, R1, and R3; New means install and Retire means remove. Within those columns, prefixes such as N (quantity) and R (quantity) mean install/new and remove/retire. EX generally describes existing/reference equipment and is not an authorized production row unless the packet explicitly identifies it as payable work.
 - If the unit meaning, location, action, or authorized quantity is ambiguous, do not guess. Either exclude that row from import with a review note or return needs_review when no safe row can be produced.
 - Extract every qualifying source row separately. Do not sum duplicates; deterministic database finalization performs consolidation after human review.
 - Never invent a code, quantity, location, description, or missing digit. Lower confidence and add a concise review note when a cell is hard to read.
@@ -301,7 +307,15 @@ Deno.serve(async (request) => {
         reasoning_tokens: attemptUsage.reasoning,
         total_tokens: attemptUsage.total,
       }));
-      return parsePacketOutput(outputText(result));
+      const modelOutput = parsePacketOutput(outputText(result));
+      if (modelOutput.parsed) {
+        modelOutput.parsed = normalizePacketExtraction(modelOutput.parsed, {
+          profileVersion: PROFILE_VERSION,
+          pageOffset,
+          pageCount,
+        });
+      }
+      return modelOutput;
     };
 
     const fallbackRun = await runPacketModelFallback({

@@ -15,6 +15,118 @@ function pushUnique(values, value) {
   if (!values.includes(value)) values.push(value);
 }
 
+function appendReviewNote(existing, note) {
+  const current = String(existing || "").trim();
+  return current ? `${current} ${note}` : note;
+}
+
+/**
+ * Converts recoverable model omissions into explicit, unchecked review rows.
+ * Source facts are never invented: an unidentified location gets a visible
+ * REVIEW-PAGE-* placeholder and cannot be imported until a reviewer edits it.
+ * Rows with impossible pages or nonpositive quantities are discarded with a
+ * warning because they cannot satisfy the staging table's safety constraints.
+ *
+ * @param {unknown} parsed
+ * @param {{profileVersion?: string, pageOffset?: number, pageCount?: number}} options
+ */
+export function normalizePacketExtraction(parsed, options = {}) {
+  if (!isPlainObject(parsed)) return parsed;
+  const {
+    profileVersion = "",
+    pageOffset = 0,
+    pageCount = 1,
+  } = options;
+  const firstSourcePage = pageOffset + 1;
+  const lastSourcePage = pageOffset + pageCount;
+  const normalized = {
+    ...parsed,
+    confidence: isConfidence(parsed.confidence) ? parsed.confidence : 0.5,
+    warnings: Array.isArray(parsed.warnings)
+      ? parsed.warnings.map(value => String(value || "").trim()).filter(Boolean)
+      : [],
+  };
+
+  if (normalized.status === "unsupported") {
+    normalized.provider_key = "unknown";
+    normalized.batch_disposition = "unsupported_packet";
+    normalized.rows = [];
+    return normalized;
+  }
+  if (normalized.status === "uncertain") {
+    if (!["no_candidate_table", "needs_review"].includes(normalized.batch_disposition)) {
+      normalized.batch_disposition = "needs_review";
+    }
+    normalized.rows = [];
+    return normalized;
+  }
+  if (normalized.status !== "supported") return normalized;
+
+  normalized.provider_key = String(normalized.provider_key || "").trim() || "unknown";
+  normalized.profile_version = profileVersion;
+  const safeRows = [];
+  for (const originalRow of Array.isArray(normalized.rows) ? normalized.rows : []) {
+    if (!isPlainObject(originalRow)) {
+      pushUnique(normalized.warnings, "One malformed source row was omitted from review.");
+      continue;
+    }
+    let sourcePage = Number(originalRow.source_page);
+    if (
+      Number.isInteger(sourcePage) &&
+      (sourcePage < firstSourcePage || sourcePage > lastSourcePage) &&
+      sourcePage >= 1 && sourcePage <= pageCount
+    ) {
+      sourcePage += pageOffset;
+    }
+    if (!Number.isInteger(sourcePage) || sourcePage < firstSourcePage || sourcePage > lastSourcePage) {
+      pushUnique(normalized.warnings, "One row with an invalid source page was omitted from review.");
+      continue;
+    }
+    const quantity = Number(originalRow.estimated_quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      pushUnique(normalized.warnings, "One row without a positive authorized quantity was omitted from review.");
+      continue;
+    }
+
+    const row = {
+      ...originalRow,
+      source_page: sourcePage,
+      estimated_quantity: quantity,
+      confidence: isConfidence(originalRow.confidence) ? originalRow.confidence : 0.5,
+      include_in_import: originalRow.include_in_import === true,
+      work_point_code: String(originalRow.work_point_code || "").trim(),
+      contractor_unit_code: String(originalRow.contractor_unit_code || "").trim(),
+      review_note: String(originalRow.review_note || "").trim(),
+    };
+    if (!row.work_point_code) {
+      row.work_point_code = `REVIEW-PAGE-${sourcePage}`;
+      row.include_in_import = false;
+      row.review_note = appendReviewNote(
+        row.review_note,
+        "Work point was not identified; assign it before import.",
+      );
+    }
+    if (!row.contractor_unit_code) {
+      row.include_in_import = false;
+      row.review_note = appendReviewNote(
+        row.review_note,
+        "No production/pay unit was identified; confirm whether this is material-only.",
+      );
+    }
+    safeRows.push(row);
+  }
+
+  normalized.rows = safeRows;
+  if (safeRows.length) {
+    normalized.batch_disposition = "supported_rows";
+  } else {
+    normalized.status = "uncertain";
+    normalized.batch_disposition = "needs_review";
+    pushUnique(normalized.warnings, "A possible construction table was found, but no safe review rows could be created.");
+  }
+  return normalized;
+}
+
 /**
  * Deterministically checks a structured packet result. The model's own
  * confidence is only one signal: malformed rows, impossible page numbers,
