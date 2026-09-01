@@ -52,6 +52,7 @@
       if(fr&&!fr.error)foremenById=new Map((fr.data||[]).map(f=>[f.id,f]));
       loadedCompanyId=cid;
       renderEquipmentManager();
+      await window.LineCrewRefreshCompleteRoster?.();
       ensureForemanRow();
       document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(r=>{renderEquipmentSelect(r);applyDefaultEquipment(r,false);});
       sortForemanFirst();
