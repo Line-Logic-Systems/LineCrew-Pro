@@ -26,6 +26,8 @@
   let jobs = [];
   let crewRowsLoadedForReport = null;
   let crewRowCounter = 0;
+  const rosterAssignmentDrafts = new Map();
+  let rosterAssignmentsSaving = false;
 
   function addStyles(){
     if(byId('timekeepingStyles')) return;
@@ -42,6 +44,9 @@
       .tk-table th{font-size:12px;text-transform:uppercase;color:#617284}
       .tk-table input,.tk-table select{padding:9px;margin:0;min-width:90px}
       .tk-row-actions button{width:auto;margin:0;padding:8px 10px}
+      .tk-roster-savebar{display:flex;gap:10px;align-items:center;margin:12px 0;padding:8px 0;position:sticky;top:8px;z-index:3;background:var(--surface,#fff)}
+      .tk-roster-savebar button{width:auto;margin:0}
+      .tk-assignment-pending{background:#fff8df}
       .tk-crew-card{border:1px solid #dce5ed;border-radius:14px;padding:14px;margin:14px 0;background:#f8fafc}
       .tk-crew-row{display:grid;grid-template-columns:minmax(180px,1.6fr) minmax(90px,.7fr) minmax(90px,.7fr) auto;gap:8px;align-items:end;margin:8px 0}
       .tk-crew-row label{margin:0;font-size:12px}
@@ -84,6 +89,7 @@
           <label>Assigned Admin<select id="tkEmployeeAdmin"><option value="">Unassigned</option></select></label>
         </div>
         <button id="tkAddEmployeeBtn" class="success">Add Employee</button>
+        <div class="tk-roster-savebar"><button id="tkSaveAssignmentsBtn" type="button" class="success" disabled>Save Crew Assignments</button><span id="tkRosterSaveStatus" class="muted">Choose assignments, then save them together.</span></div>
         <div id="tkRosterList" style="margin-top:12px"></div>
       </div>
       <div id="timekeepingReportCard" class="card">
@@ -115,6 +121,7 @@
     byId('tkRunReportBtn').onclick = loadEntries;
     byId('tkExportCsvBtn').onclick = exportCsv;
     byId('tkAddEmployeeBtn').onclick = addEmployee;
+    byId('tkSaveAssignmentsBtn').onclick = saveRosterAssignments;
   }
 
   function addTile(){
@@ -265,41 +272,84 @@
     refreshCrewEmployeeSelects();
   }
 
-  async function assignEmployee(id, assignedForemanId){
-    if(!canManageRoster()) return;
-    const { error } = await getSb().from('timekeeping_employees')
-      .update({assigned_foreman_id:assignedForemanId||null,updated_at:new Date().toISOString()})
-      .eq('id',id);
-    if(error) return alert('Could not assign employee: '+error.message);
+  function updateRosterDraft(id,field,value){
+    if(!canManageRoster()||rosterAssignmentsSaving)return;
+    const employee=employees.find(e=>e.id===id);
+    if(!employee)return;
+    const existing=rosterAssignmentDrafts.get(id)||{
+      assigned_foreman_id:employee.assigned_foreman_id||'',
+      assigned_admin_id:employee.assigned_admin_id||''
+    };
+    existing[field]=value||'';
+    const unchanged=existing.assigned_foreman_id===(employee.assigned_foreman_id||'')&&existing.assigned_admin_id===(employee.assigned_admin_id||'');
+    if(unchanged)rosterAssignmentDrafts.delete(id);
+    else rosterAssignmentDrafts.set(id,existing);
+    const row=byId('tkRosterList')?.querySelector(`[data-tk-employee-row="${id}"]`);
+    row?.classList.toggle('tk-assignment-pending',!unchanged);
+    updateRosterSaveState();
+  }
+
+  function updateRosterSaveState(message=''){
+    const button=byId('tkSaveAssignmentsBtn');
+    const status=byId('tkRosterSaveStatus');
+    const count=rosterAssignmentDrafts.size;
+    if(button){
+      button.disabled=rosterAssignmentsSaving||!count;
+      button.textContent=rosterAssignmentsSaving?'Saving Assignments…':count?`Save Crew Assignments (${count})`:'Save Crew Assignments';
+    }
+    if(status)status.textContent=message||(count?`${count} employee assignment${count===1?'':'s'} ready to save.`:'Choose assignments, then save them together.');
+  }
+
+  function openRosterGroups(){
+    return new Set(Array.from(byId('tkRosterList')?.querySelectorAll('details[open][data-tk-roster-group]')||[]).map(group=>group.dataset.tkRosterGroup));
+  }
+
+  async function saveRosterAssignments(){
+    if(!canManageRoster()||rosterAssignmentsSaving||!rosterAssignmentDrafts.size)return;
+    const openGroups=openRosterGroups();
+    const drafts=Array.from(rosterAssignmentDrafts.entries());
+    rosterAssignmentsSaving=true;
+    updateRosterSaveState();
+    const results=await Promise.all(drafts.map(async([id,draft])=>{
+      try{
+        const employee=employees.find(item=>item.id===id);
+        const changes={updated_at:new Date().toISOString()};
+        if((draft.assigned_foreman_id||'')!==(employee?.assigned_foreman_id||''))changes.assigned_foreman_id=draft.assigned_foreman_id||null;
+        if((draft.assigned_admin_id||'')!==(employee?.assigned_admin_id||''))changes.assigned_admin_id=draft.assigned_admin_id||null;
+        const {error}=await getSb().from('timekeeping_employees').update(changes).eq('id',id);
+        return {id,error};
+      }catch(error){return {id,error};}
+    }));
+    const failed=results.filter(result=>result.error);
+    results.filter(result=>!result.error).forEach(result=>rosterAssignmentDrafts.delete(result.id));
     await loadEmployees();
-    renderRoster();
+    rosterAssignmentsSaving=false;
+    renderRoster(openGroups);
+    fillFilters();
     refreshCrewEmployeeSelects();
-  }
-
-  async function assignEmployeeAdmin(id, assignedAdminId){
-    if(!canManageRoster()) return;
-    const { error } = await getSb().from('timekeeping_employees')
-      .update({assigned_admin_id:assignedAdminId||null,updated_at:new Date().toISOString()})
-      .eq('id',id);
-    if(error) return alert('Could not assign employee to the Admin roster: '+error.message);
-    await loadEmployees();
-    renderRoster();
     window.LineCrewLeadershipMyTime?.refresh?.();
+    if(failed.length){
+      updateRosterSaveState(`${failed.length} assignment${failed.length===1?'':'s'} could not be saved. The unsaved selections remain highlighted.`);
+      alert('Could not save every crew assignment: '+failed[0].error.message);
+      return;
+    }
+    updateRosterSaveState(`${drafts.length} employee assignment${drafts.length===1?'':'s'} saved.`);
   }
 
-  function renderRoster(){
+  function renderRoster(groupsToOpen=new Set()){
     const box = byId('tkRosterList');
     if(!box) return;
     if(!employees.length){box.innerHTML='<p class="muted">No employees have been added yet.</p>';return;}
     const foremanOptions=(selected)=>'<option value="">Unassigned</option>'+foremen.map(f=>`<option value="${esc(f.id)}" ${f.id===selected?'selected':''}>${esc(f.full_name||'Foreman')}</option>`).join('');
     const adminOptions=(selected)=>'<option value="">Unassigned</option>'+admins.map(a=>`<option value="${esc(a.id)}" ${a.id===selected?'selected':''}>${esc(a.full_name||'Admin')}</option>`).join('');
-    const employeeRows=(group)=>group.map(e=>`<tr><td data-label="Employee"><strong>${esc(e.full_name)}</strong></td><td data-label="#">${esc(e.employee_number || '')}</td><td data-label="Classification">${esc(e.classification || '')}</td><td data-label="Default Crew">${esc(e.default_crew_name || '')}</td><td data-label="Assigned Foreman"><select data-tk-foreman="${esc(e.id)}" ${e.active?'':'disabled'}>${foremanOptions(e.assigned_foreman_id)}</select></td><td data-label="Assigned Admin"><select data-tk-admin="${esc(e.id)}" ${e.active?'':'disabled'}>${adminOptions(e.assigned_admin_id)}</select></td><td data-label="Status">${e.active ? 'Active':'Inactive'}</td><td data-label="Action" class="tk-row-actions"><button class="secondary small" data-tk-toggle="${esc(e.id)}" data-active="${e.active ? '0':'1'}">${e.active ? 'Deactivate':'Activate'}</button></td></tr>`).join('');
-    const crewGroups=foremen.map(f=>({name:f.full_name||'Foreman',members:employees.filter(e=>e.assigned_foreman_id===f.id)}));
-    crewGroups.push({name:'Unassigned Employees',members:employees.filter(e=>!e.assigned_foreman_id)});
-    box.innerHTML=crewGroups.map(group=>`<details class="job-card tk-crew-group"><summary><strong>${esc(group.name)}</strong> — ${group.members.length} crew member${group.members.length===1?'':'s'}</summary>${group.members.length?`<div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Default Crew</th><th>Assigned Foreman</th><th>Assigned Admin</th><th>Status</th><th></th></tr></thead><tbody>${employeeRows(group.members)}</tbody></table></div>`:'<p class="muted">No employees assigned.</p>'}</details>`).join('');
+    const employeeRows=(group)=>group.map(e=>{const draft=rosterAssignmentDrafts.get(e.id);const selectedForeman=draft?.assigned_foreman_id??e.assigned_foreman_id;const selectedAdmin=draft?.assigned_admin_id??e.assigned_admin_id;return `<tr data-tk-employee-row="${esc(e.id)}" class="${draft?'tk-assignment-pending':''}"><td data-label="Employee"><strong>${esc(e.full_name)}</strong></td><td data-label="#">${esc(e.employee_number || '')}</td><td data-label="Classification">${esc(e.classification || '')}</td><td data-label="Default Crew">${esc(e.default_crew_name || '')}</td><td data-label="Assigned Foreman"><select data-tk-foreman="${esc(e.id)}" ${e.active?'':'disabled'}>${foremanOptions(selectedForeman)}</select></td><td data-label="Assigned Admin"><select data-tk-admin="${esc(e.id)}" ${e.active?'':'disabled'}>${adminOptions(selectedAdmin)}</select></td><td data-label="Status">${e.active ? 'Active':'Inactive'}</td><td data-label="Action" class="tk-row-actions"><button class="secondary small" data-tk-toggle="${esc(e.id)}" data-active="${e.active ? '0':'1'}">${e.active ? 'Deactivate':'Activate'}</button></td></tr>`;}).join('');
+    const crewGroups=foremen.map(f=>({key:f.id,name:f.full_name||'Foreman',members:employees.filter(e=>e.assigned_foreman_id===f.id)}));
+    crewGroups.push({key:'unassigned',name:'Unassigned Employees',members:employees.filter(e=>!e.assigned_foreman_id)});
+    box.innerHTML=crewGroups.map(group=>`<details class="job-card tk-crew-group" data-tk-roster-group="${esc(group.key)}" ${groupsToOpen.has(group.key)?'open':''}><summary><strong>${esc(group.name)}</strong> — ${group.members.length} crew member${group.members.length===1?'':'s'}</summary>${group.members.length?`<div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Default Crew</th><th>Assigned Foreman</th><th>Assigned Admin</th><th>Status</th><th></th></tr></thead><tbody>${employeeRows(group.members)}</tbody></table></div>`:'<p class="muted">No employees assigned.</p>'}</details>`).join('');
     box.querySelectorAll('[data-tk-toggle]').forEach(btn => btn.onclick = () => toggleEmployee(btn.dataset.tkToggle, btn.dataset.active === '1'));
-    box.querySelectorAll('[data-tk-foreman]').forEach(select => select.onchange = () => assignEmployee(select.dataset.tkForeman,select.value));
-    box.querySelectorAll('[data-tk-admin]').forEach(select => select.onchange = () => assignEmployeeAdmin(select.dataset.tkAdmin,select.value));
+    box.querySelectorAll('[data-tk-foreman]').forEach(select => select.onchange = () => updateRosterDraft(select.dataset.tkForeman,'assigned_foreman_id',select.value));
+    box.querySelectorAll('[data-tk-admin]').forEach(select => select.onchange = () => updateRosterDraft(select.dataset.tkAdmin,'assigned_admin_id',select.value));
+    updateRosterSaveState();
   }
 
   async function loadEntries(){
