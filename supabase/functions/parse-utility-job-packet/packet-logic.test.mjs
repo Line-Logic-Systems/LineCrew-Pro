@@ -6,7 +6,7 @@ import {
 } from "./packet-logic.mjs";
 
 const context = {
-  profileVersion: "oncor-tivoli-cu-estimate-v1",
+  profileVersion: "adaptive-utility-packet-v2",
   pageOffset: 10,
   pageCount: 5,
 };
@@ -42,6 +42,24 @@ assert.deepEqual(
   assessPacketExtraction(supported(), context),
   { valid:true, needsFallback:false, invalidReasons:[], fallbackReasons:[] },
   "A high-confidence, structurally valid Mini result must not spend a full-model call.",
+);
+
+assert.deepEqual(
+  assessPacketExtraction(supported({
+    provider_key:"united-cooperative-services",
+    format_key:"provider-specific-construction-table",
+  }), context),
+  { valid:true, needsFallback:false, invalidReasons:[], fallbackReasons:[] },
+  "A structurally valid packet from an unfamiliar utility must be accepted for review.",
+);
+
+assert.equal(
+  assessPacketExtraction(supported({
+    provider_key:"united-cooperative-services",
+    rows:[{ ...supported().rows[0], work_type:"transfer" }],
+  }), context).valid,
+  true,
+  "Adaptive packets must support transfer rows as well as install and remove.",
 );
 
 assert.equal(

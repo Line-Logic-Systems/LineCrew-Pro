@@ -18,7 +18,7 @@ function corsHeaders(request: Request) {
 }
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const PROFILE_VERSION = "oncor-tivoli-cu-estimate-v1";
+const PROFILE_VERSION = "adaptive-utility-packet-v2";
 const REQUEST_TIME_BUDGET_MS = 138000;
 
 class PacketParseError extends Error {
@@ -50,7 +50,7 @@ const packetSchema = {
   properties: {
     status: { type: "string", enum: ["supported", "unsupported", "uncertain"] },
     batch_disposition: { type: "string", enum: ["supported_rows", "no_candidate_table", "needs_review", "unsupported_packet"] },
-    provider_key: { type: "string", enum: ["oncor", "unknown"] },
+    provider_key: { type: "string" },
     format_key: { type: "string" },
     profile_version: { type: "string" },
     work_order: { type: "string" },
@@ -66,7 +66,7 @@ const packetSchema = {
           source_page: { type: "integer" },
           work_point_code: { type: "string" },
           work_point_description: { type: "string" },
-          work_type: { type: "string", enum: ["install", "remove"] },
+          work_type: { type: "string", enum: ["install", "transfer", "remove"] },
           material_cu: { type: "string" },
           contractor_unit_code: { type: "string" },
           estimated_quantity: { type: "number" },
@@ -83,27 +83,27 @@ const packetSchema = {
 const instructions = `
 You extract utility construction job packets for LineCrew Pro. Accuracy is more important than returning rows.
 
-First identify the utility and packet format. This release supports only the Oncor Tivoli/IBM CU Estimate table format. Strong Oncor evidence includes Tivoli/IBM branding and tables headed Station, Task ID, As Built Qty, Est Qty, CU, Contractor CU, Description with Install or Remove sections. Do not interpret a differently formatted utility/co-op packet using Oncor rules. For another utility, return status=unsupported, provider_key=unknown, no rows, and a concise warning. If identification is ambiguous, return status=uncertain and no rows.
+Identify the utility/co-op and document layout from branding, headings, labels, and table structure. Extract construction authorization rows from any utility packet; do not require a known provider or a previously seen layout. Set provider_key to a short lowercase provider slug when identifiable, otherwise "unknown". Set format_key to a concise lowercase layout description. profile_version must be exactly ${PROFILE_VERSION} whenever rows are returned.
 
 Set batch_disposition precisely:
-- supported_rows: supported Oncor CU Estimate rows were extracted from this page batch.
-- no_candidate_table: this batch contains ordinary cover, map, drawing, note, summary, or other pages with no candidate CU Estimate construction table. Return status=uncertain and no rows. This is not an error and does not need review.
-- needs_review: a candidate CU Estimate table or provider marker may be present, but scan quality, cropping, ambiguity, or unreadable cells prevent a reliable extraction. Return status=uncertain, no rows, and explain the issue in warnings.
-- unsupported_packet: the packet is confidently from another provider or format. Return status=unsupported, provider_key=unknown, and no rows.
+- supported_rows: reliable construction authorization rows were extracted from this page batch, regardless of provider or layout.
+- no_candidate_table: this batch contains a cover, map, drawing, note, summary, material list, completed/as-built report, or other pages with no construction authorization table. Return status=uncertain and no rows. This is not an error and does not need review.
+- needs_review: a possible construction table is present, but scan quality or ambiguous column meaning prevents safe row extraction. Return status=uncertain, no rows, and explain the issue once in warnings.
+- unsupported_packet: use only when the document is not a utility construction job packet at all. Never use this merely because the utility or layout is unfamiliar.
 
-ONCOR PROFILE (${PROFILE_VERSION}):
-- Read only CU Estimate construction table pages. Ignore covers, maps, drawings, planned materials/labor, related work orders, notes, and summaries.
-- Station is the work_point_code. Preserve leading zeros exactly (0014 stays 0014).
-- Est Qty is the designed/authorized quantity and applies to both CU and Contractor CU on that row.
-- CU is storeroom/material ordering reference only. Put it in material_cu. Never use it as the production/pay unit.
-- Contractor CU is the LineCrew Pro production/pay unit. Put it in contractor_unit_code.
-- Rows with a blank Contractor CU are material-only: retain them for audit, set contractor_unit_code to an empty string, include_in_import=false, and review_note="Material-only row; no Contractor CU".
-- Install and Remove are separate work types. A section label continues until the next Install/Remove label or Station.
-- Extract every qualifying source row separately. Do not sum duplicates; deterministic database finalization will sum matching Station + work type + Contractor CU.
-- Never invent a code, quantity, Station, description, or missing digit. Lower confidence and add a review note when a cell is hard to read.
+ADAPTIVE EXTRACTION PROFILE (${PROFILE_VERSION}):
+- Read construction authorization/design tables. Ignore covers, maps, drawings, planned material/labor summaries, invoices, as-built/completed quantities, notes, and unrelated work orders.
+- Map the utility's location identifier (for example Work Point, Station, Pole, Structure, Location, Task, or Assembly location) to work_point_code. Preserve leading zeros exactly. If a table has authorized units but no location column, use the most specific visible section/location identifier. Never invent one.
+- Map only the designed, estimated, planned, or authorized quantity to estimated_quantity. Never substitute an as-built, completed, installed-to-date, cost, labor-hour, or material quantity.
+- Map the contractor production/pay/billing unit to contractor_unit_code. Labels may include Contractor Unit, Contractor CU, Pay Unit, Billing Unit, Unit Code, Assembly, or a provider-specific equivalent.
+- A material, stock, catalog, or storeroom code belongs in material_cu, not contractor_unit_code. If a row is clearly material-only, retain it for audit with contractor_unit_code empty, include_in_import=false, and an explanatory review_note.
+- If the packet has one plausible unit-code column and no separate material-code column, preserve it as contractor_unit_code but lower confidence and add a review note so the reviewer confirms it against the contract Price Book.
+- Normalize work_type to install, transfer, or remove from headings, action columns, quantity columns, or section labels. Keep actions separate.
+- If the unit meaning, location, action, or authorized quantity is ambiguous, do not guess. Either exclude that row from import with a review note or return needs_review when no safe row can be produced.
+- Extract every qualifying source row separately. Do not sum duplicates; deterministic database finalization performs consolidation after human review.
+- Never invent a code, quantity, location, description, or missing digit. Lower confidence and add a concise review note when a cell is hard to read.
 - source_page is the one-based PDF page number, not a printed internal page label.
-- profile_version must be exactly ${PROFILE_VERSION} for supported Oncor packets.
-- Work order should be the packet WO/WR identifier without guessing.
+- Work order should be the packet WO/WR/job identifier without guessing.
 `;
 
 function outputText(result: Record<string, unknown>): string {
@@ -258,14 +258,14 @@ Deno.serve(async (request) => {
           instructions: `${instructions}\nThis request contains a page batch from the original PDF. ` +
             `The first page in this batch is original PDF page ${pageOffset + 1} of ${totalPages}. ` +
             `For every extracted row, source_page must be the original one-based PDF page number: ` +
-            `batch page number + ${pageOffset}. If this batch contains no candidate Oncor CU Estimate construction table, ` +
+            `batch page number + ${pageOffset}. If this batch contains no candidate construction authorization table, ` +
             `return status=uncertain, batch_disposition=no_candidate_table, and an empty rows array.` +
             (attempt === "fallback"
               ? ` This is the full-model verification pass. Re-check the five-page group carefully because the first pass was flagged for: ${fallbackReasons.join(", ")}.`
               : ""),
           input: [{ role: "user", content: [
             { type: "input_file", filename, file_data: fileData, detail: "high" },
-            { type: "input_text", text: "Identify this packet and extract all supported authorized-unit source rows. Return no rows unless the provider/format is supported with confidence." },
+            { type: "input_text", text: "Identify this utility packet and extract every reliable authorized construction-unit source row, adapting to the document's actual labels and layout. Unfamiliar providers and formats are valid and must not be rejected solely for being new." },
           ] }],
           reasoning: { effort: attempt === "primary" ? "low" : "medium" },
           text: { format: { type: "json_schema", name: "utility_packet", strict: true, schema: packetSchema } },

@@ -7933,17 +7933,24 @@ review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
 '<p class="muted">Finishing packet analysis. Nothing has been added to the job yet.</p>';
 const parsedChunks = analysis.parsedChunks;
 const supported = parsedChunks.filter(chunk =>
-chunk?.status === 'supported' && chunk?.provider_key === 'oncor' &&
+chunk?.status === 'supported' &&
 Array.isArray(chunk?.rows) && chunk.rows.length
 );
 if(!supported.length){
-const warning = parsedChunks.flatMap(chunk => chunk?.warnings || []).join(' ') ||
-'This utility or packet layout is not supported yet.';
+const warning = [...new Set(parsedChunks
+.flatMap(chunk => chunk?.warnings || [])
+.map(value => String(value || '').trim())
+.filter(Boolean))].join(' ') ||
+'No reliable authorized construction-unit rows were found in this packet.';
 throw new Error(warning + ' Nothing was added to the job.');
 }
+const detectedProvider = parsedChunks
+.map(chunk => String(chunk?.provider_key || '').trim())
+.find(value => value && value !== 'unknown') ||
+String(supported[0].provider_key || 'unknown');
 const parsed = {
 status:'supported',
-provider_key:'oncor',
+provider_key:detectedProvider,
 format_key:supported[0].format_key,
 profile_version:supported[0].profile_version,
 work_order:supported.map(chunk => chunk.work_order).find(Boolean) || '',
@@ -8026,15 +8033,15 @@ const unmatched = rows.filter(row => row.include_in_import && !row.price_book_ma
 const lowConfidence = rows.filter(row => Number(row.confidence) < 0.9).length;
 container.innerHTML = `
 <div class="section-header"><div>
-<strong>Review Oncor Job Packet</strong>
-<div class="muted">${escapeHtml(parsed.work_order || fileNameWithoutExtension(packageRecord.source_filename))} · ${rows.length} source rows</div>
+<strong>Review Utility Job Packet</strong>
+<div class="muted">${escapeHtml(parsed.work_order || fileNameWithoutExtension(packageRecord.source_filename))} · ${escapeHtml(String(parsed.provider_key || 'Utility').replace(/[-_]+/g, ' '))} · ${rows.length} source rows</div>
 </div></div>
 <div class="import-summary"><strong>Review required before import</strong><br>
 ${materialOnly} material-only · ${unmatched} Contractor Units not matched to Price Book · ${lowConfidence} low-confidence rows
 </div>
-<p class="muted">Est Qty is the authorized quantity. Contractor CU is the production/pay unit. CU is retained only as storeroom reference. Uncheck material-only or unwanted rows.</p>
+<p class="muted">Confirm the work point, action, production/pay unit and authorized quantity against the source packet. Material-only rows should remain unchecked.</p>
 <div class="import-table-wrap"><table class="import-table"><thead><tr>
-<th>Use</th><th>Page</th><th>Station</th><th>Work</th><th>CU (material)</th><th>Contractor Unit</th><th>Est Qty</th><th>Check</th>
+<th>Use</th><th>Page</th><th>Work Point</th><th>Work</th><th>Material Ref</th><th>Production Unit</th><th>Authorized Qty</th><th>Check</th>
 </tr></thead><tbody></tbody></table></div>
 <div class="button-row">
 <button type="button" class="success smart-packet-confirm">Import Reviewed Contractor Units</button>
