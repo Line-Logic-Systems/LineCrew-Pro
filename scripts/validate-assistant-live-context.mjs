@@ -98,7 +98,7 @@ assert.deepEqual(
 const assistant = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts','utf8');
 const app = fs.readFileSync('index.html','utf8');
 for(const marker of [
-  '2026-09-01-member-money-visibility-v12',
+  '2026-09-01-admin-owner-recovery-v13',
   'loadLiveCompanyContext(',
   'Authenticated Owner/Admin read-only snapshot constrained by company RLS',
   '.eq("company_id", companyId)',

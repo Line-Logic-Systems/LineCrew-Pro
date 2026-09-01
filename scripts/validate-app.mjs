@@ -76,7 +76,9 @@ for (const marker of [
   'linecrew_set_superintendent_permissions',
   'linecrew_claim_initial_owner',
   'linecrew_transfer_company_owner',
-  'Transfer Ownership'
+  'linecrew_admin_replace_company_owner',
+  'Transfer Ownership',
+  'Ownership Recovery'
 ]) {
   assert(html.includes(marker), `Missing critical role/team marker: ${marker}`);
 }
@@ -86,7 +88,9 @@ const teamFunctionNames = [
   'formatTeamRole',
   'roleOptionsForMember',
   'canTransferOwnershipTo',
+  'canAdminReplaceOwner',
   'transferCompanyOwnership',
+  'replaceCompanyOwnerAsAdmin',
   'claimInitialOwner',
   'updateTeamMemberRole'
 ];
@@ -137,7 +141,13 @@ if (teamFunctionSources.some(source => !source)) {
     expectRoles(
       roleValues({ id:'company-owner', role:'owner', active:true }),
       [],
-      'Admin must not receive Owner controls.'
+      'Admin must not receive unsafe generic Owner role controls.'
+    );
+    assert(
+      teamContext.canAdminReplaceOwner({ id:'company-owner', role:'owner', active:false }) &&
+        !teamContext.canAdminReplaceOwner({ id:'peer-admin', role:'admin', active:true }) &&
+        !teamContext.canAdminReplaceOwner({ id:'actor-admin', role:'owner', active:true }),
+      'Admin ownership recovery must target only another current Owner, including an unavailable Owner.'
     );
     expectRoles(
       roleValues({ id:'actor-admin', role:'foreman', active:true }),
@@ -195,6 +205,71 @@ if (teamFunctionSources.some(source => !source)) {
     );
 
     teamContext.currentProfile = { id:'actor-admin', role:'admin' };
+    teamContext.teamLoads = 0;
+    calls = installDeferredRpc();
+    const recoveryOwner = { id:'company-owner', full_name:'Former Owner', role:'owner', active:false };
+    const recoveryAdmin = { id:'actor-admin', full_name:'Current Admin', role:'admin', active:true };
+    const recoveryButton = { disabled:false, textContent:'Change Owner & Transfer Ownership' };
+    const replacementSelect = { disabled:false };
+    const formerRoleSelect = { disabled:false };
+    const firstRecovery = teamContext.replaceCompanyOwnerAsAdmin(
+      recoveryOwner,
+      recoveryAdmin,
+      'superintendent',
+      recoveryButton,
+      replacementSelect,
+      formerRoleSelect
+    );
+    const repeatedRecovery = teamContext.replaceCompanyOwnerAsAdmin(
+      recoveryOwner,
+      recoveryAdmin,
+      'superintendent',
+      recoveryButton,
+      replacementSelect,
+      formerRoleSelect
+    );
+    assert(
+      calls.length === 1 &&
+        calls[0].name === 'linecrew_admin_replace_company_owner' &&
+        calls[0].args?.current_owner_id === recoveryOwner.id &&
+        calls[0].args?.replacement_admin_id === recoveryAdmin.id &&
+        calls[0].args?.former_owner_role === 'superintendent' &&
+        recoveryButton.disabled &&
+        replacementSelect.disabled &&
+        formerRoleSelect.disabled &&
+        recoveryButton.textContent === 'Recovering Ownership...',
+      'Admin ownership recovery must submit one atomic handoff request and disable every control while pending.'
+    );
+    calls.forEach(call => call.resolve({ error:{ message:'expected recovery failure' } }));
+    await Promise.all([firstRecovery, repeatedRecovery]);
+    assert(
+      !recoveryButton.disabled &&
+        recoveryButton.textContent === 'Change Owner & Transfer Ownership' &&
+        !replacementSelect.disabled &&
+        !formerRoleSelect.disabled &&
+        teamContext.teamLoads === 1,
+      'Ownership recovery errors must restore all controls and reload authoritative Team state.'
+    );
+
+    teamContext.appLoads = 0;
+    calls = installDeferredRpc();
+    const successButton = { disabled:false, textContent:'Change Owner & Transfer Ownership' };
+    const successRecovery = teamContext.replaceCompanyOwnerAsAdmin(
+      recoveryOwner,
+      recoveryAdmin,
+      'admin',
+      successButton,
+      { disabled:false },
+      { disabled:false }
+    );
+    calls[0].resolve({ error:null });
+    await successRecovery;
+    assert(
+      teamContext.appLoads === 1,
+      'An Admin who becomes Owner through recovery must reload the complete app with the new authority.'
+    );
+
+    teamContext.currentProfile = { id:'actor-admin', role:'admin' };
     calls = installDeferredRpc();
     const claimButton = { disabled:false, textContent:'Make Me Company Owner' };
     const firstClaim = teamContext.claimInitialOwner(claimButton);
@@ -248,7 +323,8 @@ if (teamFunctionSources.some(source => !source)) {
     assert(
       teamRenderer.includes('button.onclick = ()=>claimInitialOwner(button);') &&
         teamRenderer.includes('save.onclick=()=>updateTeamMemberRole(member,roleSelect.value,save,roleSelect);') &&
-        teamRenderer.includes('transfer.onclick=()=>transferCompanyOwnership(member,transfer);'),
+        teamRenderer.includes('transfer.onclick=()=>transferCompanyOwnership(member,transfer);') &&
+        teamRenderer.includes('renderAdminOwnershipRecovery(member,members,card);'),
       'Rendered Team buttons must pass their controls into the single-flight handlers.'
     );
   } catch (error) {
