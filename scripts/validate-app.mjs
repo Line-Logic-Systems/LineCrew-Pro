@@ -735,6 +735,48 @@ if (packetFallbackStart >= 0 && packetFallbackEnd >= 0) {
   )();
 }
 
+if (analyzePacketFallbackFixture) {
+  try {
+    const slowGroup = new Error('fixture dense group timed out');
+    slowGroup.retryOriginal = false;
+    slowGroup.retrySmaller = true;
+    slowGroup.pageOffset = 3;
+    slowGroup.pageCount = 3;
+    const recovery = await analyzePacketFallbackFixture(
+      [
+        { page_offset:0, page_count:3, total_pages:6 },
+        { page_offset:3, page_count:3, total_pages:6 }
+      ],
+      async (_chunk, index) => {
+        if(index === 1) throw slowGroup;
+        return { status:'supported', rows:[{ source_page:1 }] };
+      },
+      async failures => {
+        assert(
+          failures.length === 1 && failures[0] === slowGroup,
+          'Adaptive packet recovery must receive only the failed dense group.'
+        );
+        return {
+          retryMode:'smaller',
+          parsedChunks:[3,4,5].map(pageOffset => ({
+            status:'supported',
+            rows:[{ source_page:pageOffset + 1 }]
+          }))
+        };
+      }
+    );
+    assert(
+      recovery.retriedSmaller === true &&
+        recovery.retriedOriginal === false &&
+        recovery.parsedChunks.length === 4 &&
+        recovery.parsedChunks.flatMap(chunk => chunk.rows).map(row => row.source_page).join(',') === '1,4,5,6',
+      'A slow three-page group must be replaced by its one-page results without discarding successful groups.'
+    );
+  } catch (error) {
+    failures.push('Adaptive Job Jacket page-group recovery test failed: ' + error.message);
+  }
+}
+
 // Promise rejection does not cancel sibling PDF workers. The parser must wait
 // for them to settle before rendering its terminal error, or a late progress
 // update can overwrite the failure and leave the review stuck on "Reading".
@@ -1205,10 +1247,10 @@ for (const marker of [
 }
 
 assert(
-  html.includes('async function splitPdfForPacketImport(file, pagesPerChunk = 5)') &&
+  html.includes('async function splitPdfForPacketImport(file, pagesPerChunk = 3)') &&
     html.includes('page_count:packet.page_count') &&
     html.includes('Math.min(completedPages, chunk.total_pages)'),
-  'PDF Job Jackets must use five-page groups and page-accurate progress reporting.'
+  'PDF Job Jackets must use adaptive three-page groups and page-accurate progress reporting.'
 );
 for (const marker of [
   'const remainingInstall = Math.max(',

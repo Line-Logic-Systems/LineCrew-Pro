@@ -420,7 +420,16 @@ assert(verifyPostRestoreSecurity.includes("public.admin_update_user(uuid,text,bo
 assert(packetParser.includes('if (origin && !allowedOrigins.has(origin))'), 'Job-packet parsing must reject unapproved browser origins.');
 assert(!packetParser.includes('"Access-Control-Allow-Origin": "*"'), 'Job-packet parsing must not allow every browser origin.');
 assert(packetParser.includes('|| "gpt-5.4-mini"'), 'Job-packet parsing must default to the cost-controlled document model.');
-assert(packetParser.includes('reasoning: { effort: "medium" }'), 'Job-packet parsing must not use high reasoning for every page group.');
+assert(
+  packetParser.includes('attempt === "primary" ? "low" : "medium"'),
+  'Job-packet parsing must use low reasoning first and reserve medium reasoning for full-model fallback.'
+);
+assert(
+  index.includes('async function splitPdfForPacketImport(file, pagesPerChunk = 3)') &&
+    index.includes('retrySmaller:detail.retry_smaller === true') &&
+    index.includes("retryMode:'smaller'"),
+  'Job-packet parsing must retry only slow dense groups as single pages.'
+);
 assert(packetParser.includes('event: "packet_parse_completed"') && packetParser.includes('reasoning_tokens:'), 'Job-packet parsing must log token usage for cost monitoring.');
 assert(packetParser.includes('Math.min(2, totalPages - pageOffset)'), 'Job-packet parsing must remain compatible with already-open two-page client sessions during rollout.');
 assert(appPolish.includes("tile.setAttribute('role','link')") && appPolish.includes("tile.addEventListener('keydown'"), 'Dashboard tiles must support keyboard and screen-reader navigation.');
