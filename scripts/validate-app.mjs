@@ -81,9 +81,78 @@ for (const marker of [
   'loadImportWorksheet(newPriceBookPendingWorksheet)',
   'newPriceBookInlineMappingTask',
   'newPriceBookPreSaveMappingActive ? [] : currentPriceBookItems',
-  'validRows.length === 0 || newPriceBookPreSaveMappingActive'
+  'validRows.length === 0 || newPriceBookPreSaveMappingActive',
+  "$('manageExistingContracts').open = true;",
+  "currentOpenPriceBook?.id === priceBookId",
+  "!$('priceBookImportCard').classList.contains('hidden')"
 ]) {
   assert(html.includes(marker), `Missing smart Unit Pricing import marker: ${marker}`);
+}
+
+// Step 4 Review must reveal the already-loaded import without reopening the
+// Price Book, because openPriceBook() intentionally resets pending import state.
+const reviewHandlerStart = html.indexOf("$('reviewSetupPriceBookBtn').onclick = () => {");
+const reviewHandlerEnd = html.indexOf("$('finishContractSetupBtn').onclick = () => {", reviewHandlerStart);
+if (reviewHandlerStart < 0 || reviewHandlerEnd < 0) {
+  failures.push('Missing executable Step 4 Review Unit Pricing handler.');
+} else {
+  const reviewHandlerCode = html.slice(reviewHandlerStart, reviewHandlerEnd);
+  const classList = (...classes) => {
+    const values = new Set(classes);
+    return {
+      add: value => values.add(value),
+      remove: value => values.delete(value),
+      contains: value => values.has(value)
+    };
+  };
+  let scrolledTarget = '';
+  let openCalls = 0;
+  const pendingRows = [{ item_code:'PL2000R' }];
+  const elements = {
+    reviewSetupPriceBookBtn:{ onclick:null },
+    contractSetupReview:{ dataset:{ priceBookId:'pb-review' } },
+    manageExistingContracts:{ open:false },
+    priceBookDetail:{
+      dataset:{ priceBookId:'pb-review' },
+      classList:classList('hidden'),
+      scrollIntoView:()=>{ scrolledTarget='detail'; }
+    },
+    priceBookImportCard:{
+      classList:classList(),
+      scrollIntoView:()=>{ scrolledTarget='import'; }
+    },
+    mapUnitCode:{ value:'Work Unit' },
+    confirmPriceBookImportBtn:{ classList:classList() }
+  };
+  const getElement = id => elements[id];
+  try {
+    const installHandler = new Function(
+      '$',
+      'currentOpenPriceBook',
+      'currentPriceBookImportRows',
+      'priceBookNavigationRecords',
+      'openPriceBook',
+      'alert',
+      `${reviewHandlerCode}; return $('reviewSetupPriceBookBtn').onclick;`
+    );
+    const handler = installHandler(
+      getElement,
+      { id:'pb-review' },
+      pendingRows,
+      new Map(),
+      ()=>{ openCalls += 1; },
+      ()=>{}
+    );
+    handler();
+    assert(elements.manageExistingContracts.open, 'Step 4 Review must open Manage Existing Contracts.');
+    assert(scrolledTarget === 'import', 'Step 4 Review must scroll to the pending import preview.');
+    assert(openCalls === 0, 'Step 4 Review must not reopen and reset the current Price Book.');
+    assert(pendingRows.length === 1, 'Step 4 Review must preserve pending import rows.');
+    assert(elements.mapUnitCode.value === 'Work Unit', 'Step 4 Review must preserve column mappings.');
+    assert(!elements.confirmPriceBookImportBtn.classList.contains('hidden'), 'Step 4 Review must preserve the Import button state.');
+  } catch (error) {
+    failures.push('Step 4 Review handler regression test failed: ' + error.message);
+  }
 }
 for (const marker of [
   'normalizedPriceWorkType',
