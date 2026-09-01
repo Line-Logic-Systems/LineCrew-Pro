@@ -54,6 +54,7 @@ const mustExist = [
   'supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql',
   'supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql',
   'supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql',
+  'supabase/migrations/20260901045812_optimize_job_packet_review_import.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -107,6 +108,7 @@ const foremanFieldTools = fs.readFileSync('foreman-field-tools.js', 'utf8');
 const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
 const jobJacketIntegrity = fs.readFileSync('supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql', 'utf8');
 const jobJacketReimport = fs.readFileSync('supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql', 'utf8');
+const packetTimeoutFix = fs.readFileSync('supabase/migrations/20260901045812_optimize_job_packet_review_import.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const dailyCompanyBackup = fs.readFileSync('.github/workflows/daily-company-data-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
@@ -537,6 +539,29 @@ assert(
     index.includes("if(importedStatus !== 'active')"),
   'Spreadsheet jacket UI must use the atomic finalizer and confirm activation before claiming success.'
 );
+assert(
+  index.includes("'finalize_utility_packet_import_review'") &&
+    index.includes('{ p_import_id:importId, p_rows:reviewRows }') &&
+    index.includes('Packet saved for review') &&
+    index.includes('Open Saved Review'),
+  'PDF jacket review must bulk-save rows and preserve a resumable draft after a review timeout.'
+);
+for (const marker of [
+  'linecrew_utility_packet_import_matches',
+  'create_and_stage_utility_packet_import',
+  "'resumed', true",
+  'source_keys as materialized',
+  'update_utility_packet_import_rows_bulk',
+  'finalize_utility_packet_import_review',
+  'jsonb_to_recordset(p_rows)',
+  'Review between 1 and 4,000 packet rows at a time.',
+  'job_package_work_points_package_canonical_key_idx',
+  'public.normalize_work_point_key(work_point_code)',
+  'with matches as materialized',
+  'on conflict (work_point_id, price_book_item_id) do update',
+  "package.status = 'draft'",
+  'from public, anon, authenticated'
+]) assert(packetTimeoutFix.includes(marker), `Packet timeout/atomic import marker missing: ${marker}`);
 for (const marker of [
   'delete from public.job_package_authorized_units',
   'delete from public.job_package_work_points',

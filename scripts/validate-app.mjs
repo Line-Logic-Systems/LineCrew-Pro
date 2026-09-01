@@ -473,6 +473,125 @@ if (packetPdfParserStart < 0 || packetPdfParserEnd < 0) {
   }
 }
 
+// Staging and review loading are separate transactions. If review loading
+// fails after staging commits, the UI must expose the saved draft instead of
+// claiming that the packet was never added.
+if (packetPdfParserStart >= 0 && packetPdfParserEnd >= 0) {
+  try {
+    let savedReview = null;
+    let openedPackage = null;
+    let loadCalls = 0;
+    const savedButton = { onclick:null };
+    const savedPackage = {
+      id:'saved-package',
+      job_id:'saved-job',
+      package_name:'saved-jacket',
+      status:'draft'
+    };
+    const savedReviewFixture = new Function(
+      'document',
+      'escapeHtml',
+      'splitPdfForPacketImport',
+      'sha256File',
+      'sb',
+      'packetFunctionErrorMessage',
+      'renderSmartPacketReview',
+      'loadJobs',
+      'openJobPackageDetails',
+      'currentJobPackageCatalog',
+      `let currentUtilityPacketImportId = null;\n` +
+        `let currentOpenJobId = null;\n` +
+        `${html.slice(packetPdfParserStart, packetPdfParserEnd)}\n` +
+        'return parsePdfJobPacketForJob;'
+    )(
+      {
+        getElementById:()=>({ prepend:node => { savedReview = node; } }),
+        createElement:()=>({
+          className:'',
+          innerHTML:'',
+          querySelector:()=>savedButton
+        })
+      },
+      value => String(value),
+      async () => [{
+        file_data:'data:application/pdf;base64,fixture',
+        page_offset:0,
+        total_pages:1
+      }],
+      async () => 'saved-fixture-sha256',
+      {
+        functions:{
+          invoke:async () => ({
+            data:{
+              status:'supported',
+              provider_key:'oncor',
+              format_key:'fixture',
+              profile_version:'fixture-v1',
+              work_order:'WO-SAVED',
+              confidence:0.99,
+              warnings:[],
+              rows:[{
+                source_page:1,
+                work_point_code:'20',
+                work_type:'install',
+                contractor_unit_code:'U1',
+                estimated_quantity:1
+              }]
+            },
+            error:null
+          })
+        },
+        rpc:async name => name === 'create_and_stage_utility_packet_import'
+          ? { data:{ package_id:'saved-package', import_id:'saved-import' }, error:null }
+          : { data:null, error:{ message:'canceling statement due to statement timeout' } }
+      },
+      async error => error.message,
+      ()=>{},
+      async () => { loadCalls += 1; },
+      async jobPackage => { openedPackage = jobPackage; },
+      [savedPackage]
+    );
+    await savedReviewFixture(
+      { id:'saved-job', job_number:'PDF-2', contract_id:'contract-1' },
+      { name:'saved-jacket.pdf', size:1024 }
+    );
+    assert(
+      savedReview?.innerHTML.includes('Packet saved for review') &&
+        savedReview.innerHTML.includes('Open Saved Review') &&
+        !savedReview.innerHTML.includes('Packet not added'),
+      'A post-stage review timeout must identify the resumable saved draft.'
+    );
+    await savedButton.onclick?.();
+    assert(
+      loadCalls === 1 && openedPackage === savedPackage,
+      'Open Saved Review must reload jobs and reopen the exact staged package.'
+    );
+  } catch (error) {
+    failures.push('Saved Job Jacket review recovery regression test failed: ' + error.message);
+  }
+}
+
+const smartPacketReviewStart = html.indexOf('function renderSmartPacketReview');
+const smartPacketReviewEnd = html.indexOf(
+  'function fileNameWithoutExtension',
+  smartPacketReviewStart
+);
+if (smartPacketReviewStart < 0 || smartPacketReviewEnd < 0) {
+  failures.push('Missing executable smart Job Jacket review renderer.');
+} else {
+  const smartPacketReview = html.slice(smartPacketReviewStart, smartPacketReviewEnd);
+  assert(
+    smartPacketReview.includes("'finalize_utility_packet_import_review'") &&
+      smartPacketReview.includes('{ p_import_id:importId, p_rows:reviewRows }'),
+    'Smart Job Jacket review must save and finalize all rows through one atomic RPC.'
+  );
+  assert(
+    !smartPacketReview.includes("sb.rpc('update_utility_packet_import_row'") &&
+      !smartPacketReview.includes("'update_utility_packet_import_rows_bulk'"),
+    'Smart Job Jacket review must not split review saving into extra database requests.'
+  );
+}
+
 // Work-point aliases must use the same canonical key so quantities do not
 // overwrite or split when a utility sheet mixes padded and prefixed values.
 const packetPointStart = html.indexOf('function normalizeJobPacketPoint');
@@ -944,6 +1063,38 @@ if (fs.existsSync(jobJacketIntegrityMigrationPath)) {
     ),
     'Transfer quantities must never be valued with an install price.'
   );
+}
+
+const packetTimeoutMigrationPath =
+  'supabase/migrations/20260901045812_optimize_job_packet_review_import.sql';
+assert(
+  fs.existsSync(packetTimeoutMigrationPath),
+  'Missing Job Jacket review/finalization timeout migration.'
+);
+if (fs.existsSync(packetTimeoutMigrationPath)) {
+  const packetTimeoutMigration = fs.readFileSync(packetTimeoutMigrationPath, 'utf8');
+  for (const marker of [
+    'linecrew_utility_packet_import_matches',
+    'create_and_stage_utility_packet_import',
+    "'resumed', true",
+    'source_keys as materialized',
+    'candidates as materialized',
+    'update_utility_packet_import_rows_bulk',
+    'finalize_utility_packet_import_review',
+    'jsonb_to_recordset(p_rows)',
+    'Review between 1 and 4,000 packet rows at a time.',
+    'job_package_work_points_package_canonical_key_idx',
+    'public.normalize_work_point_key(work_point_code)',
+    'with matches as materialized',
+    'on conflict (work_point_id, price_book_item_id) do update',
+    'package.status = \'draft\'',
+    'from public, anon, authenticated'
+  ]) {
+    assert(
+      packetTimeoutMigration.includes(marker),
+      `Missing packet timeout/atomic import marker: ${marker}`
+    );
+  }
 }
 
 for (const marker of [
