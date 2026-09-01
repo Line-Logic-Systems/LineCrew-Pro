@@ -9,7 +9,7 @@ import {
   sanitizeAssistantScreenContext,
 } from "./assistant-logic.mjs";
 
-const KNOWLEDGE_VERSION = "2026-08-30-read-only-navigation-v8";
+const KNOWLEDGE_VERSION = "2026-09-01-job-jacket-end-to-end-v9";
 
 const allowedOrigins = new Set([
   "https://app.linecrewpro.com",
@@ -114,11 +114,11 @@ CUSTOMERS, CONTRACTS AND PRICE BOOKS
 
 JOBS AND UTILITY JOB PACKAGES
 - Owner/Admin uses Jobs as Job Setup & Management. General Foreman and authorized Superintendent use Jobs & Crew Progress. Foremen use Assigned Jobs for field work; they can see and report only against active jobs assigned to them.
-- Authorized management creates a Job with + Create Job and ties it to the correct contract. There is no separate bulk Job-file import in this release; never confuse Utility Job Package import with creating Jobs.
+- Authorized management creates a Job with + Create Job and ties it to the correct contract. The same form accepts an optional PDF, Excel or CSV Job Jacket / Utility Packet. Create Job & Review Jacket creates the job first, then opens packet review; nothing imports until confirmation.
 - The Jobs progress list shows authorized, reported, approved and remaining value plus redline and Pending Packet counts. Select a job to open details.
 - Owner/Admin, General Foreman and an authorized Superintendent may assign multiple Foremen/General Foremen to a job. The job card and supervisor progress view show every assignee. View Assignment History records who assigned or unassigned each leader and when.
 - A utility job package is optional at job start. Foremen may report production before a packet arrives.
-- To add a packet: Jobs > open job > + Add Utility Package; enter its details and choose Save & Import Authorized Units. LineCrew Pro opens that package's CSV/Excel import immediately. Select the file/worksheet, map work point, description, unit code, work type and quantities, preview and confirm.
+- To add a packet later: Jobs > open job > + Add Job Packet. PDF packets open structured review; Excel/CSV packets open worksheet and column mapping for work point, description, unit code, work type and quantities. A confirmed import activates the authorization baseline used by Daily Reports, Remaining Units and Admin progress.
 - Imported authorized units are the baseline that classifies matching production as authorized, excess/unlisted production as redline, reconciles Pending Packet entries and powers reported/approved completion percentages.
 - Imported work points and authorized units calculate authorized value and job completion.
 - Pole/location formats such as 18, Pole 18, WP-18 and Work Point 18 normalize for matching.
@@ -145,7 +145,7 @@ TEAM, EMPLOYEES AND FOREMAN CREWS
 DAILY REPORTS AND UNIT ENTRY
 - Only a Foreman creates the field Daily Report. The Foreman opens Production > Create Daily Report, chooses an assigned job/date, verifies the auto-populated Crew Time employees, enters Start and Stop in 24-hour time plus Lunch minutes, confirms Per diem and assigned Truck / Equipment, adds any Extra Man, enters weather/delay details and notes, then saves the draft.
 - LineCrew Pro derives worked hours from Start, Stop and Lunch, then recalculates Regular and OT across the employee's configured workweek. Per diem defaults on but can be unchecked for an exception. Do not tell a Foreman to override the calculated weekly Regular/OT split.
-- Manage Units is pole-centered. Enter one pole/location, add every completed unit for that pole, and choose Save Pole & Add Next. The completed pole stays in a compact review list while a clean entry opens for the next pole. Choose Add 5 Unit Lines when a pole needs more than ten entries.
+- Manage Units is pole-centered. Jacket work points are offered in the Pole / Location field; choosing one shows its authorized units, work types and remaining quantities for one-click selection. Unlisted field changes can still be entered for deliberate Redline review. Add every completed unit for that pole, then choose Save Pole & Add Next. The completed pole stays in a compact review list while a clean entry opens for the next pole. Choose Add 5 Unit Lines when a pole needs more than ten entries.
 - Unit search ranks unit-code matches before description matches and learns commonly selected units locally for faster entry.
 - The Foreman can add multiple units and multiple poles on one daily report, update quantities, remove incorrect draft lines, attach supporting files, then choose Done Adding Units from either finish control. The app then offers the report review/submission step.
 - Remaining Units is a Foreman-only dashboard workspace. Select an assigned active job and search by Work Point. It shows Authorized, Saved Draft, Awaiting GF, Approved and Remaining quantities for install, transfer and remove without exposing contract prices. Drafts/submitted reports reserve quantities; returned reports release them until resubmitted; redlines remain separate and do not reduce authorized remaining quantities.

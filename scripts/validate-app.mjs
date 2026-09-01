@@ -175,6 +175,633 @@ for (const marker of [
   assert(html.includes(marker), `Missing Utility Package Transfer marker: ${marker}`);
 }
 
+// A Job Jacket can be supplied while the job is first created. Keep the
+// picker optional so an Admin can still create the job and add a jacket later.
+const createJobPacketInput = html.match(
+  /<input\b(?=[^>]*\bid=["']createJobPacketFile["'])[^>]*>/i
+)?.[0] || '';
+assert(createJobPacketInput, 'Missing same-page Create Job jacket picker.');
+assert(
+  /accept=["']\.pdf,\.csv,\.tsv,\.txt,\.xlsx,\.xls,\.ods["']/i.test(createJobPacketInput),
+  'Create Job jacket picker must accept every supported PDF/spreadsheet format.'
+);
+assert(
+  !/\srequired(?:\s|=|>)/i.test(createJobPacketInput),
+  'Create Job jacket picker must remain optional.'
+);
+assert(
+  html.includes('Job Jacket / Utility Packet (optional)') &&
+    html.includes('Create Job & Review Jacket'),
+  'Create Job must clearly identify the optional jacket review flow.'
+);
+
+// Exercise the shared validation/router used by both the Create Job picker
+// and the existing-job "+ Add Job Packet" picker.
+const packetHelpersStart = html.indexOf('function jobPacketFileValidationMessage');
+const packetHelpersEnd = html.indexOf('function chooseJobPacketFileForJob', packetHelpersStart);
+if (packetHelpersStart < 0 || packetHelpersEnd < 0) {
+  failures.push('Missing executable Job Jacket file validation/router helpers.');
+} else {
+  const packetHelpersCode = html.slice(packetHelpersStart, packetHelpersEnd);
+  const packetCalls = [];
+  const packetAlerts = [];
+  try {
+    const packetHelpers = new Function(
+      'alert',
+      'document',
+      'showJobDetail',
+      'parsePdfJobPacketForJob',
+      'showJobPackageForm',
+      'handleJobPackageImportFile',
+      `let currentOpenJobId = null;\n${packetHelpersCode}\n` +
+        'return {' +
+        'jobPacketFileValidationMessage,handleJobPacketFileForJob,' +
+        'getCurrentOpenJobId:()=>currentOpenJobId' +
+        '};'
+    )(
+      message => packetAlerts.push(message),
+      { getElementById: () => null },
+      job => packetCalls.push(['detail', job]),
+      async (job, file) => packetCalls.push(['pdf', job, file]),
+      (job, options) => packetCalls.push(['form', job, options]),
+      async file => packetCalls.push(['sheet', file])
+    );
+    const packetJob = { id:'job-packet-test', job_number:'TEST-100' };
+    const pdfFile = { name:'FIELD-JACKET.PDF', size:20 * 1024 * 1024 };
+    const sheetFile = { name:'authorized-units.xlsx', size:1234 };
+
+    assert(
+      packetHelpers.jobPacketFileValidationMessage(pdfFile) === '' &&
+        packetHelpers.jobPacketFileValidationMessage(sheetFile) === '',
+      'Supported Job Jacket files must pass validation.'
+    );
+    assert(
+      packetHelpers.jobPacketFileValidationMessage({
+        name:'too-large.pdf',
+        size:20 * 1024 * 1024 + 1
+      }).includes('20 MB'),
+      'Job Jacket validation must reject PDFs larger than 20 MB.'
+    );
+    assert(
+      packetHelpers.jobPacketFileValidationMessage({ name:'jacket.zip', size:1 }) !== '',
+      'Job Jacket validation must reject unsupported file formats.'
+    );
+
+    await packetHelpers.handleJobPacketFileForJob(packetJob, pdfFile);
+    assert(
+      packetCalls.map(call => call[0]).join(',') === 'detail,pdf' &&
+        packetCalls[1][1] === packetJob &&
+        packetCalls[1][2] === pdfFile,
+      'PDF jackets must route only to structured PDF review for the selected job.'
+    );
+    assert(
+      packetHelpers.getCurrentOpenJobId() === packetJob.id,
+      'Job Jacket review must preserve the selected job id.'
+    );
+
+    packetCalls.length = 0;
+    await packetHelpers.handleJobPacketFileForJob(packetJob, sheetFile);
+    assert(
+      packetCalls.map(call => call[0]).join(',') === 'detail,form,sheet' &&
+        packetCalls[1][2]?.inline === true &&
+        packetCalls[1][2]?.fileName === sheetFile.name &&
+        packetCalls[2][1] === sheetFile,
+      'Spreadsheet jackets must open inline mapping and read the exact selected file.'
+    );
+
+    packetCalls.length = 0;
+    packetAlerts.length = 0;
+    const invalidRoute = await packetHelpers.handleJobPacketFileForJob(
+      packetJob,
+      { name:'jacket.exe', size:1 }
+    );
+    assert(
+      invalidRoute === false && packetCalls.length === 0 && packetAlerts.length === 1,
+      'Invalid Job Jacket files must stop before any parser or import flow runs.'
+    );
+  } catch (error) {
+    failures.push('Job Jacket file routing regression test failed: ' + error.message);
+  }
+}
+
+// Spreadsheet parsing is asynchronous and the shared import state must belong
+// to the newest selection. A slower, stale read must not overwrite the newer
+// workbook or leave its contents paired with the newer filename.
+const packetSpreadsheetStateStart = html.indexOf(
+  'let currentJobPackageImportWorkbook = null;'
+);
+const packetSpreadsheetStateEnd = html.indexOf(
+  'let currentUtilityPacketImportId',
+  packetSpreadsheetStateStart
+);
+const packetSpreadsheetReaderStart = html.indexOf(
+  'async function handleJobPackageImportFile'
+);
+const packetSpreadsheetReaderEnd = html.indexOf(
+  "$('jobPackageImportFile').onchange",
+  packetSpreadsheetReaderStart
+);
+if (
+  packetSpreadsheetStateStart < 0 || packetSpreadsheetStateEnd < 0 ||
+  packetSpreadsheetReaderStart < 0 || packetSpreadsheetReaderEnd < 0
+) {
+  failures.push('Missing executable Job Jacket spreadsheet reader.');
+} else {
+  try {
+    const spreadsheetElements = {
+      jobPackageImportWorksheet:{ innerHTML:'', appendChild:()=>{} },
+      jobPackageImportWorksheetWrap:{ classList:{ toggle:()=>{} } },
+      jobPackageImportMapping:{ classList:{ add:()=>{} } },
+      previewJobPackageImportBtn:{ classList:{ add:()=>{} } },
+      confirmJobPackageImportBtn:{ classList:{ add:()=>{} } },
+      jobPackageImportPreview:{ innerHTML:'' },
+      jobPackageFormCard:{ contains:()=>true },
+      jobPackageImportForm:{},
+      jobPackageName:{ value:'' }
+    };
+    const spreadsheetMappings = [];
+    const spreadsheetAlerts = [];
+    const spreadsheetFixture = new Function(
+      '$',
+      'XLSX',
+      'document',
+      'configureJobPacketMappings',
+      'alert',
+      `${html.slice(packetSpreadsheetStateStart, packetSpreadsheetStateEnd)}\n` +
+        `${html.slice(packetSpreadsheetReaderStart, packetSpreadsheetReaderEnd)}\n` +
+        'return {' +
+        'read:handleJobPackageImportFile,' +
+        'state:()=>({' +
+        'filename:currentJobPackageImportFilename,' +
+        'workbook:currentJobPackageImportWorkbook,' +
+        "packageName:$('jobPackageName').value" +
+        '})};'
+    )(
+      id => spreadsheetElements[id],
+      {
+        read:value => value,
+        utils:{ sheet_to_json:sheet => sheet.rows }
+      },
+      { createElement:()=>({}) },
+      headers => spreadsheetMappings.push(headers[0]),
+      message => spreadsheetAlerts.push(message)
+    );
+    const delayedSpreadsheet = (name, delay, header) => ({
+      name,
+      async arrayBuffer(){
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return {
+          SheetNames:['Sheet1'],
+          Sheets:{ Sheet1:{ rows:[{ [header]:1 }] } }
+        };
+      }
+    });
+    const staleRead = spreadsheetFixture.read(
+      delayedSpreadsheet('first.xlsx', 45, 'FIRST')
+    );
+    await new Promise(resolve => setTimeout(resolve, 2));
+    const newestRead = spreadsheetFixture.read(
+      delayedSpreadsheet('second.xlsx', 5, 'SECOND')
+    );
+    const [staleResult, newestResult] = await Promise.all([staleRead, newestRead]);
+    const spreadsheetState = spreadsheetFixture.state();
+    const finalSpreadsheetHeader = Object.keys(
+      spreadsheetState.workbook?.Sheets?.Sheet1?.rows?.[0] || {}
+    )[0];
+    assert(
+      staleResult === false && newestResult === true &&
+        spreadsheetState.filename === 'second.xlsx' &&
+        spreadsheetState.packageName === 'second' &&
+        finalSpreadsheetHeader === 'SECOND' &&
+        spreadsheetMappings.join(',') === 'SECOND' &&
+        spreadsheetAlerts.length === 0,
+      'Overlapping Job Jacket reads must keep only the newest filename, workbook and mapping.'
+    );
+  } catch (error) {
+    failures.push('Overlapping Job Jacket spreadsheet-read regression test failed: ' + error.message);
+  }
+}
+
+// Promise rejection does not cancel sibling PDF workers. The parser must wait
+// for them to settle before rendering its terminal error, or a late progress
+// update can overwrite the failure and leave the review stuck on "Reading".
+const packetPdfParserStart = html.indexOf('async function parsePdfJobPacketForJob');
+const packetPdfParserEnd = html.indexOf(
+  'function renderSmartPacketReview',
+  packetPdfParserStart
+);
+if (packetPdfParserStart < 0 || packetPdfParserEnd < 0) {
+  failures.push('Missing executable Job Jacket PDF parser.');
+} else {
+  try {
+    let pdfReview = null;
+    let pdfStageCalls = 0;
+    const pdfPackageContainer = {
+      prepend:node => { pdfReview = node; }
+    };
+    const pdfFixture = new Function(
+      'document',
+      'escapeHtml',
+      'splitPdfForPacketImport',
+      'sha256File',
+      'sb',
+      'packetFunctionErrorMessage',
+      'renderSmartPacketReview',
+      `let currentUtilityPacketImportId = null;\n` +
+        `${html.slice(packetPdfParserStart, packetPdfParserEnd)}\n` +
+        'return parsePdfJobPacketForJob;'
+    )(
+      {
+        getElementById:()=>pdfPackageContainer,
+        createElement:()=>({
+          className:'',
+          innerHTML:'',
+          querySelector:()=>({ onclick:null })
+        })
+      },
+      value => String(value),
+      async () => [0, 2, 4].map(pageOffset => ({
+        file_data:'data:application/pdf;base64,fixture',
+        page_offset:pageOffset,
+        total_pages:6
+      })),
+      async () => 'fixture-sha256',
+      {
+        functions:{
+          invoke:async (_name, { body }) => {
+            const delay = body.page_offset === 0 ? 5 : body.page_offset === 2 ? 30 : 50;
+            await new Promise(resolve => setTimeout(resolve, delay));
+            if(body.page_offset === 0){
+              return { data:null, error:{ message:'fixture chunk failed' } };
+            }
+            return {
+              data:{
+                status:'supported',
+                provider_key:'oncor',
+                rows:[{ source_page:body.page_offset + 1 }],
+                warnings:[]
+              },
+              error:null
+            };
+          }
+        },
+        rpc:async () => {
+          pdfStageCalls += 1;
+          return { data:null, error:null };
+        }
+      },
+      async error => error.message,
+      ()=>{}
+    );
+    await pdfFixture(
+      { id:'pdf-race-job', job_number:'PDF-1', contract_id:'contract-1' },
+      { name:'race-jacket.pdf', size:1024 }
+    );
+    const pdfFailureAtReturn = pdfReview?.innerHTML || '';
+    await new Promise(resolve => setTimeout(resolve, 80));
+    const pdfFailureAfterWorkers = pdfReview?.innerHTML || '';
+    assert(
+      pdfStageCalls === 0 &&
+        pdfFailureAtReturn.includes('Packet not added') &&
+        pdfFailureAtReturn.includes('fixture chunk failed') &&
+        pdfFailureAfterWorkers === pdfFailureAtReturn &&
+        !pdfFailureAfterWorkers.includes('Analyzed'),
+      'A failed PDF Job Jacket worker must leave one stable terminal error after sibling workers settle.'
+    );
+  } catch (error) {
+    failures.push('Job Jacket PDF worker-failure regression test failed: ' + error.message);
+  }
+}
+
+// Work-point aliases must use the same canonical key so quantities do not
+// overwrite or split when a utility sheet mixes padded and prefixed values.
+const packetPointStart = html.indexOf('function normalizeJobPacketPoint');
+const packetPointEnd = html.indexOf('async function previewJobPackageImport', packetPointStart);
+if (packetPointStart < 0 || packetPointEnd < 0) {
+  failures.push('Missing executable Job Jacket work-point normalizer.');
+} else {
+  try {
+    const normalizeJobPacketPoint = new Function(
+      `${html.slice(packetPointStart, packetPointEnd)}; return normalizeJobPacketPoint;`
+    )();
+    const aliases = ['WP-0020', 'Pole 20', '20'];
+    assert(
+      aliases.every(value => normalizeJobPacketPoint(value) === '20'),
+      'WP-0020, Pole 20 and 20 must normalize to the same work point.'
+    );
+    const aggregated = aliases.reduce((totals, value, index) => {
+      const key = normalizeJobPacketPoint(value);
+      totals.set(key, (totals.get(key) || 0) + index + 1);
+      return totals;
+    }, new Map());
+    assert(
+      aggregated.size === 1 && aggregated.get('20') === 6,
+      'Equivalent work points must aggregate quantities instead of overwriting or splitting them.'
+    );
+  } catch (error) {
+    failures.push('Job Jacket work-point normalization regression test failed: ' + error.message);
+  }
+}
+
+// The remaining-units RPC intentionally releases a returned draft. When that
+// same draft is reopened, subtract only its own matching saved row for the
+// picker display. A never-returned draft is already reserved by the RPC and
+// must not be subtracted a second time.
+const returnedDraftQuantityStart = html.indexOf('function authorizedDailyWorkType');
+const returnedDraftQuantityEnd = html.indexOf(
+  'function renderDailyAuthorizedUnitsForLocation',
+  returnedDraftQuantityStart
+);
+if (
+  packetPointStart < 0 || packetPointEnd < 0 ||
+  returnedDraftQuantityStart < 0 || returnedDraftQuantityEnd < 0
+) {
+  failures.push('Missing executable returned-draft authorized-quantity helpers.');
+} else {
+  try {
+    const installReturnedDraftFixture = (report, savedUnits) => new Function(
+      'currentDailyUnitReport',
+      'currentDailySavedUnits',
+      `${html.slice(packetPointStart, packetPointEnd)}\n` +
+        `${html.slice(returnedDraftQuantityStart, returnedDraftQuantityEnd)}\n` +
+        'return {dailyReportIsReturnedDraft,dailyAuthorizedQuantityAvailable};'
+    )(report, savedUnits);
+    const targetAuthorizedUnit = {
+      work_point_code:'20',
+      unit_code:'A',
+      work_type:'install',
+      remaining_quantity:5
+    };
+    const savedReturnedDraftRows = [
+      {
+        pole_location:'WP-20',
+        item_code:'A',
+        install_quantity:2,
+        transfer_quantity:0,
+        retirement_quantity:0
+      },
+      {
+        pole_location:'WP-21',
+        item_code:'A',
+        install_quantity:40,
+        transfer_quantity:0,
+        retirement_quantity:0
+      },
+      {
+        pole_location:'Pole 20',
+        item_code:'B',
+        install_quantity:50,
+        transfer_quantity:0,
+        retirement_quantity:0
+      }
+    ];
+    const returnedDraftReport = { status:'draft', review_notes:'Correct and resubmit' };
+    const returnedDraft = installReturnedDraftFixture(
+      returnedDraftReport,
+      savedReturnedDraftRows
+    );
+    assert(
+      returnedDraft.dailyReportIsReturnedDraft(returnedDraftReport) &&
+        returnedDraft.dailyAuthorizedQuantityAvailable(targetAuthorizedUnit) === 3,
+      'A returned draft with 2 saved against RPC remaining 5 must offer exactly 3.'
+    );
+    assert(
+      returnedDraft.dailyAuthorizedQuantityAvailable({
+        ...targetAuthorizedUnit,
+        work_point_code:'WP-22'
+      }) === 5 &&
+        returnedDraft.dailyAuthorizedQuantityAvailable({
+          ...targetAuthorizedUnit,
+          unit_code:'C'
+        }) === 5,
+      'Returned-draft adjustment must not subtract unrelated locations or unit codes.'
+    );
+
+    const neverReturnedDraftReport = { status:'draft', review_notes:'' };
+    const neverReturnedDraft = installReturnedDraftFixture(
+      neverReturnedDraftReport,
+      savedReturnedDraftRows
+    );
+    assert(
+      !neverReturnedDraft.dailyReportIsReturnedDraft(neverReturnedDraftReport) &&
+        neverReturnedDraft.dailyAuthorizedQuantityAvailable({
+          ...targetAuthorizedUnit,
+          remaining_quantity:3
+        }) === 3,
+      'A never-returned draft with RPC remaining 3 must still offer 3 without double subtraction.'
+    );
+  } catch (error) {
+    failures.push('Returned-draft authorized-quantity regression test failed: ' + error.message);
+  }
+}
+
+// Execute the Create Job handler with a jacket to prove the UUID returned by
+// the database is loaded before that exact file is routed into its review.
+const createJobHandlerStart = html.indexOf("$('createJobBtn').onclick = async()=>{");
+const createJobHandlerEnd = html.indexOf('/* LOAD JOBS */', createJobHandlerStart);
+if (createJobHandlerStart < 0 || createJobHandlerEnd < 0) {
+  failures.push('Missing executable Create Job handler.');
+} else {
+  try {
+    const createJobHandlerCode = html.slice(createJobHandlerStart, createJobHandlerEnd);
+    const createdJobId = '00000000-0000-4000-8000-000000000123';
+    const jacketFile = { name:'created-job-jacket.xlsx', size:456 };
+    const sequence = [];
+    const alerts = [];
+    let routedJob = null;
+    let routedFile = null;
+    let historyState = null;
+    let rpcCall = null;
+    const jobs = [];
+    const elements = {
+      createJobCard:{ dataset:{}, classList:{ add:className => sequence.push('hide:' + className) } },
+      createJobPacketFile:{ files:[jacketFile] },
+      jobNumber:{ value:' JOB-123 ' },
+      jobName:{ value:' Jacket Integration Test ' },
+      jobContract:{ value:'contract-123' },
+      createJobBtn:{ onclick:null, disabled:false, textContent:'Create Job & Review Jacket' }
+    };
+    const getElement = id => elements[id];
+    const fixture = new Function(
+      '$',
+      'sb',
+      'currentJobsCatalog',
+      'currentOpenJobId',
+      'loadJobs',
+      'handleJobPacketFileForJob',
+      'setAppHistory',
+      'updateCreateJobActionLabel',
+      'resetCreateJobPacketSelection',
+      'jobPacketFileValidationMessage',
+      'alert',
+      `${createJobHandlerCode}; return {` +
+        "handler:$('createJobBtn').onclick," +
+        'getCurrentOpenJobId:()=>currentOpenJobId' +
+        '};'
+    )(
+      getElement,
+      {
+        rpc:async (name, args) => {
+          sequence.push('rpc');
+          rpcCall = { name, args };
+          return { data:createdJobId, error:null };
+        }
+      },
+      jobs,
+      null,
+      async () => {
+        sequence.push('load');
+        jobs.push({ id:createdJobId, job_number:'JOB-123' });
+      },
+      async (job, file) => {
+        sequence.push('route');
+        routedJob = job;
+        routedFile = file;
+      },
+      state => {
+        sequence.push('history');
+        historyState = state;
+      },
+      () => sequence.push('label'),
+      () => sequence.push('reset'),
+      () => '',
+      message => alerts.push(message)
+    );
+
+    await fixture.handler();
+    assert(
+      rpcCall?.name === 'create_contract_job' &&
+        rpcCall.args.p_contract_id === 'contract-123' &&
+        rpcCall.args.p_job_number === 'JOB-123' &&
+        rpcCall.args.p_job_name === 'Jacket Integration Test',
+      'Create Job must send the entered contract, number and name to the create RPC.'
+    );
+    assert(
+      sequence.filter(step => ['rpc', 'load', 'history', 'route'].includes(step)).join(',') ===
+        'rpc,load,history,route',
+      'Create Job must create, reload, establish detail history, then route the jacket.'
+    );
+    assert(
+      fixture.getCurrentOpenJobId() === createdJobId &&
+        routedJob?.id === createdJobId &&
+        routedFile === jacketFile,
+      'Create Job must route the exact selected jacket using the returned job UUID.'
+    );
+    assert(
+      historyState?.lineCrewPage === 'jobsPage' &&
+        historyState?.view === 'jobDetail' &&
+        historyState?.jobId === createdJobId,
+      'Create Job jacket review must push the same job-detail history state as a normal job open.'
+    );
+    assert(
+      elements.createJobBtn.disabled === false && alerts.length === 0,
+      'Create Job must restore its button after a successful jacket handoff.'
+    );
+  } catch (error) {
+    failures.push('Create Job jacket handoff regression test failed: ' + error.message);
+  }
+}
+
+for (const marker of [
+  'id="dailyAuthorizedUnitPanel"',
+  'id="dailyAuthorizedUnitHelp"',
+  'id="dailyAuthorizedUnitChoices"',
+  "sb.rpc('get_remaining_job_units_for_field', { p_job_id:report.job_id })",
+  'const authorizedRowsRequest = canEditDraft && report.job_id',
+  'renderDailyAuthorizedUnitsForLocation',
+  'addAuthorizedDailyUnit',
+  'From job jacket:',
+  'Pending Packet or Redline'
+]) {
+  assert(html.includes(marker), `Missing Foreman authorized Job Jacket marker: ${marker}`);
+}
+for (const marker of [
+  'const remainingInstall = Math.max(',
+  'const remainingTransfer = Math.max(',
+  'const remainingRetirement = Math.max(',
+  '<strong>Remaining I: ${dailyQuantityText(remainingInstall)}',
+  'T: ${dailyQuantityText(remainingTransfer)}',
+  'R: ${dailyQuantityText(remainingRetirement)}</strong>'
+]) {
+  assert(html.includes(marker), `Missing Admin Job Jacket remaining-quantity marker: ${marker}`);
+}
+
+// Jacket work points with remaining quantity must be offered in the same
+// Foreman pole/location control as locations already saved on the report.
+const dailyLocationStart = html.indexOf('function dailyWorkPointKey');
+const dailyLocationEnd = html.indexOf('function dailyQuantityText', dailyLocationStart);
+if (dailyLocationStart < 0 || dailyLocationEnd < 0) {
+  failures.push('Missing executable Foreman jacket work-point renderer.');
+} else {
+  try {
+    const locationList = { innerHTML:'' };
+    const dailyLocationHelpers = new Function(
+      '$',
+      'escapeHtml',
+      'normalizeJobPacketPoint',
+      'currentDailySavedUnits',
+      'currentDailyAuthorizedRows',
+      'dailyAuthorizedQuantityAvailable',
+      `${html.slice(dailyLocationStart, dailyLocationEnd)}; ` +
+        'return {renderDailyPoleLocationOptions,findDailySavedUnitAtLocation};'
+    )(
+      id => (id === 'dailyUnitPoleLocations' ? locationList : null),
+      value => String(value),
+      value => {
+        const key = String(value || '')
+          .trim()
+          .toLowerCase()
+          .replace(/^(pole|wp|work[\s_-]*point)[\s#:_-]*/i, '')
+          .replace(/[^a-z0-9]+/g, '');
+        return /^\d+$/.test(key) ? (key.replace(/^0+(?=\d)/, '') || '0') : key;
+      },
+      [
+        { price_book_item_id:'item-a', pole_location:'Pole 20' },
+        { price_book_item_id:'item-b', pole_location:'Pole 4' }
+      ],
+      [
+        { work_point_code:'WP-0020', remaining_quantity:3 },
+        { work_point_code:'20', remaining_quantity:2 },
+        { work_point_code:'Pole 99', remaining_quantity:0 }
+      ],
+      authorized => Number(authorized.remaining_quantity || 0)
+    );
+    dailyLocationHelpers.renderDailyPoleLocationOptions();
+    const optionValues = [...locationList.innerHTML.matchAll(/value="([^"]*)"/g)]
+      .map(match => match[1]);
+    assert(
+      optionValues.length === 2 &&
+        optionValues.includes('Pole 4') &&
+        optionValues.includes('Pole 20') &&
+        !optionValues.includes('WP-0020') &&
+        !optionValues.includes('20') &&
+        !optionValues.includes('Pole 99'),
+      'Foreman location choices must canonically dedupe saved and jacket work-point aliases.'
+    );
+    assert(
+      dailyLocationHelpers.findDailySavedUnitAtLocation('item-a', 'WP-0020')
+        ?.pole_location === 'Pole 20' &&
+        dailyLocationHelpers.findDailySavedUnitAtLocation('item-a', '20')
+          ?.pole_location === 'Pole 20' &&
+        dailyLocationHelpers.findDailySavedUnitAtLocation('item-b', 'WP-0020') == null,
+      'Foreman batch save must reuse an equivalent saved location for the same Price Book item.'
+    );
+    for (const marker of [
+      'const existing = findDailySavedUnitAtLocation(',
+      "const persistedLocation = String(existing?.pole_location || '').trim() || location;",
+      'dailyWorkPointKey(persistedLocation)',
+      'location:persistedLocation'
+    ]) {
+      assert(
+        html.includes(marker),
+        `Foreman batch save is missing canonical existing-location reuse: ${marker}`
+      );
+    }
+  } catch (error) {
+    failures.push('Foreman jacket work-point renderer regression test failed: ' + error.message);
+  }
+}
+
 const transferMigrationPath =
   'supabase/migrations/20260831050000_smart_pricebook_and_packet_transfers.sql';
 assert(fs.existsSync(transferMigrationPath), 'Missing packet Transfer database migration.');
@@ -198,6 +825,125 @@ if (fs.existsSync(transferMigrationPath)) {
       `Missing guarded packet Transfer migration marker: ${marker}`
     );
   }
+}
+
+const jobJacketIntegrityMigrationPath =
+  'supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql';
+assert(
+  fs.existsSync(jobJacketIntegrityMigrationPath),
+  'Missing end-to-end Job Jacket integrity migration.'
+);
+if (fs.existsSync(jobJacketIntegrityMigrationPath)) {
+  const integrityMigration = fs.readFileSync(jobJacketIntegrityMigrationPath, 'utf8');
+  for (const marker of [
+    'finalize_job_package_spreadsheet_import',
+    'linecrew_report_counts_toward_progress',
+    "lower(coalesce(p_status, 'draft')) in ('submitted', 'approved')",
+    'p_reviewed_at is null',
+    "nullif(btrim(coalesce(p_review_notes, '')), '') is null",
+    'coalesce(p_archived, false) is false'
+  ]) {
+    assert(
+      integrityMigration.includes(marker),
+      `Missing canonical Job Jacket progress marker: ${marker}`
+    );
+  }
+
+  const migrationFunction = name => {
+    const start = integrityMigration.indexOf(`create or replace function public.${name}(`);
+    if (start < 0) return '';
+    const next = integrityMigration.indexOf('\ncreate or replace function public.', start + 1);
+    return integrityMigration.slice(start, next < 0 ? undefined : next);
+  };
+  for (const consumer of [
+    'get_job_package_work_points',
+    'get_job_package_work_points_v2',
+    'get_daily_report_unit_locations_v2',
+    'get_remaining_job_units_for_field',
+    'get_job_progress_dashboard'
+  ]) {
+    const body = migrationFunction(consumer);
+    assert(body, `Missing rewritten progress consumer: ${consumer}`);
+    assert(
+      body.includes('public.linecrew_report_counts_toward_progress('),
+      `${consumer} must share the canonical returned-report counting rule.`
+    );
+  }
+
+  // Keep the rule's expected state transitions explicit and executable. The
+  // SQL markers above tie this truth table to the immutable database helper.
+  const canonicalProgressCount = report =>
+    report.archived !== true &&
+    (
+      ['submitted', 'approved'].includes(String(report.status || 'draft').toLowerCase()) ||
+      (
+        String(report.status || 'draft').toLowerCase() === 'draft' &&
+        report.reviewedAt == null &&
+        !String(report.reviewNotes || '').trim()
+      )
+    );
+  const reportStateTruthTable = [
+    {
+      label:'initial draft',
+      report:{ status:'draft', submittedAt:null, reviewedAt:null, reviewNotes:'', archived:false },
+      expected:true
+    },
+    {
+      label:'submitted',
+      report:{ status:'submitted', submittedAt:'2026-09-01', reviewedAt:null, reviewNotes:'', archived:false },
+      expected:true
+    },
+    {
+      label:'approved',
+      report:{ status:'approved', submittedAt:'2026-09-01', reviewedAt:'2026-09-02', reviewNotes:'', archived:false },
+      expected:true
+    },
+    {
+      label:'returned draft',
+      report:{ status:'draft', submittedAt:'2026-09-01', reviewedAt:'2026-09-02', reviewNotes:'Fix quantities', archived:false },
+      expected:false
+    },
+    {
+      label:'rejected',
+      report:{ status:'rejected', submittedAt:'2026-09-01', reviewedAt:'2026-09-02', reviewNotes:'Rejected', archived:false },
+      expected:false
+    },
+    {
+      label:'archived draft',
+      report:{ status:'draft', submittedAt:null, reviewedAt:null, reviewNotes:'', archived:true },
+      expected:false
+    },
+    {
+      label:'archived approved',
+      report:{ status:'approved', submittedAt:'2026-09-01', reviewedAt:'2026-09-02', reviewNotes:'', archived:true },
+      expected:false
+    }
+  ];
+  for (const state of reportStateTruthTable) {
+    assert(
+      canonicalProgressCount(state.report) === state.expected,
+      `Canonical progress truth table failed for ${state.label}.`
+    );
+  }
+
+  assert(
+    integrityMigration.includes(
+      'authorized.authorized_transfer_quantity * item.transfer_price'
+    ) &&
+      integrityMigration.includes(
+        'location.transfer_quantity * unit.actual_transfer_price'
+      ) &&
+      integrityMigration.includes(
+        'location.transfer_quantity * unit.adjusted_transfer_price'
+      ),
+    'Transfer quantities must retain their transfer prices in Admin and report values.'
+  );
+  assert(
+    !/(?:authorized\.authorized_transfer_quantity|location\.transfer_quantity)\s*\*\s*(?:item\.install_price|unit\.(?:actual|adjusted)_install_price)/i.test(
+      integrityMigration
+    ),
+    'Transfer quantities must never be valued with an install price.'
+  );
 }
 
 for (const marker of [
@@ -532,5 +1278,7 @@ console.log('- Flexible JSA camera/viewer wiring is present');
 console.log('- Multi-table and multi-sheet Unit Pricing import wiring is present');
 console.log('- Adaptive wide/long Unit Pricing import behavior is verified');
 console.log('- Utility Package Transfer wiring is present');
+console.log('- Create Job jacket routing and work-point normalization are verified');
+console.log('- Foreman authorized units and Admin remaining quantities are present');
 console.log('- HTML ids are unique');
 console.log('- No known server-side secret patterns are exposed');
