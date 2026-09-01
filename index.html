@@ -7543,6 +7543,7 @@ async function parsePdfJobPacketForJob(job, file){
 const packageContainer = document.getElementById('job-packages-' + job.id);
 if(!packageContainer) return;
 const review = document.createElement('div');
+let stagedPacket = null;
 review.className = 'job-card job-packet-smart-review';
 review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) +
 '…</strong><p class="muted">Detecting the utility and packet format. Nothing has been added to the job yet.</p>';
@@ -7626,6 +7627,7 @@ p_rows:parsed.rows
 }
 );
 if(stageError) throw new Error(stageError.message);
+stagedPacket = staged;
 currentUtilityPacketImportId = staged.import_id;
 const packageRecord = {
 id:staged.package_id,
@@ -7643,6 +7645,21 @@ const { data:rows, error:reviewError } = await sb.rpc(
 if(reviewError) throw new Error(reviewError.message);
 renderSmartPacketReview(review, job, packageRecord, staged.import_id, parsed, rows || []);
 }catch(error){
+if(stagedPacket?.package_id){
+review.innerHTML = '<strong>Packet saved for review</strong>' +
+'<p class="import-error">The packet was saved, but its review could not open: ' +
+escapeHtml(error.message || 'Unable to load the saved packet review.') + '</p>' +
+'<button type="button" class="secondary small">Open Saved Review</button>';
+review.querySelector('button').onclick = async () => {
+currentOpenJobId = job.id;
+await loadJobs();
+const savedPackage = currentJobPackageCatalog.find(
+item => String(item.id) === String(stagedPacket.package_id)
+);
+if(savedPackage) await openJobPackageDetails(savedPackage);
+};
+return;
+}
 review.innerHTML = '<strong>Packet not added</strong><p class="import-error">' +
 escapeHtml(error.message || 'Unable to analyze this packet.') + '</p>' +
 '<button type="button" class="secondary small">Close</button>';
@@ -7693,22 +7710,20 @@ const button = event.currentTarget;
 button.disabled = true;
 button.textContent = 'Saving review…';
 try{
-for(const tr of tbody.querySelectorAll('tr')){
-const { error } = await sb.rpc('update_utility_packet_import_row', {
-p_row_id:tr.dataset.rowId,
-p_work_point_code:tr.querySelector('.smart-row-point').value.trim(),
-p_work_type:tr.querySelector('.smart-row-type').value,
-p_contractor_unit_code:tr.querySelector('.smart-row-unit').value.trim() || null,
-p_estimated_quantity:Number(tr.querySelector('.smart-row-qty').value),
-p_include_in_import:tr.querySelector('.smart-row-use').checked,
-p_review_note:null
-});
-if(error) throw new Error(error.message);
-}
+const reviewRows = [...tbody.querySelectorAll('tr')].map(tr => ({
+row_id:tr.dataset.rowId,
+work_point_code:tr.querySelector('.smart-row-point').value.trim(),
+work_type:tr.querySelector('.smart-row-type').value,
+contractor_unit_code:tr.querySelector('.smart-row-unit').value.trim() || null,
+estimated_quantity:Number(tr.querySelector('.smart-row-qty').value),
+include_in_import:tr.querySelector('.smart-row-use').checked,
+review_note:null
+}));
 button.textContent = 'Validating and importing…';
-const { data:result, error } = await sb.rpc('finalize_utility_packet_import', {
-p_import_id:importId
-});
+const { data:result, error } = await sb.rpc(
+'finalize_utility_packet_import_review',
+{ p_import_id:importId, p_rows:reviewRows }
+);
 if(error) throw new Error(error.message);
 currentOpenJobPackage = packageRecord;
 container.innerHTML = '<strong>Packet imported</strong><p>' +
