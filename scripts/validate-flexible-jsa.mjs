@@ -58,7 +58,7 @@ for(const token of [
   'isSupabaseRuntime',
   '/expanded-jsa.js?v=20260901a',
   '/offline-jsa.js?v=20260827b',
-  '/timekeeping-input-v2.js?v=20260829c',
+  '/timekeeping-input-v2.js?v=20260901a',
   '/jsa-signatures.js?v=20260828a'
 ]){
   if(!serviceWorker.includes(token)) throw new Error('Missing Offline JSA app-shell token: ' + token);

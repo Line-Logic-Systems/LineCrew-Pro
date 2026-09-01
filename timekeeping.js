@@ -9,6 +9,7 @@
   const companyId = () => typeof currentProfile !== 'undefined' ? currentProfile?.company_id || null : null;
   const isLeader = () => ['gf','admin','owner'].includes(role());
   const canManageRoster = () => isLeader();
+  const canViewCompleteRoster = () => ['admin','owner'].includes(role());
   const getSb = () => typeof sb !== 'undefined' ? sb : window.sb;
   const todayIso = () => new Date().toISOString().slice(0,10);
   const mondayIso = () => {
@@ -22,6 +23,7 @@
   let equipment = [];
   let foremen = [];
   let admins = [];
+  let teamProfiles = [];
   let entries = [];
   let jobs = [];
   let crewRowsLoadedForReport = null;
@@ -47,6 +49,14 @@
       .tk-roster-savebar{display:flex;gap:10px;align-items:center;margin:12px 0;padding:8px 0;position:sticky;top:8px;z-index:3;background:var(--surface,#fff)}
       .tk-roster-savebar button{width:auto;margin:0}
       .tk-assignment-pending{background:#fff8df}
+      .tk-complete-roster{border:1px solid #b9cad8;border-radius:14px;margin:14px 0;background:#f8fafc;overflow:hidden}
+      .tk-complete-roster>summary{cursor:pointer;padding:13px 14px;font-weight:800;color:#0b2d4d}
+      .tk-complete-roster-body{padding:0 14px 14px}
+      .tk-roster-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:10px 0 14px}
+      .tk-roster-summary>div{background:#fff;border:1px solid #dce5ed;border-radius:10px;padding:10px;text-align:center}
+      .tk-roster-summary strong{display:block;font-size:20px;color:#0b2d4d}
+      .tk-complete-section{margin-top:16px}.tk-complete-section h4{margin:0 0 8px}
+      .tk-roster-unassigned td{background:#fff8df}.tk-roster-inactive{opacity:.6}
       .tk-crew-card{border:1px solid #dce5ed;border-radius:14px;padding:14px;margin:14px 0;background:#f8fafc}
       .tk-crew-row{display:grid;grid-template-columns:minmax(180px,1.6fr) minmax(90px,.7fr) minmax(90px,.7fr) auto;gap:8px;align-items:end;margin:8px 0}
       .tk-crew-row label{margin:0;font-size:12px}
@@ -58,7 +68,7 @@
       .tk-help{font-size:13px;color:#6c7a89}
       .tk-inline-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
       .tk-inline-actions button{width:auto}
-      @media(max-width:720px){.tk-grid,.tk-summary{grid-template-columns:1fr 1fr}.tk-crew-row{grid-template-columns:1fr 1fr}.tk-crew-row .tk-person{grid-column:1/-1}.tk-detail-row{grid-template-columns:1fr 1fr}.tk-detail-row>label:nth-child(4){grid-column:1/-1}}
+      @media(max-width:720px){.tk-grid,.tk-summary,.tk-roster-summary{grid-template-columns:1fr 1fr}.tk-crew-row{grid-template-columns:1fr 1fr}.tk-crew-row .tk-person{grid-column:1/-1}.tk-detail-row{grid-template-columns:1fr 1fr}.tk-detail-row>label:nth-child(4){grid-column:1/-1}}
     `;
     document.head.appendChild(style);
   }
@@ -80,6 +90,10 @@
       <div id="timekeepingRosterCard" class="card hidden">
         <h3>Manage Personnel Assignments</h3>
         <p class="muted">Assign field employees to their Foreman crew and, independently, to an Admin time roster. Foreman crew members automatically appear on Daily Reports; Admin roster members automatically appear in that Admin's My Time workspace.</p>
+        <details id="tkCompleteRoster" class="tk-complete-roster hidden">
+          <summary id="tkCompleteRosterSummary">Complete Company Roster</summary>
+          <div id="tkCompleteRosterBody" class="tk-complete-roster-body"></div>
+        </details>
         <div class="tk-grid">
           <label>Employee #<input id="tkEmployeeNumber" type="text" placeholder="Optional"></label>
           <label>Employee Name<input id="tkEmployeeName" type="text" placeholder="Full name"></label>
@@ -155,8 +169,9 @@
   async function refreshTimekeeping(){
     if(!companyId() || !getSb()) return;
     byId('timekeepingRosterCard')?.classList.toggle('hidden', !canManageRoster());
-    await Promise.all([loadEmployees(), loadJobs(), loadForemen(), loadAdmins()]);
+    await Promise.all([loadEmployees(), loadJobs(), loadForemen(), loadAdmins(), loadTeamProfiles()]);
     renderRoster();
+    renderCompleteRoster();
     fillFilters();
     await loadEntries();
   }
@@ -216,6 +231,16 @@
     }
   }
 
+  async function loadTeamProfiles(){
+    if(!companyId()||!canViewCompleteRoster()){teamProfiles=[];return;}
+    const {data,error}=await getSb().from('profiles')
+      .select('id,full_name,email,role,active')
+      .eq('company_id',companyId())
+      .order('full_name');
+    if(error){console.error('Complete roster Team load failed',error);return;}
+    teamProfiles=data||[];
+  }
+
   async function loadJobs(){
     if(!companyId()) return;
     const { data, error } = await getSb().from('jobs')
@@ -259,6 +284,7 @@
     ['tkEmployeeNumber','tkEmployeeName','tkEmployeeClass','tkEmployeeCrew','tkEmployeeForeman','tkEmployeeAdmin'].forEach(id => { if(byId(id)) byId(id).value=''; });
     await loadEmployees();
     renderRoster();
+    renderCompleteRoster();
     fillFilters();
     refreshCrewEmployeeSelects();
   }
@@ -268,6 +294,7 @@
     if(error) return alert('Could not update employee: ' + error.message);
     await loadEmployees();
     renderRoster();
+    renderCompleteRoster();
     fillFilters();
     refreshCrewEmployeeSelects();
   }
@@ -325,6 +352,7 @@
     await loadEmployees();
     rosterAssignmentsSaving=false;
     renderRoster(openGroups);
+    renderCompleteRoster();
     fillFilters();
     refreshCrewEmployeeSelects();
     window.LineCrewLeadershipMyTime?.refresh?.();
@@ -351,6 +379,90 @@
     box.querySelectorAll('[data-tk-admin]').forEach(select => select.onchange = () => updateRosterDraft(select.dataset.tkAdmin,'assigned_admin_id',select.value));
     updateRosterSaveState();
   }
+
+  function renderCompleteRoster(){
+    const panel=byId('tkCompleteRoster'),summary=byId('tkCompleteRosterSummary'),body=byId('tkCompleteRosterBody');
+    if(!panel||!summary||!body)return;
+    panel.classList.toggle('hidden',!canViewCompleteRoster());
+    if(!canViewCompleteRoster())return;
+    const foremanMap=new Map(foremen.map(person=>[person.id,person]));
+    const adminMap=new Map(admins.map(person=>[person.id,person]));
+    const profileById=new Map(teamProfiles.map(profile=>[profile.id,profile]));
+    const teamRoleLabel=value=>({gf:'GF',admin:'Admin',owner:'Owner',foreman:'Foreman',superintendent:'Superintendent'}[String(value||'').toLowerCase()]||String(value||'Team Member'));
+    const leadershipRoles=new Set(['foreman','gf','superintendent','admin','owner']);
+    const leadershipEmployee=employee=>leadershipRoles.has(String(profileById.get(employee.linked_profile_id)?.role||'').toLowerCase());
+    const linkedProfileIds=new Set(employees.map(employee=>employee.linked_profile_id).filter(Boolean));
+    const profileOnlyPeople=teamProfiles.filter(profile=>!linkedProfileIds.has(profile.id)).map(profile=>{
+      const profileRole=String(profile.role||'member').toLowerCase();
+      return {
+        id:`profile-${profile.id}`,
+        full_name:profile.full_name||profile.email||'Team Member',
+        employee_number:profile.email||'',
+        classification:`Team Login — ${teamRoleLabel(profileRole)}`,
+        active:profile.active!==false,
+        assigned_foreman_id:null,
+        assigned_admin_id:null,
+        default_crew_name:'',
+        default_equipment:'',
+        profile_only:true,
+        profile_role:profileRole
+      };
+    });
+    const allPeople=[...employees,...profileOnlyPeople];
+    const activeEmployees=employees.filter(employee=>employee.active!==false);
+    const activePeople=allPeople.filter(person=>person.active!==false);
+    const activeEquipment=equipment.filter(unit=>unit.active!==false);
+    const employeeForEquipment=unitNumber=>employees.find(employee=>employee.default_equipment===unitNumber)||null;
+    const activeCrewMembers=activeEmployees.filter(employee=>!leadershipEmployee(employee));
+    const assignedPeople=activeCrewMembers.filter(employee=>employee.assigned_foreman_id).length;
+    const unassignedPeople=activeCrewMembers.length-assignedPeople;
+    const assignedEquipment=activeEquipment.filter(unit=>{
+      const employee=employeeForEquipment(unit.unit_number);
+      return employee&&employee.active!==false;
+    }).length;
+    const unassignedEquipment=activeEquipment.length-assignedEquipment;
+    summary.textContent=`Complete Company Roster — ${activePeople.length} people / ${activeEquipment.length} equipment`;
+    const crewLabel=employee=>{
+      const foreman=foremanMap.get(employee.assigned_foreman_id);
+      if(foreman)return `${foreman.full_name||'Foreman'}${employee.default_crew_name?' — '+employee.default_crew_name:''}`;
+      const linkedRole=String(profileById.get(employee.linked_profile_id)?.role||'').toLowerCase();
+      if(leadershipEmployee(employee))return linkedRole==='foreman'?'Foreman — Own Crew':`${teamRoleLabel(linkedRole)} Leadership`;
+      return employee.default_crew_name?`Unassigned — ${employee.default_crew_name}`:'Unassigned';
+    };
+    const peopleRows=[...allPeople].sort((left,right)=>{
+      const leftUnassigned=!left.profile_only&&!leadershipEmployee(left)&&left.active!==false&&!left.assigned_foreman_id?0:1;
+      const rightUnassigned=!right.profile_only&&!leadershipEmployee(right)&&right.active!==false&&!right.assigned_foreman_id?0:1;
+      return leftUnassigned-rightUnassigned||String(left.full_name||'').localeCompare(String(right.full_name||''));
+    });
+    const equipmentRows=[...equipment].sort((left,right)=>{
+      const leftUnassigned=left.active!==false&&!employeeForEquipment(left.unit_number)?0:1;
+      const rightUnassigned=right.active!==false&&!employeeForEquipment(right.unit_number)?0:1;
+      return leftUnassigned-rightUnassigned||String(left.unit_number||'').localeCompare(String(right.unit_number||''),undefined,{numeric:true});
+    });
+    body.innerHTML=`
+      <p class="tk-help">Read-only company overview. Unassigned active people and equipment are highlighted.</p>
+      <div class="tk-roster-summary">
+        <div><strong>${activePeople.length}</strong>Active People</div>
+        <div><strong>${assignedPeople}</strong>Assigned Crew Members</div>
+        <div><strong>${unassignedPeople}</strong>Unassigned Crew Members</div>
+        <div><strong>${activeEquipment.length}</strong>Active Equipment</div>
+        <div><strong>${assignedEquipment}</strong>Assigned Equipment</div>
+        <div><strong>${unassignedEquipment}</strong>Unassigned Equipment</div>
+      </div>
+      <div class="tk-complete-section"><h4>People</h4><div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Employee</th><th>#</th><th>Classification</th><th>Foreman / Crew</th><th>Admin Roster</th><th>Equipment</th><th>Status</th></tr></thead><tbody>${peopleRows.length?peopleRows.map(employee=>{
+        const admin=adminMap.get(employee.assigned_admin_id);
+        const unassigned=!employee.profile_only&&!leadershipEmployee(employee)&&employee.active!==false&&!employee.assigned_foreman_id;
+        const leadershipCrew=employee.profile_only?`${employee.classification.replace('Team Login — ','')} Leadership` : crewLabel(employee);
+        return `<tr class="${unassigned?'tk-roster-unassigned ':''}${employee.active===false?'tk-roster-inactive':''}"><td><strong>${esc(employee.full_name||'Unnamed Employee')}</strong>${employee.profile_only?' <span class="muted">(Team login)</span>':''}</td><td>${esc(employee.employee_number||'')}</td><td>${esc(employee.classification||'')}</td><td>${esc(leadershipCrew)}</td><td>${employee.profile_only?'—':esc(admin?.full_name||'Unassigned')}</td><td>${employee.profile_only?'—':esc(employee.default_equipment||'Unassigned')}</td><td>${employee.active===false?'Inactive':'Active'}</td></tr>`;
+      }).join(''):'<tr><td colspan="7">No personnel have been added.</td></tr>'}</tbody></table></div></div>
+      <div class="tk-complete-section"><h4>Equipment</h4><div class="tk-table-wrap"><table class="tk-table"><thead><tr><th>Unit #</th><th>Type / Description</th><th>Assigned Employee</th><th>Foreman / Crew</th><th>Status</th></tr></thead><tbody>${equipmentRows.length?equipmentRows.map(unit=>{
+        const employee=employeeForEquipment(unit.unit_number);
+        const unassigned=unit.active!==false&&(!employee||employee.active===false);
+        return `<tr class="${unassigned?'tk-roster-unassigned ':''}${unit.active===false?'tk-roster-inactive':''}"><td><strong>${esc(unit.unit_number)}</strong></td><td>${esc(unit.description||'')}</td><td>${employee?esc((employee.full_name||employee.employee_number||'Employee')+(employee.active===false?' (Inactive)':'')):'Unassigned'}</td><td>${employee?esc(crewLabel(employee)):'Unassigned'}</td><td>${unit.active===false?'Inactive':'Active'}</td></tr>`;
+      }).join(''):'<tr><td colspan="5">No equipment has been added.</td></tr>'}</tbody></table></div></div>`;
+  }
+
+  window.LineCrewRefreshCompleteRoster=async()=>{await Promise.all([loadEmployees(),loadForemen(),loadAdmins(),loadTeamProfiles()]);renderCompleteRoster();};
 
   async function loadEntries(){
     if(!companyId() || !byId('tkReportList')) return;
