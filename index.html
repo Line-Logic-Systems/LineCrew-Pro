@@ -1980,7 +1980,7 @@ Save Company Settings
 <div id="companyMhRateSettings" class="job-card hidden">
 <h3>Required Man-Hour Rate</h3>
 <p class="muted">
-Set the company break-even target per weighted man-hour. Supervision sees red more than 5% below it, yellow within 5% below it, and green at or above it.
+Set the company break-even target per weighted man-hour. Production views show red more than 5% below it, yellow within 5% below it, and green at or above it.
 </p>
 <label for="companyRequiredMhRate">Target ($ per weighted man-hour)</label>
 <input id="companyRequiredMhRate" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="Example: 45.00">
@@ -4254,8 +4254,11 @@ const SUPERINTENDENT_CAPABILITIES = [
 ['reporting','Reporting','View company reports; billing exports also require Actual Contract Pricing.'],
 ['storm_mode','Storm Mode','Configure storm events and participating crews.'],
 ['safety_records','Safety Records','View and manage company JSA records.'],
-['actual_pricing','Actual Contract Pricing','See contract dollars; billing exports also require Reporting.'],
 ['exports','Exports','Download permitted reports; dollar exports still require pricing access.']
+];
+const MONEY_VISIBILITY_PERMISSIONS = [
+['actual_pricing','Actual Money','See actual contract prices, actual unit values and Actual MH Run Rate.'],
+['field_pricing','Field Money','See field-adjusted unit values and Field MH Run Rate.']
 ];
 function currentUserRole(){
 return String(currentProfile?.role || 'foreman').toLowerCase();
@@ -4473,6 +4476,13 @@ dashboardDraggedTile = null;
 function userHasCapability(capability){
 const role = currentUserRole();
 if(role === 'owner' || role === 'admin') return true;
+if(capability === 'actual_pricing'){
+const defaultValue = role !== 'foreman';
+return currentProfile?.role_permissions?.actual_pricing ?? defaultValue;
+}
+if(capability === 'field_pricing'){
+return currentProfile?.role_permissions?.field_pricing ?? true;
+}
 if(role === 'superintendent'){
 return currentProfile?.role_permissions?.[capability] !== false;
 }
@@ -4504,9 +4514,9 @@ return userHasCapability('job_packages') || currentUserRole() === 'gf';
 function userCanExport(){ return userHasCapability('exports') || currentUserRole() === 'gf'; }
 function userCanSeeSafetyRecords(){ return userHasCapability('safety_records') || ['gf','foreman'].includes(currentUserRole()); }
 function userCanSeeActualContractPrices(){
-return ['owner','admin','gf'].includes(currentUserRole()) ||
-(currentUserRole() === 'superintendent' && userHasCapability('actual_pricing'));
+return userHasCapability('actual_pricing');
 }
+function userCanSeeFieldMoney(){ return userHasCapability('field_pricing'); }
 function userCanUseBillingExports(){
 return ['owner','admin'].includes(currentUserRole()) ||
 (currentUserRole() === 'superintendent' &&
@@ -5733,6 +5743,58 @@ await loadTeamMembers();
 details.appendChild(save);
 card.appendChild(details);
 }
+function renderMoneyVisibilityPermissions(member,card){
+const role = String(member.role || 'foreman').toLowerCase();
+if(!['foreman','gf','superintendent'].includes(role) || !userIsCompanyAdmin()) return;
+const details = document.createElement('details');
+details.className = 'job-card';
+const summary = document.createElement('summary');
+summary.textContent = 'Money Visibility';
+details.appendChild(summary);
+const intro = document.createElement('p');
+intro.className = 'muted';
+intro.textContent = 'Choose which dollar values this person may see. These settings do not change units, quantities, or report access.';
+details.appendChild(intro);
+const checks = new Map();
+MONEY_VISIBILITY_PERMISSIONS.forEach(([key,labelText,helpText]) => {
+const label = document.createElement('label');
+label.className = 'checkbox-row';
+const input = document.createElement('input');
+input.type = 'checkbox';
+const defaultValue = key === 'actual_pricing' ? role !== 'foreman' : true;
+input.checked = member.role_permissions?.[key] ?? defaultValue;
+checks.set(key,input);
+const text = document.createElement('span');
+text.innerHTML = '<strong>'+escapeHtml(labelText)+'</strong><br><span class="muted">'+escapeHtml(helpText)+'</span>';
+label.append(input,text);
+details.appendChild(label);
+});
+const save = document.createElement('button');
+save.className = 'success small';
+save.textContent = 'Save Money Visibility';
+save.onclick = async () => {
+if(save.disabled) return;
+save.disabled = true;
+const priorText = save.textContent;
+save.textContent = 'Saving...';
+const { error } = await sb.rpc('linecrew_set_member_money_permissions', {
+target_user_id:member.id,
+can_see_actual:checks.get('actual_pricing').checked,
+can_see_field:checks.get('field_pricing').checked
+});
+if(error){
+save.disabled = false;
+save.textContent = priorText;
+alert('Unable to save money visibility: ' + error.message);
+await loadTeamMembers();
+return;
+}
+alert('Money visibility saved. The team member may need to refresh or sign in again.');
+await loadTeamMembers();
+};
+details.appendChild(save);
+card.appendChild(details);
+}
 async function claimInitialOwner(button){
 if(currentUserRole() !== 'admin' || button?.disabled) return;
 if(!confirm('Make your account the Owner for this company? The Owner controls Admin access and company governance.')) return;
@@ -5802,6 +5864,7 @@ if(canChangeMemberAccess(member)){
 const access=document.createElement('button'); access.className=(member.active===false?'success':'warning')+' small'; access.textContent=member.active===false?'Restore Access':'Suspend Access'; access.onclick=()=>changeTeamMemberAccess(member); card.appendChild(access);
 }
 renderSuperintendentPermissions(member,card);
+renderMoneyVisibilityPermissions(member,card);
 fragment.appendChild(card);
 });
 $('teamList').appendChild(fragment);
@@ -6416,10 +6479,12 @@ pending += Number(summary.pending_packet_count || 0);
 });
 $('jobProgressTotals').innerHTML =
 '<span><strong>' + activeJobs.length + '</strong><br>Active Jobs</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(authorized)) + '</strong><br>Authorized</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(reported)) + '</strong><br>Reported</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(approved)) + '</strong><br>Approved</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(remaining)) + '</strong><br>Remaining</span>' +
+(userCanSeeFieldMoney()
+? '<span><strong>' + escapeHtml(formatCurrency(authorized)) + '</strong><br>Authorized</span>' +
+  '<span><strong>' + escapeHtml(formatCurrency(reported)) + '</strong><br>Reported</span>' +
+  '<span><strong>' + escapeHtml(formatCurrency(approved)) + '</strong><br>Approved</span>' +
+  '<span><strong>' + escapeHtml(formatCurrency(remaining)) + '</strong><br>Remaining</span>'
+: '') +
 '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
 '<span><strong>' + pending + '</strong><br>Pending Job Units</span>';
 $('jobProgressCount').textContent =
@@ -6456,10 +6521,12 @@ Number(summary.work_point_count || 0) + ' work point(s) · ' +
 Number(summary.report_count || 0) + ' daily report(s)</div>' +
 '<div class="job-progress-assignees"><strong>Assigned Foremen / Job Leaders:</strong> ' +
 escapeHtml(assignmentLabel) + '</div>' +
-'<div class="daily-review-counts"><span class="authorized">' +
-escapeHtml(formatCurrency(summary.authorized_value || 0)) + ' Authorized</span>' +
-' &nbsp;•&nbsp; ' + escapeHtml(formatCurrency(summary.remaining_value || 0)) + ' Remaining' +
-' &nbsp;•&nbsp; <span class="redline">' + Number(summary.redline_count || 0) + ' Redline</span>' +
+'<div class="daily-review-counts">' +
+(userCanSeeFieldMoney()
+? '<span class="authorized">' + escapeHtml(formatCurrency(summary.authorized_value || 0)) + ' Authorized</span>' +
+  ' &nbsp;•&nbsp; ' + escapeHtml(formatCurrency(summary.remaining_value || 0)) + ' Remaining &nbsp;•&nbsp; '
+: '') +
+'<span class="redline">' + Number(summary.redline_count || 0) + ' Redline</span>' +
 ' &nbsp;•&nbsp; <span class="pending">' + Number(summary.pending_packet_count || 0) + ' Pending</span></div>';
 row.title = 'Open ' + job.job_number + ' job details';
 row.setAttribute('role', 'button');
@@ -7090,7 +7157,7 @@ const approvedPercent = authorizedValue > 0
 ? Math.min(100, approvedValue / authorizedValue * 100)
 : 0;
 $('jobPackageProgress').innerHTML = `
-<strong>Authorized Value: ${escapeHtml(formatCurrency(authorizedValue))}</strong>
+${userCanSeeFieldMoney() ? '<strong>Authorized Value: ' + escapeHtml(formatCurrency(authorizedValue)) + '</strong>' : ''}
 <strong>Reported: ${reportedPercent.toFixed(1)}%</strong>
 <strong>Approved: ${approvedPercent.toFixed(1)}%</strong>
 <strong>Work Points: ${pointGroups.size}</strong>
@@ -8999,7 +9066,7 @@ answer:'Pending Job Units means production was reported before a utility job pac
 },
 {
 terms:['team','foreman','general foreman','role','permissions','superintendent permissions','change role'],
-answer:'Open Team for login accounts and role controls. Hierarchy: Owner > Admin > Superintendent > General Foreman > Foreman. Owner/Admin can promote a lower-role member to Admin, but only Owner can change an existing Admin. Admin cannot assign Owner. A company with no Owner lets one active Admin claim it; later changes use Owner-controlled Transfer Ownership. A Superintendent with Role Management may manage GF/Foreman only. Owner/Admin can set each Superintendent capability. Role changes may require refresh or sign-out/sign-in.'
+answer:'Open Team for login accounts and role controls. Hierarchy: Owner > Admin > Superintendent > General Foreman > Foreman. Owner/Admin can promote a lower-role member to Admin, but only Owner can change an existing Admin. Admin cannot assign Owner. A company with no Owner lets one active Admin claim it; later changes use Owner-controlled Transfer Ownership. A Superintendent with Role Management may manage GF/Foreman only. Owner/Admin can set each Superintendent operational capability and can separately check Actual Money and Field Money visibility for each Foreman, General Foreman and Superintendent. Role or visibility changes may require refresh or sign-out/sign-in.'
 },
 {
 terms:['assign job','job assignment','multiple foremen','more than one foreman','assignment history','who assigned'],
@@ -9035,11 +9102,11 @@ answer:'Owner/Admin opens Timekeeping and uses Truck / Equipment Roster. Upload 
 },
 {
 terms:['adjustment','adjusted price','field value','foreman price','percentage'],
-answer:'Owner/Admin or an authorized Superintendent edits the Contract and sets the Foreman field-value adjustment percentage. Foremen see the permitted field value. Owner/Admin/GF and a Superintendent with Actual Contract Pricing permission can see actual values. Verify the percentage and contract before field rollout.'
+answer:'Owner/Admin or an authorized Superintendent edits the Contract and sets the field-value adjustment percentage. Owner/Admin then uses Team > Money Visibility to choose whether each Foreman, General Foreman and Superintendent may see Actual Money, Field Money, both or neither. Foremen default to Field Money only; General Foremen and Superintendents default to both. Verify the percentage, contract and each person’s visibility before field rollout.'
 },
 {
-terms:['job progress','percentage complete','completion','authorized value','remaining value','man hour rate','mh rate','burn rate','red yellow green','rate target'],
-answer:'Supervisors open Jobs & Crew Progress or Production for progress and Field MH Run Rate. Authorized value comes from imported utility-package units; reported and approved percentages use eligible production against that baseline. Field MH Run Rate is field unit value divided by weighted hours (Regular + 1.5 × OT). Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Red is below 95% of target, yellow is 95% up to but not including the exact target, and green is at or above target. It is an operational rate, not payroll cost or guaranteed profit.'
+terms:['job progress','percentage complete','completion','authorized value','remaining value','man hour rate','my man hour rate','mh rate','burn rate','red yellow green','rate target'],
+answer:'By default, Foremen see Field MH Run Rate on their own Daily Reports in Production, calculated only from field unit value. Owner/Admin can separately allow or hide Actual Money and Field Money for each Foreman, General Foreman and Superintendent in Team > Money Visibility. Actual MH Run Rate appears only when Actual Money is checked; Field MH Run Rate appears only when Field Money is checked. Supervisors open Jobs & Crew Progress or Production for progress. Field MH Run Rate is field unit value divided by weighted hours (Regular + 1.5 × OT). Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Red is below 95% of target, yellow is 95% up to but not including the exact target, and green is at or above target. It is an operational rate, not payroll cost or guaranteed profit.'
 },
 {
 terms:['attachment','photo','print','pdf','save pdf'],
@@ -12722,7 +12789,7 @@ currency: 'USD'
 }
 async function fetchPriceBookItemsForCurrentUser(priceBookId){
 return sb.rpc(
-'get_price_book_items_for_user',
+'get_price_book_items_visible',
 { p_price_book_id:priceBookId }
 );
 }
@@ -14325,36 +14392,19 @@ return filteredItems;
 }
 function priceBookItemPriceMarkup(item){
 const canSeeActual = userCanSeeActualContractPrices();
-if(canSeeActual && item.has_adjustment){
-return (
-'Actual I: <strong>' +
-escapeHtml(formatCurrency(item.actual_install_price)) +
-'</strong> T: <strong>' +
-escapeHtml(formatCurrency(item.actual_transfer_price)) +
-'</strong> R: <strong>' +
-escapeHtml(formatCurrency(item.actual_retirement_price)) +
-'</strong><br>Field I: <strong>' +
-escapeHtml(formatCurrency(item.adjusted_install_price)) +
-'</strong> T: <strong>' +
-escapeHtml(formatCurrency(item.adjusted_transfer_price)) +
-'</strong> R: <strong>' +
-escapeHtml(formatCurrency(item.adjusted_retirement_price)) +
-'</strong>'
-);
+const canSeeField = userCanSeeFieldMoney();
+const lines = [];
+if(canSeeActual){
+lines.push('Actual I: <strong>' + escapeHtml(formatCurrency(item.actual_install_price)) +
+'</strong> T: <strong>' + escapeHtml(formatCurrency(item.actual_transfer_price)) +
+'</strong> R: <strong>' + escapeHtml(formatCurrency(item.actual_retirement_price)) + '</strong>');
 }
-const label =
-canSeeActual || !item.has_adjustment
-? 'Actual'
-: 'Field';
-return (
-label + ' I: <strong>' +
-escapeHtml(formatCurrency(item.install_price)) +
-'</strong> T: <strong>' +
-escapeHtml(formatCurrency(item.transfer_price)) +
-'</strong> R: <strong>' +
-escapeHtml(formatCurrency(item.retirement_price)) +
-'</strong>'
-);
+if(canSeeField){
+lines.push('Field I: <strong>' + escapeHtml(formatCurrency(item.adjusted_install_price)) +
+'</strong> T: <strong>' + escapeHtml(formatCurrency(item.adjusted_transfer_price)) +
+'</strong> R: <strong>' + escapeHtml(formatCurrency(item.adjusted_retirement_price)) + '</strong>');
+}
+return lines.join('<br>') || '<span class="muted">Money hidden by company permissions.</span>';
 }
 function renderPriceBookItems(){
 const filteredItems =
@@ -14585,70 +14635,36 @@ if(items.length === 0){
 alert('There are no matching units to export.');
 return;
 }
-const includeBothPrices =
-userCanSeeActualContractPrices() &&
-items.some(item => item.has_adjustment);
-const hasFieldAdjustment =
-items.some(item => item.has_adjustment);
-const headers = includeBothPrices
-? [
+const includeActual = userCanSeeActualContractPrices();
+const includeField = userCanSeeFieldMoney();
+const headers = [
 'Unit Code',
 'Unit Name',
 'Description',
-'Actual Install Price',
-'Actual Transfer Price',
-'Actual Retirement Price',
-'Field Install Value',
-'Field Transfer Value',
-'Field Retirement Value',
-'Unit of Measure',
-'Category',
-'Status'
-]
-: [
-'Unit Code',
-'Unit Name',
-'Description',
-userCanSeeActualContractPrices() || !hasFieldAdjustment
-? 'Actual Install Price'
-: 'Field Install Value',
-userCanSeeActualContractPrices() || !hasFieldAdjustment
-? 'Actual Transfer Price'
-: 'Field Transfer Value',
-userCanSeeActualContractPrices() || !hasFieldAdjustment
-? 'Actual Retirement Price'
-: 'Field Retirement Value',
+...(includeActual ? ['Actual Install Price','Actual Transfer Price','Actual Retirement Price'] : []),
+...(includeField ? ['Field Install Value','Field Transfer Value','Field Retirement Value'] : []),
 'Unit of Measure',
 'Category',
 'Status'
 ];
-const rows = items.map(item => includeBothPrices
-? [
+const rows = items.map(item => [
 item.item_code,
 item.item_name,
 item.description,
-Number(item.actual_install_price || 0).toFixed(2),
-Number(item.actual_transfer_price || 0).toFixed(2),
-Number(item.actual_retirement_price || 0).toFixed(2),
-Number(item.adjusted_install_price || 0).toFixed(2),
-Number(item.adjusted_transfer_price || 0).toFixed(2),
-Number(item.adjusted_retirement_price || 0).toFixed(2),
+...(includeActual ? [
+  Number(item.actual_install_price || 0).toFixed(2),
+  Number(item.actual_transfer_price || 0).toFixed(2),
+  Number(item.actual_retirement_price || 0).toFixed(2)
+] : []),
+...(includeField ? [
+  Number(item.adjusted_install_price || 0).toFixed(2),
+  Number(item.adjusted_transfer_price || 0).toFixed(2),
+  Number(item.adjusted_retirement_price || 0).toFixed(2)
+] : []),
 item.unit_of_measure,
 item.category,
 item.active ? 'Active' : 'Inactive'
-]
-: [
-item.item_code,
-item.item_name,
-item.description,
-Number(item.install_price || 0).toFixed(2),
-Number(item.transfer_price || 0).toFixed(2),
-Number(item.retirement_price || 0).toFixed(2),
-item.unit_of_measure,
-item.category,
-item.active ? 'Active' : 'Inactive'
-]
-);
+]);
 const csv = [headers, ...rows]
 .map(row => row.map(csvCell).join(','))
 .join('\r\n');
@@ -15047,8 +15063,12 @@ if(String(report.status || '').toLowerCase() === 'approved') approved += 1;
 $('productionReportingMetrics').innerHTML =
 '<span><strong>' + reports.length + '</strong><br>Reports</span>' +
 '<span><strong>' + approved + '</strong><br>Completed</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(actualValue)) + '</strong><br>Actual Unit Value</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(fieldValue)) + '</strong><br>Field Unit Value</span>' +
+(userCanSeeActualContractPrices()
+? '<span><strong>' + escapeHtml(formatCurrency(actualValue)) + '</strong><br>Actual Unit Value</span>'
+: '') +
+(userCanSeeFieldMoney()
+? '<span><strong>' + escapeHtml(formatCurrency(fieldValue)) + '</strong><br>Field Unit Value</span>'
+: '') +
 '<span><strong>' + regularHours + '</strong><br>Regular Hours</span>' +
 '<span><strong>' + overtimeHours + '</strong><br>OT Hours</span>' +
 '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
@@ -15140,8 +15160,12 @@ totalPending += pending;
 summary.innerHTML =
 '<span><strong>' + stormReports.length + '</strong><br>Storm Reports</span>' +
 '<span><strong>' + crews.size + '</strong><br>Crews</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(totalActual)) + '</strong><br>Actual Value</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(totalField)) + '</strong><br>Field Value</span>' +
+(userCanSeeActualContractPrices()
+? '<span><strong>' + escapeHtml(formatCurrency(totalActual)) + '</strong><br>Actual Value</span>'
+: '') +
+(userCanSeeFieldMoney()
+? '<span><strong>' + escapeHtml(formatCurrency(totalField)) + '</strong><br>Field Value</span>'
+: '') +
 '<span><strong>' + totalRegularHours + '</strong><br>Regular Hours</span>' +
 '<span><strong>' + totalOvertimeHours + '</strong><br>OT Hours</span>' +
 '<span><strong>' + totalRedlines + '</strong><br>Redlines</span>' +
@@ -15163,8 +15187,12 @@ crew.reports + ' report' + (crew.reports === 1 ? '' : 's') +
 '</span></div>' +
 '<div class="daily-value-summary">' +
 '<span><strong>' + crew.approved + '</strong><br>Approved</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(crew.actual)) + '</strong><br>Actual Value</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(crew.field)) + '</strong><br>Field Value</span>' +
+(userCanSeeActualContractPrices()
+? '<span><strong>' + escapeHtml(formatCurrency(crew.actual)) + '</strong><br>Actual Value</span>'
+: '') +
+(userCanSeeFieldMoney()
+? '<span><strong>' + escapeHtml(formatCurrency(crew.field)) + '</strong><br>Field Value</span>'
+: '') +
 '<span><strong>' + crew.regularHours + '</strong><br>Regular Hours</span>' +
 '<span><strong>' + crew.overtimeHours + '</strong><br>OT Hours</span>' +
 '<span><strong>' + crew.redlines + '</strong><br>Redlines</span>' +
@@ -15343,8 +15371,10 @@ group.pending += Number(authorization.pending_packet_count || 0);
 });
 const headers = [
 'Storm Event', 'Job Number', 'Job Name', 'From Date', 'Through Date',
-'Crews', 'Reports', 'Approved Reports', 'Actual Unit Value',
-'Field Unit Value', 'Regular Hours', 'OT Hours', 'Redlines', 'Pending Job Units'
+'Crews', 'Reports', 'Approved Reports',
+...(userCanSeeActualContractPrices() ? ['Actual Unit Value'] : []),
+...(userCanSeeFieldMoney() ? ['Field Unit Value'] : []),
+'Regular Hours', 'OT Hours', 'Redlines', 'Pending Job Units'
 ];
 const totals = {
 reports:0, approved:0, actual:0, field:0,
@@ -15361,13 +15391,17 @@ Object.keys(totals).forEach(key => totals[key] += Number(group[key] || 0));
 return [
 group.eventName, group.jobNumber, group.jobName, group.fromDate,
 group.throughDate, [...group.crews].sort().join('; '), group.reports,
-group.approved, group.actual.toFixed(2), group.field.toFixed(2),
+group.approved,
+...(userCanSeeActualContractPrices() ? [group.actual.toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [group.field.toFixed(2)] : []),
 group.regularHours, group.overtimeHours, group.redlines, group.pending
 ];
 });
 rows.push([
 'TOTAL', '', '', '', '', '', totals.reports, totals.approved,
-totals.actual.toFixed(2), totals.field.toFixed(2), totals.regularHours,
+...(userCanSeeActualContractPrices() ? [totals.actual.toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [totals.field.toFixed(2)] : []),
+totals.regularHours,
 totals.overtimeHours, totals.redlines, totals.pending
 ]);
 downloadStormCsv(
@@ -15407,7 +15441,9 @@ group.field += Number(value.adjusted_total || 0);
 const headers = [
 'Storm Event', 'Crew', 'Foreman', 'From Date', 'Through Date',
 'Reports', 'Approved Reports', 'Regular Hours', 'OT Hours',
-'Total Hours', 'Actual Unit Value', 'Field Unit Value'
+'Total Hours',
+...(userCanSeeActualContractPrices() ? ['Actual Unit Value'] : []),
+...(userCanSeeFieldMoney() ? ['Field Unit Value'] : [])
 ];
 const totals = {
 reports:0, approved:0, regularHours:0, overtimeHours:0, actual:0, field:0
@@ -15424,14 +15460,16 @@ return [
 group.eventName, group.crewName, group.foremanName, group.fromDate,
 group.throughDate, group.reports, group.approved, group.regularHours,
 group.overtimeHours, group.regularHours + group.overtimeHours,
-group.actual.toFixed(2), group.field.toFixed(2)
+...(userCanSeeActualContractPrices() ? [group.actual.toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [group.field.toFixed(2)] : [])
 ];
 });
 rows.push([
 'TOTAL', '', '', '', '', totals.reports, totals.approved,
 totals.regularHours, totals.overtimeHours,
 totals.regularHours + totals.overtimeHours,
-totals.actual.toFixed(2), totals.field.toFixed(2)
+...(userCanSeeActualContractPrices() ? [totals.actual.toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [totals.field.toFixed(2)] : [])
 ]);
 downloadStormCsv(
 headers,
@@ -15451,7 +15489,8 @@ return;
 const headers = [
 'Job Number', 'Job Name', 'Work Date', 'Foreman', 'Crew', 'Status',
 'Regular Hours', 'OT Hours', 'Weather', 'Delay Hours', 'Delay Reason',
-'Actual Unit Value', 'Field Unit Value',
+...(userCanSeeActualContractPrices() ? ['Actual Unit Value'] : []),
+...(userCanSeeFieldMoney() ? ['Field Unit Value'] : []),
 'Authorized Units', 'Pending Job Units', 'Redline Units',
 'Storm Mode', 'Storm Event', 'Report Notes', 'Review Notes'
 ];
@@ -15470,8 +15509,8 @@ Number(report.overtime_hours || 0),
 report.weather_conditions || '',
 Number(report.delay_hours || 0),
 report.delay_reason || '',
-Number(value.actual_total || 0).toFixed(2),
-Number(value.adjusted_total || 0).toFixed(2),
+...(userCanSeeActualContractPrices() ? [Number(value.actual_total || 0).toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [Number(value.adjusted_total || 0).toFixed(2)] : []),
 Number(authorization.authorized_count || 0),
 Number(authorization.pending_packet_count || 0),
 Number(authorization.redline_count || 0),
@@ -16191,7 +16230,7 @@ printWindow.document.write(
 '<p style="font-family:Arial;padding:24px">Preparing daily report...</p>'
 );
 const { data:units, error } = await sb.rpc(
-'get_daily_report_unit_locations_v2',
+'get_daily_report_unit_locations_visible_v2',
 { p_report_id:report.id }
 );
 if(error){
@@ -16328,8 +16367,11 @@ if(!summary || Number(summary.unit_line_count || 0) === 0){
 return '<br><span class="muted">Unit Value: No units entered</span>';
 }
 const canSeeActual = userCanSeeActualContractPrices();
+const canSeeField = userCanSeeFieldMoney();
+if(!canSeeActual && !canSeeField){
+return '<br><span class="muted">Unit values hidden by company permissions.</span>';
+}
 const hasAdjustment = summary.has_adjustment === true;
-const canSeeRunRate = userCanReviewProduction() || userCanUseReporting();
 const weightedHours =
 Number(report?.regular_hours || 0) +
 (Number(report?.overtime_hours || 0) * 1.5);
@@ -16339,14 +16381,15 @@ const actualRunRate = weightedHours > 0
 const fieldRunRate = weightedHours > 0
 ? Number(summary.adjusted_total || 0) / weightedHours
 : 0;
-const runRateMarkup = !canSeeRunRate
-? ''
-: (canSeeActual
+const runRateMarkup =
+(canSeeActual
 ? '<br>Actual MH Run Rate: <strong>' +
 escapeHtml(formatCurrency(actualRunRate)) + '</strong>'
 : '') +
-'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate);
-if(canSeeActual && hasAdjustment){
+(canSeeField
+? '<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)
+: '');
+if(canSeeActual && canSeeField && hasAdjustment){
 return (
 '<br>Actual Unit Value: <strong>' +
 escapeHtml(formatCurrency(summary.actual_total)) +
@@ -16356,10 +16399,8 @@ escapeHtml(formatCurrency(summary.adjusted_total)) +
 '</strong>' + runRateMarkup
 );
 }
-const label = hasAdjustment ? 'Field Unit Value' : 'Actual Unit Value';
-const amount = canSeeActual
-? summary.actual_total
-: summary.visible_total;
+const label = canSeeActual ? 'Actual Unit Value' : 'Field Unit Value';
+const amount = canSeeActual ? summary.actual_total : summary.adjusted_total;
 return (
 '<br>' + label + ': <strong>' +
 escapeHtml(formatCurrency(amount)) +
@@ -16389,7 +16430,7 @@ escapeHtml(formatCurrency(rate)) + '</strong>' +
 escapeHtml(statusText) + '</span>';
 }
 function dailyReportTargetDotMarkup(report, summary){
-if(!userCanReviewProduction() && !userCanUseReporting()) return '';
+if(!userCanSeeFieldMoney() || (!userCanReviewProduction() && !userCanUseReporting())) return '';
 const weightedHours =
 Number(report?.regular_hours || 0) +
 (Number(report?.overtime_hours || 0) * 1.5);
@@ -16459,8 +16500,8 @@ const authorizedRowsRequest = canEditDraft && report.job_id
 ? sb.rpc('get_remaining_job_units_for_field', { p_job_id:report.job_id })
 : Promise.resolve({ data:[], error:null });
 const [catalogResult, savedResult, usageResult, authorizedResult] = await Promise.all([
-sb.rpc('get_daily_report_unit_catalog', { p_report_id:report.id }),
-sb.rpc('get_daily_report_unit_locations_v2', { p_report_id:report.id }),
+sb.rpc('get_daily_report_unit_catalog_visible', { p_report_id:report.id }),
+sb.rpc('get_daily_report_unit_locations_visible_v2', { p_report_id:report.id }),
 sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id }),
 authorizedRowsRequest
 ]);
@@ -17174,22 +17215,17 @@ await loadProductionReports();
 }
 function dailyUnitValueLabel(item){
 const canSeeActual = userCanSeeActualContractPrices();
-if(canSeeActual && item.has_adjustment){
-return (
-'Actual I: <strong>' + formatCurrency(item.actual_install_price) +
-'</strong> R: <strong>' + formatCurrency(item.actual_retirement_price) +
-'</strong><br>Field I: <strong>' +
-formatCurrency(item.adjusted_install_price) +
-'</strong> R: <strong>' +
-formatCurrency(item.adjusted_retirement_price) + '</strong>'
-);
+const canSeeField = userCanSeeFieldMoney();
+const lines = [];
+if(canSeeActual){
+lines.push('Actual I: <strong>' + formatCurrency(item.actual_install_price) +
+'</strong> R: <strong>' + formatCurrency(item.actual_retirement_price) + '</strong>');
 }
-const label = item.has_adjustment ? 'Field' : 'Actual';
-return (
-label + ' I: <strong>' + formatCurrency(item.install_price) +
-'</strong> R: <strong>' + formatCurrency(item.retirement_price) +
-'</strong>'
-);
+if(canSeeField){
+lines.push('Field I: <strong>' + formatCurrency(item.adjusted_install_price) +
+'</strong> R: <strong>' + formatCurrency(item.adjusted_retirement_price) + '</strong>');
+}
+return lines.join('<br>') || '<span class="muted">Money hidden by company permissions.</span>';
 }
 function renderDailyUnitTotals(){
 const savedItems = currentDailySavedUnits;
@@ -17206,17 +17242,21 @@ const visibleTotal = savedItems.reduce(
 0
 );
 const hasAdjustment = savedItems.some(item => item.has_adjustment);
-if(userCanSeeActualContractPrices() && hasAdjustment){
+if(userCanSeeActualContractPrices() && userCanSeeFieldMoney() && hasAdjustment){
 $('dailyUnitValueSummary').innerHTML =
 '<strong>Actual Daily Unit Value: ' +
 escapeHtml(formatCurrency(actualTotal)) + '</strong>' +
 '<strong>Field Daily Unit Value: ' +
 escapeHtml(formatCurrency(adjustedTotal)) + '</strong>';
+}else if(userCanSeeActualContractPrices()){
+$('dailyUnitValueSummary').innerHTML =
+'<strong>Actual Daily Unit Value: ' + escapeHtml(formatCurrency(actualTotal)) + '</strong>';
+}else if(userCanSeeFieldMoney()){
+$('dailyUnitValueSummary').innerHTML =
+'<strong>Field Daily Unit Value: ' + escapeHtml(formatCurrency(adjustedTotal)) + '</strong>';
 }else{
 $('dailyUnitValueSummary').innerHTML =
-'<strong>' + (hasAdjustment ? 'Field' : 'Actual') +
-' Daily Unit Value: ' +
-escapeHtml(formatCurrency(visibleTotal)) + '</strong>';
+'<span class="muted">Unit values hidden by company permissions.</span>';
 }
 }
 async function saveDailyUnitRow(item, row, button){
@@ -17394,7 +17434,7 @@ approveBtn.className = 'success small';
 approveBtn.textContent = 'Approve';
 approveBtn.onclick = async () => {
 const { data: authorizationRows, error: authorizationError } = await sb.rpc(
-'get_daily_report_unit_locations_v2',
+'get_daily_report_unit_locations_visible_v2',
 { p_report_id: report.id }
 );
 if(authorizationError){

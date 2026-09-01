@@ -62,6 +62,10 @@ const mustExist = [
   'supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql',
   'supabase/migrations/20260901045812_optimize_job_packet_review_import.sql',
   'supabase/migrations/20260901055156_admin_promotion_and_single_owner_governance.sql',
+  'supabase/migrations/20260901070000_member_money_visibility.sql',
+  'supabase/migrations/20260901071000_fix_member_money_permission_update.sql',
+  'supabase/migrations/20260901072000_preserve_field_role_money_permissions.sql',
+  'supabase/migrations/20260901073000_mask_detailed_field_money.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -116,6 +120,10 @@ const jobJacketIntegrity = fs.readFileSync('supabase/migrations/20260901030000_j
 const jobJacketReimport = fs.readFileSync('supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql', 'utf8');
 const packetTimeoutFix = fs.readFileSync('supabase/migrations/20260901045812_optimize_job_packet_review_import.sql', 'utf8');
 const roleGovernance = fs.readFileSync('supabase/migrations/20260901055156_admin_promotion_and_single_owner_governance.sql', 'utf8');
+const moneyVisibility = fs.readFileSync('supabase/migrations/20260901070000_member_money_visibility.sql', 'utf8');
+const moneyVisibilityUpdateFix = fs.readFileSync('supabase/migrations/20260901071000_fix_member_money_permission_update.sql', 'utf8');
+const fieldRoleMoneyPermissions = fs.readFileSync('supabase/migrations/20260901072000_preserve_field_role_money_permissions.sql', 'utf8');
+const detailedFieldMoney = fs.readFileSync('supabase/migrations/20260901073000_mask_detailed_field_money.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const dailyCompanyBackup = fs.readFileSync('.github/workflows/daily-company-data-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
@@ -169,7 +177,7 @@ assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must a
 assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
 assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
 assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
-assert(assistant.includes('2026-09-01-admin-owner-governance-v10'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('2026-09-01-member-money-visibility-v12'), 'AI assistant knowledge version marker must track the current workflow release.');
 assert(assistant.includes('loadLiveCompanyContext('), 'AI assistant must load permission-scoped live company context.');
 assert(assistant.includes('assistantModelConfig(requestPlan.route'), 'AI assistant must route complex questions to the reasoning model.');
 assert(assistant.includes('safety_identifier: safetyIdentifier'), 'AI assistant requests must include a privacy-preserving safety identifier.');
@@ -632,7 +640,38 @@ assert(index.includes('jobName + \' · \' + foreman'), 'Compact supervisor rows 
 assert(hasVersionedAsset(expandedJsa, 'role-workspace-polish.js'), 'Role workspace management labels must use a cache version.');
 assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
 assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');
-assert(index.includes("'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)"), 'Supervision report cards must color only the field man-hour rate number.');
+assert(index.includes('function userCanSeeFieldMoney()'), 'Field-money visibility helper is missing.');
+assert(index.includes("'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)"), 'Production report cards must color only the field man-hour rate number.');
+for (const marker of [
+  'linecrew_set_member_money_permissions',
+  "'actual_pricing', can_see_actual",
+  "'field_pricing', can_see_field",
+  "v_can_see_actual := public.linecrew_has_capability('actual_pricing')",
+  "v_can_see_field := public.linecrew_has_capability('field_pricing')",
+  'profile.company_id = actor.company_id'
+]) assert(moneyVisibility.includes(marker), `Money visibility security marker missing: ${marker}`);
+for (const marker of [
+  'v_actor_company_id',
+  'profile.company_id = v_actor_company_id',
+  'get diagnostics v_updated = row_count',
+  'if v_updated <> 1 then'
+]) assert(moneyVisibilityUpdateFix.includes(marker), `Money visibility update marker missing: ${marker}`);
+for (const marker of [
+  "new.role in ('foreman','gf')",
+  "'actual_pricing', new.role_permissions -> 'actual_pricing'",
+  "'field_pricing', new.role_permissions -> 'field_pricing'",
+  "new.role in ('admin','owner')"
+]) assert(fieldRoleMoneyPermissions.includes(marker), `Field-role money permission marker missing: ${marker}`);
+for (const marker of [
+  'get_price_book_items_visible',
+  'get_daily_report_unit_catalog_visible',
+  'get_daily_report_unit_locations_visible_v2',
+  "linecrew_has_capability('field_pricing')",
+  'then item.adjusted_line_value else null end'
+]) assert(detailedFieldMoney.includes(marker), `Detailed Field Money mask missing: ${marker}`);
+for (const marker of ['Money Visibility','Actual Money','Field Money']) {
+  assert(index.includes(marker), `Team money visibility UI marker missing: ${marker}`);
+}
 assert(/\.daily-review-counts\s+\.authorized,\s*\.daily-review-counts\s+\.pending,\s*\.daily-review-counts\s+\.redline\s*\{[^}]*color\s*:\s*inherit\s*;/m.test(index), 'Authorization, Pending Packet and Redline summary counts must remain neutral.');
 assert(!index.includes('mh-rate-target'), 'Man-hour target status must not render as a separate colored badge.');
 assert(timekeeping.includes('window.manHourRateNumberMarkup(value)'), 'Production totals must color only the Field MH Run Rate value.');

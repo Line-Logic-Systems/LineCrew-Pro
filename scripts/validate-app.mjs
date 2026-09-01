@@ -256,6 +256,66 @@ if (teamFunctionSources.some(source => !source)) {
   }
 }
 
+const dailyReportValueSummarySource = extractNamedFunction(html, 'dailyReportValueSummaryMarkup');
+if (!dailyReportValueSummarySource) {
+  failures.push('Missing executable Daily Report value summary renderer.');
+} else {
+  try {
+    const reportContext = {
+      canSeeActual:false,
+      canSeeField:true,
+      userCanSeeActualContractPrices:()=>reportContext.canSeeActual,
+      userCanSeeFieldMoney:()=>reportContext.canSeeField,
+      escapeHtml:value=>String(value),
+      formatCurrency:value=>`$${Number(value).toFixed(2)}`,
+      manHourRateNumberMarkup:value=>`<RATE>${Number(value).toFixed(2)}</RATE>`
+    };
+    vm.createContext(reportContext);
+    vm.runInContext(dailyReportValueSummarySource, reportContext);
+    const report = { regular_hours:10, overtime_hours:2 };
+    const summary = {
+      unit_line_count:1,
+      has_adjustment:true,
+      actual_total:1000,
+      adjusted_total:460,
+      visible_total:460
+    };
+    const foremanMarkup = reportContext.dailyReportValueSummaryMarkup(report, summary);
+    assert(
+      foremanMarkup.includes('Field MH Run Rate') &&
+        foremanMarkup.includes('35.38') &&
+        !foremanMarkup.includes('Actual MH Run Rate') &&
+        !foremanMarkup.includes('76.92'),
+      'Foreman Daily Reports must show the field MH run rate without exposing the actual MH run rate.'
+    );
+    reportContext.canSeeActual = true;
+    const adminMarkup = reportContext.dailyReportValueSummaryMarkup(report, summary);
+    assert(
+      adminMarkup.includes('Actual MH Run Rate') &&
+        adminMarkup.includes('76.92') &&
+        adminMarkup.includes('Field MH Run Rate') &&
+        adminMarkup.includes('35.38'),
+      'Actual-pricing leadership must continue to see both actual and field MH run rates.'
+    );
+    reportContext.canSeeField = false;
+    const actualOnlyMarkup = reportContext.dailyReportValueSummaryMarkup(report, summary);
+    assert(
+      actualOnlyMarkup.includes('Actual MH Run Rate') &&
+        !actualOnlyMarkup.includes('Field MH Run Rate'),
+      'Field Money disabled must hide the field MH run rate while preserving allowed actual money.'
+    );
+    reportContext.canSeeActual = false;
+    const noMoneyMarkup = reportContext.dailyReportValueSummaryMarkup(report, summary);
+    assert(
+      noMoneyMarkup.includes('hidden by company permissions') &&
+        !noMoneyMarkup.includes('MH Run Rate'),
+      'Disabling both money permissions must hide every unit value and MH run rate.'
+    );
+  } catch (error) {
+    failures.push('Daily Report value-summary behavior regression test failed: ' + error.message);
+  }
+}
+
 // Flexible JSA/mobile capture and the in-app multi-page viewer are core pilot flows.
 for (const marker of [
   'jsa-attachment-viewer',

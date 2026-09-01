@@ -120,6 +120,11 @@ const scenarios = [
     role: 'Foreman',
     question: 'How do I check Remaining Units left at a work point?',
     expected: ['searches by Work Point', 'Redlines stay separate']
+  },
+  {
+    role: 'Foreman',
+    question: 'Where do I see my man hour rate?',
+    expected: ['Field MH Run Rate on their own Daily Reports', 'Actual Money and Field Money']
   }
 ];
 
