@@ -33,6 +33,9 @@ jobs:
       - name: Validate production readiness
         run: node scripts/validate-production-readiness.mjs
 
+      - name: Validate job-packet model fallback
+        run: node supabase/functions/parse-utility-job-packet/packet-logic.test.mjs
+
       - name: Validate LineCrew Assistant knowledge
         run: node scripts/validate-assistant-knowledge.mjs
 
