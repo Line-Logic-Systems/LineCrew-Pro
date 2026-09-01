@@ -89,7 +89,7 @@
     section.innerHTML = `
       <div class="card">
         <div class="section-header">
-          <div><h2>Timekeeping</h2><p class="muted">Crew time for payroll, billing and production reporting.</p></div>
+          <div><h2>Timekeeping / Roster</h2><p class="muted">Crew time, personnel, equipment, payroll and production reporting.</p></div>
           <button id="timekeepingBackBtn" class="secondary small">Back to Dashboard</button>
         </div>
       </div>
@@ -154,7 +154,7 @@
     tile.id = 'timekeepingTile';
     tile.setAttribute('role','link');
     tile.setAttribute('tabindex','0');
-    tile.innerHTML = '<strong>Timekeeping</strong><span class="muted">Crew hours, payroll and billing exports</span>';
+    tile.innerHTML = '<strong>Timekeeping / Roster</strong><span class="muted">Crew hours, personnel, equipment and payroll</span>';
     const open = async (options={}) => {
       if(typeof show === 'function') show('dashboardPage');
       ['dashboardPage','teamPage','jobsPage','productionPage','safetyPage','priceBooksPage','setupPage','authPage'].forEach(id => byId(id)?.classList.add('hidden'));
