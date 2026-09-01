@@ -17652,8 +17652,11 @@ $('closeDailyUnitEditorBottomBtn').onclick = () => finishDailyUnitEntry($('close
 // The report list owns the secure unit-entry helpers. Expose the current
 // implementation so a newly saved report can continue directly to units.
 window.openDailyUnitEditor = openDailyUnitEditor;
+// Returning is allowed from approved as well, so an error found after
+// approval is not a dead end. Approving stays limited to submitted.
+const reviewStatus = String(report.status || '').toLowerCase();
 if(
-String(report.status || '').toLowerCase() === 'submitted' &&
+['submitted','approved'].includes(reviewStatus) &&
 userCanReviewProduction()
 ){
 const approveBtn =
@@ -17730,10 +17733,13 @@ return;
 alert('Daily report approved.');
 await loadProductionReports();
 };
+const returnLabel = reviewStatus === 'approved'
+? 'Withdraw Approval & Return'
+: 'Return Report';
 const returnBtn =
 document.createElement('button');
 returnBtn.className = 'secondary small';
-returnBtn.textContent = 'Return Report';
+returnBtn.textContent = returnLabel;
 returnBtn.onclick = async () => {
 const notes =
 prompt(
@@ -17748,7 +17754,11 @@ return;
 }
 const confirmed =
 confirm(
-'Return this report to the foreman?'
+reviewStatus === 'approved'
+? 'Withdraw approval and return this report to the foreman?\n\n'
+  + 'The approval is removed and the report returns to draft for correction. '
+  + 'If it has already been billed, the billing batch is not adjusted automatically.'
+: 'Return this report to the foreman?'
 );
 if(!confirmed){
 return;
@@ -17764,7 +17774,7 @@ p_review_notes: notes.trim()
 );
 if(error){
 returnBtn.disabled = false;
-returnBtn.textContent = 'Return Report';
+returnBtn.textContent = returnLabel;
 alert(
 'Unable to return report: ' +
 error.message
@@ -17774,7 +17784,7 @@ return;
 alert('Daily report returned to draft.');
 await loadProductionReports();
 };
-card.appendChild(approveBtn);
+if(reviewStatus === 'submitted') card.appendChild(approveBtn);
 card.appendChild(returnBtn);
 }
 if(userCanManageProductionRecords() || currentUserRole() === 'foreman'){
