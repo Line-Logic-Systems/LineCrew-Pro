@@ -502,6 +502,33 @@ assert(timekeeping.includes('Unassigned Crew Members')&&timekeeping.includes('Un
 assert(timekeeping.includes("const canViewCompleteRoster = () => ['admin','owner'].includes(role())"), 'The complete company roster must remain Owner/Admin-only.');
 assert(timekeeping.includes(".select('id,full_name,email,role,active')")&&timekeeping.includes('profileOnlyPeople'), 'The complete company roster must include Team login accounts without duplicating linked employees.');
 assert(timekeepingInput.includes('await window.LineCrewRefreshCompleteRoster?.();'), 'Equipment changes must refresh the consolidated company roster.');
+assert(timekeeping.includes('id="tkCompleteRosterSearch"')&&timekeeping.includes('id="tkCompleteRosterAssignment"')&&timekeeping.includes('id="tkCompleteRosterForeman"'), 'The complete company roster must support search, assignment, and Foreman/crew filters.');
+assert(timekeeping.includes('Export Filtered Excel')&&timekeeping.includes('filteredCompleteRosterRecords()'), 'Complete roster export must honor the active filters.');
+assert(timekeeping.includes("XLSX.utils.book_append_sheet(workbook,sheet,'People')")&&timekeeping.includes("XLSX.utils.book_append_sheet(workbook,sheet,'Equipment')"), 'Complete roster Excel export must separate People and Equipment sheets.');
+assert(timekeeping.includes('safeRosterExportCell'), 'Complete roster exports must neutralize spreadsheet formulas.');
+const completeRosterFilterStart = timekeeping.indexOf('function filteredCompleteRosterRecords(){');
+const completeRosterFilterEnd = timekeeping.indexOf('\n  function applyCompleteRosterFilters()', completeRosterFilterStart);
+assert(completeRosterFilterStart >= 0 && completeRosterFilterEnd > completeRosterFilterStart, 'Complete roster filter function could not be isolated for regression testing.');
+const completeRosterFilterFixture = new Function(
+  'completeRosterFilters',
+  'completeRosterPeople',
+  'completeRosterEquipment',
+  `${timekeeping.slice(completeRosterFilterStart, completeRosterFilterEnd)}; return filteredCompleteRosterRecords();`
+);
+const fixturePeople = [
+  {id:'p1',searchText:'alpha lineman foreman one',status:'active',assignment:'assigned',foremanFilter:'f1'},
+  {id:'p2',searchText:'beta operator unassigned',status:'inactive',assignment:'unassigned',foremanFilter:'unassigned'}
+];
+const fixtureEquipment = [
+  {id:'e1',searchText:'truck 100 alpha foreman one',status:'active',assignment:'assigned',foremanFilter:'f1'},
+  {id:'e2',searchText:'trailer 200 unassigned',status:'active',assignment:'unassigned',foremanFilter:'unassigned'}
+];
+let filteredRosterFixture = completeRosterFilterFixture({query:'alpha',kind:'all',status:'all',assignment:'all',foreman:'all'}, fixturePeople, fixtureEquipment);
+assert(filteredRosterFixture.people.map(row=>row.id).join(',')==='p1'&&filteredRosterFixture.equipment.map(row=>row.id).join(',')==='e1', 'Complete roster search must filter both People and Equipment.');
+filteredRosterFixture = completeRosterFilterFixture({query:'',kind:'people',status:'inactive',assignment:'unassigned',foreman:'unassigned'}, fixturePeople, fixtureEquipment);
+assert(filteredRosterFixture.people.map(row=>row.id).join(',')==='p2'&&filteredRosterFixture.equipment.length===0, 'Complete roster People filters must combine kind, status, assignment, and crew.');
+filteredRosterFixture = completeRosterFilterFixture({query:'',kind:'equipment',status:'active',assignment:'unassigned',foreman:'unassigned'}, fixturePeople, fixtureEquipment);
+assert(filteredRosterFixture.people.length===0&&filteredRosterFixture.equipment.map(row=>row.id).join(',')==='e2', 'Complete roster Equipment filters must combine kind, status, assignment, and crew.');
 assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time options must identify assigned crew members first.');
 assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
 assert(timekeeping.includes("const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;"), 'Foreman Daily Reports must identify the logged-in Foreman employee directly.');
