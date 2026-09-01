@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   assessPacketExtraction,
+  normalizePacketExtraction,
   parsePacketOutput,
   runPacketModelFallback,
 } from "./packet-logic.mjs";
@@ -60,6 +61,50 @@ assert.equal(
   }), context).valid,
   true,
   "Adaptive packets must support transfer rows as well as install and remove.",
+);
+
+const normalizedMissingPoint = normalizePacketExtraction(supported({
+  provider_key:"united-cooperative-services",
+  profile_version:"model-chose-a-different-version",
+  rows:[{
+    ...supported().rows[0],
+    source_page:1,
+    work_point_code:"",
+  }],
+}), context);
+assert.equal(normalizedMissingPoint.profile_version, context.profileVersion);
+assert.equal(normalizedMissingPoint.rows[0].source_page, 11);
+assert.equal(normalizedMissingPoint.rows[0].work_point_code, "REVIEW-PAGE-11");
+assert.equal(normalizedMissingPoint.rows[0].include_in_import, false);
+assert.match(normalizedMissingPoint.rows[0].review_note, /assign it before import/i);
+assert.equal(
+  assessPacketExtraction(normalizedMissingPoint, context).valid,
+  true,
+  "A missing location must become an unchecked review row instead of failing the packet.",
+);
+
+const normalizedAlphanumericPoint = normalizePacketExtraction(supported({
+  provider_key:"united-cooperative-services",
+  rows:[{ ...supported().rows[0], work_point_code:"R1" }],
+}), context);
+assert.equal(
+  normalizedAlphanumericPoint.rows[0].work_point_code,
+  "R1",
+  "An alphanumeric location must remain intact and must not be interpreted as a work action.",
+);
+
+const normalizedUnsafeQuantity = normalizePacketExtraction(supported({
+  confidence:4,
+  rows:[{ ...supported().rows[0], estimated_quantity:0 }],
+}), context);
+assert.equal(normalizedUnsafeQuantity.status, "uncertain");
+assert.equal(normalizedUnsafeQuantity.batch_disposition, "needs_review");
+assert.deepEqual(normalizedUnsafeQuantity.rows, []);
+assert.equal(normalizedUnsafeQuantity.confidence, 0.5);
+assert.equal(
+  assessPacketExtraction(normalizedUnsafeQuantity, context).valid,
+  true,
+  "An unusable row must produce a review result rather than a fatal validation error.",
 );
 
 assert.equal(
