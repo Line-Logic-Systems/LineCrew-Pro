@@ -60,7 +60,7 @@ export function assessPacketExtraction(parsed, options = {}) {
   }
 
   if (parsed.status === "supported") {
-    if (parsed.provider_key !== "oncor") invalidReasons.push("supported_provider_mismatch");
+    if (!String(parsed.provider_key || "").trim()) invalidReasons.push("missing_provider_key");
     if (parsed.profile_version !== profileVersion) invalidReasons.push("profile_version_mismatch");
     if (parsed.batch_disposition !== "supported_rows") invalidReasons.push("supported_disposition_mismatch");
     if (!Array.isArray(parsed.rows) || parsed.rows.length === 0) invalidReasons.push("supported_without_rows");
@@ -91,7 +91,7 @@ export function assessPacketExtraction(parsed, options = {}) {
       pushUnique(invalidReasons, "source_page_out_of_range");
     }
     if (!String(row.work_point_code || "").trim()) pushUnique(invalidReasons, "missing_work_point_code");
-    if (!["install", "remove"].includes(row.work_type)) pushUnique(invalidReasons, "invalid_work_type");
+    if (!["install", "transfer", "remove"].includes(row.work_type)) pushUnique(invalidReasons, "invalid_work_type");
     if (!Number.isFinite(row.estimated_quantity) || row.estimated_quantity <= 0) {
       pushUnique(invalidReasons, "invalid_estimated_quantity");
     }
