@@ -84,7 +84,7 @@ for (const marker of [
   'validRows.length === 0 || newPriceBookPreSaveMappingActive',
   "$('manageExistingContracts').open = true;",
   "currentOpenPriceBook?.id === priceBookId",
-  "currentPriceBookImportRows.length > 0"
+  "!$('priceBookImportCard').classList.contains('hidden')"
 ]) {
   assert(html.includes(marker), `Missing smart Unit Pricing import marker: ${marker}`);
 }
