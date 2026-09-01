@@ -52,6 +52,8 @@ const mustExist = [
   'supabase/migrations/20260828173009_consolidate_leadership_self_time_policies.sql',
   'supabase/migrations/20260826234242_foreman_remaining_job_units.sql',
   'supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql',
+  'supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql',
+  'supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -103,6 +105,8 @@ const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
 const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
 const foremanFieldTools = fs.readFileSync('foreman-field-tools.js', 'utf8');
 const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
+const jobJacketIntegrity = fs.readFileSync('supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql', 'utf8');
+const jobJacketReimport = fs.readFileSync('supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const dailyCompanyBackup = fs.readFileSync('.github/workflows/daily-company-data-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
@@ -156,7 +160,7 @@ assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must a
 assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
 assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
 assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
-assert(assistant.includes('2026-08-30-read-only-navigation-v8'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('2026-09-01-job-jacket-end-to-end-v9'), 'AI assistant knowledge version marker must track the current workflow release.');
 assert(assistant.includes('loadLiveCompanyContext('), 'AI assistant must load permission-scoped live company context.');
 assert(assistant.includes('assistantModelConfig(requestPlan.route'), 'AI assistant must route complex questions to the reasoning model.');
 assert(assistant.includes('safety_identifier: safetyIdentifier'), 'AI assistant requests must include a privacy-preserving safety identifier.');
@@ -183,7 +187,7 @@ for (const marker of [
   'multiple Foremen/General Foremen',
   'Manage Foreman Crews',
   'Regular + 1.5 × OT',
-  'There is no separate bulk Job-file import',
+  'The same form accepts an optional PDF, Excel or CSV Job Jacket / Utility Packet',
   'Supervisors review but do not edit a Foreman',
   'green at or above the exact target',
   'Offline JSA Mode',
@@ -201,11 +205,11 @@ for (const marker of [
 assert(index.includes("function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }"), 'AI assistant launcher must be Owner/Admin-only.');
 assert(!index.includes("['ai_assistant','AI Assistant']"), 'AI assistant must not be configurable as a Superintendent capability.');
 for (const marker of [
-  'Save & Import Authorized Units',
+  'Create Job & Review Jacket',
   'Create Account & Join Company',
   'Assign Another Foreman / Leader',
   'Manage Foreman Crews',
-  'There is no separate bulk Job-file import',
+  'A confirmed packet becomes the active authorization baseline',
   'Red is below 95% of target',
   'Offline JSA Mode',
   'searches by Work Point',
@@ -511,6 +515,71 @@ assert(index.includes('id="jobPackageInlineImportMount"'), 'Job-package setup mu
 assert(index.includes('Save Package &amp; Preview File'), 'Job-package save must name the inline file-preview workflow.');
 assert(index.includes("$('jobPackageInlineImportMount').appendChild($('jobPackageImportForm'))"), 'Adding a utility package must place file selection and mapping inside the same package box.');
 assert(index.includes("return alert('Choose the Excel or CSV job packet file in this box.')"), 'Saving a utility package must require the inline packet file.');
+for (const marker of [
+  'linecrew_resolve_job_price_book',
+  'public.linecrew_can_manage_job_packages()',
+  'create or replace function public.resolve_utility_packet_price_item',
+  'create or replace function public.finalize_utility_packet_import',
+  'create or replace function public.finalize_job_package_spreadsheet_import',
+  'public.linecrew_foreman_has_job_assignment(job.id)',
+  'else coalesce(report.price_book_id, v_price_book_id)',
+  "report.price_book_id is null",
+  "package.id <> new.id",
+  "package.status = 'active'",
+  'linecrew_report_counts_toward_progress',
+  "nullif(btrim(coalesce(p_review_notes, '')), '') is null",
+  'create or replace function public.get_remaining_job_units_for_field',
+  'create or replace function public.get_job_progress_dashboard',
+  'from public, anon, authenticated'
+]) assert(jobJacketIntegrity.includes(marker), `Job Jacket end-to-end integrity marker missing: ${marker}`);
+assert(
+  index.includes("sb.rpc('finalize_job_package_spreadsheet_import'") &&
+    index.includes("if(importedStatus !== 'active')"),
+  'Spreadsheet jacket UI must use the atomic finalizer and confirm activation before claiming success.'
+);
+for (const marker of [
+  'delete from public.job_package_authorized_units',
+  'delete from public.job_package_work_points',
+  "package.status = 'draft'",
+  'Upload a new job-jacket revision; only a draft package can be imported.',
+  'revoke all on function public.import_job_package_units(uuid, jsonb, text)',
+  'from public, anon, authenticated',
+  'create trigger enforce_draft_job_package_work_point_mutation',
+  'create trigger enforce_draft_job_package_authorized_unit_mutation',
+  'create trigger prevent_non_draft_job_package_delete',
+  'Active job-jacket revisions are read-only. Upload a new revision.',
+  'if auth.uid() is null then',
+  'create or replace function public.get_job_package_revision_delta_v2',
+  'public.normalize_work_point_key(point.work_point_code)',
+  'authorized.authorized_transfer_quantity',
+  'transfer_change numeric'
+]) assert(jobJacketReimport.includes(marker), `Job Jacket replacement/revision marker missing: ${marker}`);
+assert(
+  index.includes("sb.rpc('get_job_package_revision_delta_v2'") &&
+    index.includes("escapeHtml(change.prior_transfer)+' → '+escapeHtml(change.new_transfer)"),
+  'Revision comparison must use canonical work points and display transfer changes.'
+);
+assert(
+  index.includes("$('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || !isDraft)") &&
+    index.includes("String(currentOpenJobPackage?.status || 'draft').toLowerCase() === 'draft'"),
+  'Active jacket baselines must be read-only and corrected through a new revision.'
+);
+assert(
+  index.includes("String(jobPackage.status || 'draft').toLowerCase() === 'draft'") &&
+    index.includes("deleteButton.textContent = 'Delete Draft Package'"),
+  'Only draft jacket revisions may expose a destructive delete action.'
+);
+assert(
+  index.includes('function jobPackageRevisionLabel(jobPackage)') &&
+    (index.match(/jobPackageRevisionLabel\(/g) || []).length >= 6,
+  'Job history, billing exports and PDF records must share one revision label.'
+);
+assert(
+  index.includes('expanded-jsa.js?v=20260901a') &&
+    serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
+    serviceWorker.includes("linecrew-pro-shell-v56"),
+  'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
+);
 
 for (const marker of [
   'required_man_hour_rate numeric(12,2)',

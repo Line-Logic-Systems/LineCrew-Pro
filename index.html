@@ -2117,7 +2117,7 @@ Company job management
 id="showAddJobPackageBtn"
 class="success hidden"
 >
-+ Add Utility Package to Existing Job
++ Add Job Jacket to Existing Job
 </button>
 <button
 id="showCreateJobBtn"
@@ -2295,6 +2295,18 @@ placeholder="Example: Feeder Rebuild"
 The selected contract controls which Price Book units and values can be
 used for this job.
 </p>
+<div id="createJobPacketField">
+<label for="createJobPacketFile">Job Jacket / Utility Packet (optional)</label>
+<input
+id="createJobPacketFile"
+type="file"
+accept=".pdf,.csv,.tsv,.txt,.xlsx,.xls,.ods"
+>
+<p class="muted">
+PDF, Excel or CSV. After the job is created, you will review the jacket
+before any authorized units are imported. PDF files can be up to 20 MB.
+</p>
+</div>
 <button class="success" id="createJobBtn">
 Create Job
 </button>
@@ -2307,7 +2319,7 @@ Cancel
 </div>
 <div id="jobPackageFormHome"></div>
 <div id="jobPackageFormCard" class="card hidden">
-<h2>Add Utility Job Package</h2>
+<h2>Add Job Jacket / Utility Packet</h2>
 <p class="muted">
 Importing the package's authorized units lets LineCrew Pro distinguish
 normal authorized production from redlines, reconcile Pending Job Units
@@ -2894,6 +2906,11 @@ Save the pole to start a clean entry for the next location.
 <label for="dailyUnitPoleLocation">Pole / Location</label>
 <input id="dailyUnitPoleLocation" list="dailyUnitPoleLocations"
 maxlength="200" placeholder="Example: Pole 18">
+</div>
+<div id="dailyAuthorizedUnitPanel" class="job-card hidden">
+<strong>Authorized Units From Job Jacket</strong>
+<p id="dailyAuthorizedUnitHelp" class="muted"></p>
+<div id="dailyAuthorizedUnitChoices" class="button-row"></div>
 </div>
 <div id="dailyUnitBatchRows"></div>
 <div class="button-row">
@@ -3943,9 +3960,12 @@ let currentOpenJobPackage = null;
 let currentJobPackageImportWorkbook = null;
 let currentJobPackageImportRows = [];
 let currentJobPackageImportFilename = null;
+let currentJobPackageImportReadToken = 0;
 let currentUtilityPacketImportId = null;
 let currentDailyUnitCatalog = [];
 let currentDailySavedUnits = [];
+let currentDailyAuthorizedRows = [];
+let currentDailyAuthorizedLoadError = '';
 let currentDailyUnitUsageMemory = new Map();
 let currentDailyUnitReport = null;
 let currentDailyUnitBatchRows = [];
@@ -5858,7 +5878,7 @@ detail.innerHTML='<div class="card"><button id="closeCompletedJobDetail" class="
 '<div class="card"><h3>Supervision & Crew History</h3><p>'+escapeHtml(r.assignments.map(item=>item.full_name+' — '+formatTeamRole(item.member_role)).join('; ')||'No retained job-leader assignments.')+'</p></div>'+
 '<div class="card"><h3>Daily Reports ('+r.reports.length+')</h3>'+((r.reports.map(report=>'<div class="daily-history-event"><strong>'+escapeHtml(report.work_date)+' — '+escapeHtml(report.foreman_name||'Foreman not recorded')+'</strong><br>'+escapeHtml(report.crew_name||'Crew not recorded')+' · '+Number(report.regular_hours||0)+' regular / '+Number(report.overtime_hours||0)+' OT · '+escapeHtml(String(report.status||'').toUpperCase())+(report.notes?'<br>'+escapeHtml(report.notes):'')+'</div>').join(''))||'<p class="muted">No Daily Reports.</p>')+'</div>'+
 '<div class="card"><h3>Unit Production ('+r.units.length+')</h3>'+((completedJobUnitRows(r).slice(0,100).map(unit=>'<div class="daily-history-event"><strong>'+escapeHtml(unit['Work Date'])+' · '+escapeHtml(unit['Pole / Work Point'])+' · '+escapeHtml(unit['Unit Code'])+'</strong><br>Installed '+unit.Installed+' · Transferred '+unit.Transferred+' · Removed '+unit.Removed+' · '+escapeHtml(unit.Authorization)+'</div>').join(''))||'<p class="muted">No unit production.</p>')+(r.units.length>100?'<p class="muted">Showing the first 100 unit lines. Export Excel for the complete record.</p>':'')+'</div>'+
-'<div class="card"><h3>Utility Packet Revisions ('+r.packages.length+')</h3>'+((r.packages.map(item=>'<div class="daily-history-event"><strong>Revision '+Number(item.revision_number||1)+' — '+escapeHtml(item.package_name||item.package_number||'Utility Job Packet')+'</strong><br>'+escapeHtml(String(item.status||'').toUpperCase())+' · '+escapeHtml(item.source_filename||'No source filename')+'</div>').join(''))||'<p class="muted">No utility packet revisions.</p>')+'</div>'+
+'<div class="card"><h3>Utility Packet Revisions ('+r.packages.length+')</h3>'+((r.packages.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(jobPackageRevisionLabel(item))+' — '+escapeHtml(item.package_name||item.package_number||'Utility Job Packet')+'</strong><br>'+escapeHtml(String(item.status||'').toUpperCase())+' · '+escapeHtml(item.source_filename||'No source filename')+'</div>').join(''))||'<p class="muted">No utility packet revisions.</p>')+'</div>'+
 '<div class="card"><h3>Report Attachments ('+r.attachments.length+')</h3><div id="completedJobAttachments">'+((r.attachments.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(item.original_filename||'Attachment')+'</strong>'+(item.caption?'<br>'+escapeHtml(item.caption):'')+'<br><span class="muted">'+escapeHtml(formatCompletedJobDate(item.created_at))+'</span><br><button class="secondary small completed-attachment-open" data-attachment-id="'+escapeHtml(item.id)+'">Open Read-Only</button></div>').join(''))||'<p class="muted">No report attachments.</p>')+'</div></div>'+
 '<div class="card"><h3>Closeout & Reopen History ('+r.closeoutHistory.length+')</h3>'+((r.closeoutHistory.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(String(item.action||'').replaceAll('_',' ').toUpperCase())+'</strong><br>'+escapeHtml(item.actor_name||'System')+' · '+escapeHtml(formatTeamRole(item.actor_role))+' · '+escapeHtml(formatCompletedJobDate(item.occurred_at))+(item.reason?'<br>'+escapeHtml(item.reason):'')+(item.action==='override_closed'?'<br><span class="muted">Owner-authorized unresolved-work override</span>':'')+'</div>').join(''))||'<p class="muted">No closeout history was recorded before audit tracking was enabled.</p>')+'</div>'+
 '<div class="card"><h3>Audit History ('+r.audit.length+')</h3>'+((r.audit.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(String(item.event_type||'updated').replaceAll('_',' '))+'</strong><br>'+escapeHtml(item.actor_name||'System')+' · '+escapeHtml(formatCompletedJobDate(item.event_at))+(item.event_notes?'<br>'+escapeHtml(item.event_notes):'')+'</div>').join(''))||'<p class="muted">No recorded audit events.</p>')+'</div>'+
@@ -5880,7 +5900,7 @@ XLSX.utils.book_append_sheet(wb,completedJobSheet(summary,'No summary'),'Job Sum
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.assignments.map(item=>({'Name':item.full_name||'','Role':formatTeamRole(item.member_role),'Assigned At':item.assigned_at||'','Assigned By':item.assigned_by_name||''})),'No assignments'),'Supervision');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.reports.map(item=>({'Work Date':item.work_date||'','Foreman':item.foreman_name||'','Crew':item.crew_name||'','Regular Hours':Number(item.regular_hours||0),'OT Hours':Number(item.overtime_hours||0),'Weather':item.weather_conditions||'','Delay Hours':Number(item.delay_hours||0),'Delay Reason':item.delay_reason||'','Status':String(item.status||'').toUpperCase(),'Storm Mode':item.storm_mode?'Yes':'No','Storm Event':item.storm_event_name||'','Report Notes':item.notes||'','Review Notes':item.review_notes||''})),'No Daily Reports'),'Daily Reports');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(completedJobUnitRows(r),'No unit production'),'Unit Production');
-XLSX.utils.book_append_sheet(wb,completedJobSheet(r.packages.map(item=>({'Revision':Number(item.revision_number||1),'Package Name':item.package_name||'','Package Number':item.package_number||'','Status':String(item.status||'').toUpperCase(),'Received':item.received_date||'','Source File':item.source_filename||'','Created':item.created_at||'','Notes':item.notes||''})),'No packet revisions'),'Packet Revisions');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(r.packages.map(item=>({'Revision':jobPackageRevisionLabel(item),'Package Name':item.package_name||'','Package Number':item.package_number||'','Status':String(item.status||'').toUpperCase(),'Received':item.received_date||'','Source File':item.source_filename||'','Created':item.created_at||'','Notes':item.notes||''})),'No packet revisions'),'Packet Revisions');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.jsas.map(item=>({'Work Date':item.work_date||'','Foreman':item.foreman_name||item.creator_name||'','Crew':item.crew_name||'','Status':item.status||'','Created':item.created_at||''})),'No JSAs'),'JSA Index');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.attachments.map(item=>({'Daily Report ID':item.daily_report_id||'','File Name':item.original_filename||'','Caption':item.caption||'','MIME Type':item.mime_type||'','Size Bytes':Number(item.file_size_bytes||0),'Created':item.created_at||''})),'No attachments'),'Attachment Index');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.closeoutHistory.map(item=>({'Action':String(item.action||'').replaceAll('_',' '),'Actor':item.actor_name||'System','Role':formatTeamRole(item.actor_role),'Event Time':item.occurred_at||'','Reason':item.reason||'','Paid Final Bill':item.blockers?.has_paid_final_bill===true?'Yes':item.action==='override_closed'?'No':'','Approved Unbilled':Number(item.blockers?.approved_unbilled_value||0),'Awaiting Review':Number(item.blockers?.awaiting_review_count||0),'Draft or Returned':Number(item.blockers?.draft_report_count||0)})),'No closeout history'),'Closeout History');
@@ -5938,19 +5958,48 @@ returnToDashboard();
 };
 /* CREATE JOB FORM */
 $('showAddJobPackageBtn').onclick = ()=> showJobPackageForm();
+function updateCreateJobActionLabel(){
+if($('createJobCard').dataset.jobId){
+$('createJobBtn').textContent = 'Save Changes';
+return;
+}
+const hasJacket = Boolean($('createJobPacketFile').files?.[0]);
+$('createJobBtn').textContent = hasJacket
+? 'Create Job & Review Jacket'
+: 'Create Job';
+}
+function resetCreateJobPacketSelection(){
+$('createJobPacketFile').value = '';
+updateCreateJobActionLabel();
+}
 $('showCreateJobBtn').onclick = ()=>{
 delete $('createJobCard').dataset.jobId;
 $('createJobCard').querySelector('h2').textContent = 'Create Job';
-$('createJobBtn').textContent = 'Create Job';
 $('jobNumber').value = '';
 $('jobName').value = '';
+resetCreateJobPacketSelection();
+$('createJobPacketField').classList.toggle(
+'hidden',
+!userCanManageJobPackages()
+);
 loadJobContractOptions();
 $('createJobCard')
 .classList
 .remove('hidden');
 };
+$('createJobPacketFile').onchange = ()=>{
+const file = $('createJobPacketFile').files?.[0] || null;
+const fileError = jobPacketFileValidationMessage(file);
+if(fileError){
+alert(fileError);
+resetCreateJobPacketSelection();
+return;
+}
+updateCreateJobActionLabel();
+};
 $('cancelCreateJobBtn').onclick = ()=>{
 delete $('createJobCard').dataset.jobId;
+resetCreateJobPacketSelection();
 $('createJobCard')
 .classList
 .add('hidden');
@@ -5995,6 +6044,9 @@ $('jobContract').appendChild(option);
 /* CREATE JOB */
 $('createJobBtn').onclick = async()=>{
 const jobId = $('createJobCard').dataset.jobId || null;
+const jacketFile = jobId
+? null
+: ($('createJobPacketFile').files?.[0] || null);
 const number =
 $('jobNumber').value.trim();
 const name =
@@ -6005,6 +6057,15 @@ return alert(
 'Job number, job name and contract are required.'
 );
 }
+const fileError = jobPacketFileValidationMessage(jacketFile);
+if(fileError){
+return alert(fileError);
+}
+const button = $('createJobBtn');
+button.disabled = true;
+button.textContent = jobId ? 'Saving Changes...' : 'Creating Job...';
+let createdJobId = null;
+try{
 const result = jobId
 ? await sb.rpc('update_contract_job', {
 p_job_id:jobId,
@@ -6017,19 +6078,58 @@ p_contract_id:contractId,
 p_job_number:number,
 p_job_name:name
 });
-const { error } = result;
-if(error){
-return alert(error.message);
+if(result.error){
+return alert(result.error.message);
 }
+createdJobId = jobId ? null : result.data;
 $('jobNumber').value = '';
 $('jobName').value = '';
 $('jobContract').value = '';
 delete $('createJobCard').dataset.jobId;
+resetCreateJobPacketSelection();
 $('createJobCard')
 .classList
 .add('hidden');
+if(jacketFile && createdJobId){
+currentOpenJobId = createdJobId;
+}
 await loadJobs();
+if(jacketFile){
+const createdJob = currentJobsCatalog.find(
+job => String(job.id) === String(createdJobId)
+);
+if(!createdJob){
+return alert(
+'Job ' + number + ' was created, but its jacket review did not open. ' +
+'Open that job and choose + Add Job Packet to retry the jacket. Do not create the job again.'
+);
+}
+setAppHistory({
+lineCrewPage:'jobsPage',
+view:'jobDetail',
+jobId:createdJob.id
+});
+await handleJobPacketFileForJob(createdJob, jacketFile);
+return;
+}
 alert(jobId ? 'Job updated.' : 'Job created.');
+}catch(error){
+if(!jobId && createdJobId){
+alert(
+'Job ' + number + ' was created, but the page could not finish loading it: ' +
+(error?.message || 'Unexpected error') + '. Open the existing job to continue. ' +
+'Do not create the job again.'
+);
+return;
+}
+alert(
+'Unable to finish ' + (jobId ? 'saving the job' : 'creating the job') +
+': ' + (error?.message || 'Unexpected error')
+);
+}finally{
+button.disabled = false;
+updateCreateJobActionLabel();
+}
 };
 /* LOAD JOBS */
 async function loadJobs(){
@@ -6670,6 +6770,10 @@ return;
 }
 await loadJobs();
 }
+function jobPackageRevisionLabel(jobPackage){
+const revision = Math.max(1, Number(jobPackage?.revision_number || 1));
+return revision > 1 ? 'Revision ' + (revision - 1) : 'Original Packet';
+}
 function renderJobPackages(job, container){
 const packages = currentJobPackageCatalog.filter(
 jobPackage => String(jobPackage.job_id) === String(job.id)
@@ -6691,9 +6795,7 @@ row.innerHTML = `
 <div>
 <strong>${escapeHtml(jobPackage.package_name)}</strong>
 <div class="muted">
-${jobPackage.revision_number > 1
-? 'Revision ' + escapeHtml(jobPackage.revision_number - 1)
-: 'Original Packet'} ·
+${escapeHtml(jobPackageRevisionLabel(jobPackage))} ·
 Reference: ${escapeHtml(jobPackage.package_number || 'Not provided')}
 ${jobPackage.received_date
 ? ' · Received: ' + escapeHtml(jobPackage.received_date)
@@ -6720,10 +6822,13 @@ changesButton.textContent = 'View Revision Changes';
 changesButton.onclick = ()=> toggleJobPackageRevisionChanges(jobPackage,row,changesButton);
 row.appendChild(changesButton);
 }
-if(userCanManageJobPackages()){
+if(
+userCanManageJobPackages() &&
+String(jobPackage.status || 'draft').toLowerCase() === 'draft'
+){
 const deleteButton = document.createElement('button');
 deleteButton.className = 'danger small';
-deleteButton.textContent = 'Delete Test Package';
+deleteButton.textContent = 'Delete Draft Package';
 deleteButton.onclick = ()=> deleteJobPackage(jobPackage);
 row.appendChild(deleteButton);
 }
@@ -6734,7 +6839,7 @@ async function toggleJobPackageRevisionChanges(jobPackage,row,button){
 const existing = row.querySelector('.packet-revision-delta');
 if(existing){ existing.remove(); button.textContent='View Revision Changes'; return; }
 button.disabled=true; button.textContent='Loading Changes...';
-const { data,error } = await sb.rpc('get_job_package_revision_delta',{ p_package_id:jobPackage.id });
+const { data,error } = await sb.rpc('get_job_package_revision_delta_v2',{ p_package_id:jobPackage.id });
 button.disabled=false; button.textContent='Hide Revision Changes';
 if(error){ button.textContent='View Revision Changes'; return alert('Unable to compare packet revisions: '+error.message); }
 const panel=document.createElement('div'); panel.className='daily-report-history packet-revision-delta';
@@ -6744,7 +6849,9 @@ panel.innerHTML='<strong>Revision Changes</strong><p class="muted">No authorized
 panel.innerHTML='<strong>Revision Changes</strong>' + data.map(change =>
 '<div class="daily-history-event"><strong>WP '+escapeHtml(change.work_point)+' · '+escapeHtml(change.unit_code)+'</strong><br>'+
 'Install: '+escapeHtml(change.prior_install)+' → '+escapeHtml(change.new_install)+
-' ('+(Number(change.install_change)>=0?'+':'')+escapeHtml(change.install_change)+') · Remove: '+
+' ('+(Number(change.install_change)>=0?'+':'')+escapeHtml(change.install_change)+') · Transfer: '+
+escapeHtml(change.prior_transfer)+' → '+escapeHtml(change.new_transfer)+
+' ('+(Number(change.transfer_change)>=0?'+':'')+escapeHtml(change.transfer_change)+') · Remove: '+
 escapeHtml(change.prior_remove)+' → '+escapeHtml(change.new_remove)+
 ' ('+(Number(change.remove_change)>=0?'+':'')+escapeHtml(change.remove_change)+')</div>'
 ).join('');
@@ -6827,9 +6934,9 @@ $('jobPackageDetailSubtitle').textContent =
 'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +
 ' · Status: ' + status.toUpperCase() + source;
 const canManagePackage = userCanManageJobPackages();
-const isClosed = status === 'closed';
-$('jobPackageAdminTools').classList.toggle('hidden', !canManagePackage || isClosed);
-$('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || isClosed);
+const isDraft = status === 'draft';
+$('jobPackageAdminTools').classList.toggle('hidden', !canManagePackage || !isDraft);
+$('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || !isDraft);
 const statusButton = $('jobPackageStatusActionBtn');
 statusButton.classList.toggle('hidden', !canManagePackage);
 if(!canManagePackage){
@@ -6893,7 +7000,7 @@ renderJobPackageWorkPoints(lines || []);
 function renderJobPackageWorkPoints(lines){
 const pointGroups = new Map();
 const packageIsEditable = userCanManageJobPackages() &&
-String(currentOpenJobPackage?.status || 'draft').toLowerCase() !== 'closed';
+String(currentOpenJobPackage?.status || 'draft').toLowerCase() === 'draft';
 lines.forEach(line => {
 if(!pointGroups.has(line.work_point_id)){
 pointGroups.set(line.work_point_id, {
@@ -6952,6 +7059,21 @@ unitContainer.innerHTML = '<p class="muted">No authorized units added.</p>';
 point.units.forEach(unit => {
 const row = document.createElement('div');
 row.className = 'unit-compact-card';
+const remainingInstall = Math.max(
+Number(unit.authorized_install_quantity || 0) -
+Number(unit.reported_install_quantity || 0),
+0
+);
+const remainingTransfer = Math.max(
+Number(unit.authorized_transfer_quantity || 0) -
+Number(unit.reported_transfer_quantity || 0),
+0
+);
+const remainingRetirement = Math.max(
+Number(unit.authorized_retirement_quantity || 0) -
+Number(unit.reported_retirement_quantity || 0),
+0
+);
 row.innerHTML = `
 <strong>${escapeHtml(unit.unit_code)}</strong> —
 ${escapeHtml(unit.unit_name || unit.unit_description || '')}
@@ -6964,7 +7086,10 @@ T: ${unit.reported_transfer_quantity} ·
 R: ${unit.reported_retirement_quantity} ·
 Approved I: ${unit.approved_install_quantity} ·
 T: ${unit.approved_transfer_quantity} ·
-R: ${unit.approved_retirement_quantity}
+R: ${unit.approved_retirement_quantity}<br>
+<strong>Remaining I: ${dailyQuantityText(remainingInstall)} ·
+T: ${dailyQuantityText(remainingTransfer)} ·
+R: ${dailyQuantityText(remainingRetirement)}</strong>
 </div>
 `;
 if(packageIsEditable){
@@ -7079,6 +7204,7 @@ const jobPacketMappingDefinitions = [
 { id:'jobMapRemoveQuantity', aliases:['removequantity','removeqty','retirementquantity','retireqty','remove','retirement'] }
 ];
 function resetJobPackageImport(){
+currentJobPackageImportReadToken += 1;
 currentJobPackageImportWorkbook = null;
 currentJobPackageImportRows = [];
 currentJobPackageImportFilename = null;
@@ -7122,11 +7248,14 @@ const column = $(selectId).value;
 return column ? row[column] : '';
 }
 function normalizeJobPacketPoint(value){
-return String(value || '')
+const key = String(value || '')
 .trim()
 .toLowerCase()
 .replace(/^(pole|wp|work[\s_-]*point)[\s#:_-]*/i, '')
 .replace(/[^a-z0-9]+/g, '');
+return /^\d+$/.test(key)
+? (key.replace(/^0+(?=\d)/, '') || '0')
+: key;
 }
 async function previewJobPackageImport(){
 if(!$('jobMapWorkPoint').value || !$('jobMapUnitCode').value){
@@ -7260,11 +7389,25 @@ if(!file) return;
 if(typeof XLSX === 'undefined'){
 return alert('The spreadsheet reader did not load. Refresh and try again.');
 }
+const readToken = ++currentJobPackageImportReadToken;
+currentJobPackageImportWorkbook = null;
+currentJobPackageImportRows = [];
+currentJobPackageImportFilename = null;
+$('jobPackageImportMapping').classList.add('hidden');
+$('previewJobPackageImportBtn').classList.add('hidden');
+$('confirmJobPackageImportBtn').classList.add('hidden');
+$('jobPackageImportPreview').innerHTML = '';
 try{
-currentJobPackageImportFilename = file.name;
-currentJobPackageImportWorkbook = XLSX.read(await file.arrayBuffer());
-const names = currentJobPackageImportWorkbook.SheetNames || [];
+const workbook = XLSX.read(await file.arrayBuffer());
+if(readToken !== currentJobPackageImportReadToken) return false;
+const names = workbook.SheetNames || [];
 if(!names.length) throw new Error('The file does not contain a worksheet.');
+const rows = XLSX.utils.sheet_to_json(workbook.Sheets[names[0]], {
+defval:'', raw:false, blankrows:false
+});
+if(!rows.length) throw new Error('No completed rows were found.');
+currentJobPackageImportFilename = file.name;
+currentJobPackageImportWorkbook = workbook;
 $('jobPackageImportWorksheet').innerHTML = '';
 names.forEach(name => {
 const option = document.createElement('option');
@@ -7273,10 +7416,6 @@ option.textContent = name;
 $('jobPackageImportWorksheet').appendChild(option);
 });
 $('jobPackageImportWorksheetWrap').classList.toggle('hidden', names.length < 2);
-const rows = XLSX.utils.sheet_to_json(currentJobPackageImportWorkbook.Sheets[names[0]], {
-defval:'', raw:false, blankrows:false
-});
-if(!rows.length) throw new Error('No completed rows were found.');
 configureJobPacketMappings(Object.keys(rows[0]));
 if(
 $('jobPackageFormCard').contains($('jobPackageImportForm')) &&
@@ -7286,10 +7425,13 @@ $('jobPackageName').value = String(file.name || '')
 .replace(/\.[^.]+$/, '')
 .trim();
 }
+return true;
 }catch(error){
+if(readToken !== currentJobPackageImportReadToken) return false;
 currentJobPackageImportWorkbook = null;
 currentJobPackageImportFilename = null;
 alert('Unable to read packet: ' + error.message);
+return false;
 }
 }
 $('jobPackageImportFile').onchange = async event => {
@@ -7304,7 +7446,7 @@ if(!confirm(
 const button = $('confirmJobPackageImportBtn');
 button.disabled = true;
 button.textContent = 'Importing...';
-const { data, error } = await sb.rpc('import_job_package_units', {
+const { data, error } = await sb.rpc('finalize_job_package_spreadsheet_import', {
 p_package_id:currentOpenJobPackage.id,
 p_rows:currentJobPackageImportRows.map(({errors, ...row}) => row),
 p_source_filename:currentJobPackageImportFilename
@@ -7314,7 +7456,19 @@ if(error){
 button.textContent = 'Confirm Import';
 return alert('Nothing was imported: ' + error.message);
 }
-alert(`${data?.imported_rows || currentJobPackageImportRows.length} authorized unit rows imported.`);
+const importedStatus = String(data?.status || data?.package_status || '').toLowerCase();
+if(importedStatus !== 'active'){
+button.textContent = 'Confirm Import';
+return alert(
+'The authorized rows were processed, but LineCrew Pro could not confirm that the ' +
+'job jacket became active. Reopen the existing job and package before retrying.'
+);
+}
+currentOpenJobPackage.status = importedStatus;
+alert(
+`${data?.imported_rows || currentJobPackageImportRows.length} authorized unit rows imported. ` +
+'The job jacket is active and available to assigned Foremen.'
+);
 const inlineCreation =
 $('jobPackageFormCard').contains($('jobPackageImportForm'));
 resetJobPackageImport();
@@ -7431,9 +7585,11 @@ review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
 review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
 '<p class="muted">Analyzing ' + chunks.length +
 ' page groups, three at a time. Nothing has been added to the job yet.</p>';
-await Promise.all(
+const analysisResults = await Promise.allSettled(
 Array.from({ length:Math.min(3, chunks.length) }, () => analyzeNextChunk())
 );
+const failedAnalysis = analysisResults.find(result => result.status === 'rejected');
+if(failedAnalysis) throw failedAnalysis.reason;
 const supported = parsedChunks.filter(chunk =>
 chunk?.status === 'supported' && chunk?.provider_key === 'oncor' &&
 Array.isArray(chunk?.rows) && chunk.rows.length
@@ -7572,6 +7728,36 @@ alert('Nothing was imported: ' + error.message);
 function fileNameWithoutExtension(value){
 return String(value || 'Job Packet').replace(/\.[^.]+$/, '');
 }
+function jobPacketFileValidationMessage(file){
+if(!file) return '';
+const filename = String(file.name || '').trim();
+if(!/\.(pdf|csv|tsv|txt|xlsx|xls|ods)$/i.test(filename)){
+return 'Choose a PDF, Excel, CSV, TSV, TXT or ODS job jacket.';
+}
+if(/\.pdf$/i.test(filename) && Number(file.size || 0) > 20 * 1024 * 1024){
+return 'The PDF job jacket must be 20 MB or smaller.';
+}
+return '';
+}
+async function handleJobPacketFileForJob(job, file){
+const fileError = jobPacketFileValidationMessage(file);
+if(fileError){
+alert(fileError);
+return false;
+}
+if(!job?.id || !file) return false;
+currentOpenJobId = job.id;
+if(!document.getElementById('job-packages-' + job.id)){
+showJobDetail(job, false);
+}
+if(file.name.toLowerCase().endsWith('.pdf')){
+await parsePdfJobPacketForJob(job, file);
+return true;
+}
+showJobPackageForm(job, { inline:true, fileName:file.name });
+await handleJobPackageImportFile(file);
+return true;
+}
 function chooseJobPacketFileForJob(job){
 const fileInput = document.createElement('input');
 fileInput.type = 'file';
@@ -7579,12 +7765,7 @@ fileInput.accept = '.pdf,.csv,.tsv,.txt,.xlsx,.xls,.ods';
 fileInput.onchange = async () => {
 const file = fileInput.files?.[0];
 if(!file) return;
-if(file.name.toLowerCase().endsWith('.pdf')){
-await parsePdfJobPacketForJob(job, file);
-return;
-}
-showJobPackageForm(job, { inline:true, fileName:file.name });
-await handleJobPackageImportFile(file);
+await handleJobPacketFileForJob(job, file);
 };
 fileInput.click();
 }
@@ -7741,7 +7922,9 @@ await previewJobPackageImport();
 async function editJob(job){
 $('createJobCard').dataset.jobId = job.id;
 $('createJobCard').querySelector('h2').textContent = 'Edit Job';
-$('createJobBtn').textContent = 'Save Changes';
+resetCreateJobPacketSelection();
+$('createJobPacketField').classList.add('hidden');
+updateCreateJobActionLabel();
 $('jobNumber').value = job.job_number || '';
 $('jobName').value = job.job_name || '';
 await loadJobContractOptions(job.contract_id || '');
@@ -8562,7 +8745,7 @@ const summarySheet=XLSX.utils.aoa_to_sheet(summary); summarySheet['!cols']=[{wch
 XLSX.utils.book_append_sheet(workbook,summarySheet,completeBillingSheetName('Job Summary',usedSheets));
 const historySheet=XLSX.utils.json_to_sheet(batchHistory); historySheet['!cols']=[18,18,14,22,22,22,26,24,16,14,16,20,32,40,12].map(wch=>({wch}));
 XLSX.utils.book_append_sheet(workbook,historySheet,completeBillingSheetName('Batch History',usedSheets));
-const revisionRows=packages.map(item=>({'Revision':Number(item.revision_number || 1),'Package Name':item.package_name || '',
+const revisionRows=packages.map(item=>({'Revision':jobPackageRevisionLabel(item),'Package Name':item.package_name || '',
 'Package / Reference Number':item.package_number || '','Status':String(item.status || '').toUpperCase(),
 'Received Date':item.received_date || '','Source File':item.source_filename || '',
 'Supersedes Package ID':item.supersedes_package_id || '','Created':item.created_at || '','Notes':item.notes || ''}));
@@ -8610,7 +8793,7 @@ if(attachments.length) pdfLine('Attachments: '+attachments.map(item=>item.origin
 y-=6;
 });
 pdfLine('Utility Packet Revision History',{bold:true,size:12,gap:18});
-packages.forEach(item=>pdfLine('Revision '+Number(item.revision_number || 1)+' | '+(item.package_name || item.package_number || 'Utility Job Packet')+' | '+String(item.status || '').toUpperCase()+' | '+(item.source_filename || 'No source filename'),{size:8}));
+packages.forEach(item=>pdfLine(jobPackageRevisionLabel(item)+' | '+(item.package_name || item.package_number || 'Utility Job Packet')+' | '+String(item.status || '').toUpperCase()+' | '+(item.source_filename || 'No source filename'),{size:8}));
 const pdfBytes=await pdf.save();
 if(exportType==='pdf'){
 downloadGeneratedBlob(new Blob([pdfBytes],{type:'application/pdf'}),fileStem+'.pdf');
@@ -8698,7 +8881,7 @@ answer:'Every LineCrew Pro role can choose Desktop View from the profile card on
 },
 {
 terms:['add job','new job','create job','start job','job setup','import jobs','upload jobs','bulk jobs'],
-answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General Foreman and a Superintendent with Jobs permission use Jobs & Crew Progress. Choose + Create Job, enter the job number/name and correct Contract, then save. There is no separate bulk Job-file import in this release. Utility Job Package authorized-unit import belongs to an existing Job and does not create Jobs. Foremen use Assigned Jobs and see only active jobs assigned to them.'
+answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General Foreman and a Superintendent with Jobs permission use Jobs & Crew Progress. Choose + Create Job, enter the job number/name and correct Contract, then optionally choose the PDF, Excel or CSV Job Jacket / Utility Packet. Create Job & Review Jacket creates the job first and opens the required packet review; nothing imports until you confirm it. A jacket can also be added later from + Add Job Packet. Assign the job to its Foreman so it appears in Daily Reports and Remaining Units.'
 },
 {
 terms:['add admin','more admins','new admin','promote admin','make admin'],
@@ -8714,7 +8897,7 @@ answer:'To upload pricing for a new Price Book: open Price Books, choose + Add P
 },
 {
 terms:['job packet','utility packet','work point','pole packet','authorized units','normal units','import package','percent complete'],
-answer:'Open Jobs, select the existing job, choose + Add Utility Package, enter the package details, then choose Save & Import Authorized Units. The saved package opens its CSV/Excel import immediately. Select the file/worksheet; map work point, description, unit code, work type and authorized quantities; preview and confirm. Imported authorized units define normal/authorized production, identify excess or unlisted redlines, reconcile Pending Job Units and calculate reported/approved job completion percentage.'
+answer:'When creating a job, choose its optional Job Jacket / Utility Packet and then Create Job & Review Jacket. For an existing job, choose + Add Job Packet. PDF jackets open a structured review; Excel/CSV jackets open worksheet and column mapping for work point, description, unit code, work type and authorized quantities. Nothing imports until confirmation. A confirmed packet becomes the active authorization baseline, feeds Foreman jacket-unit choices and Remaining Units, identifies redlines or Pending Packet work, and drives Admin reported, approved and remaining progress.'
 },
 {
 terms:['remaining units','units left','what is left','left on job','left at work point','crew time tab'],
@@ -15262,6 +15445,7 @@ notes,
 status,
 archived,
 review_notes,
+reviewed_at,
 storm_mode,
 storm_event_name,
 jobs (
@@ -16188,12 +16372,19 @@ $('dailyUnitList').innerHTML =
 $('dailyUnitValueSummary').innerHTML = '';
 $('dailyUnitReviewActions').innerHTML = '';
 $('dailyUnitReviewActions').classList.add('hidden');
+$('dailyAuthorizedUnitPanel').classList.add('hidden');
+$('dailyAuthorizedUnitHelp').textContent = '';
+$('dailyAuthorizedUnitChoices').innerHTML = '';
 $('productionList').classList.add('hidden');
 $('productionEmpty').classList.add('hidden');
-const [catalogResult, savedResult, usageResult] = await Promise.all([
+const authorizedRowsRequest = canEditDraft && report.job_id
+? sb.rpc('get_remaining_job_units_for_field', { p_job_id:report.job_id })
+: Promise.resolve({ data:[], error:null });
+const [catalogResult, savedResult, usageResult, authorizedResult] = await Promise.all([
 sb.rpc('get_daily_report_unit_catalog', { p_report_id:report.id }),
 sb.rpc('get_daily_report_unit_locations_v2', { p_report_id:report.id }),
-sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id })
+sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id }),
+authorizedRowsRequest
 ]);
 if(catalogResult.error || savedResult.error || usageResult.error){
 $('dailyUnitEditor').classList.add('hidden');
@@ -16207,6 +16398,8 @@ return;
 }
 currentDailyUnitCatalog = catalogResult.data || [];
 currentDailySavedUnits = savedResult.data || [];
+currentDailyAuthorizedRows = authorizedResult.data || [];
+currentDailyAuthorizedLoadError = authorizedResult.error?.message || '';
 currentDailyUnitUsageMemory = new Map(
 (usageResult.data || []).map(usage => [
 String(usage.item_code || '').trim().toLowerCase(),
@@ -16219,6 +16412,7 @@ lastUsed:usage.last_used || null
 renderDailyPoleLocationOptions();
 addDailyUnitBatchRows(10);
 renderDailyUnitEditor();
+renderDailyAuthorizedUnitsForLocation();
 renderDailyUnitReviewActions(report);
 $('dailyUnitPoleLocation').focus();
 $('dailyUnitEditor').scrollIntoView({ behavior:'smooth' });
@@ -16423,15 +16617,170 @@ $('dailyUnitList').appendChild(poleCard);
 });
 renderDailyUnitTotals();
 }
+function dailyWorkPointKey(value){
+const location = String(value || '').trim();
+return normalizeJobPacketPoint(location) || location.toLowerCase();
+}
+function findDailySavedUnitAtLocation(priceBookItemId, location){
+const locationKey = dailyWorkPointKey(location);
+return currentDailySavedUnits.find(saved =>
+String(saved.price_book_item_id || '') === String(priceBookItemId || '') &&
+dailyWorkPointKey(saved.pole_location) === locationKey
+);
+}
 function renderDailyPoleLocationOptions(){
-const locations = [...new Set(
-currentDailySavedUnits
-.map(item => String(item.pole_location || '').trim())
+const locationsByKey = new Map();
+[
+...currentDailySavedUnits.map(item => item.pole_location),
+...currentDailyAuthorizedRows
+.filter(item => dailyAuthorizedQuantityAvailable(item) > 0)
+.map(item => item.work_point_code)
+]
+.map(value => String(value || '').trim())
 .filter(Boolean)
-)].sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
+.forEach(location => {
+const key = dailyWorkPointKey(location);
+if(!locationsByKey.has(key)) locationsByKey.set(key, location);
+});
+const locations = [...locationsByKey.values()]
+.sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
 $('dailyUnitPoleLocations').innerHTML = locations
 .map(location => '<option value="' + escapeHtml(location) + '"></option>')
 .join('');
+}
+function dailyQuantityText(value){
+const quantity = Number(value || 0);
+if(!Number.isFinite(quantity)) return '0';
+return Number.isInteger(quantity)
+? String(quantity)
+: quantity.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+function authorizedDailyWorkType(value){
+return String(value || '').toLowerCase() === 'remove'
+? 'retirement'
+: String(value || '').toLowerCase();
+}
+function dailyReportIsReturnedDraft(report){
+return String(report?.status || '').toLowerCase() === 'draft' &&
+(
+Boolean(report?.reviewed_at) ||
+Boolean(String(report?.review_notes || '').trim())
+);
+}
+function returnedDraftSavedAuthorizedQuantity(authorized){
+if(!dailyReportIsReturnedDraft(currentDailyUnitReport)) return 0;
+const locationKey = normalizeJobPacketPoint(authorized.work_point_code);
+const unitCode = String(authorized.unit_code || '').trim().toLowerCase();
+const quantityField = authorizedDailyWorkType(authorized.work_type) === 'retirement'
+? 'retirement_quantity'
+: authorizedDailyWorkType(authorized.work_type) + '_quantity';
+return currentDailySavedUnits.reduce((total, item) => {
+if(
+normalizeJobPacketPoint(item.pole_location) !== locationKey ||
+String(item.item_code || '').trim().toLowerCase() !== unitCode
+){
+return total;
+}
+return total + Number(item[quantityField] || 0);
+}, 0);
+}
+function dailyAuthorizedQuantityAvailable(authorized){
+return Math.max(
+Number(authorized.remaining_quantity || 0) -
+returnedDraftSavedAuthorizedQuantity(authorized),
+0
+);
+}
+function renderDailyAuthorizedUnitsForLocation(){
+const panel = $('dailyAuthorizedUnitPanel');
+const help = $('dailyAuthorizedUnitHelp');
+const choices = $('dailyAuthorizedUnitChoices');
+choices.innerHTML = '';
+if(!userCanEditDailyReportDraft(currentDailyUnitReport)){
+panel.classList.add('hidden');
+return;
+}
+panel.classList.remove('hidden');
+if(currentDailyAuthorizedLoadError){
+help.textContent =
+'Authorized jacket units could not be loaded: ' + currentDailyAuthorizedLoadError;
+return;
+}
+if(!currentDailyAuthorizedRows.length){
+help.textContent =
+'This job does not have an active authorized-unit jacket yet. ' +
+'You can still enter completed work; it will be marked Pending Packet or Redline for review.';
+return;
+}
+const location = $('dailyUnitPoleLocation').value.trim();
+if(!location){
+const remainingPoints = new Set(
+currentDailyAuthorizedRows
+.filter(item => dailyAuthorizedQuantityAvailable(item) > 0)
+.map(item => normalizeJobPacketPoint(item.work_point_code))
+).size;
+help.textContent = remainingPoints
+? 'Choose one of the jacket work points above to load its authorized units.'
+: (dailyReportIsReturnedDraft(currentDailyUnitReport)
+? 'All authorized units are already entered on this returned draft or reported elsewhere.'
+: 'All authorized units in this job jacket have already been reported.');
+return;
+}
+const locationKey = normalizeJobPacketPoint(location);
+const matching = currentDailyAuthorizedRows.filter(item =>
+normalizeJobPacketPoint(item.work_point_code) === locationKey &&
+dailyAuthorizedQuantityAvailable(item) > 0
+);
+if(!matching.length){
+help.textContent =
+'No authorized quantity remains at this work point. ' +
+'You can still enter field changes for Redline review.';
+return;
+}
+help.textContent =
+'Select a jacket unit to add it below. Its work type and remaining quantity are shown here.';
+matching.forEach(authorized => {
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'secondary small';
+button.textContent =
+String(authorized.unit_code || 'Unit') + ' — ' +
+dailyUnitWorkTypeLabel(authorizedDailyWorkType(authorized.work_type)) +
+' — ' + dailyQuantityText(dailyAuthorizedQuantityAvailable(authorized)) + ' left';
+button.onclick = () => addAuthorizedDailyUnit(authorized, button);
+choices.appendChild(button);
+});
+}
+async function addAuthorizedDailyUnit(authorized, button){
+const catalogItem = currentDailyUnitCatalog.find(item =>
+String(item.item_code || '').trim().toLowerCase() ===
+String(authorized.unit_code || '').trim().toLowerCase()
+);
+if(!catalogItem){
+return alert(
+'Unit ' + authorized.unit_code +
+' is authorized in the job jacket but is not in this Daily Report Price Book. ' +
+'Ask an Admin to verify the job Price Book.'
+);
+}
+let batchRow = currentDailyUnitBatchRows.find(row =>
+!row.selectedItem && !row.searchInput.value.trim() && !row.quantityInput.value.trim()
+);
+if(!batchRow){
+createDailyUnitBatchRow();
+batchRow = currentDailyUnitBatchRows[currentDailyUnitBatchRows.length - 1];
+}
+button.disabled = true;
+await selectDailyBatchUnit(batchRow, catalogItem);
+button.disabled = false;
+batchRow.actionInput.value = authorizedDailyWorkType(authorized.work_type);
+batchRow.selection.insertAdjacentHTML(
+'beforeend',
+'<div class="muted">From job jacket: ' +
+escapeHtml(dailyQuantityText(dailyAuthorizedQuantityAvailable(authorized))) +
+' remaining</div>'
+);
+batchRow.quantityInput.focus();
 }
 function shortDailyUnitLabel(item){
 const text = String(item.item_name || item.description || 'Unnamed Unit').trim();
@@ -16660,15 +17009,17 @@ alert('Enter a quantity greater than zero on completed line ' + (index + 1) + '.
 row.quantityInput.focus();
 return false;
 }
-const key = row.selectedItem.price_book_item_id + '|' + location.toLowerCase();
-if(!grouped.has(key)){
-const existing = currentDailySavedUnits.find(saved =>
-saved.price_book_item_id === row.selectedItem.price_book_item_id &&
-String(saved.pole_location || '').trim().toLowerCase() === location.toLowerCase()
+const existing = findDailySavedUnitAtLocation(
+row.selectedItem.price_book_item_id,
+location
 );
+const persistedLocation = String(existing?.pole_location || '').trim() || location;
+const key = row.selectedItem.price_book_item_id + '|' +
+dailyWorkPointKey(persistedLocation);
+if(!grouped.has(key)){
 grouped.set(key, {
 item:row.selectedItem,
-location,
+location:persistedLocation,
 install:Number(existing?.install_quantity || 0),
 transfer:Number(existing?.transfer_quantity || 0),
 retirement:Number(existing?.retirement_quantity || 0)
@@ -16839,6 +17190,10 @@ await openDailyUnitEditor(currentDailyUnitReport);
 await loadProductionReports();
 }
 $('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(5);
+$('dailyUnitPoleLocation').addEventListener(
+'input',
+renderDailyAuthorizedUnitsForLocation
+);
 $('saveDailyUnitBatchBtn').onclick = saveDailyUnitBatch;
 async function offerForemanSubmitAfterUnits(report){
 if(!report || currentUserRole() !== 'foreman') return;
@@ -16900,6 +17255,8 @@ bottomDoneButton.textContent = 'Done Adding Units';
 $('dailyUnitEditor').classList.add('hidden');
 currentDailyUnitCatalog = [];
 currentDailySavedUnits = [];
+currentDailyAuthorizedRows = [];
+currentDailyAuthorizedLoadError = '';
 currentDailyUnitUsageMemory = new Map();
 currentDailyUnitReport = null;
 currentDailyUnitBatchRows = [];
@@ -17317,6 +17674,8 @@ created_by,
 foreman_id,
 archived,
 price_book_id,
+review_notes,
+reviewed_at,
 jobs (
 job_number,
 job_name
@@ -17664,7 +18023,7 @@ alert('LineCrew Pro could not start: ' + (error?.message || 'Unknown error'));
 }
 startApp();
 </script>
-<script src="expanded-jsa.js?v=20260829e"></script>
+<script src="expanded-jsa.js?v=20260901a"></script>
 <script>
 (function () {
 var installPrompt = null;
