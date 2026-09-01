@@ -4,17 +4,17 @@
 
 Packet extraction is a draft. It never changes a job's authorized production until an authorized user reviews the source rows and chooses **Import Reviewed Contractor Units**.
 
-Unsupported or uncertain formats return no rows. A new utility/co-op format must get its own versioned profile and fixture tests; it must not inherit Oncor column meaning by guesswork.
+The adaptive extractor reads unfamiliar utility/co-op layouts into the same canonical review rows. It uses document labels and table meaning instead of inheriting Oncor column meaning. Ambiguous rows remain excluded or require review; unfamiliar branding alone is never a reason to reject a packet.
 
 ## Canonical source row
 
 | Field | Meaning |
 | --- | --- |
-| `provider_key` | Detected utility profile (`oncor` in v1) |
+| `provider_key` | Detected utility/co-op slug, or `unknown` when branding is unavailable |
 | `format_key` | Detected document layout |
 | `source_page` | One-based PDF page for audit/review |
 | `work_point_code` | Utility location; Oncor `Station` |
-| `work_type` | `install` or `remove` |
+| `work_type` | `install`, `transfer` or `remove` |
 | `material_cu` | Utility material/storeroom code; never a production unit |
 | `contractor_unit_code` | Contractor production/pay unit matched to the contract Price Book |
 | `estimated_quantity` | Designed quantity from the utility packet |
@@ -62,6 +62,6 @@ For the reviewed Station 0014 example, the expected consolidated production rows
 - Superintendent: the same workflow when the relevant `jobs` and `job_packages` capabilities are enabled.
 - Foreman: assigned-job field reporting only; cannot create jobs or import packets.
 
-## Adding another utility
+## Unfamiliar utilities and layouts
 
-A new profile must define positive detection evidence, page/table selection, work-point mapping, production-code mapping, material-code handling, work-type mapping, quantity meaning, exclusion rules, and known fixture totals. If detection is not decisive, return `unsupported` or `uncertain`; never silently fall back to Oncor.
+The adaptive profile identifies page/table selection, work-point mapping, production-code mapping, material-code handling, work-type mapping, and authorized quantity meaning from the packet itself. Every extracted row remains a draft until an authorized user reviews it, and every included production unit must match the job's active contract Price Book before finalization. Provider-specific fixtures should still be added as real packet examples become available so recurring formats receive regression coverage.
