@@ -5885,7 +5885,12 @@ const roleLabel = document.createElement('label');
 roleLabel.textContent = 'Former Owner’s new role';
 const roleSelect = document.createElement('select');
 roleSelect.className = 'team-role-select';
-[['admin','Admin'],['superintendent','Superintendent'],['gf','General Foreman'],['foreman','Foreman']].forEach(([value,label]) => {
+// A replaced Owner stays an Admin so they keep sight of their own removal:
+// audit_log is readable only by Owner and Admin, so any lower role would hide
+// the record of who took ownership from the person it happened to. The new
+// Owner can lower it afterwards from the normal role controls, which writes a
+// separate audit row under a different actor.
+[['admin','Admin']].forEach(([value,label]) => {
 const option = document.createElement('option');
 option.value = value;
 option.textContent = label;
@@ -5893,6 +5898,12 @@ roleSelect.appendChild(option);
 });
 roleLabel.appendChild(roleSelect);
 details.appendChild(roleLabel);
+const roleNote = document.createElement('p');
+roleNote.className = 'muted';
+roleNote.textContent =
+'The former Owner stays an Admin so they can still see the record of this change. '
++ 'You can lower their role afterwards from their team row.';
+details.appendChild(roleNote);
 const button = document.createElement('button');
 button.className = 'warning small';
 button.textContent = 'Change Owner & Transfer Ownership';
