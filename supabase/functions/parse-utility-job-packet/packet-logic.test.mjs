@@ -93,6 +93,43 @@ assert.equal(
   "An alphanumeric location must remain intact and must not be interpreted as a work action.",
 );
 
+const normalizedUncertainRows = normalizePacketExtraction(supported({
+  status:"uncertain",
+  batch_disposition:"needs_review",
+  provider_key:"united-cooperative-services",
+  confidence:0.72,
+  rows:[{
+    ...supported().rows[0],
+    work_point_code:"R3",
+    contractor_unit_code:"C4 7/1",
+    review_note:"Confirm this visible code against the contract Price Book.",
+  }],
+}), context);
+assert.equal(normalizedUncertainRows.status, "supported");
+assert.equal(normalizedUncertainRows.batch_disposition, "supported_rows");
+assert.equal(normalizedUncertainRows.rows.length, 1);
+assert.equal(normalizedUncertainRows.rows[0].work_point_code, "R3");
+assert.equal(
+  assessPacketExtraction(normalizedUncertainRows, context).valid,
+  true,
+  "Extracted uncertain rows must reach mandatory review instead of being discarded.",
+);
+
+let uncertainReviewCalls = 0;
+const uncertainReviewRun = await runPacketModelFallback({
+  primaryModel:"gpt-5.4-mini",
+  fallbackModel:"gpt-5.4",
+  analyze:async () => {
+    uncertainReviewCalls += 1;
+    return { parsed:normalizedUncertainRows, error:null };
+  },
+  assess:parsed => assessPacketExtraction(parsed, context),
+});
+assert.equal(uncertainReviewCalls, 2, "Low-confidence review rows must receive the full-model verification pass.");
+assert.equal(uncertainReviewRun.assessment.valid, true);
+assert.equal(uncertainReviewRun.parsed.status, "supported");
+assert.equal(uncertainReviewRun.parsed.rows.length, 1);
+
 const normalizedUnsafeQuantity = normalizePacketExtraction(supported({
   confidence:4,
   rows:[{ ...supported().rows[0], estimated_quantity:0 }],
