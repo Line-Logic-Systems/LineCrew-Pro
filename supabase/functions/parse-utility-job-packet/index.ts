@@ -25,18 +25,21 @@ class PacketParseError extends Error {
   code: string;
   status: number;
   retryOriginal: boolean;
+  retrySmaller: boolean;
 
   constructor(
     message: string,
     code = "packet_parse_failed",
     status = 400,
     retryOriginal = false,
+    retrySmaller = false,
   ) {
     super(message);
     this.name = "PacketParseError";
     this.code = code;
     this.status = status;
     this.retryOriginal = retryOriginal;
+    this.retrySmaller = retrySmaller;
   }
 }
 
@@ -169,6 +172,7 @@ function upstreamPacketError(response: Response, upstreamBody: string, requestId
 Deno.serve(async (request) => {
   const requestId = crypto.randomUUID();
   const requestStartedAt = Date.now();
+  let requestedPageCount = 0;
   const origin = request.headers.get("Origin") || "";
   if (origin && !allowedOrigins.has(origin)) {
     return new Response(JSON.stringify({ error: "Origin not allowed." }), {
@@ -211,6 +215,7 @@ Deno.serve(async (request) => {
     const pageCount = Number.isInteger(suppliedPageCount) && suppliedPageCount > 0
       ? suppliedPageCount
       : Math.min(2, totalPages - pageOffset);
+    requestedPageCount = pageCount;
     if (!filename.toLowerCase().endsWith(".pdf")) throw new Error("This parser accepts PDF job packets only.");
     if (!/^data:application\/pdf;base64,[a-z0-9+/=\r\n]+$/i.test(fileData)) throw new Error("The PDF data is invalid.");
     const estimatedBytes = Math.floor((fileData.length - fileData.indexOf(",") - 1) * 0.75);
@@ -262,7 +267,7 @@ Deno.serve(async (request) => {
             { type: "input_file", filename, file_data: fileData, detail: "high" },
             { type: "input_text", text: "Identify this packet and extract all supported authorized-unit source rows. Return no rows unless the provider/format is supported with confidence." },
           ] }],
-          reasoning: { effort: "medium" },
+          reasoning: { effort: attempt === "primary" ? "low" : "medium" },
           text: { format: { type: "json_schema", name: "utility_packet", strict: true, schema: packetSchema } },
           max_output_tokens: 30000,
           store: false,
@@ -370,6 +375,7 @@ Deno.serve(async (request) => {
     const timeout = error instanceof DOMException && error.name === "TimeoutError";
     const code = timeout ? "packet_analyzer_timeout" : packetError?.code || "packet_parse_failed";
     const status = timeout ? 504 : packetError?.status || 400;
+    const retrySmaller = requestedPageCount > 1 && (timeout || packetError?.retryOriginal === true || packetError?.retrySmaller === true);
     console.error(JSON.stringify({
       event: "packet_parse_failed",
       request_id: requestId,
@@ -381,6 +387,7 @@ Deno.serve(async (request) => {
       code,
       request_id: requestId,
       retry_original: packetError?.retryOriginal === true,
+      retry_smaller: retrySmaller,
     }), {
       status, headers: { ...corsHeaders(request), "Content-Type": "application/json" },
     });

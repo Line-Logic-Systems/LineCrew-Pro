@@ -7723,7 +7723,7 @@ return [...new Uint8Array(digest)]
 .map(value => value.toString(16).padStart(2, '0'))
 .join('');
 }
-async function splitPdfForPacketImport(file, pagesPerChunk = 5){
+async function splitPdfForPacketImport(file, pagesPerChunk = 3){
 if(!window.PDFLib?.PDFDocument){
 throw new Error('The PDF page reader did not load. Refresh and try again.');
 }
@@ -7762,7 +7762,8 @@ const supportCode = detail.request_id
 return {
 message:detail.error + supportCode,
 code:String(detail.code || 'packet_parse_failed'),
-retryOriginal:detail.retry_original === true
+retryOriginal:detail.retry_original === true,
+retrySmaller:detail.retry_smaller === true
 };
 }
 }catch(contextError){
@@ -7771,7 +7772,8 @@ retryOriginal:detail.retry_original === true
 return {
 message:error?.message || 'The packet could not be analyzed.',
 code:'packet_request_failed',
-retryOriginal:false
+retryOriginal:false,
+retrySmaller:false
 };
 }
 async function packetFunctionErrorMessage(error){
@@ -7813,12 +7815,22 @@ if(!failedCount){
 return { parsedChunks, retriedOriginal:false, failedCount:0 };
 }
 const nonRetryableFailure = failedChunks.find(error =>
-error && error.retryOriginal === false
+error && error.retryOriginal === false && error.retrySmaller !== true
 );
 if(nonRetryableFailure) throw nonRetryableFailure;
 onProgress(completedChunks, chunks.length, null, true, completedPages);
-const originalResult = await analyzeOriginal(failedChunks.filter(Boolean));
-return { parsedChunks:[originalResult], retriedOriginal:true, failedCount };
+const recoveryResult = await analyzeOriginal(failedChunks.filter(Boolean));
+if(recoveryResult && Array.isArray(recoveryResult.parsedChunks)){
+return {
+parsedChunks:recoveryResult.retryMode === 'original'
+? recoveryResult.parsedChunks
+: [...parsedChunks.filter(Boolean), ...recoveryResult.parsedChunks],
+retriedOriginal:recoveryResult.retryMode === 'original',
+retriedSmaller:recoveryResult.retryMode === 'smaller',
+failedCount
+};
+}
+return { parsedChunks:[recoveryResult], retriedOriginal:true, retriedSmaller:false, failedCount };
 }
 async function parsePdfJobPacketForJob(job, file){
 const packageContainer = document.getElementById('job-packages-' + job.id);
@@ -7853,6 +7865,9 @@ const detail = await packetFunctionErrorDetails(error);
 const packetError = new Error(detail.message);
 packetError.code = detail.code;
 packetError.retryOriginal = detail.retryOriginal;
+packetError.retrySmaller = detail.retrySmaller;
+packetError.pageOffset = packet.page_offset;
+packetError.pageCount = packet.page_count;
 throw packetError;
 }
 if(data?.error) throw new Error(data.error);
@@ -7868,8 +7883,28 @@ const analysis = await analyzePacketPageGroupsWithFallback(
 chunks,
 analyzePacketData,
 async failedChunks => {
+if(failedChunks.every(error => error?.retrySmaller === true && Number(error?.pageCount) > 1)){
+review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+'<p class="muted">Some dense pages need a closer look. Rechecking only those pages in smaller groups. Nothing has been added to the job yet.</p>';
+const singlePages = await splitPdfForPacketImport(file, 1);
+const retryPages = singlePages.filter(page => failedChunks.some(error =>
+page.page_offset >= Number(error.pageOffset) &&
+page.page_offset < Number(error.pageOffset) + Number(error.pageCount)
+));
+const smallerAnalysis = await analyzePacketPageGroupsWithFallback(
+retryPages,
+analyzePacketData,
+async remainingFailures => { throw remainingFailures.find(Boolean); },
+(completed, total) => {
+review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+'<p class="muted">Rechecked ' + completed + ' of ' + total +
+' dense pages. Nothing has been added to the job yet.</p>';
+}
+);
+return { parsedChunks:smallerAnalysis.parsedChunks, retryMode:'smaller' };
+}
 try{
-return await analyzePacketData(await originalPacket());
+return { parsedChunks:[await analyzePacketData(await originalPacket())], retryMode:'original' };
 }catch(error){
 const firstFailure = failedChunks.find(Boolean);
 const supportDetail = /Support code:/i.test(String(error?.message || ''))
@@ -7885,7 +7920,7 @@ supportDetail
 (completedChunks, chunkCount, chunk, retrying, completedPages) => {
 if(retrying){
 review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
-'<p class="muted">A page group could not be read. Retrying the untouched original PDF once. Nothing has been added to the job yet.</p>';
+'<p class="muted">Rechecking slow or unclear pages automatically. Nothing has been added to the job yet.</p>';
 return;
 }
 review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
@@ -7921,6 +7956,14 @@ parsed.warnings.unshift(
 'The page-group analysis was retried using the untouched original PDF.'
 );
 }
+if(analysis.retriedSmaller){
+parsed.warnings.unshift(
+'Dense page groups were automatically rechecked one page at a time.'
+);
+}
+parsed.rows.sort((left,right) =>
+Number(left.source_page || 0) - Number(right.source_page || 0)
+);
 review.innerHTML = '<strong>Saving packet review…</strong>';
 const { data:staged, error:stageError } = await sb.rpc(
 'create_and_stage_utility_packet_import',
