@@ -112,6 +112,6 @@ for(const block of latest.values()){
   generated += 1;
 }
 out+='commit;\n';
-fs.writeFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql',out);
+fs.writeFileSync('supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql',out);
 console.log(`Generated Superintendent compatibility for ${generated} functions.`);
 for(const b of latest.values()) console.log('-',b.fn,b.cap,'<-',b.source);

@@ -17,10 +17,10 @@ const roster = read('timekeeping-roster.js');
 const gfScope = read('gf-crew-scope.js');
 const polish = read('app-polish.js');
 const index = read('index.html');
-const weeklyMigration = read('supabase/migrations/20260826_weekly_ot_company_week_start_and_draft_cleanup.sql');
-const adminEditMigration = read('supabase/migrations/20260826070000_admin_timekeeping_edits.sql');
-const gfMigration = read('supabase/migrations/20260826090000_gf_foreman_scope_and_scoped_jsas.sql');
-const hardeningMigration = read('supabase/migrations/20260826101500_post_e2e_timekeeping_hardening.sql');
+const weeklyMigration = read('supabase/migrations/archive/20260826_weekly_ot_company_week_start_and_draft_cleanup.sql');
+const adminEditMigration = read('supabase/migrations/archive/20260826070000_admin_timekeeping_edits.sql');
+const gfMigration = read('supabase/migrations/archive/20260826090000_gf_foreman_scope_and_scoped_jsas.sql');
+const hardeningMigration = read('supabase/migrations/archive/20260826101500_post_e2e_timekeeping_hardening.sql');
 
 // Payroll rules exercised in the full field -> GF -> Admin test.
 requireText(payroll, 'total>24', 'Payroll exception guard must only flag impossible >24-hour days.');

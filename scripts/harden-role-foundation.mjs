@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-const path = 'supabase/migrations/20260818_owner_superintendent_roles.sql';
+const path = 'supabase/migrations/archive/20260818_owner_superintendent_roles.sql';
 let sql = fs.readFileSync(path,'utf8');
 const changes=[];
 function r(before,after,label){

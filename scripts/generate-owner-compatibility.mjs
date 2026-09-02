@@ -48,6 +48,6 @@ for(const block of unique.values()){
   out += `-- Source: ${block.source}\n${block.sql}\n\n`;
 }
 out += 'commit;\n';
-fs.writeFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', out);
+fs.writeFileSync('supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql', out);
 console.log(`Generated Owner compatibility for ${unique.size} functions.`);
 for(const block of unique.values()) console.log('-', block.fn, '<-', block.source);
