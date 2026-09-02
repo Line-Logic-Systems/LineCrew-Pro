@@ -41,47 +41,59 @@ jobs:
             --env SUPABASE_DB_URL \
             --volume "$PWD/baseline-work:/work" \
             postgres:17-alpine \
-            sh -ceu '
-              pg_dump \
-                --dbname="$SUPABASE_DB_URL" \
-                --format=custom \
-                --schema-only \
-                --no-owner \
-                --schema=auth \
-                --schema=public \
-                --schema=storage \
-                --file=/work/production-schema.dump
+            pg_dump \
+              --dbname="$SUPABASE_DB_URL" \
+              --format=custom \
+              --schema-only \
+              --no-owner \
+              --schema=auth \
+              --schema=public \
+              --schema=storage \
+              --file=/work/production-schema.dump
 
-              pg_restore --list /work/production-schema.dump > /work/all.list
-              if grep -Eq " TABLE DATA | SEQUENCE SET " /work/all.list; then
-                echo "Schema archive unexpectedly contains data entries." >&2
-                exit 1
-              fi
+          docker run --rm \
+            --volume "$PWD/baseline-work:/work" \
+            postgres:17-alpine \
+            pg_restore --list /work/production-schema.dump \
+            > baseline-work/all.list
+          if grep -Eq " TABLE DATA | SEQUENCE SET " baseline-work/all.list; then
+            echo "Schema archive unexpectedly contains data entries." >&2
+            exit 1
+          fi
 
-              pg_restore --list --schema=public /work/production-schema.dump > /work/public-raw.list
-              awk "\
-                / SCHEMA - public / { print \";\" \\$0; next } \
-                / COMMENT - SCHEMA public / { print \";\" \\$0; next } \
-                / ACL - SCHEMA public / { print \";\" \\$0; next } \
-                / DEFAULT ACL / { print \";\" \\$0; next } \
-                { print } \
-              " /work/public-raw.list > /work/public.list
+          docker run --rm \
+            --volume "$PWD/baseline-work:/work" \
+            postgres:17-alpine \
+            pg_restore --list --schema=public /work/production-schema.dump \
+            > baseline-work/public-raw.list
+          awk '
+            / SCHEMA - public / { print ";" $0; next }
+            / COMMENT - SCHEMA public / { print ";" $0; next }
+            / ACL - SCHEMA public / { print ";" $0; next }
+            / DEFAULT ACL / { print ";" $0; next }
+            { print }
+          ' baseline-work/public-raw.list > baseline-work/public.list
 
-              grep "^;" /work/all.list > /work/linecrew-managed.list
-              awk "\
-                / TRIGGER auth complete_team_invitation_signup / { print; next } \
-                / POLICY storage / { print; next } \
-              " /work/all.list >> /work/linecrew-managed.list
+          grep "^;" baseline-work/all.list > baseline-work/linecrew-managed.list
+          awk '
+            / TRIGGER auth complete_team_invitation_signup / { print; next }
+            / POLICY storage / { print; next }
+          ' baseline-work/all.list >> baseline-work/linecrew-managed.list
 
-              pg_restore --schema-only --no-owner \
-                --use-list=/work/public.list \
-                --file=/work/public.sql \
-                /work/production-schema.dump
-              pg_restore --schema-only --no-owner \
-                --use-list=/work/linecrew-managed.list \
-                --file=/work/managed.sql \
-                /work/production-schema.dump
-            '
+          docker run --rm \
+            --volume "$PWD/baseline-work:/work" \
+            postgres:17-alpine \
+            pg_restore --schema-only --no-owner \
+              --use-list=/work/public.list \
+              --file=/work/public.sql \
+              /work/production-schema.dump
+          docker run --rm \
+            --volume "$PWD/baseline-work:/work" \
+            postgres:17-alpine \
+            pg_restore --schema-only --no-owner \
+              --use-list=/work/linecrew-managed.list \
+              --file=/work/managed.sql \
+              /work/production-schema.dump
 
           {
             echo "-- LineCrew Pro production schema baseline"
