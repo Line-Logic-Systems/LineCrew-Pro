@@ -1265,8 +1265,13 @@ for (const marker of [
 
 // Jacket work points with remaining quantity must be offered in the same
 // Foreman pole/location control as locations already saved on the report.
+// The end marker only bounds the slice compiled below; it is whichever
+// function follows renderDailyPoleLocationOptions. It used to be
+// dailyQuantityText, which has since moved to top level so the Utility Job
+// Package screen can reach it. The compiled region is unchanged:
+// dailyWorkPointKey, findDailySavedUnitAtLocation, renderDailyPoleLocationOptions.
 const dailyLocationStart = html.indexOf('function dailyWorkPointKey');
-const dailyLocationEnd = html.indexOf('function dailyQuantityText', dailyLocationStart);
+const dailyLocationEnd = html.indexOf('function authorizedDailyWorkType', dailyLocationStart);
 if (dailyLocationStart < 0 || dailyLocationEnd < 0) {
   failures.push('Missing executable Foreman jacket work-point renderer.');
 } else {
