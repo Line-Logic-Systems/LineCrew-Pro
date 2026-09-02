@@ -2,16 +2,34 @@
 
 ## The problem
 
-The migration folder and the production database do not agree. Measured on
-2026-09-01 against project `ldgkyxuozbozgkvwzadg`:
+The migration folder and the production database do not agree. Re-measured on
+2026-09-02 against project `ldgkyxuozbozgkvwzadg`:
 
-| | |
-|---|---|
-| Migration files in `supabase/migrations` | 161 |
-| Migrations recorded applied in production | 130 |
-| In the repository, never recorded as applied | 40 |
-| Applied in production, no repository file at all | 9 |
-| Relative order of the shared ones | differs |
+| | 2026-09-01 | 2026-09-02 |
+|---|---|---|
+| Migration files in `supabase/migrations` | 161 | **166** |
+| Migrations recorded applied in production | 130 | **131** |
+| In the repository, never recorded as applied | 40 | **grew by 4** |
+| Applied in production, no repository file at all | 9 | 9 |
+| Relative order of the shared ones | differs | differs |
+
+The gap widened rather than closed. The latest version recorded in production is
+`20260901074150`, but three migrations written since then are **live in the
+database and absent from `schema_migrations`**:
+
+- `20260901100000_return_approved_daily_reports`
+- `20260902030000_stable_packet_review_pagination`
+- `20260902060000_packet_unit_aliases`
+
+Their objects are verifiably present — `utility_packet_unit_aliases` and
+`linecrew_set_packet_unit_alias` both exist — because they were applied by hand
+through the Supabase SQL Editor, which executes the SQL without writing to
+`schema_migrations`. A fourth,
+`20260902090000_index_packet_unit_alias_foreign_keys`, is committed and awaiting
+the same treatment.
+
+That is the habit this document exists to retire: every hand-applied migration
+makes the folder a less accurate description of production, silently.
 
 The 40 unrecorded files include foundational ones — `job_package_foundation`,
 `daily_report_audit_history`, `enforce_privileged_mfa_server_side`. The 9
