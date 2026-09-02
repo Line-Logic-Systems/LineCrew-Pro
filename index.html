@@ -1553,6 +1553,11 @@ content:'Review and ';
    control is reachable without scrolling sideways. */
 .import-table td.smart-check-cell{white-space:normal;min-width:132px}
 .import-table td.smart-check-cell .smart-row-map{display:block;margin-top:6px}
+/* Utility unit codes run long -- "COOP ML 20 - 200A 240V" rendered as
+   "COOP ML" in a default-width input, so the reviewer could not read the code
+   they were about to map or bill. */
+.import-table .smart-row-unit{min-width:180px}
+.import-table .smart-row-point{min-width:96px}
 .import-table{
 width:100%;
 border-collapse:collapse;
@@ -7238,8 +7243,9 @@ panel.innerHTML =
 '</div></div>' +
 '<label for="packetUnitMapTarget">Price Book unit</label>' +
 '<input id="packetUnitMapTarget" list="packetUnitMapOptions" autocomplete="off" ' +
-'placeholder="Start typing a unit code">' +
+'style="width:100%" placeholder="Start typing a unit code">' +
 '<datalist id="packetUnitMapOptions">' + options + '</datalist>' +
+'<div class="packet-unit-map-preview import-summary"></div>' +
 '<p class="muted">' + (units || []).length + ' units in this job’s Price Book.</p>' +
 '<div class="button-row">' +
 '<button type="button" class="success small packet-unit-map-save">Save Mapping</button>' +
@@ -7248,6 +7254,34 @@ panel.innerHTML =
 '</div><p class="packet-unit-map-error import-error"></p>';
 const input = panel.querySelector('#packetUnitMapTarget');
 const errorLine = panel.querySelector('.packet-unit-map-error');
+const preview = panel.querySelector('.packet-unit-map-preview');
+// The input holds the unit code, and a Price Book code can be far longer than
+// the box -- "10-15-25 kVA Conventional Transformer" shows as a fragment. A
+// mapping sets what the work bills at, so the chosen unit and its rates are
+// spelled out here before saving rather than inferred from a truncated field.
+const unitPrice = value =>
+value === null || value === undefined || value === '' ? '—' : '$' + Number(value).toFixed(2);
+const describeTarget = () => {
+const typed = String(input.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+if(!typed){
+preview.textContent = 'Choose the Price Book unit this code bills as.';
+return;
+}
+const unit = (units || []).find(item =>
+String(item.item_code || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === typed
+);
+if(!unit){
+preview.textContent = 'No Price Book unit matches that yet — keep typing or pick from the list.';
+return;
+}
+preview.innerHTML = '<strong>' + escapeHtml(unit.item_code) + '</strong>' +
+(unit.description ? ' · ' + escapeHtml(unit.description) : '') +
+'<br>Install ' + unitPrice(unit.install_price) +
+' · Transfer ' + unitPrice(unit.transfer_price) +
+' · Remove ' + unitPrice(unit.retirement_price);
+};
+input.addEventListener('input', describeTarget);
+describeTarget();
 input.focus();
 const apply = async target => {
 errorLine.textContent = '';
