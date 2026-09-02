@@ -4179,19 +4179,25 @@ return [...document.querySelectorAll('main > section')]
 .find(section => !section.classList.contains('hidden'))?.id ||
 window.location.pathname || 'app';
 }
-function recordTechnicalError(area,code,message){
+async function recordTechnicalError(area,code,message){
 if(!currentProfile?.company_id) return;
 const safeMessage = String(message || 'Unexpected application error').slice(0,300);
 const fingerprint = `${area}|${code}|${safeMessage}`;
 if(fingerprint === lastRecordedError && Date.now()-lastRecordedErrorAt < 10000) return;
 lastRecordedError = fingerprint;
 lastRecordedErrorAt = Date.now();
-void sb.rpc('record_app_error',{
+try{
+const {error} = await sb.rpc('record_app_error',{
 p_area:String(area || 'app').slice(0,60),
 p_error_code:String(code || 'operation_failed').slice(0,80),
 p_page:currentErrorPage().slice(0,100),
 p_message:safeMessage
 });
+if(error) console.warn('Unable to record application error:',error.message);
+}catch(error){
+// Error telemetry must never become another unhandled application error.
+console.warn('Unable to record application error:',error?.message || error);
+}
 }
 function updatePilotFeedbackUi(){
 const isPilot = String(currentCompany?.subscription_status || '').toLowerCase() === 'trial';
