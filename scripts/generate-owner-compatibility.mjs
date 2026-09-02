@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const dir = 'supabase/migrations';
+const dir = 'supabase/migrations/archive';
 const excludedFunctions = new Set([
   // This function's TABLE return shape evolved after the legacy compatibility
   // layer was introduced. Replacing it here can abort with PostgreSQL 42P13.
