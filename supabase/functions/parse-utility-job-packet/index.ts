@@ -86,14 +86,14 @@ const packetSchema = {
 };
 
 const instructions = `
-You extract utility construction job packets for LineCrew Pro. Accuracy is more important than returning rows.
+You extract utility construction job packets for LineCrew Pro. Every row you return is checked by a human reviewer before anything is imported, and unchecked rows import nothing. So accuracy means never inventing a value; it does not mean withholding a row you can see. A visible row described only in warnings is lost work — return it with include_in_import=false and a review_note instead.
 
 Identify the utility/co-op and document layout from branding, headings, labels, and table structure. Extract construction authorization rows from any utility packet; do not require a known provider or a previously seen layout. Set provider_key to a short lowercase provider slug when identifiable, otherwise "unknown". Set format_key to a concise lowercase layout description. profile_version must be exactly ${PROFILE_VERSION} whenever rows are returned.
 
 Set batch_disposition precisely:
 - supported_rows: reliable construction authorization rows were extracted from this page batch, regardless of provider or layout.
 - no_candidate_table: this batch contains a cover, map, drawing, note, summary, material list, completed/as-built report, or other pages with no construction authorization table. Return status=uncertain and no rows. This is not an error and does not need review.
-- needs_review: a possible construction table is present, but scan quality or ambiguous column meaning prevents safe row extraction. Return status=uncertain, no rows, and explain the issue once in warnings.
+- needs_review: a construction table is present, but scan quality or ambiguous column meaning leaves some rows unsettled. Return status=uncertain together with every row you can read, each unsettled row carrying include_in_import=false, lowered confidence, and a review_note naming the doubt. Explain the batch-level issue once in warnings. Return no rows only when nothing on the pages is legible enough to transcribe.
 - unsupported_packet: use only when the document is not a utility construction job packet at all. Never use this merely because the utility or layout is unfamiliar.
 
 ADAPTIVE EXTRACTION PROFILE (${PROFILE_VERSION}):
@@ -103,9 +103,10 @@ ADAPTIVE EXTRACTION PROFILE (${PROFILE_VERSION}):
 - Map the contractor production/pay/billing unit to contractor_unit_code. Labels may include Contractor Unit, Contractor CU, Pay Unit, Billing Unit, Unit Code, Assembly, or a provider-specific equivalent.
 - A material, stock, catalog, or storeroom code belongs in material_cu, not contractor_unit_code. If a row is clearly material-only, retain it for audit with contractor_unit_code empty, include_in_import=false, and an explanatory review_note.
 - If the packet has one plausible unit-code column and no separate material-code column, preserve it as contractor_unit_code but lower confidence and add a review note so the reviewer confirms it against the contract Price Book.
+- Doubt about whether a code matches the contract Price Book is never a reason to withhold a row. The reviewer holds the Price Book and you do not, and the app already blocks import of codes it cannot match. Return the row with the code exactly as displayed, lower confidence, and add a review_note. State price-book uncertainty once per batch in warnings rather than repeating it for each page or column.
 - Normalize work_type to install, transfer, or remove from headings, action columns, quantity columns, or section labels. Keep actions separate.
 - In columnar staking sheets, each column heading may define a separate work point. For example, "1 New OH 0 feet", "R1 Retire OH 129 feet", and "R3 Retire OH 372 feet" have work points 1, R1, and R3; New means install and Retire means remove. Within those columns, prefixes such as N (quantity) and R (quantity) mean install/new and remove/retire. EX generally describes existing/reference equipment and is not an authorized production row unless the packet explicitly identifies it as payable work.
-- If the unit meaning, location, action, or authorized quantity is ambiguous, do not guess. Either exclude that row from import with a review note or return needs_review when no safe row can be produced.
+- If the unit meaning, location, action, or authorized quantity is ambiguous, do not guess and do not discard. Return the row exactly as displayed with include_in_import=false, lowered confidence, and a review_note stating what is unresolved, so the reviewer can settle it against the contract. Withholding the whole batch is a last resort for pages where nothing is legible.
 - Extract every qualifying source row separately. Do not sum duplicates; deterministic database finalization performs consolidation after human review.
 - Never invent a code, quantity, location, description, or missing digit. Lower confidence and add a concise review note when a cell is hard to read.
 - source_page is the one-based PDF page number, not a printed internal page label.
@@ -267,7 +268,7 @@ Deno.serve(async (request) => {
             `batch page number + ${pageOffset}. If this batch contains no candidate construction authorization table, ` +
             `return status=uncertain, batch_disposition=no_candidate_table, and an empty rows array.` +
             (attempt === "fallback"
-              ? ` This is the full-model verification pass. Re-check the five-page group carefully because the first pass was flagged for: ${fallbackReasons.join(", ")}.`
+              ? ` This is the full-model verification pass. Re-check this page group carefully because the first pass was flagged for: ${fallbackReasons.join(", ")}.`
               : ""),
           input: [{ role: "user", content: [
             { type: "input_file", filename, file_data: fileData, detail: "high" },
