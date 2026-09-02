@@ -64,6 +64,50 @@ assert(
   'Pilot feedback must save first and then invoke the authenticated support email notifier.'
 );
 
+const technicalErrorSource = extractNamedFunction(html, 'recordTechnicalError');
+if (!technicalErrorSource) {
+  failures.push('Missing executable application error recorder.');
+} else {
+  const telemetryCalls = [];
+  const telemetryWarnings = [];
+  const telemetryContext = {
+    currentProfile:{ company_id:'company-test' },
+    lastRecordedError:'',
+    lastRecordedErrorAt:0,
+    currentErrorPage:() => 'jobsPage',
+    sb:{ rpc:async (name,args) => {
+      telemetryCalls.push({ name,args });
+      return { error:null };
+    } },
+    console:{ warn:(...args) => telemetryWarnings.push(args) }
+  };
+  try {
+    vm.createContext(telemetryContext);
+    vm.runInContext(technicalErrorSource, telemetryContext);
+    await telemetryContext.recordTechnicalError('browser','uncaught_error','expected test error');
+    assert(
+      telemetryCalls.length === 1 &&
+        telemetryCalls[0].name === 'record_app_error' &&
+        telemetryCalls[0].args?.p_area === 'browser' &&
+        telemetryCalls[0].args?.p_error_code === 'uncaught_error' &&
+        telemetryCalls[0].args?.p_page === 'jobsPage' &&
+        telemetryCalls[0].args?.p_message === 'expected test error',
+      'Application errors must execute the record_app_error RPC with bounded context.'
+    );
+
+    telemetryContext.lastRecordedError = '';
+    telemetryContext.sb.rpc = async () => { throw new Error('expected telemetry failure'); };
+    await telemetryContext.recordTechnicalError('browser','uncaught_error','failure-path test');
+    assert(
+      telemetryWarnings.length === 1 &&
+        String(telemetryWarnings[0][1]).includes('expected telemetry failure'),
+      'Telemetry failures must be contained without creating an unhandled rejection.'
+    );
+  } catch (error) {
+    failures.push(`Application error recorder validation failed: ${error.message}`);
+  }
+}
+
 // Weekend pilot critical-role markers. These do not replace server-side policy tests;
 // they prevent accidental removal of required UI wiring during rapid changes.
 for (const marker of [
