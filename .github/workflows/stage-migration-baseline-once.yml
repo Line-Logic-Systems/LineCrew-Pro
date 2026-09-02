@@ -1,0 +1,89 @@
+name: Stage Migration Baseline Once
+
+on:
+  push:
+    branches: [chore/migration-baseline]
+    paths:
+      - '.github/workflows/stage-migration-baseline-once.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stage-migration-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the review branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Preserve history and activate only the verified baseline
+        env:
+          BASELINE_VERSION: '20260902194315'
+        run: |
+          set -euo pipefail
+          test "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 166
+          test -s "supabase/baseline/${BASELINE_VERSION}_baseline.sql"
+
+          mkdir -p supabase/migrations/archive
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' \
+            -exec mv -t supabase/migrations/archive {} +
+          mv "supabase/baseline/${BASELINE_VERSION}_baseline.sql" \
+            "supabase/migrations/${BASELINE_VERSION}_baseline.sql"
+          rmdir supabase/baseline
+
+          test "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 1
+          test "$(find supabase/migrations/archive -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 166
+
+          while IFS= read -r -d '' file; do
+            sed -i 's#supabase/migrations/2026#supabase/migrations/archive/2026#g' "$file"
+          done < <(rg -l -0 'supabase/migrations/2026' \
+            --glob '!supabase/migrations/**' \
+            --glob '!.git/**')
+
+          if rg -n 'supabase/migrations/2026' --glob '!supabase/migrations/**'; then
+            echo "A historical migration reference still points at the active migration directory." >&2
+            exit 1
+          fi
+
+      - name: Run repository regression checks
+        run: |
+          set -euo pipefail
+          node scripts/validate-app.mjs
+          node scripts/validate-end-to-end-regressions.mjs
+          node scripts/validate-flexible-jsa.mjs
+          node scripts/validate-platform-billing.mjs
+          node scripts/validate-beta-onboarding.mjs
+          node scripts/validate-assistant-memory.mjs
+          node scripts/validate-company-logo-upload.mjs
+          node scripts/validate-leadership-self-time.mjs
+          node scripts/validate-production-readiness.mjs
+          git diff --check
+
+      - name: Rebuild a clean local Supabase instance from the active migration
+        run: |
+          set -euo pipefail
+          npm install -g supabase@2.116.0
+          trap 'supabase stop --no-backup >/dev/null 2>&1 || true' EXIT
+          supabase start
+          supabase db reset
+          supabase stop --no-backup
+          trap - EXIT
+
+      - name: Commit the reviewable baseline transition
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/stage-migration-baseline-once.yml
+          git add supabase scripts .github internal-docs
+          test "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 1
+          test "$(find supabase/migrations/archive -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 166
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Replace drifted migrations with verified production baseline"
+          git push origin HEAD:chore/migration-baseline
