@@ -50,7 +50,7 @@ jobs:
       - name: Validate Superintendent compatibility generator
         run: |
           node scripts/generate-superintendent-compatibility.mjs
-          test -s supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
-          grep -q "linecrew_has_capability" supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
-          grep -q "superintendent" supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
-          head -n 40 supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
+          test -s supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql
+          grep -q "linecrew_has_capability" supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql
+          grep -q "superintendent" supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql
+          head -n 40 supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql
