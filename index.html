@@ -1547,6 +1547,12 @@ display:none!important;
 content:'Review and ';
 }
 .import-table-wrap{overflow-x:auto;margin-top:12px}
+/* Every other cell is nowrap, which pushed the packet review's Check column --
+   the one carrying the Map Unit button -- off the right edge and behind a
+   horizontal scrollbar. Let this one column wrap and stack its button so the
+   control is reachable without scrolling sideways. */
+.import-table td.smart-check-cell{white-space:normal;min-width:132px}
+.import-table td.smart-check-cell .smart-row-map{display:block;margin-top:6px}
 .import-table{
 width:100%;
 border-collapse:collapse;
@@ -8196,9 +8202,9 @@ tr.innerHTML = `
 <td>${escapeHtml(row.material_cu || '—')}</td>
 <td><input class="smart-row-unit" value="${escapeHtml(row.contractor_unit_code || '')}" placeholder="Material only"></td>
 <td><input class="smart-row-qty" type="number" min="0.01" step="0.01" value="${Number(row.estimated_quantity)}"></td>
-<td class="${row.price_book_match || !row.include_in_import ? '' : 'import-error'}">${
+<td class="smart-check-cell ${row.price_book_match || !row.include_in_import ? '' : 'import-error'}">${
 !row.contractor_unit_code ? 'Material only' : row.price_book_match ? 'Matched'
-: 'Needs Price Book match <button type="button" class="secondary small smart-row-map">Map Unit</button>'
+: 'Not in Price Book<button type="button" class="secondary small smart-row-map">Map Unit</button>'
 }</td>`;
 tr.querySelector('.smart-row-type').value = row.work_type;
 tr.querySelector('.smart-row-map')?.addEventListener('click', () => {
