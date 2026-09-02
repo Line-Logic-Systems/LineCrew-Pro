@@ -7124,11 +7124,10 @@ return;
 }
 const pending = pendingRows?.[0];
 if(!pending) return;
-const { data:rows, error:reviewError } = await sb.rpc(
-'get_utility_packet_import_review',
-{ p_import_id:pending.import_id }
-);
-if(reviewError){
+let rows;
+try{
+rows = await fetchAllPacketReviewRows(pending.import_id);
+}catch(reviewError){
 container.innerHTML = '<p class="import-error">Unable to load packet review: ' +
 escapeHtml(reviewError.message) + '</p>';
 return;
@@ -7143,6 +7142,56 @@ work_order:pending.detected_work_order || jobPackage.package_number || '',
 confidence:pending.extraction_confidence,
 warnings:pending.extraction_summary?.warnings || []
 }, rows || []);
+}
+// PostgREST caps every response at its max-rows setting, so asking for a whole
+// packet review in one request silently truncated it: a 1203-row import
+// rendered 1000 rows, and the reviewer could neither see nor correct the other
+// 203. Nothing was ever imported unreviewed -- update_utility_packet_import_rows_bulk
+// requires the submitted rows to match the import's row count exactly -- but
+// that made the packet unimportable instead, failing with "The packet review
+// changed. Reopen it before saving." every time, because reopening truncated
+// again. An oversized packet was a dead end.
+//
+// Page instead, advancing by the rows actually received rather than the size
+// requested, so a server cap smaller than the page size cannot end the loop
+// early. Only an empty page stops it.
+const PACKET_REVIEW_PAGE_SIZE = 500;
+async function fetchAllPacketReviewRows(importId){
+const rows = [];
+const seen = new Set();
+let expectedTotal = null;
+while(true){
+const { data, error, count } = await sb
+.rpc('get_utility_packet_import_review',
+{ p_import_id:importId },
+expectedTotal === null ? { count:'exact' } : undefined)
+.range(rows.length, rows.length + PACKET_REVIEW_PAGE_SIZE - 1);
+if(error) throw new Error(error.message);
+if(expectedTotal === null && Number.isFinite(count)) expectedTotal = Number(count);
+const page = data || [];
+if(!page.length) break;
+page.forEach(row => {
+if(seen.has(row.row_id)) return;
+seen.add(row.row_id);
+rows.push(row);
+});
+if(rows.length > 20000){
+throw new Error(
+'This packet has more review rows than LineCrew Pro can show at once. ' +
+'Nothing was changed. Contact LineCrew Pro Support.'
+);
+}
+}
+// The reviewer must see every row before any of them import. If the server
+// reported a total we could not fully retrieve, refuse rather than render a
+// review that looks complete and is not.
+if(expectedTotal !== null && rows.length !== expectedTotal){
+throw new Error(
+'Only ' + rows.length + ' of ' + expectedTotal + ' packet rows could be loaded, ' +
+'so this review is incomplete. Nothing was changed. Reopen the packet to try again.'
+);
+}
+return rows;
 }
 function refreshOpenJobPackageControls(){
 if(!currentOpenJobPackage){
@@ -8005,11 +8054,7 @@ package_number:parsed.work_order || null,
 source_filename:file.name,
 status:'draft'
 };
-const { data:rows, error:reviewError } = await sb.rpc(
-'get_utility_packet_import_review',
-{ p_import_id:staged.import_id }
-);
-if(reviewError) throw new Error(reviewError.message);
+const rows = await fetchAllPacketReviewRows(staged.import_id);
 renderSmartPacketReview(review, job, packageRecord, staged.import_id, parsed, rows || []);
 }catch(error){
 if(stagedPacket?.package_id){
