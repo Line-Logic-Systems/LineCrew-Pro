@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const dir='supabase/migrations';
+const dir='supabase/migrations/archive';
 const excluded=new Set([
   // The current 22-column TABLE return shape is maintained by a forward
   // migration. Never regenerate an older shape into this legacy layer.
