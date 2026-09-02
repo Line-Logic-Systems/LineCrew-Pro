@@ -1,114 +1,84 @@
-# Reconciling `supabase/migrations` with production
+# Production migration baseline
 
-## The problem
+## Current state
 
-The migration folder and the production database do not agree. Re-measured on
-2026-09-02 against project `ldgkyxuozbozgkvwzadg`:
+The repository migration history drifted from production because some SQL files
+were applied manually in the Supabase SQL Editor. A file applied that way changes
+the schema but does not add a row to `supabase_migrations.schema_migrations`.
 
-| | 2026-09-01 | 2026-09-02 |
-|---|---|---|
-| Migration files in `supabase/migrations` | 161 | **166** |
-| Migrations recorded applied in production | 130 | **131** |
-| In the repository, never recorded as applied | 40 | **grew by 4** |
-| Applied in production, no repository file at all | 9 | 9 |
-| Relative order of the shared ones | differs | differs |
+Measured on 2026-09-02:
 
-The gap widened rather than closed. The latest version recorded in production is
-`20260901074150`, but three migrations written since then are **live in the
-database and absent from `schema_migrations`**:
+| Item | Count |
+|---|---:|
+| Historical repository migrations preserved in `supabase/migrations/archive/` | 166 |
+| Active repository baseline migrations in `supabase/migrations/` | 1 |
+| Migrations currently recorded in production | 132 |
+| Production tables / functions / policies / triggers / indexes / enums | 92 / 259 / 128 / 34 / 398 / 10 |
+| Test tables / functions / policies / triggers / indexes / enums before reconciliation | 77 / 172 / 88 / 18 / 250 / 10 |
 
-- `20260901100000_return_approved_daily_reports`
-- `20260902030000_stable_packet_review_pagination`
-- `20260902060000_packet_unit_aliases`
+The active baseline is
+`supabase/migrations/20260902194315_baseline.sql`. It is a schema-only dump
+of production project `ldgkyxuozbozgkvwzadg`. It includes the manually applied
+packet-unit-alias indexes and contains no table data, `COPY`, data `INSERT`,
+or `supabase_migrations` history.
 
-Their objects are verifiably present — `utility_packet_unit_aliases` and
-`linecrew_set_packet_unit_alias` both exist — because they were applied by hand
-through the Supabase SQL Editor, which executes the SQL without writing to
-`schema_migrations`. A fourth,
-`20260902090000_index_packet_unit_alias_foreign_keys`, is committed and awaiting
-the same treatment.
+The 166 former migration files remain in `archive/` for audit history. They
+are not part of future `supabase db reset` or `supabase db push` runs.
 
-That is the habit this document exists to retire: every hand-applied migration
-makes the folder a less accurate description of production, silently.
+## Verification already completed
 
-The 40 unrecorded files include foundational ones — `job_package_foundation`,
-`daily_report_audit_history`, `enforce_privileged_mfa_server_side`. The 9
-orphans include `capability_whitelist_fix`,
-`lock_security_definer_to_authenticated` and `security_cleanup_aug20`.
+- Independent Disaster Backup run 11 succeeded on 2026-08-30, including the
+  logical database dump, repository archive, integrity check, and Azure copy.
+- The baseline was generated with PostgreSQL 17 tooling.
+- A clean local Supabase instance was started and rebuilt from only the active
+  baseline with Supabase CLI 2.116.0.
+- `supabase db reset` completed successfully.
+- All repository regression validators passed after references to archived
+  migrations were updated.
+- The transition branch does not execute SQL against Production or Test.
 
-Repository filenames also drift from the recorded versions: the file
-`20260901055156_admin_promotion_and_single_owner_governance.sql` was recorded
-as version `20260901061256`.
+## Remaining production history reconciliation
 
-## Why it matters
+Do not execute the baseline against the existing production database: its
+objects already exist. Reconcile only the migration metadata, in a separately
+approved maintenance action.
 
-**You cannot rebuild production from this folder.** Two consequences:
+1. Reconfirm a successful off-platform backup and Azure copy.
+2. Export all current rows from
+   `supabase_migrations.schema_migrations` and commit the export to the
+   controlled recovery record. Do not include database credentials.
+3. Capture read-only pre-change counts for schemas, tables, functions, policies,
+   triggers, indexes, enums, and the current migration rows.
+4. In one transaction, preserve the old rows in a timestamped archival table,
+   replace the active migration-history rows with version `20260902194315`,
+   and verify the inserted baseline row before commit.
+5. Confirm every schema-object count is unchanged after commit. Roll back if any
+   schema object differs.
+6. Run the production verification SQL and Supabase security/performance
+   advisors.
 
-1. **Disaster recovery is weaker than it appears.** The backups cover data. The
-   schema path does not reproduce, so a restore into a schema built from these
-   files would not match production.
-2. **The Test project cannot mirror production.** Which means
-   `test-two-company-isolation` — the strongest security check in CI — runs
-   against a schema that may differ from the one customers use.
+This operation changes migration metadata only. It must not create, alter, or
+drop application objects or customer data.
 
-Nothing is broken in production today. The risk is entirely about rebuilding.
+## Test reconciliation
 
-## The fix: squash to a baseline
+The current Test project does not match production. Applying the baseline on top
+of its existing objects will conflict. Reconcile Test only through an explicitly
+approved reset or a newly created empty Test project:
 
-Reconciling 49 individual discrepancies by hand is laborious and error-prone.
-The standard remedy is to declare production's current schema the new starting
-point.
+1. Export any Test data that must be retained.
+2. Reset an empty Test database from the active baseline.
+3. Compare the object inventory with production.
+4. Run `test-two-company-isolation` and the full application verification
+   suite against Test.
+5. Update Test environment references only after those checks pass.
 
-### 1. Verify a recent backup first
+A Test reset is destructive to Test data and requires confirmation at action
+time. It is not part of merging this repository baseline.
 
-Confirm a successful `Independent Disaster Backup` run and that its Azure copy
-exists, per release rule 8. Do not start without one.
+## Going forward
 
-### 2. Dump production's schema
-
-Using the Supabase CLI, authenticated with the same access token used by the
-Edge Function deploy workflow. Confirm the exact flags with
-`supabase db dump --help` before running — they change between CLI versions.
-
-```
-supabase db dump --project-ref ldgkyxuozbozgkvwzadg -f baseline.sql
-```
-
-This must be **schema only**, not data. Check the output before proceeding:
-it should contain `create table` / `create function` / `create policy`
-statements and no `insert into` of customer rows.
-
-### 3. Stage the baseline
-
-- Move all 161 existing files to `supabase/migrations/archive/`. Keep them —
-  they are the historical record, and several document why a thing was done.
-- Add the dump as a single `<timestamp>_baseline.sql` in `supabase/migrations/`.
-
-### 4. Record it as already applied
-
-Production already has this schema, so the baseline must be marked applied
-rather than executed against it. Insert its version into
-`supabase_migrations.schema_migrations` on **production**, then apply the
-baseline normally to the **Test** project so the two finally match.
-
-### 5. Verify
-
-- `scripts/verify-production-schema.sql` — the existing read-only post-deploy
-  check must still pass against production
-- Compare function and policy counts between production and Test; they should
-  now agree
-- Run `test-two-company-isolation` against Test and confirm it still passes
-- Supabase advisors should report zero ERROR-level findings
-
-### 6. From then on
-
-New migrations go through one path only — a file in `supabase/migrations`,
-applied through the same runner every time. The mismatch above came from
-mixing hand-applied dashboard SQL with committed files; that is the habit to
-retire, not the tooling.
-
-## What this does not need
-
-No application downtime, no data migration, and no change to any running
-function. The database is untouched except for one row recorded in
-`schema_migrations`.
+Create every schema change as a new timestamped file in
+`supabase/migrations/` and apply it through the migration runner. Do not apply
+migration files manually in the SQL Editor. If an emergency manual change is
+unavoidable, repair the migration history immediately and document the event.
