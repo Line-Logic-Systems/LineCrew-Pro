@@ -7116,10 +7116,27 @@ currentOpenJobPackage = jobPackage;
 $('jobPackageDetailTitle').textContent = jobPackage.package_name;
 refreshOpenJobPackageControls();
 resetJobPackageImport();
-$('jobPackageDetailCard').classList.remove('hidden');
+const detailCard = $('jobPackageDetailCard');
+detailCard.classList.remove('hidden');
+// Scroll before loading, not after. This card sits near the top of the jobs
+// page while the job being read renders further down, so opening a package
+// used to unhide a card the reviewer could not see, wait on two round trips,
+// and only then scroll -- and if either threw, the scroll never ran and the
+// rejection was silent. Clicking Open Package did nothing at all.
+detailCard.scrollIntoView({ behavior:'smooth' });
+const progress = $('jobPackageProgress');
+progress.textContent = 'Loading package…';
+try{
 await loadPendingUtilityPacketReview(jobPackage);
 await loadJobPackageWorkPoints();
-$('jobPackageDetailCard').scrollIntoView({ behavior:'smooth' });
+}catch(error){
+progress.innerHTML = '<span class="import-error">This package could not be opened: ' +
+escapeHtml(error?.message || 'Unknown error.') + '</span>';
+return;
+}
+// The work points change the card's height, so settle the scroll on the
+// finished layout rather than the empty one.
+detailCard.scrollIntoView({ behavior:'smooth' });
 }
 async function loadPendingUtilityPacketReview(jobPackage){
 const container = $('jobPackagePendingReview');
