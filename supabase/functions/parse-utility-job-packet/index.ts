@@ -25,6 +25,11 @@ function corsHeaders(request: Request) {
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const PROFILE_VERSION = "adaptive-utility-packet-v2";
 const REQUEST_TIME_BUDGET_MS = 138000;
+// Backoff before each retry of a transient upstream failure. Two entries means
+// at most three attempts, which fits the time budget alongside a 90s call.
+const UPSTREAM_RETRY_DELAYS_MS = [1000, 3000];
+// A retry is only worth starting with enough budget left to finish the call.
+const UPSTREAM_RETRY_MIN_REMAINING_MS = 30000;
 
 class PacketParseError extends Error {
   code: string;
@@ -123,16 +128,38 @@ function outputText(result: Record<string, unknown>): string {
   ).join("\n");
 }
 
-function upstreamPacketError(response: Response, upstreamBody: string, requestId: string) {
-  let upstreamCode = "unknown";
-  let upstreamType = "unknown";
+function parseUpstreamError(upstreamBody: string) {
   try {
     const upstreamError = JSON.parse(upstreamBody)?.error;
-    upstreamCode = String(upstreamError?.code || "unknown").slice(0, 100);
-    upstreamType = String(upstreamError?.type || "unknown").slice(0, 100);
+    return {
+      code: String(upstreamError?.code || "unknown").slice(0, 100),
+      type: String(upstreamError?.type || "unknown").slice(0, 100),
+    };
   } catch (_error) {
     // The upstream status and request id still make a non-JSON response traceable.
+    return { code: "unknown", type: "unknown" };
   }
+}
+
+// A 5xx (including Cloudflare's 502/520/524 in front of the API) and a plain
+// rate limit both clear on their own. Quota exhaustion does not, and neither
+// does a bad key, so those fail immediately rather than burning the budget.
+function isTransientUpstream(status: number, upstreamCode: string) {
+  if (status >= 500) return true;
+  return status === 429 && upstreamCode !== "insufficient_quota";
+}
+
+function upstreamRetryDelayMs(response: Response) {
+  const seconds = Number(response.headers.get("Retry-After"));
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, 10000) : 0;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function upstreamPacketError(response: Response, upstreamBody: string, requestId: string) {
+  const { code: upstreamCode, type: upstreamType } = parseUpstreamError(upstreamBody);
   console.error(JSON.stringify({
     event: "packet_analyzer_rejected",
     request_id: requestId,
@@ -248,75 +275,105 @@ Deno.serve(async (request) => {
     const fallbackModel = Deno.env.get("OPENAI_DOCUMENT_FALLBACK_MODEL") || "gpt-5.4";
     const usageTotal = { input:0, output:0, reasoning:0, total:0 };
     const analyzeWithModel = async (model: string, attempt: "primary" | "fallback", fallbackReasons: string[] = []) => {
-      const elapsed = Date.now() - requestStartedAt;
-      const remaining = REQUEST_TIME_BUDGET_MS - elapsed;
-      if (remaining < 15000) {
-        throw new PacketParseError(
-          "The packet analyzer needs another attempt, but this page group took too long. Nothing was saved. Try again shortly.",
-          "packet_analyzer_timeout",
-          504,
-        );
-      }
-      const response = await fetch("https://api.openai.com/v1/responses", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${openAiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model,
-          instructions: `${instructions}\nThis request contains a page batch from the original PDF. ` +
-            `The first page in this batch is original PDF page ${pageOffset + 1} of ${totalPages}. ` +
-            `For every extracted row, source_page must be the original one-based PDF page number: ` +
-            `batch page number + ${pageOffset}. If this batch contains no candidate construction authorization table, ` +
-            `return status=uncertain, batch_disposition=no_candidate_table, and an empty rows array.` +
-            (attempt === "fallback"
-              ? ` This is the full-model verification pass. Re-check this page group carefully because the first pass was flagged for: ${fallbackReasons.join(", ")}.`
-              : ""),
-          input: [{ role: "user", content: [
-            { type: "input_file", filename, file_data: fileData, detail: "high" },
-            { type: "input_text", text: "Identify this utility packet and extract every reliable authorized construction-unit source row, adapting to the document's actual labels and layout. Unfamiliar providers and formats are valid and must not be rejected solely for being new." },
-          ] }],
-          reasoning: { effort: attempt === "primary" ? "low" : "medium" },
-          text: { format: { type: "json_schema", name: "utility_packet", strict: true, schema: packetSchema } },
-          max_output_tokens: 30000,
-          store: false,
-        }),
-        signal: AbortSignal.timeout(Math.min(90000, remaining)),
-      });
-      if (!response.ok) {
-        throw upstreamPacketError(response, (await response.text()).slice(0, 2000), requestId);
-      }
-      const result = await response.json();
-      const usage = result?.usage || {};
-      const attemptUsage = {
-        input:Number(usage.input_tokens || 0),
-        output:Number(usage.output_tokens || 0),
-        reasoning:Number(usage.output_tokens_details?.reasoning_tokens || 0),
-        total:Number(usage.total_tokens || 0),
-      };
-      usageTotal.input += attemptUsage.input;
-      usageTotal.output += attemptUsage.output;
-      usageTotal.reasoning += attemptUsage.reasoning;
-      usageTotal.total += attemptUsage.total;
-      console.log(JSON.stringify({
-        event: "packet_ai_attempt_completed",
-        request_id: requestId,
-        attempt,
+      const requestBody = JSON.stringify({
         model,
-        page_offset: pageOffset,
-        page_count: pageCount,
-        input_tokens: attemptUsage.input,
-        output_tokens: attemptUsage.output,
-        reasoning_tokens: attemptUsage.reasoning,
-        total_tokens: attemptUsage.total,
-      }));
-      const modelOutput = parsePacketOutput(outputText(result));
-      if (modelOutput.parsed) {
-        modelOutput.parsed = normalizePacketExtraction(modelOutput.parsed, {
-          profileVersion: PROFILE_VERSION,
-          pageOffset,
-          pageCount,
+        instructions: `${instructions}\nThis request contains a page batch from the original PDF. ` +
+          `The first page in this batch is original PDF page ${pageOffset + 1} of ${totalPages}. ` +
+          `For every extracted row, source_page must be the original one-based PDF page number: ` +
+          `batch page number + ${pageOffset}. If this batch contains no candidate construction authorization table, ` +
+          `return status=uncertain, batch_disposition=no_candidate_table, and an empty rows array.` +
+          (attempt === "fallback"
+            ? ` This is the full-model verification pass. Re-check this page group carefully because the first pass was flagged for: ${fallbackReasons.join(", ")}.`
+            : ""),
+        input: [{ role: "user", content: [
+          { type: "input_file", filename, file_data: fileData, detail: "high" },
+          { type: "input_text", text: "Identify this utility packet and extract every reliable authorized construction-unit source row, adapting to the document's actual labels and layout. Unfamiliar providers and formats are valid and must not be rejected solely for being new." },
+        ] }],
+        reasoning: { effort: attempt === "primary" ? "low" : "medium" },
+        text: { format: { type: "json_schema", name: "utility_packet", strict: true, schema: packetSchema } },
+        max_output_tokens: 30000,
+        store: false,
+      });
+      // A transient upstream failure used to discard the whole packet: one
+      // Cloudflare 520 on one page group threw away every other group's work
+      // and the AI spend behind it. The call is idempotent (store: false), so
+      // retrying in place is safe and far cheaper than re-uploading.
+      for (let retry = 0; ; retry++) {
+        const remaining = REQUEST_TIME_BUDGET_MS - (Date.now() - requestStartedAt);
+        if (remaining < 15000) {
+          throw new PacketParseError(
+            "The packet analyzer needs another attempt, but this page group took too long. Nothing was saved. Try again shortly.",
+            "packet_analyzer_timeout",
+            504,
+          );
+        }
+        const response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${openAiKey}`, "Content-Type": "application/json" },
+          body: requestBody,
+          signal: AbortSignal.timeout(Math.min(90000, remaining)),
         });
+        if (!response.ok) {
+          const upstreamBody = (await response.text()).slice(0, 2000);
+          const { code: upstreamCode } = parseUpstreamError(upstreamBody);
+          const delayMs = Math.max(
+            UPSTREAM_RETRY_DELAYS_MS[retry] ?? 0,
+            upstreamRetryDelayMs(response),
+          );
+          const canRetry = retry < UPSTREAM_RETRY_DELAYS_MS.length &&
+            isTransientUpstream(response.status, upstreamCode) &&
+            remaining - delayMs > UPSTREAM_RETRY_MIN_REMAINING_MS;
+          if (!canRetry) throw upstreamPacketError(response, upstreamBody, requestId);
+          console.warn(JSON.stringify({
+            event: "packet_upstream_retry",
+            request_id: requestId,
+            attempt,
+            model,
+            page_offset: pageOffset,
+            page_count: pageCount,
+            upstream_status: response.status,
+            upstream_code: upstreamCode,
+            retry: retry + 1,
+            delay_ms: delayMs,
+          }));
+          await sleep(delayMs);
+          continue;
+        }
+        const result = await response.json();
+        const usage = result?.usage || {};
+        const attemptUsage = {
+          input:Number(usage.input_tokens || 0),
+          output:Number(usage.output_tokens || 0),
+          reasoning:Number(usage.output_tokens_details?.reasoning_tokens || 0),
+          total:Number(usage.total_tokens || 0),
+        };
+        usageTotal.input += attemptUsage.input;
+        usageTotal.output += attemptUsage.output;
+        usageTotal.reasoning += attemptUsage.reasoning;
+        usageTotal.total += attemptUsage.total;
+        console.log(JSON.stringify({
+          event: "packet_ai_attempt_completed",
+          request_id: requestId,
+          attempt,
+          model,
+          page_offset: pageOffset,
+          page_count: pageCount,
+          input_tokens: attemptUsage.input,
+          output_tokens: attemptUsage.output,
+          reasoning_tokens: attemptUsage.reasoning,
+          total_tokens: attemptUsage.total,
+          upstream_retries: retry,
+        }));
+        const modelOutput = parsePacketOutput(outputText(result));
+        if (modelOutput.parsed) {
+          modelOutput.parsed = normalizePacketExtraction(modelOutput.parsed, {
+            profileVersion: PROFILE_VERSION,
+            pageOffset,
+            pageCount,
+          });
+        }
+        return modelOutput;
       }
-      return modelOutput;
     };
 
     const fallbackRun = await runPacketModelFallback({
