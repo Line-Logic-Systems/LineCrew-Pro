@@ -7193,6 +7193,92 @@ throw new Error(
 }
 return rows;
 }
+// A utility writes units in its own vocabulary -- United calls #4 ACSR
+// "C4 7/1" and a 5 kVA transformer "DTran5Kva" -- so codes that are perfectly
+// valid on the packet are absent from the contract Price Book and block the
+// import. Mapping the code beats the two older workarounds: editing the box
+// overwrites what the utility authorized, and adding the code to the Price Book
+// fills a contract's book with units that are not in the contract. The mapping
+// is saved per contract, so it applies to every future packet from that utility
+// and never touches another utility's book.
+async function openPacketUnitMapper(container, job, packageRecord, importId, parsed, packetCode){
+const code = String(packetCode || '').trim();
+if(!code){
+alert('This row has no production unit to map.');
+return;
+}
+// Only one mapper at a time: the picker owns fixed element ids, so a second
+// open would leave duplicate ids and the datalist would attach to the wrong
+// input.
+container.querySelectorAll('.packet-unit-map-panel').forEach(open => open.remove());
+const panel = document.createElement('div');
+panel.className = 'job-card packet-unit-map-panel';
+panel.innerHTML = '<strong>Loading Price Book units…</strong>';
+container.prepend(panel);
+try{
+const { data:units, error } = await sb.rpc(
+'linecrew_price_book_units_for_import', { p_import_id:importId }
+);
+if(error) throw new Error(error.message);
+const options = (units || []).map(unit =>
+'<option value="' + escapeHtml(unit.item_code) + '">' +
+escapeHtml([unit.item_name, unit.description].filter(Boolean).join(' · ')) +
+'</option>'
+).join('');
+panel.innerHTML =
+'<div class="section-header"><div><strong>Map “' + escapeHtml(code) + '” to a Price Book unit</strong>' +
+'<div class="muted">Saved for this contract. Every row using “' + escapeHtml(code) +
+'” matches from now on, on this packet and future ones. The packet keeps its own code.</div>' +
+'</div></div>' +
+'<label for="packetUnitMapTarget">Price Book unit</label>' +
+'<input id="packetUnitMapTarget" list="packetUnitMapOptions" autocomplete="off" ' +
+'placeholder="Start typing a unit code">' +
+'<datalist id="packetUnitMapOptions">' + options + '</datalist>' +
+'<p class="muted">' + (units || []).length + ' units in this job’s Price Book.</p>' +
+'<div class="button-row">' +
+'<button type="button" class="success small packet-unit-map-save">Save Mapping</button>' +
+'<button type="button" class="secondary small packet-unit-map-clear">Remove Mapping</button>' +
+'<button type="button" class="secondary small packet-unit-map-cancel">Cancel</button>' +
+'</div><p class="packet-unit-map-error import-error"></p>';
+const input = panel.querySelector('#packetUnitMapTarget');
+const errorLine = panel.querySelector('.packet-unit-map-error');
+input.focus();
+const apply = async target => {
+errorLine.textContent = '';
+panel.querySelectorAll('button').forEach(button => { button.disabled = true; });
+try{
+const { error:saveError } = await sb.rpc(
+'linecrew_set_packet_unit_alias',
+{ p_import_id:importId, p_packet_code:code, p_target_item_code:target }
+);
+if(saveError) throw new Error(saveError.message);
+// Matching is recomputed server-side on read, so re-reading the review is
+// what proves the mapping took rather than assuming it did.
+const refreshed = await fetchAllPacketReviewRows(importId);
+panel.remove();
+renderSmartPacketReview(container, job, packageRecord, importId, parsed, refreshed);
+}catch(saveError){
+errorLine.textContent = saveError.message || 'The mapping could not be saved.';
+panel.querySelectorAll('button').forEach(button => { button.disabled = false; });
+}
+};
+panel.querySelector('.packet-unit-map-save').onclick = () => {
+const target = input.value.trim();
+if(!target){
+errorLine.textContent = 'Choose the Price Book unit this code means.';
+return;
+}
+apply(target);
+};
+panel.querySelector('.packet-unit-map-clear').onclick = () => apply('');
+panel.querySelector('.packet-unit-map-cancel').onclick = () => panel.remove();
+}catch(error){
+panel.innerHTML = '<strong>Unit mapping unavailable</strong><p class="import-error">' +
+escapeHtml(error.message || 'The Price Book units could not be loaded.') + '</p>' +
+'<button type="button" class="secondary small">Close</button>';
+panel.querySelector('button').onclick = () => panel.remove();
+}
+}
 function refreshOpenJobPackageControls(){
 if(!currentOpenJobPackage){
 return;
@@ -8111,9 +8197,18 @@ tr.innerHTML = `
 <td><input class="smart-row-unit" value="${escapeHtml(row.contractor_unit_code || '')}" placeholder="Material only"></td>
 <td><input class="smart-row-qty" type="number" min="0.01" step="0.01" value="${Number(row.estimated_quantity)}"></td>
 <td class="${row.price_book_match || !row.include_in_import ? '' : 'import-error'}">${
-!row.contractor_unit_code ? 'Material only' : row.price_book_match ? 'Matched' : 'Needs Price Book match'
+!row.contractor_unit_code ? 'Material only' : row.price_book_match ? 'Matched'
+: 'Needs Price Book match <button type="button" class="secondary small smart-row-map">Map Unit</button>'
 }</td>`;
 tr.querySelector('.smart-row-type').value = row.work_type;
+tr.querySelector('.smart-row-map')?.addEventListener('click', () => {
+// Map whatever is in the box now, not what the packet shipped: an edit made
+// here and not yet saved is what the reviewer means by "this unit".
+openPacketUnitMapper(
+container, job, packageRecord, importId, parsed,
+tr.querySelector('.smart-row-unit').value.trim() || row.contractor_unit_code
+);
+});
 tbody.appendChild(tr);
 });
 container.querySelector('.smart-packet-close').onclick = () => container.remove();
