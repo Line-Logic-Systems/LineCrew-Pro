@@ -1,0 +1,140 @@
+name: Build Migration Baseline Once
+
+on:
+  push:
+    branches: [chore/migration-baseline]
+    paths:
+      - '.github/workflows/build-migration-baseline-once.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-migration-baseline-once
+  cancel-in-progress: false
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the review branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Generate the production schema-only baseline
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PRODUCTION_PROJECT_REF: ldgkyxuozbozgkvwzadg
+          BASELINE_VERSION: '20260902194315'
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_DB_URL"
+          case "$SUPABASE_DB_URL" in
+            *"$PRODUCTION_PROJECT_REF"*) ;;
+            *) echo "Refusing a database URL that does not identify the production project." >&2; exit 1 ;;
+          esac
+
+          mkdir -p baseline-work supabase/baseline
+          docker run --rm \
+            --env SUPABASE_DB_URL \
+            --volume "$PWD/baseline-work:/work" \
+            postgres:17-alpine \
+            sh -ceu '
+              pg_dump \
+                --dbname="$SUPABASE_DB_URL" \
+                --format=custom \
+                --schema-only \
+                --no-owner \
+                --schema=auth \
+                --schema=public \
+                --schema=storage \
+                --file=/work/production-schema.dump
+
+              pg_restore --list /work/production-schema.dump > /work/all.list
+              if grep -Eq " TABLE DATA | SEQUENCE SET " /work/all.list; then
+                echo "Schema archive unexpectedly contains data entries." >&2
+                exit 1
+              fi
+
+              pg_restore --list --schema=public /work/production-schema.dump > /work/public-raw.list
+              awk "\
+                / SCHEMA - public / { print \";\" \\$0; next } \
+                / COMMENT - SCHEMA public / { print \";\" \\$0; next } \
+                / ACL - SCHEMA public / { print \";\" \\$0; next } \
+                / DEFAULT ACL / { print \";\" \\$0; next } \
+                { print } \
+              " /work/public-raw.list > /work/public.list
+
+              grep "^;" /work/all.list > /work/linecrew-managed.list
+              awk "\
+                / TRIGGER auth complete_team_invitation_signup / { print; next } \
+                / POLICY storage / { print; next } \
+              " /work/all.list >> /work/linecrew-managed.list
+
+              pg_restore --schema-only --no-owner \
+                --use-list=/work/public.list \
+                --file=/work/public.sql \
+                /work/production-schema.dump
+              pg_restore --schema-only --no-owner \
+                --use-list=/work/linecrew-managed.list \
+                --file=/work/managed.sql \
+                /work/production-schema.dump
+            '
+
+          {
+            echo "-- LineCrew Pro production schema baseline"
+            echo "-- Generated from project $PRODUCTION_PROJECT_REF with PostgreSQL 17 pg_dump --schema-only."
+            echo "-- Supabase-managed schemas are not recreated; only public plus LineCrew-owned Auth/Storage objects are included."
+            sed -E '/^\\(un)?restrict /d' baseline-work/public.sql
+            echo
+            sed -E '/^\\(un)?restrict /d' baseline-work/managed.sql
+          } > "supabase/baseline/${BASELINE_VERSION}_baseline.sql"
+
+          baseline="supabase/baseline/${BASELINE_VERSION}_baseline.sql"
+          test -s "$baseline"
+          grep -q "CREATE TABLE public.companies" "$baseline"
+          grep -q "CREATE FUNCTION public.record_app_error" "$baseline"
+          grep -q "CREATE POLICY" "$baseline"
+          grep -q "complete_team_invitation_signup" "$baseline"
+          if grep -Eq '^COPY .* FROM stdin;|^INSERT INTO (auth|public|storage)\\.' "$baseline"; then
+            echo "Customer-data statement found in schema-only baseline." >&2
+            exit 1
+          fi
+          if grep -q "SCHEMA supabase_migrations" "$baseline"; then
+            echo "Migration history must not be part of the baseline." >&2
+            exit 1
+          fi
+
+          rm -rf baseline-work
+
+      - name: Validate the baseline in a clean local Supabase stack
+        env:
+          BASELINE_VERSION: '20260902194315'
+        run: |
+          set -euo pipefail
+          npm install -g supabase@2.116.0
+          mv supabase/migrations supabase/migrations-original
+          mkdir supabase/migrations
+          cp "supabase/baseline/${BASELINE_VERSION}_baseline.sql" supabase/migrations/
+          trap 'supabase stop --no-backup >/dev/null 2>&1 || true' EXIT
+          supabase start
+          supabase db reset
+          supabase stop --no-backup
+          trap - EXIT
+          rm -rf supabase/migrations
+          mv supabase/migrations-original supabase/migrations
+
+      - name: Commit only the reviewed baseline output
+        env:
+          BASELINE_VERSION: '20260902194315'
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/build-migration-baseline-once.yml
+          git add "supabase/baseline/${BASELINE_VERSION}_baseline.sql"
+          test "$(git diff --cached --name-only | wc -l)" -eq 2
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Stage production schema baseline for review"
+          git push origin HEAD:chore/migration-baseline
