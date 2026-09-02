@@ -7130,8 +7130,20 @@ try{
 await loadPendingUtilityPacketReview(jobPackage);
 await loadJobPackageWorkPoints();
 }catch(error){
+// Show where it failed, not just what failed. Reading a stack trace out of
+// the browser console is not a reasonable thing to ask of the office admin
+// who hits this, so the first frame -- file, line and column -- is put on
+// screen next to the message where it can simply be read back to support.
+const firstFrame = String(error?.stack || '')
+.split('\n')
+.map(line => line.trim())
+.find(line => /:\d+:\d+/.test(line)) || '';
 progress.innerHTML = '<span class="import-error">This package could not be opened: ' +
-escapeHtml(error?.message || 'Unknown error.') + '</span>';
+escapeHtml(error?.message || 'Unknown error.') + '</span>' +
+(firstFrame
+? '<div class="muted">Support detail: ' + escapeHtml(firstFrame.slice(0, 200)) + '</div>'
+: '');
+console.error('openJobPackageDetails failed', error);
 return;
 }
 // The work points change the card's height, so settle the scroll on the
