@@ -48,6 +48,7 @@ jobs:
           done < <(find . -type f \
             -not -path './.git/*' \
             -not -path './supabase/migrations/*' \
+            -not -path './.github/workflows/stage-migration-baseline-once.yml' \
             -print0)
 
           stale_reference=0
@@ -58,6 +59,7 @@ jobs:
           done < <(find . -type f \
             -not -path './.git/*' \
             -not -path './supabase/migrations/*' \
+            -not -path './.github/workflows/stage-migration-baseline-once.yml' \
             -print0)
           test "$stale_reference" -eq 0
 
