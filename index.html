@@ -1546,6 +1546,18 @@ display:none!important;
 #priceBookImportCard.new-price-book-inline-mapping #priceBookColumnMapping>h3:before{
 content:'Review and ';
 }
+/* Surfaced by the global error and unhandledrejection listeners. Fixed to the
+   bottom so it cannot be missed the way an off-screen card was, and above the
+   app rather than inside any one screen, since these errors come from anywhere. */
+.app-error-banner{
+position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;
+display:flex;gap:12px;align-items:flex-start;justify-content:space-between;
+background:#fdecec;border:1px solid var(--red,#c0392b);border-radius:8px;
+padding:12px 14px;font-size:14px;color:#7a1c14;
+box-shadow:0 6px 20px rgba(0,0,0,.18);max-width:720px;margin:0 auto;
+}
+.app-error-banner-frame{margin-top:6px;font-size:12px;opacity:.85;word-break:break-all}
+.app-error-banner button{flex:none;cursor:pointer}
 .import-table-wrap{overflow-x:auto;margin-top:12px}
 /* Every other cell is nowrap, which pushed the packet review's Check column --
    the one carrying the Map Unit button -- off the right edge and behind a
@@ -4240,10 +4252,52 @@ recordTechnicalError('user_operation','operation_failed',text);
 }
 lineCrewNativeAlert(message);
 };
-window.addEventListener('error',event =>
-recordTechnicalError('browser','uncaught_error',event.message));
-window.addEventListener('unhandledrejection',event =>
-recordTechnicalError('browser','unhandled_promise',event.reason?.message || event.reason));
+// The first stack frame -- file, line and column. Reading a stack trace out of
+// the browser console is not something the office admin hitting an error can be
+// asked to do, so this goes on screen where it can be read back to support.
+function firstStackFrame(error){
+return String(error?.stack || '')
+.split('\n')
+.map(line => line.trim())
+.find(line => /:\d+:\d+/.test(line)) || '';
+}
+// Every uncaught error and rejected promise used to be recorded to the database
+// and shown to nobody, so a real failure and a slow load looked identical: the
+// button simply did nothing. Four separate defects presented that way before the
+// cause of any of them could be seen. They are now surfaced as well as recorded.
+function showAppErrorBanner(message, frame){
+const text = String(message || '').trim();
+// A fetch cancelled because a newer one superseded it is normal operation.
+// A banner that cries wolf teaches the user to ignore it, which is worse than
+// the silence this replaces.
+if(!text || /\bAbortError\b|\bThe operation was aborted\b|\bsignal is aborted\b/i.test(text)) return;
+let banner = document.getElementById('appErrorBanner');
+if(!banner){
+banner = document.createElement('div');
+banner.id = 'appErrorBanner';
+banner.className = 'app-error-banner';
+document.body.appendChild(banner);
+}
+banner.innerHTML = '<div><strong>Something went wrong on this screen.</strong>' +
+'<div>' + escapeHtml(text.slice(0, 220)) + '</div>' +
+(frame ? '<div class="app-error-banner-frame">Support detail: ' +
+escapeHtml(String(frame).slice(0, 200)) + '</div>' : '') +
+'</div><button type="button" aria-label="Dismiss">Dismiss</button>';
+banner.querySelector('button').onclick = () => banner.remove();
+}
+window.addEventListener('error',event => {
+recordTechnicalError('browser','uncaught_error',event.message);
+showAppErrorBanner(
+event.message,
+firstStackFrame(event.error) ||
+(event.filename ? event.filename + ':' + event.lineno + ':' + event.colno : '')
+);
+});
+window.addEventListener('unhandledrejection',event => {
+const reason = event.reason;
+recordTechnicalError('browser','unhandled_promise',reason?.message || reason);
+showAppErrorBanner(reason?.message || reason, firstStackFrame(reason));
+});
 const APP_PAGE_IDS = new Set([
 'dashboardPage',
 'teamPage',
@@ -7134,10 +7188,7 @@ await loadJobPackageWorkPoints();
 // the browser console is not a reasonable thing to ask of the office admin
 // who hits this, so the first frame -- file, line and column -- is put on
 // screen next to the message where it can simply be read back to support.
-const firstFrame = String(error?.stack || '')
-.split('\n')
-.map(line => line.trim())
-.find(line => /:\d+:\d+/.test(line)) || '';
+const firstFrame = firstStackFrame(error);
 progress.innerHTML = '<span class="import-error">This package could not be opened: ' +
 escapeHtml(error?.message || 'Unknown error.') + '</span>' +
 (firstFrame
