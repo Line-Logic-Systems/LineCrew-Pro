@@ -7,7 +7,7 @@ function read(path){
 function requireText(text,needle,message){if(!text.includes(needle))throw new Error(message)}
 function rejectText(text,needle,message){if(text.includes(needle))throw new Error(message)}
 
-const migration=read('supabase/migrations/20260830073000_beta_application_onboarding.sql');
+const migration=read('supabase/migrations/archive/20260830073000_beta_application_onboarding.sql');
 const submit=read('supabase/functions/submit-beta-application/index.ts');
 const review=read('supabase/functions/review-beta-application/index.ts');
 const accept=read('beta-accept.html');

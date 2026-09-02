@@ -4,8 +4,8 @@ const html = fs.readFileSync('index.html','utf8');
 const offlineJsa = fs.readFileSync('offline-jsa.js','utf8');
 const timekeepingInput = fs.readFileSync('timekeeping-input-v2.js','utf8');
 const serviceWorker = fs.readFileSync('service-worker.js','utf8');
-const migration = fs.readFileSync('supabase/migrations/202608190700_flexible_jsa_upload.sql','utf8');
-const compat = fs.readFileSync('supabase/migrations/202608190710_flexible_jsa_digital_compat.sql','utf8');
+const migration = fs.readFileSync('supabase/migrations/archive/202608190700_flexible_jsa_upload.sql','utf8');
+const compat = fs.readFileSync('supabase/migrations/archive/202608190710_flexible_jsa_digital_compat.sql','utf8');
 
 const requiredHtml = [
   'companyJsaMethod',

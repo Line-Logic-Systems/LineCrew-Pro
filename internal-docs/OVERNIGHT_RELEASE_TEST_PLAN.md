@@ -6,8 +6,8 @@ This release adds company settings and branding, printable daily reports, privat
 
 Run these migrations in Supabase SQL Editor in this exact order:
 
-1. `supabase/migrations/20260817_company_settings_branding.sql`
-2. `supabase/migrations/20260817_daily_report_attachments.sql`
+1. `supabase/migrations/archive/20260817_company_settings_branding.sql`
+2. `supabase/migrations/archive/20260817_daily_report_attachments.sql`
 
 Each successful migration displays **Success. No rows returned**. Stop and save a screenshot if Supabase reports an error.
 

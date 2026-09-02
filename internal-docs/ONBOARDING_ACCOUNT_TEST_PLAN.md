@@ -2,7 +2,7 @@
 
 ## Required migration
 
-Run `supabase/migrations/20260817_profile_self_service.sql` in Supabase SQL Editor before testing profile editing.
+Run `supabase/migrations/archive/20260817_profile_self_service.sql` in Supabase SQL Editor before testing profile editing.
 
 Expected result: **Success. No rows returned.**
 

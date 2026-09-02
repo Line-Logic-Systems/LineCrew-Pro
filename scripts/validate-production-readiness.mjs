@@ -20,53 +20,53 @@ const mustExist = [
   'scripts/validate-app.mjs',
   'supabase/functions/linecrew-assistant/index.ts',
   'scripts/validate-assistant-memory.mjs',
-  'supabase/migrations/20260830174354_assistant_memory_reminders.sql',
-  'supabase/migrations/20260830175934_index_assistant_memory_foreign_keys.sql',
+  'supabase/migrations/archive/20260830174354_assistant_memory_reminders.sql',
+  'supabase/migrations/archive/20260830175934_index_assistant_memory_foreign_keys.sql',
   'supabase/functions/send-team-invitation/index.ts',
   'supabase/functions/notify-pilot-feedback/index.ts',
   'supabase/functions/complete-team-invitation-signup/index.ts',
   'supabase/functions/_shared/api-keys.ts',
   'supabase/functions/_shared/api-keys_test.ts',
-  'supabase/migrations/20260818_owner_superintendent_roles.sql',
-  'supabase/migrations/20260818_owner_superintendent_team_access.sql',
-  'supabase/migrations/202608190100_owner_legacy_compatibility.sql',
-  'supabase/migrations/202608190200_superintendent_legacy_compatibility.sql',
-  'supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql',
-  'supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql',
-  'supabase/migrations/20260823004222_superintendent_customers_contracts_policies.sql',
-  'supabase/migrations/20260823015316_one_click_company_invitations.sql',
-  'supabase/migrations/20260823021011_automate_invited_foreman_signup.sql',
-  'supabase/migrations/20260823023639_restrict_foremen_to_assigned_jobs.sql',
-  'supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql',
-  'supabase/migrations/20260823030000_company_employee_roster_assignment.sql',
-  'supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql',
-  'supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql',
-  'supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql',
-  'supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql',
-  'supabase/migrations/20260824190000_enforce_privileged_mfa_without_deadline.sql',
-  'supabase/migrations/20260824070000_append_only_job_closeout_history.sql',
-  'supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql',
-  'supabase/migrations/20260825143000_harden_report_and_final_billing_controls.sql',
-  'supabase/migrations/20260825150000_close_direct_rest_authorization_gaps.sql',
-  'supabase/migrations/20260825151500_dynamic_backup_table_inventory.sql',
-  'supabase/migrations/20260825152000_restore_owner_job_rpc_access.sql',
+  'supabase/migrations/archive/20260818_owner_superintendent_roles.sql',
+  'supabase/migrations/archive/20260818_owner_superintendent_team_access.sql',
+  'supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql',
+  'supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql',
+  'supabase/migrations/archive/20260822220000_production_role_compatibility_drift_repair.sql',
+  'supabase/migrations/archive/20260822223611_close_post_fix_rpc_access_gaps.sql',
+  'supabase/migrations/archive/20260823004222_superintendent_customers_contracts_policies.sql',
+  'supabase/migrations/archive/20260823015316_one_click_company_invitations.sql',
+  'supabase/migrations/archive/20260823021011_automate_invited_foreman_signup.sql',
+  'supabase/migrations/archive/20260823023639_restrict_foremen_to_assigned_jobs.sql',
+  'supabase/migrations/archive/20260823024700_show_job_assignees_to_supervisors.sql',
+  'supabase/migrations/archive/20260823030000_company_employee_roster_assignment.sql',
+  'supabase/migrations/archive/20260823051008_allow_foreman_delete_own_draft_reports.sql',
+  'supabase/migrations/archive/20260823053000_add_company_man_hour_rate_target.sql',
+  'supabase/migrations/archive/20260824060308_restrict_daily_report_reads_by_role.sql',
+  'supabase/migrations/archive/20260824063000_enforce_privileged_mfa_server_side.sql',
+  'supabase/migrations/archive/20260824190000_enforce_privileged_mfa_without_deadline.sql',
+  'supabase/migrations/archive/20260824070000_append_only_job_closeout_history.sql',
+  'supabase/migrations/archive/20260824071000_daily_report_scale_and_integrity.sql',
+  'supabase/migrations/archive/20260825143000_harden_report_and_final_billing_controls.sql',
+  'supabase/migrations/archive/20260825150000_close_direct_rest_authorization_gaps.sql',
+  'supabase/migrations/archive/20260825151500_dynamic_backup_table_inventory.sql',
+  'supabase/migrations/archive/20260825152000_restore_owner_job_rpc_access.sql',
   'number-input-polish.js',
   'foreman-field-tools.js',
   'leadership-my-time.js',
   'scripts/validate-leadership-self-time.mjs',
-  'supabase/migrations/20260828172839_leadership_self_time.sql',
-  'supabase/migrations/20260828173009_consolidate_leadership_self_time_policies.sql',
-  'supabase/migrations/20260826234242_foreman_remaining_job_units.sql',
-  'supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql',
-  'supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql',
-  'supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql',
-  'supabase/migrations/20260901045812_optimize_job_packet_review_import.sql',
-  'supabase/migrations/20260901055156_admin_promotion_and_single_owner_governance.sql',
-  'supabase/migrations/20260901070000_member_money_visibility.sql',
-  'supabase/migrations/20260901071000_fix_member_money_permission_update.sql',
-  'supabase/migrations/20260901072000_preserve_field_role_money_permissions.sql',
-  'supabase/migrations/20260901073000_mask_detailed_field_money.sql',
-  'supabase/migrations/20260901074000_admin_owner_recovery.sql',
+  'supabase/migrations/archive/20260828172839_leadership_self_time.sql',
+  'supabase/migrations/archive/20260828173009_consolidate_leadership_self_time_policies.sql',
+  'supabase/migrations/archive/20260826234242_foreman_remaining_job_units.sql',
+  'supabase/migrations/archive/20260827120000_fix_remaining_units_job_scope.sql',
+  'supabase/migrations/archive/20260901030000_job_jacket_end_to_end_integrity.sql',
+  'supabase/migrations/archive/20260901031500_job_jacket_reimport_and_revision_delta.sql',
+  'supabase/migrations/archive/20260901045812_optimize_job_packet_review_import.sql',
+  'supabase/migrations/archive/20260901055156_admin_promotion_and_single_owner_governance.sql',
+  'supabase/migrations/archive/20260901070000_member_money_visibility.sql',
+  'supabase/migrations/archive/20260901071000_fix_member_money_permission_update.sql',
+  'supabase/migrations/archive/20260901072000_preserve_field_role_money_permissions.sql',
+  'supabase/migrations/archive/20260901073000_mask_detailed_field_money.sql',
+  'supabase/migrations/archive/20260901074000_admin_owner_recovery.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -84,28 +84,28 @@ const teamInvitation = fs.readFileSync('supabase/functions/send-team-invitation/
 const pilotFeedbackNotifier = fs.readFileSync('supabase/functions/notify-pilot-feedback/index.ts', 'utf8');
 const invitationSignup = fs.readFileSync('supabase/functions/complete-team-invitation-signup/index.ts', 'utf8');
 const edgeApiKeys = fs.readFileSync('supabase/functions/_shared/api-keys.ts', 'utf8');
-const roleMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_roles.sql', 'utf8');
-const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', 'utf8');
-const superintendentCompat = fs.readFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
-const driftRepair = fs.readFileSync('supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql', 'utf8');
-const rpcAccessRepair = fs.readFileSync('supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql', 'utf8');
-const superintendentContractsPolicies = fs.readFileSync('supabase/migrations/20260823004222_superintendent_customers_contracts_policies.sql', 'utf8');
-const companyInvitations = fs.readFileSync('supabase/migrations/20260823015316_one_click_company_invitations.sql', 'utf8');
-const automaticInvitationSignup = fs.readFileSync('supabase/migrations/20260823021011_automate_invited_foreman_signup.sql', 'utf8');
-const foremanJobAssignments = fs.readFileSync('supabase/migrations/20260823023639_restrict_foremen_to_assigned_jobs.sql', 'utf8');
-const supervisorJobAssignees = fs.readFileSync('supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
-const employeeRosterAssignment = fs.readFileSync('supabase/migrations/20260823030000_company_employee_roster_assignment.sql', 'utf8');
-const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
-const manHourRateTarget = fs.readFileSync('supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
-const dailyReportReadScope = fs.readFileSync('supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
-const privilegedMfaFoundation = fs.readFileSync('supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
-const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824190000_enforce_privileged_mfa_without_deadline.sql', 'utf8');
-const jobCloseoutHistory = fs.readFileSync('supabase/migrations/20260824070000_append_only_job_closeout_history.sql', 'utf8');
-const dailyReportScaleIntegrity = fs.readFileSync('supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql', 'utf8');
-const reportAndFinalBillingHardening = fs.readFileSync('supabase/migrations/20260825143000_harden_report_and_final_billing_controls.sql', 'utf8');
-const directRestHardening = fs.readFileSync('supabase/migrations/20260825150000_close_direct_rest_authorization_gaps.sql', 'utf8');
-const dynamicBackupInventory = fs.readFileSync('supabase/migrations/20260825151500_dynamic_backup_table_inventory.sql', 'utf8');
-const ownerJobAccess = fs.readFileSync('supabase/migrations/20260825152000_restore_owner_job_rpc_access.sql', 'utf8');
+const roleMigration = fs.readFileSync('supabase/migrations/archive/20260818_owner_superintendent_roles.sql', 'utf8');
+const ownerCompat = fs.readFileSync('supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql', 'utf8');
+const superintendentCompat = fs.readFileSync('supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
+const driftRepair = fs.readFileSync('supabase/migrations/archive/20260822220000_production_role_compatibility_drift_repair.sql', 'utf8');
+const rpcAccessRepair = fs.readFileSync('supabase/migrations/archive/20260822223611_close_post_fix_rpc_access_gaps.sql', 'utf8');
+const superintendentContractsPolicies = fs.readFileSync('supabase/migrations/archive/20260823004222_superintendent_customers_contracts_policies.sql', 'utf8');
+const companyInvitations = fs.readFileSync('supabase/migrations/archive/20260823015316_one_click_company_invitations.sql', 'utf8');
+const automaticInvitationSignup = fs.readFileSync('supabase/migrations/archive/20260823021011_automate_invited_foreman_signup.sql', 'utf8');
+const foremanJobAssignments = fs.readFileSync('supabase/migrations/archive/20260823023639_restrict_foremen_to_assigned_jobs.sql', 'utf8');
+const supervisorJobAssignees = fs.readFileSync('supabase/migrations/archive/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
+const employeeRosterAssignment = fs.readFileSync('supabase/migrations/archive/20260823030000_company_employee_roster_assignment.sql', 'utf8');
+const foremanDraftDeletion = fs.readFileSync('supabase/migrations/archive/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
+const manHourRateTarget = fs.readFileSync('supabase/migrations/archive/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
+const dailyReportReadScope = fs.readFileSync('supabase/migrations/archive/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
+const privilegedMfaFoundation = fs.readFileSync('supabase/migrations/archive/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
+const privilegedMfaServer = fs.readFileSync('supabase/migrations/archive/20260824190000_enforce_privileged_mfa_without_deadline.sql', 'utf8');
+const jobCloseoutHistory = fs.readFileSync('supabase/migrations/archive/20260824070000_append_only_job_closeout_history.sql', 'utf8');
+const dailyReportScaleIntegrity = fs.readFileSync('supabase/migrations/archive/20260824071000_daily_report_scale_and_integrity.sql', 'utf8');
+const reportAndFinalBillingHardening = fs.readFileSync('supabase/migrations/archive/20260825143000_harden_report_and_final_billing_controls.sql', 'utf8');
+const directRestHardening = fs.readFileSync('supabase/migrations/archive/20260825150000_close_direct_rest_authorization_gaps.sql', 'utf8');
+const dynamicBackupInventory = fs.readFileSync('supabase/migrations/archive/20260825151500_dynamic_backup_table_inventory.sql', 'utf8');
+const ownerJobAccess = fs.readFileSync('supabase/migrations/archive/20260825152000_restore_owner_job_rpc_access.sql', 'utf8');
 const backupScript = fs.readFileSync('scripts/backup-supabase.mjs', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const appPolish = fs.readFileSync('app-polish.js', 'utf8');
@@ -117,16 +117,16 @@ const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
 const timekeepingInput = fs.readFileSync('timekeeping-input-v2.js', 'utf8');
 const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
 const foremanFieldTools = fs.readFileSync('foreman-field-tools.js', 'utf8');
-const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
-const jobJacketIntegrity = fs.readFileSync('supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql', 'utf8');
-const jobJacketReimport = fs.readFileSync('supabase/migrations/20260901031500_job_jacket_reimport_and_revision_delta.sql', 'utf8');
-const packetTimeoutFix = fs.readFileSync('supabase/migrations/20260901045812_optimize_job_packet_review_import.sql', 'utf8');
-const roleGovernance = fs.readFileSync('supabase/migrations/20260901055156_admin_promotion_and_single_owner_governance.sql', 'utf8');
-const moneyVisibility = fs.readFileSync('supabase/migrations/20260901070000_member_money_visibility.sql', 'utf8');
-const moneyVisibilityUpdateFix = fs.readFileSync('supabase/migrations/20260901071000_fix_member_money_permission_update.sql', 'utf8');
-const fieldRoleMoneyPermissions = fs.readFileSync('supabase/migrations/20260901072000_preserve_field_role_money_permissions.sql', 'utf8');
-const detailedFieldMoney = fs.readFileSync('supabase/migrations/20260901073000_mask_detailed_field_money.sql', 'utf8');
-const adminOwnerRecovery = fs.readFileSync('supabase/migrations/20260901074000_admin_owner_recovery.sql', 'utf8');
+const remainingUnitsMigration = fs.readFileSync('supabase/migrations/archive/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
+const jobJacketIntegrity = fs.readFileSync('supabase/migrations/archive/20260901030000_job_jacket_end_to_end_integrity.sql', 'utf8');
+const jobJacketReimport = fs.readFileSync('supabase/migrations/archive/20260901031500_job_jacket_reimport_and_revision_delta.sql', 'utf8');
+const packetTimeoutFix = fs.readFileSync('supabase/migrations/archive/20260901045812_optimize_job_packet_review_import.sql', 'utf8');
+const roleGovernance = fs.readFileSync('supabase/migrations/archive/20260901055156_admin_promotion_and_single_owner_governance.sql', 'utf8');
+const moneyVisibility = fs.readFileSync('supabase/migrations/archive/20260901070000_member_money_visibility.sql', 'utf8');
+const moneyVisibilityUpdateFix = fs.readFileSync('supabase/migrations/archive/20260901071000_fix_member_money_permission_update.sql', 'utf8');
+const fieldRoleMoneyPermissions = fs.readFileSync('supabase/migrations/archive/20260901072000_preserve_field_role_money_permissions.sql', 'utf8');
+const detailedFieldMoney = fs.readFileSync('supabase/migrations/archive/20260901073000_mask_detailed_field_money.sql', 'utf8');
+const adminOwnerRecovery = fs.readFileSync('supabase/migrations/archive/20260901074000_admin_owner_recovery.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const dailyCompanyBackup = fs.readFileSync('.github/workflows/daily-company-data-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');

@@ -5,12 +5,12 @@ import vm from 'node:vm';
 const requiredFiles = [
   'owner.html',
   'billing.html',
-  'supabase/migrations/20260818010000_platform_owner_and_billing.sql',
-  'supabase/migrations/20260818020000_crew_tier_usage_policy.sql',
-  'supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql',
-  'supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql',
-  'supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql',
-  'supabase/migrations/20260825133736_harden_subscription_entitlements.sql',
+  'supabase/migrations/archive/20260818010000_platform_owner_and_billing.sql',
+  'supabase/migrations/archive/20260818020000_crew_tier_usage_policy.sql',
+  'supabase/migrations/archive/20260818030000_crew_tier_automation_and_visibility.sql',
+  'supabase/migrations/archive/20260825000000_lock_crew_usage_rpc_execution.sql',
+  'supabase/migrations/archive/20260824223848_enforce_active_crew_plan_limit.sql',
+  'supabase/migrations/archive/20260825133736_harden_subscription_entitlements.sql',
   'supabase/functions/create-billing-checkout/index.ts',
   'supabase/functions/create-billing-portal/index.ts',
   'supabase/functions/create-plan-upgrade/index.ts',
@@ -38,12 +38,12 @@ const billing = fs.readFileSync('billing.html', 'utf8');
 const app = fs.readFileSync('index.html', 'utf8');
 const support = fs.readFileSync('support.html', 'utf8');
 const training = fs.readFileSync('training/index.html', 'utf8');
-const migration = fs.readFileSync('supabase/migrations/20260818010000_platform_owner_and_billing.sql', 'utf8');
-const crewPolicy = fs.readFileSync('supabase/migrations/20260818020000_crew_tier_usage_policy.sql', 'utf8');
-const crewAutomation = fs.readFileSync('supabase/migrations/20260818030000_crew_tier_automation_and_visibility.sql', 'utf8');
-const crewRpcLockdown = fs.readFileSync('supabase/migrations/20260825000000_lock_crew_usage_rpc_execution.sql', 'utf8');
-const crewLimitMigration = fs.readFileSync('supabase/migrations/20260824223848_enforce_active_crew_plan_limit.sql', 'utf8');
-const entitlementHardening = fs.readFileSync('supabase/migrations/20260825133736_harden_subscription_entitlements.sql', 'utf8');
+const migration = fs.readFileSync('supabase/migrations/archive/20260818010000_platform_owner_and_billing.sql', 'utf8');
+const crewPolicy = fs.readFileSync('supabase/migrations/archive/20260818020000_crew_tier_usage_policy.sql', 'utf8');
+const crewAutomation = fs.readFileSync('supabase/migrations/archive/20260818030000_crew_tier_automation_and_visibility.sql', 'utf8');
+const crewRpcLockdown = fs.readFileSync('supabase/migrations/archive/20260825000000_lock_crew_usage_rpc_execution.sql', 'utf8');
+const crewLimitMigration = fs.readFileSync('supabase/migrations/archive/20260824223848_enforce_active_crew_plan_limit.sql', 'utf8');
+const entitlementHardening = fs.readFileSync('supabase/migrations/archive/20260825133736_harden_subscription_entitlements.sql', 'utf8');
 const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/index.ts', 'utf8');
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
 const upgrade = fs.readFileSync('supabase/functions/create-plan-upgrade/index.ts', 'utf8');

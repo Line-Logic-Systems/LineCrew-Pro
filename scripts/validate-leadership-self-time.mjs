@@ -17,9 +17,9 @@ const customExport = read('custom-time-export.js');
 const payroll = read('timekeeping-payroll.js');
 const timekeeping = read('timekeeping.js');
 const foremanTools = read('foreman-field-tools.js');
-const migration = read('supabase/migrations/20260828172839_leadership_self_time.sql');
-const managedMigration = read('supabase/migrations/20260828203148_leadership_add_other_people.sql');
-const adminRosterMigration = read('supabase/migrations/20260829084727_admin_time_roster_assignments.sql');
+const migration = read('supabase/migrations/archive/20260828172839_leadership_self_time.sql');
+const managedMigration = read('supabase/migrations/archive/20260828203148_leadership_add_other_people.sql');
+const adminRosterMigration = read('supabase/migrations/archive/20260829084727_admin_time_roster_assignments.sql');
 
 if (module.includes('if (elapsed <= 0) elapsed += 1440;')) {
   throw new Error('Equal start and stop times must not be converted into a 24-hour shift.');

@@ -1441,7 +1441,7 @@ if (packetFallbackStart < 0 || packetFallbackEnd < 0) {
 }
 
 const transferMigrationPath =
-  'supabase/migrations/20260831050000_smart_pricebook_and_packet_transfers.sql';
+  'supabase/migrations/archive/20260831050000_smart_pricebook_and_packet_transfers.sql';
 assert(fs.existsSync(transferMigrationPath), 'Missing packet Transfer database migration.');
 if (fs.existsSync(transferMigrationPath)) {
   const transferMigration = fs.readFileSync(transferMigrationPath, 'utf8');
@@ -1466,7 +1466,7 @@ if (fs.existsSync(transferMigrationPath)) {
 }
 
 const jobJacketIntegrityMigrationPath =
-  'supabase/migrations/20260901030000_job_jacket_end_to_end_integrity.sql';
+  'supabase/migrations/archive/20260901030000_job_jacket_end_to_end_integrity.sql';
 assert(
   fs.existsSync(jobJacketIntegrityMigrationPath),
   'Missing end-to-end Job Jacket integrity migration.'
@@ -1585,7 +1585,7 @@ if (fs.existsSync(jobJacketIntegrityMigrationPath)) {
 }
 
 const packetTimeoutMigrationPath =
-  'supabase/migrations/20260901045812_optimize_job_packet_review_import.sql';
+  'supabase/migrations/archive/20260901045812_optimize_job_packet_review_import.sql';
 assert(
   fs.existsSync(packetTimeoutMigrationPath),
   'Missing Job Jacket review/finalization timeout migration.'
@@ -1629,7 +1629,7 @@ for (const marker of [
   assert(html.includes(marker), `Missing Admin dashboard/setup usability marker: ${marker}`);
 }
 const dashboardPreferenceMigrationPath =
-  'supabase/migrations/20260831143000_user_dashboard_preferences.sql';
+  'supabase/migrations/archive/20260831143000_user_dashboard_preferences.sql';
 assert(
   fs.existsSync(dashboardPreferenceMigrationPath),
   'Missing per-account dashboard preference migration.'

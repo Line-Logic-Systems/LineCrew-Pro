@@ -5,7 +5,7 @@ import process from 'node:process';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const app = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const migration = fs.readFileSync(
-  path.join(root, 'supabase/migrations/20260830002006_company_logo_upload.sql'),
+  path.join(root, 'supabase/migrations/archive/20260830002006_company_logo_upload.sql'),
   'utf8'
 );
 

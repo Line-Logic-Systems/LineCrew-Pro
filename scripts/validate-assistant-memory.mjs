@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
-const migrationPath = 'supabase/migrations/20260830174354_assistant_memory_reminders.sql';
+const migrationPath = 'supabase/migrations/archive/20260830174354_assistant_memory_reminders.sql';
 const migration = fs.readFileSync(migrationPath,'utf8');
-const indexMigration = fs.readFileSync('supabase/migrations/20260830175934_index_assistant_memory_foreign_keys.sql','utf8');
+const indexMigration = fs.readFileSync('supabase/migrations/archive/20260830175934_index_assistant_memory_foreign_keys.sql','utf8');
 const edge = fs.readFileSync('supabase/functions/linecrew-assistant/index.ts','utf8');
 const app = fs.readFileSync('index.html','utf8');
 

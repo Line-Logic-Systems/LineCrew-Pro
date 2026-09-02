@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const dir = 'supabase/migrations';
+const dir = 'supabase/migrations/archive';
 const excludedFunctions = new Set([
   // This function's TABLE return shape evolved after the legacy compatibility
   // layer was introduced. Replacing it here can abort with PostgreSQL 42P13.
@@ -48,6 +48,6 @@ for(const block of unique.values()){
   out += `-- Source: ${block.source}\n${block.sql}\n\n`;
 }
 out += 'commit;\n';
-fs.writeFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', out);
+fs.writeFileSync('supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql', out);
 console.log(`Generated Owner compatibility for ${unique.size} functions.`);
 for(const block of unique.values()) console.log('-', block.fn, '<-', block.source);
