@@ -48,7 +48,7 @@ jobs:
           done < <(find . -type f \
             -not -path './.git/*' \
             -not -path './supabase/migrations/*' \
-            -not -path './.github/workflows/stage-migration-baseline-once.yml' \
+            -not -path './.github/*' \
             -print0)
 
           stale_reference=0
@@ -59,7 +59,7 @@ jobs:
           done < <(find . -type f \
             -not -path './.git/*' \
             -not -path './supabase/migrations/*' \
-            -not -path './.github/workflows/stage-migration-baseline-once.yml' \
+            -not -path './.github/*' \
             -print0)
           test "$stale_reference" -eq 0
 
@@ -90,8 +90,7 @@ jobs:
       - name: Commit the reviewable baseline transition
         run: |
           set -euo pipefail
-          git rm .github/workflows/stage-migration-baseline-once.yml
-          git add supabase scripts .github internal-docs
+          git add supabase scripts internal-docs
           test "$(find supabase/migrations -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 1
           test "$(find supabase/migrations/archive -maxdepth 1 -type f -name '*.sql' | wc -l)" -eq 166
           git config user.name "github-actions[bot]"
