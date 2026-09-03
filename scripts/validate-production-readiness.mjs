@@ -767,6 +767,9 @@ assert(index.includes("' supervisor-compact-report'"), 'Supervisor Production re
 assert(index.includes('jobName + \' · \' + foreman'), 'Compact supervisor rows must identify both the job and Foreman.');
 assert(hasVersionedAsset(expandedJsa, 'role-workspace-polish.js'), 'Role workspace management labels must use a cache version.');
 assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
+assert((index.match(/const totalHours =/g) || []).length === 2, 'Both production run-rate paths must use total actual hours.');
+assert(!index.includes('weightedHours') && !index.includes('(Number(report?.overtime_hours || 0) * 1.5)'), 'Production run rates must not weight OT hours.');
+assert(timekeeping.includes('const denominator=reg+ot;') && !timekeeping.includes('const denominator=reg+(ot*1.5);'), 'Role-level Actual and Field MH Run Rates must use Regular + OT actual hours.');
 assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');
 assert(index.includes('function userCanSeeFieldMoney()'), 'Field-money visibility helper is missing.');
 assert(index.includes("'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)"), 'Production report cards must color only the field man-hour rate number.');
