@@ -165,6 +165,25 @@
     applyTheme(preferredTheme());
   }
 
+  function syncGfDashboardReviewAlert(count){
+    if(role() !== 'gf') return;
+    const card = byId('dashboardReviewAlert');
+    if(!card) return;
+    if(!count){
+      card.classList.add('hidden');
+      return;
+    }
+    const text = byId('dashboardReviewAlertText');
+    const button = byId('openProductionReview');
+    const heading = card.querySelector('h3');
+    if(text){
+      text.textContent = `${count} submitted daily report${count===1?'':'s'} waiting for GF review.`;
+    }
+    if(heading) heading.textContent = 'Production Needs Review';
+    if(button) button.textContent = 'Review Reports';
+    card.classList.remove('hidden');
+  }
+
   async function refreshProductionBadge(){
     clearTimeout(badgeTimer);
     const tile = byId('productionTile');
@@ -189,7 +208,11 @@
       const {count,error} = await query;
       if(error) throw error;
       let badge = byId('lcProductionReviewBadge');
-      if(!count){ badge?.remove(); return; }
+      if(!count){
+        badge?.remove();
+        syncGfDashboardReviewAlert(0);
+        return;
+      }
       if(!badge){
         badge = document.createElement('span');
         badge.id = 'lcProductionReviewBadge';
@@ -199,6 +222,7 @@
       badge.textContent = count > 99 ? '99+' : String(count);
       badge.title = `${count} Daily Report${count===1?'':'s'} waiting for your review`;
       badge.setAttribute('aria-label', badge.title);
+      syncGfDashboardReviewAlert(count);
     }catch(error){
       console.warn('Unable to refresh GF Production review badge:', error.message || error);
     }
