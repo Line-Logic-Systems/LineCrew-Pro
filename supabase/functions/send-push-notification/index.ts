@@ -2,7 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import webpush from "npm:web-push@3.6.7";
 import { getPublishableKey, getSecretKey } from "../_shared/api-keys.ts";
 
-const VAPID_PUBLIC_KEY = "BM_YU4CTfcI5UWlr0EPYUSTLUO4sQNa0xcSHBUWQNBEwi9N5pHd6Onf43S8dqpYv5vyoUymqyB-nK-x-_Mu-nhE";
+const VAPID_PUBLIC_KEY = "BGJsa3SAbOkoEWevDwhvoGG1fT4v2CkeQjX7QD-Tblo4Hh2I7YZYfQWx9CWiF8xPHRWGWYkjVAO6774-hHFKx30";
 const allowedOrigins = new Set([
   "https://app.linecrewpro.com",
   ...(Deno.env.get("CORS_ALLOWED_ORIGINS") || "").split(",").map((value) => value.trim()).filter(Boolean),
