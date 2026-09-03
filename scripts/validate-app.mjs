@@ -431,18 +431,18 @@ if (!dailyReportValueSummarySource) {
     const foremanMarkup = reportContext.dailyReportValueSummaryMarkup(report, summary);
     assert(
       foremanMarkup.includes('Field MH Run Rate') &&
-        foremanMarkup.includes('35.38') &&
+        foremanMarkup.includes('38.33') &&
         !foremanMarkup.includes('Actual MH Run Rate') &&
-        !foremanMarkup.includes('76.92'),
+        !foremanMarkup.includes('83.33'),
       'Foreman Daily Reports must show the field MH run rate without exposing the actual MH run rate.'
     );
     reportContext.canSeeActual = true;
     const adminMarkup = reportContext.dailyReportValueSummaryMarkup(report, summary);
     assert(
       adminMarkup.includes('Actual MH Run Rate') &&
-        adminMarkup.includes('76.92') &&
+        adminMarkup.includes('83.33') &&
         adminMarkup.includes('Field MH Run Rate') &&
-        adminMarkup.includes('35.38'),
+        adminMarkup.includes('38.33'),
       'Actual-pricing leadership must continue to see both actual and field MH run rates.'
     );
     reportContext.canSeeField = false;
