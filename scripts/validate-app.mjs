@@ -1937,6 +1937,15 @@ if (fs.existsSync('role-workspace-polish.js')) {
       roleWorkspaceCode.includes("grid.dataset.userDashboardCustomOrder==='true'"),
     'Role workspace must preserve each Admin or Owner dashboard layout.'
   );
+  assert(
+    roleWorkspaceCode.includes("document.addEventListener('touchmove',onMove,{passive:false})") &&
+      roleWorkspaceCode.includes("showIndicator('Refreshing…'") &&
+      roleWorkspaceCode.includes("showIndicator('Updated'") &&
+      roleWorkspaceCode.includes("Finish or cancel your current work before refreshing.") &&
+      roleWorkspaceCode.includes("page==='timekeepingPage'&&byId('tkSaveAssignmentsBtn')?.disabled===false") &&
+      roleWorkspaceCode.includes("page==='teamPage'&&teamRoleDirty"),
+    'Mobile pull-to-refresh must refresh data visibly without discarding open or unsaved work.'
+  );
 }
 
 if (fs.existsSync('training/training-center.js')) {

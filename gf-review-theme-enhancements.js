@@ -348,8 +348,10 @@
     });
     document.addEventListener('visibilitychange',()=>{if(!document.hidden){refreshUi();scheduleBadge();}});
     window.addEventListener('focus',()=>{refreshUi();scheduleBadge();});
+    window.addEventListener('linecrew:mobile-data-refreshed',()=>scheduleBadge(0));
     [0,250,800,1800,3500].forEach(delay=>setTimeout(refreshUi,delay));
     setInterval(()=>{scheduleBadge(0);refreshOpenCrewTimeCards();},30000);
   }
+  window.linecrewRefreshGfProductionBadge=refreshProductionBadge;
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();
 })();
