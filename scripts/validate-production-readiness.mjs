@@ -162,6 +162,12 @@ for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Polic
 }
 assert(vercelText.includes("frame-ancestors 'none'"), 'App must prevent framing/clickjacking.');
 assert(vercelText.includes('noindex, nofollow'), 'Operational app should not be indexed by search engines.');
+assert(
+  vercel.headers
+    .filter(rule => rule.headers?.some(header => header.key === 'Content-Security-Policy'))
+    .every(rule => rule.headers.find(header => header.key === 'Content-Security-Policy').value.includes("connect-src 'self' https://cdn.jsdelivr.net")),
+  'Every app CSP must allow the service worker to cache the pinned Supabase runtime from jsDelivr.'
+);
 
 const publicSecretPatterns = [
   ['OpenAI secret key', /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/],
@@ -709,7 +715,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v58"),
+    serviceWorker.includes("linecrew-pro-shell-v59"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
 );
 
