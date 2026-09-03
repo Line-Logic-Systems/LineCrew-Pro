@@ -34,7 +34,7 @@ Teach an Admin how to upload an employee roster, review company time, filter rec
 ## Scene 6 — Production run rate
 **Callout:** Run Rate
 
-**Narration:** The same crew time also feeds Production Reporting. Regular and OT stay separate in Timekeeping. For the man-hour run-rate calculation only, OT is valued at one and a half times Regular time so the production value can be compared against the crew’s labor effort.
+**Narration:** The same crew time also feeds Production Reporting. Regular and OT stay separate in Timekeeping. For the man-hour run-rate calculation, Regular and OT hours are added together as total actual crew hours so the same work completed in the same time produces the same rate regardless of when the hours were worked.
 
 ## Closing
 **Callout:** One Time Record
