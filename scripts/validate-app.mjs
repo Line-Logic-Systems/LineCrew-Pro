@@ -63,6 +63,22 @@ assert(
     html.includes('Your feedback was saved and emailed to Support.'),
   'Pilot feedback must save first and then invoke the authenticated support email notifier.'
 );
+assert(
+  html.includes('userVisibleOnly:true') &&
+    html.includes('applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)'),
+  'Push notification subscriptions must use a visible notification and the committed VAPID public key.'
+);
+const disablePushSource = extractNamedFunction(html, 'disablePushNotifications');
+assert(
+  disablePushSource.includes('await subscription.unsubscribe()') &&
+    disablePushSource.includes("sb.rpc('linecrew_delete_push_subscription'"),
+  'Disabling push notifications must unsubscribe the browser before deleting the caller-owned endpoint.'
+);
+assert(
+  html.includes('/iPad|iPhone|iPod/.test(navigator.userAgent)') &&
+    html.includes('add LineCrew Pro to your Home Screen first: Share → Add to Home Screen.'),
+  'iPhone notification setup must require Home Screen installation before offering Enable.'
+);
 
 const technicalErrorSource = extractNamedFunction(html, 'recordTechnicalError');
 if (!technicalErrorSource) {

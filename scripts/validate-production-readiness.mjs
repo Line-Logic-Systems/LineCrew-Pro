@@ -27,6 +27,8 @@ const mustExist = [
   'supabase/functions/complete-team-invitation-signup/index.ts',
   'supabase/functions/_shared/api-keys.ts',
   'supabase/functions/_shared/api-keys_test.ts',
+  'supabase/functions/send-push-notification/index.ts',
+  'supabase/migrations/20260903023149_push_subscriptions.sql',
   'supabase/migrations/archive/20260818_owner_superintendent_roles.sql',
   'supabase/migrations/archive/20260818_owner_superintendent_team_access.sql',
   'supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql',
@@ -84,6 +86,9 @@ const teamInvitation = fs.readFileSync('supabase/functions/send-team-invitation/
 const pilotFeedbackNotifier = fs.readFileSync('supabase/functions/notify-pilot-feedback/index.ts', 'utf8');
 const invitationSignup = fs.readFileSync('supabase/functions/complete-team-invitation-signup/index.ts', 'utf8');
 const edgeApiKeys = fs.readFileSync('supabase/functions/_shared/api-keys.ts', 'utf8');
+const pushNotifier = fs.readFileSync('supabase/functions/send-push-notification/index.ts', 'utf8');
+const pushSubscriptions = fs.readFileSync('supabase/migrations/20260903023149_push_subscriptions.sql', 'utf8');
+const supabaseConfig = fs.readFileSync('supabase/config.toml', 'utf8');
 const roleMigration = fs.readFileSync('supabase/migrations/archive/20260818_owner_superintendent_roles.sql', 'utf8');
 const ownerCompat = fs.readFileSync('supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql', 'utf8');
 const superintendentCompat = fs.readFileSync('supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
@@ -165,6 +170,37 @@ const publicSecretPatterns = [
   ['Private key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/]
 ];
 for (const [label, pattern] of publicSecretPatterns) assert(!pattern.test(index), `${label} appears in public index.html`);
+
+for (const marker of [
+  'alter table public.push_subscriptions enable row level security',
+  'revoke all on public.push_subscriptions from public, anon, authenticated',
+  'grant select, update, delete on public.push_subscriptions to service_role',
+  'security definer',
+  "set search_path to ''",
+  'linecrew_save_push_subscription',
+  'linecrew_delete_push_subscription',
+  'linecrew_my_push_status',
+  'on conflict (endpoint) do update',
+  'subscription.user_id = v_user_id',
+  'grant execute on function public.linecrew_my_push_status() to authenticated'
+]) assert(pushSubscriptions.includes(marker), `Push subscription security marker missing: ${marker}`);
+for (const marker of [
+  'npm:web-push@3.6.7',
+  'Deno.env.get("CORS_ALLOWED_ORIGINS")',
+  'if (origin && !allowedOrigins.has(origin))',
+  'mode === "test"',
+  '.eq("user_id", userData.user.id)',
+  'request.headers.get("x-push-cron-secret")',
+  'status === 404 || status === 410',
+  'nextFailureCount > 10',
+  'last_success_at: new Date().toISOString()',
+  'event: "push_delivery_completed"'
+]) assert(pushNotifier.includes(marker), `Push delivery marker missing: ${marker}`);
+assert(!pushNotifier.includes('console.log(subscription'), 'Push delivery logs must not expose subscription endpoints or keys.');
+assert(
+  /\[functions\.send-push-notification\]\s+verify_jwt = false/.test(supabaseConfig),
+  'Push delivery must disable the legacy gateway verifier and authenticate both modes in the handler.'
+);
 
 assert(assistant.includes('client.auth.getUser()'), 'AI assistant must authenticate the caller.');
 assert(assistant.includes('.select("company_id, role, active")'), 'AI assistant must load role and active status server-side.');
@@ -673,7 +709,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v56"),
+    serviceWorker.includes("linecrew-pro-shell-v57"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
 );
 

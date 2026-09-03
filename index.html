@@ -1855,6 +1855,15 @@ Cancel
 <button id="saveMyProfile" class="success small">Save My Profile</button>
 <button id="cancelMyProfile" class="secondary small">Cancel</button>
 </div>
+<div id="pushNotificationsCard" class="job-card">
+<h3>Notifications</h3>
+<p id="pushNotificationStatus" class="muted" aria-live="polite">Checking notification status…</p>
+<div class="button-row">
+<button id="enablePushNotifications" class="success small hidden" type="button">Enable Notifications</button>
+<button id="sendTestPushNotification" class="secondary small hidden" type="button">Send Test Notification</button>
+<button id="disablePushNotifications" class="danger small hidden" type="button">Disable Notifications</button>
+</div>
+</div>
 </div>
 <div class="grid" id="dashboardTileGrid">
 <div class="metric" id="jobsTile">
@@ -3712,6 +3721,7 @@ const SUPABASE_URL = IS_LINECREW_PRODUCTION
 const SUPABASE_KEY = IS_LINECREW_PRODUCTION
 ? 'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF'
 : 'sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx';
+const VAPID_PUBLIC_KEY = 'BGJsa3SAbOkoEWevDwhvoGG1fT4v2CkeQjX7QD-Tblo4Hh2I7YZYfQWx9CWiF8xPHRWGWYkjVAO6774-hHFKx30';
 const sb = supabase.createClient(
 SUPABASE_URL,
 SUPABASE_KEY
@@ -5037,6 +5047,7 @@ loadDashboardReviewAlert(),
 loadCompanyOnboarding(),
 primeOfflineJsaJobs(),
 loadDashboardTileOrder(),
+loadPushNotificationStatus(),
 userCanUseAssistant() ? loadAssistantMemories() : Promise.resolve([])
 ]);
 if(requestedBillingReturn && userIsCompanyAdmin()){
@@ -10439,6 +10450,136 @@ return;
 window.location.reload();
 };
 updateDesktopViewToggle();
+function urlBase64ToUint8Array(value){
+const padding = '='.repeat((4 - value.length % 4) % 4);
+const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+const raw = window.atob(base64);
+return Uint8Array.from(raw, character => character.charCodeAt(0));
+}
+function setPushNotificationUi(status,{enable=false,test=false,disable=false}={}){
+$('pushNotificationStatus').textContent = status;
+$('enablePushNotifications').classList.toggle('hidden', !enable);
+$('sendTestPushNotification').classList.toggle('hidden', !test);
+$('disablePushNotifications').classList.toggle('hidden', !disable);
+}
+function pushUnsupportedReason(){
+if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+return 'Not supported on this browser.';
+}
+if(/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.navigator.standalone){
+return 'On iPhone, add LineCrew Pro to your Home Screen first: Share → Add to Home Screen.';
+}
+if(Notification.permission === 'denied'){
+return 'Blocked in browser settings. Allow notifications for LineCrew Pro in this device’s browser or app settings.';
+}
+return '';
+}
+async function loadPushNotificationStatus(){
+const reason = pushUnsupportedReason();
+if(reason){
+setPushNotificationUi(reason);
+return;
+}
+if(!navigator.onLine){
+setPushNotificationUi('Notification status is unavailable while offline.');
+return;
+}
+if(Notification.permission !== 'granted'){
+setPushNotificationUi('Off on this device.', {enable:true});
+return;
+}
+try{
+const registration = await navigator.serviceWorker.ready;
+const subscription = await registration.pushManager.getSubscription();
+const {data,error} = await sb.rpc('linecrew_my_push_status');
+if(error) throw error;
+const count = Number((Array.isArray(data) ? data[0]?.subscription_count : data?.subscription_count) || 0);
+if(subscription && count > 0){
+setPushNotificationUi('On for this device.', {test:true,disable:true});
+}else if(subscription){
+setPushNotificationUi('Off on this device. Enable notifications to reconnect this device.', {enable:true,disable:true});
+}else{
+setPushNotificationUi(count > 0 ? 'Off on this device. Notifications are enabled on another device.' : 'Off on this device.', {enable:true});
+}
+}catch(error){
+console.warn('Unable to load push notification status.', error);
+setPushNotificationUi('Unable to verify notification status. Try again.', {enable:true});
+}
+}
+async function enablePushNotifications(){
+const button = $('enablePushNotifications');
+button.disabled = true;
+setPushNotificationUi('Requesting notification permission…');
+try{
+const reason = pushUnsupportedReason();
+if(reason) throw new Error(reason);
+const permission = await Notification.requestPermission();
+if(permission !== 'granted'){
+await loadPushNotificationStatus();
+return;
+}
+const registration = await navigator.serviceWorker.ready;
+const subscription = await registration.pushManager.subscribe({
+userVisibleOnly:true,
+applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+});
+const json = subscription.toJSON();
+if(!json.keys?.p256dh || !json.keys?.auth) throw new Error('This device did not return valid notification keys.');
+const {error} = await sb.rpc('linecrew_save_push_subscription', {
+p_endpoint:subscription.endpoint,
+p_p256dh:json.keys.p256dh,
+p_auth:json.keys.auth,
+p_user_agent:navigator.userAgent.slice(0, 300)
+});
+if(error) throw error;
+await loadPushNotificationStatus();
+}catch(error){
+console.warn('Unable to enable push notifications.', error);
+setPushNotificationUi(error?.message || 'Unable to enable notifications on this device.', {enable:true});
+}finally{
+button.disabled = false;
+}
+}
+async function disablePushNotifications(){
+const button = $('disablePushNotifications');
+button.disabled = true;
+try{
+const registration = await navigator.serviceWorker.ready;
+const subscription = await registration.pushManager.getSubscription();
+if(subscription){
+const endpoint = subscription.endpoint;
+await subscription.unsubscribe();
+const {error} = await sb.rpc('linecrew_delete_push_subscription', {p_endpoint:endpoint});
+if(error) throw error;
+}
+await loadPushNotificationStatus();
+}catch(error){
+console.warn('Unable to disable push notifications.', error);
+setPushNotificationUi(error?.message || 'Unable to disable notifications on this device.', {disable:true});
+}finally{
+button.disabled = false;
+}
+}
+async function sendTestPushNotification(){
+const button = $('sendTestPushNotification');
+button.disabled = true;
+button.textContent = 'Sending…';
+try{
+const {data,error} = await sb.functions.invoke('send-push-notification', {body:{mode:'test'}});
+if(error || data?.error) throw new Error(data?.error || error?.message || 'Test notification failed.');
+if(Number(data?.sent || 0) < 1) throw new Error('No enabled notification device was found.');
+setPushNotificationUi('Test sent. Close or background LineCrew Pro and confirm the notification appears.', {test:true,disable:true});
+}catch(error){
+console.warn('Unable to send a test push notification.', error);
+setPushNotificationUi(error?.message || 'Unable to send a test notification.', {test:true,disable:true});
+}finally{
+button.disabled = false;
+button.textContent = 'Send Test Notification';
+}
+}
+$('enablePushNotifications').onclick = enablePushNotifications;
+$('disablePushNotifications').onclick = disablePushNotifications;
+$('sendTestPushNotification').onclick = sendTestPushNotification;
 $('toggleMyProfile').onclick = () => {
 $('myProfileEditor').classList.remove('hidden');
 $('myProfileName').focus();
