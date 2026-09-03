@@ -2022,9 +2022,9 @@ Save Company Settings
 <div id="companyMhRateSettings" class="job-card hidden">
 <h3>Required Man-Hour Rate</h3>
 <p class="muted">
-Set the company break-even target per weighted man-hour. Production views show red more than 5% below it, yellow within 5% below it, and green at or above it.
+Set the company production target per man-hour. Production views show red more than 5% below it, yellow within 5% below it, and green at or above it.
 </p>
-<label for="companyRequiredMhRate">Target ($ per weighted man-hour)</label>
+<label for="companyRequiredMhRate">Target ($ per man-hour)</label>
 <input id="companyRequiredMhRate" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="Example: 45.00">
 <p class="muted">Leave blank or enter 0 to turn off target colors.</p>
 <button id="saveCompanyMhRate" class="success small">Save MH Rate Target</button>
@@ -9669,7 +9669,7 @@ answer:'Owner/Admin or an authorized Superintendent edits the Contract and sets 
 },
 {
 terms:['job progress','percentage complete','completion','authorized value','remaining value','man hour rate','my man hour rate','mh rate','burn rate','red yellow green','rate target'],
-answer:'By default, Foremen see Field MH Run Rate on their own Daily Reports in Production, calculated only from field unit value. Owner/Admin can separately allow or hide Actual Money and Field Money for each Foreman, General Foreman and Superintendent in Team > Money Visibility. Actual MH Run Rate appears only when Actual Money is checked; Field MH Run Rate appears only when Field Money is checked. Supervisors open Jobs & Crew Progress or Production for progress. Field MH Run Rate is field unit value divided by weighted hours (Regular + 1.5 × OT). Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Red is below 95% of target, yellow is 95% up to but not including the exact target, and green is at or above target. It is an operational rate, not payroll cost or guaranteed profit.'
+answer:'By default, Foremen see Field MH Run Rate on their own Daily Reports in Production, calculated only from field unit value. Owner/Admin can separately allow or hide Actual Money and Field Money for each Foreman, General Foreman and Superintendent in Team > Money Visibility. Actual MH Run Rate appears only when Actual Money is checked; Field MH Run Rate appears only when Field Money is checked. Supervisors open Jobs & Crew Progress or Production for progress. Field MH Run Rate is field unit value divided by total actual crew hours (Regular + OT). Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Red is below 95% of target, yellow is 95% up to but not including the exact target, and green is at or above target. It is an operational rate, not payroll cost or guaranteed profit.'
 },
 {
 terms:['attachment','photo','print','pdf','save pdf'],
@@ -17142,14 +17142,14 @@ if(!canSeeActual && !canSeeField){
 return '<br><span class="muted">Unit values hidden by company permissions.</span>';
 }
 const hasAdjustment = summary.has_adjustment === true;
-const weightedHours =
+const totalHours =
 Number(report?.regular_hours || 0) +
-(Number(report?.overtime_hours || 0) * 1.5);
-const actualRunRate = weightedHours > 0
-? Number(summary.actual_total || 0) / weightedHours
+Number(report?.overtime_hours || 0);
+const actualRunRate = totalHours > 0
+? Number(summary.actual_total || 0) / totalHours
 : 0;
-const fieldRunRate = weightedHours > 0
-? Number(summary.adjusted_total || 0) / weightedHours
+const fieldRunRate = totalHours > 0
+? Number(summary.adjusted_total || 0) / totalHours
 : 0;
 const runRateMarkup =
 (canSeeActual
@@ -17201,15 +17201,15 @@ escapeHtml(statusText) + '</span>';
 }
 function dailyReportTargetDotMarkup(report, summary){
 if(!userCanSeeFieldMoney() || (!userCanReviewProduction() && !userCanUseReporting())) return '';
-const weightedHours =
+const totalHours =
 Number(report?.regular_hours || 0) +
-(Number(report?.overtime_hours || 0) * 1.5);
+Number(report?.overtime_hours || 0);
 const hasRunRate =
 summary &&
 Number(summary.unit_line_count || 0) > 0 &&
-weightedHours > 0;
+totalHours > 0;
 const fieldRunRate = hasRunRate
-? Number(summary.adjusted_total || 0) / weightedHours
+? Number(summary.adjusted_total || 0) / totalHours
 : NaN;
 const status = hasRunRate ? manHourTargetStatus(fieldRunRate) : null;
 const className = status ? status.key : 'not-set';
