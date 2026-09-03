@@ -5047,7 +5047,6 @@ loadDashboardReviewAlert(),
 loadCompanyOnboarding(),
 primeOfflineJsaJobs(),
 loadDashboardTileOrder(),
-loadPushNotificationStatus(),
 userCanUseAssistant() ? loadAssistantMemories() : Promise.resolve([])
 ]);
 if(requestedBillingReturn && userIsCompanyAdmin()){
@@ -5070,6 +5069,9 @@ true
 );
 show('dashboardPage');
 }
+// Push support is optional and iOS can leave serviceWorker.ready pending.
+// Never let notification detection hold the authenticated app startup open.
+void loadPushNotificationStatus();
 }
 /* LOGIN */
 $('loginBtn').onclick = async()=>{
@@ -10463,7 +10465,7 @@ $('sendTestPushNotification').classList.toggle('hidden', !test);
 $('disablePushNotifications').classList.toggle('hidden', !disable);
 }
 function pushUnsupportedReason(){
-if(!('serviceWorker' in navigator) || !('PushManager' in window)){
+if(!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)){
 return 'Not supported on this browser.';
 }
 if(/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.navigator.standalone){
@@ -10473,6 +10475,36 @@ if(Notification.permission === 'denied'){
 return 'Blocked in browser settings. Allow notifications for LineCrew Pro in this device’s browser or app settings.';
 }
 return '';
+}
+function pushPromiseWithTimeout(promise, timeoutMs, message){
+let timeoutId;
+const timeout = new Promise((_, reject) => {
+timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+});
+return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+async function getPushServiceWorkerRegistration(){
+const timeoutMessage = 'Notification setup did not finish on this device. Close LineCrew Pro, reopen it from the Home Screen, and try again.';
+let registration = await pushPromiseWithTimeout(
+navigator.serviceWorker.getRegistration(),
+5000,
+timeoutMessage
+);
+if(!registration){
+registration = await pushPromiseWithTimeout(
+navigator.serviceWorker.register('/service-worker.js'),
+8000,
+timeoutMessage
+);
+}
+if(!registration.active){
+registration = await pushPromiseWithTimeout(
+navigator.serviceWorker.ready,
+8000,
+timeoutMessage
+);
+}
+return registration;
 }
 async function loadPushNotificationStatus(){
 const reason = pushUnsupportedReason();
@@ -10489,7 +10521,7 @@ setPushNotificationUi('Off on this device.', {enable:true});
 return;
 }
 try{
-const registration = await navigator.serviceWorker.ready;
+const registration = await getPushServiceWorkerRegistration();
 const subscription = await registration.pushManager.getSubscription();
 const {data,error} = await sb.rpc('linecrew_my_push_status');
 if(error) throw error;
@@ -10518,7 +10550,8 @@ if(permission !== 'granted'){
 await loadPushNotificationStatus();
 return;
 }
-const registration = await navigator.serviceWorker.ready;
+setPushNotificationUi('Connecting this device…');
+const registration = await getPushServiceWorkerRegistration();
 const subscription = await registration.pushManager.subscribe({
 userVisibleOnly:true,
 applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
@@ -10544,7 +10577,7 @@ async function disablePushNotifications(){
 const button = $('disablePushNotifications');
 button.disabled = true;
 try{
-const registration = await navigator.serviceWorker.ready;
+const registration = await getPushServiceWorkerRegistration();
 const subscription = await registration.pushManager.getSubscription();
 if(subscription){
 const endpoint = subscription.endpoint;

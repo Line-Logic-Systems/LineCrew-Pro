@@ -79,6 +79,18 @@ assert(
     html.includes('add LineCrew Pro to your Home Screen first: Share → Add to Home Screen.'),
   'iPhone notification setup must require Home Screen installation before offering Enable.'
 );
+const loadAppSource = extractNamedFunction(html, 'loadApp');
+assert(
+  loadAppSource.includes('void loadPushNotificationStatus();') &&
+    !loadAppSource.includes('loadPushNotificationStatus(),'),
+  'Optional push status detection must run in the background and never block authenticated app startup.'
+);
+assert(
+  html.includes('function pushPromiseWithTimeout(') &&
+    html.includes("navigator.serviceWorker.register('/service-worker.js')") &&
+    html.includes('Notification setup did not finish on this device.'),
+  'Push setup must explicitly register the service worker and stop waiting with a useful timeout.'
+);
 
 const technicalErrorSource = extractNamedFunction(html, 'recordTechnicalError');
 if (!technicalErrorSource) {
