@@ -1863,6 +1863,16 @@ Cancel
 <button id="sendTestPushNotification" class="secondary small hidden" type="button">Send Test Notification</button>
 <button id="disablePushNotifications" class="danger small hidden" type="button">Disable Notifications</button>
 </div>
+<div id="gfNotificationPreference" class="hidden" style="margin-top:14px">
+<label for="gfNotificationDeliveryMode">General Foreman Alerts</label>
+<select id="gfNotificationDeliveryMode">
+<option value="submitted_and_reminders">Submitted + reminders</option>
+<option value="submitted_only">Submitted only</option>
+</select>
+<p class="muted" style="font-size:12px;margin-top:5px">Submitted alerts include completed JSAs and Daily Reports from your assigned Foremen. Reminders cover missing or late items.</p>
+<button id="saveGfNotificationPreference" class="success small" type="button">Save Alert Choice</button>
+<span id="gfNotificationPreferenceStatus" class="muted" aria-live="polite"></span>
+</div>
 </div>
 </div>
 <div class="grid" id="dashboardTileGrid">
@@ -2036,6 +2046,21 @@ Review, approve, deny or revoke temporary LineCrew Pro diagnostic access. Every 
 <option value="both">Allow Both</option>
 </select>
 <button id="saveCompanyJsaMethod" class="success small">Save JSA Option</button>
+</div>
+<div id="notificationReminderSettingsCard" class="job-card hidden">
+<h3>Notification Reminder Times</h3>
+<p class="muted">Times use the company time zone. Leave a time blank to turn that reminder off.</p>
+<div class="form-grid">
+<div>
+<label for="dailyReportReminderTime">Daily Report Reminder</label>
+<input id="dailyReportReminderTime" type="time">
+</div>
+<div>
+<label for="jsaReminderTime">JSA Reminder</label>
+<input id="jsaReminderTime" type="time">
+</div>
+</div>
+<button id="saveNotificationReminderTimes" class="success small" type="button">Save Reminder Times</button>
 </div>
 <div class="job-card">
 <h3>Redline Approval</h3>
@@ -3739,6 +3764,7 @@ document.getElementById(id);
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
 const requestedBillingReturn = new URLSearchParams(window.location.search).get('billing') === '1';
+const requestedNotificationDestination = String(new URLSearchParams(window.location.search).get('notification') || '').trim().toLowerCase();
 const PAID_SIGNUP_PLANS = Object.freeze({starter:'Starter',business:'Business',pro:'Pro',enterprise:'Enterprise'});
 let requestedSignupPlan = String(new URLSearchParams(window.location.search).get('plan') || '').trim().toLowerCase();
 if(!requestedSignupPlan){
@@ -5020,6 +5046,13 @@ $('companyPrimaryColor').value =
 $('companyTimezone').value =
 company?.timezone || 'America/Chicago';
 $('companyWeekStartDay').value = String(Number.isInteger(Number(company?.week_start_day)) ? Number(company.week_start_day) : 1);
+$('notificationReminderSettingsCard').classList.toggle('hidden', !userIsCompanyAdmin());
+$('dailyReportReminderTime').value = company?.daily_report_reminder_time
+? String(company.daily_report_reminder_time).slice(0,5)
+: '';
+$('jsaReminderTime').value = company?.jsa_reminder_time
+? String(company.jsa_reminder_time).slice(0,5)
+: '';
 $('companyMhRateSettings').classList.toggle('hidden', !userIsCompanyAdmin());
 $('companyRequiredMhRate').value =
 Number(company?.required_man_hour_rate || 0) > 0
@@ -5054,7 +5087,16 @@ window.location.replace('/billing.html');
 return;
 }
 const savedState = window.history.state;
-if(
+if(['production-review','my-reports'].includes(requestedNotificationDestination)){
+setAppHistory({ lineCrewPage:'productionPage' },true);
+await displayAppPage('productionPage');
+}else if(['safety','new-jsa'].includes(requestedNotificationDestination)){
+setAppHistory({ lineCrewPage:'safetyPage' },true);
+await displayAppPage('safetyPage');
+if(requestedNotificationDestination === 'new-jsa'){
+setTimeout(() => $('createJsaBtn')?.click(),0);
+}
+}else if(
 savedState?.lineCrewApp &&
 APP_PAGE_IDS.has(savedState.lineCrewPage)
 ){
@@ -5072,6 +5114,7 @@ show('dashboardPage');
 // Push support is optional and iOS can leave serviceWorker.ready pending.
 // Never let notification detection hold the authenticated app startup open.
 void loadPushNotificationStatus();
+void loadGfNotificationPreference();
 }
 /* LOGIN */
 $('loginBtn').onclick = async()=>{
@@ -9574,7 +9617,7 @@ answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Pro
 },
 {
 terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
-answer:'A Foreman creates and edits field reports. Submitted reports appear in Production Review for General Foremen within their assigned-crew scope and leadership with Production Review permission. The number on the Production Dashboard tile is the in-app count waiting for review; LineCrew Pro does not currently promise background phone push notifications. Expand a report and review the full Crew Time table—employee, Start, Stop, Lunch, Regular, OT, Total, Per diem and Equipment—plus units, poles, attachments and exceptions. Choose Approve or Return Report with correction notes. The owning Foreman corrects the returned draft and submits it again; supervisors do not directly edit that draft. If GF redline approval is required, leadership override requires a recorded reason.'
+answer:'A Foreman creates and edits field reports. Submitted reports appear in Production Review for the assigned General Foreman within that GF’s assigned-crew scope. When device notifications are enabled, background phone push notifications can alert that assigned GF; each GF can choose Submitted only or Submitted + reminders in the Dashboard Notifications card. Expand a report and review the full Crew Time table—employee, Start, Stop, Lunch, Regular, OT, Total, Per diem and Equipment—plus units, poles, attachments and exceptions. Choose Approve or Return Report with correction notes. The owning Foreman is notified, corrects the returned draft and submits it again; supervisors do not directly edit that draft. If GF redline approval is required, leadership override requires a recorded reason.'
 },
 {
 terms:['redline','not authorized','extra unit'],
@@ -10538,6 +10581,51 @@ console.warn('Unable to load push notification status.', error);
 setPushNotificationUi('Unable to verify notification status. Try again.', {enable:true});
 }
 }
+async function loadGfNotificationPreference(){
+const panel = $('gfNotificationPreference');
+const status = $('gfNotificationPreferenceStatus');
+const isGf = currentUserRole() === 'gf';
+panel.classList.toggle('hidden', !isGf);
+if(!isGf) return;
+if(!navigator.onLine){
+status.textContent = ' Your saved alert choice will load when this device is online.';
+return;
+}
+status.textContent = ' Loading saved choice…';
+const { data,error } = await sb.rpc('linecrew_my_gf_notification_preference');
+if(error){
+console.warn('Unable to load GF notification preference.',error);
+status.textContent = ' Unable to load saved choice.';
+return;
+}
+const mode = String(data || 'submitted_and_reminders');
+$('gfNotificationDeliveryMode').value = mode === 'submitted_only'
+? 'submitted_only'
+: 'submitted_and_reminders';
+status.textContent = ' Saved choice loaded.';
+}
+async function saveGfNotificationPreference(){
+if(currentUserRole() !== 'gf') return;
+const button = $('saveGfNotificationPreference');
+const status = $('gfNotificationPreferenceStatus');
+button.disabled = true;
+button.textContent = 'Saving...';
+status.textContent = '';
+const { data,error } = await sb.rpc('linecrew_set_my_gf_notification_preference', {
+p_mode:$('gfNotificationDeliveryMode').value
+});
+button.disabled = false;
+button.textContent = 'Save Alert Choice';
+if(error){
+status.textContent = ' Choice was not saved.';
+alert('Unable to save alert choice: ' + error.message);
+return;
+}
+$('gfNotificationDeliveryMode').value = data === 'submitted_only'
+? 'submitted_only'
+: 'submitted_and_reminders';
+status.textContent = ' Saved.';
+}
 async function enablePushNotifications(){
 const button = $('enablePushNotifications');
 button.disabled = true;
@@ -10613,6 +10701,7 @@ button.textContent = 'Send Test Notification';
 $('enablePushNotifications').onclick = enablePushNotifications;
 $('disablePushNotifications').onclick = disablePushNotifications;
 $('sendTestPushNotification').onclick = sendTestPushNotification;
+$('saveGfNotificationPreference').onclick = saveGfNotificationPreference;
 $('toggleMyProfile').onclick = () => {
 $('myProfileEditor').classList.remove('hidden');
 $('myProfileName').focus();
@@ -18530,6 +18619,34 @@ if(error) return alert('Unable to save JSA option: ' + error.message);
 currentCompany.jsa_method = data || method;
 applyFlexibleJsaUi();
 alert('Company JSA option saved.');
+};
+$('saveNotificationReminderTimes').onclick = async () => {
+if(!userIsCompanyAdmin()) return;
+const button = $('saveNotificationReminderTimes');
+const dailyReportTime = $('dailyReportReminderTime').value || null;
+const jsaTime = $('jsaReminderTime').value || null;
+button.disabled = true;
+button.textContent = 'Saving...';
+const { data,error } = await sb.rpc('set_company_notification_reminder_times', {
+p_daily_report_reminder_time:dailyReportTime,
+p_jsa_reminder_time:jsaTime
+});
+button.disabled = false;
+button.textContent = 'Save Reminder Times';
+if(error){
+alert('Unable to save reminder times: ' + error.message);
+return;
+}
+const saved = Array.isArray(data) ? data[0] : data;
+currentCompany.daily_report_reminder_time = saved?.daily_report_reminder_time || null;
+currentCompany.jsa_reminder_time = saved?.jsa_reminder_time || null;
+$('dailyReportReminderTime').value = currentCompany.daily_report_reminder_time
+? String(currentCompany.daily_report_reminder_time).slice(0,5)
+: '';
+$('jsaReminderTime').value = currentCompany.jsa_reminder_time
+? String(currentCompany.jsa_reminder_time).slice(0,5)
+: '';
+alert('Notification reminder times saved.');
 };
 async function populateCompanyJsaUploadJobs(){
 const select = $('companyJsaUploadJob');

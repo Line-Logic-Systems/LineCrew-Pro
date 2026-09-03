@@ -88,6 +88,7 @@ const invitationSignup = fs.readFileSync('supabase/functions/complete-team-invit
 const edgeApiKeys = fs.readFileSync('supabase/functions/_shared/api-keys.ts', 'utf8');
 const pushNotifier = fs.readFileSync('supabase/functions/send-push-notification/index.ts', 'utf8');
 const pushSubscriptions = fs.readFileSync('supabase/migrations/20260903023149_push_subscriptions.sql', 'utf8');
+const pushNotificationPhase2 = fs.readFileSync('supabase/migrations/20260903150000_push_notification_phase_2.sql', 'utf8');
 const supabaseConfig = fs.readFileSync('supabase/config.toml', 'utf8');
 const roleMigration = fs.readFileSync('supabase/migrations/archive/20260818_owner_superintendent_roles.sql', 'utf8');
 const ownerCompat = fs.readFileSync('supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql', 'utf8');
@@ -203,6 +204,33 @@ for (const marker of [
   'event: "push_delivery_completed"'
 ]) assert(pushNotifier.includes(marker), `Push delivery marker missing: ${marker}`);
 assert(!pushNotifier.includes('console.log(subscription'), 'Push delivery logs must not expose subscription endpoints or keys.');
+for (const marker of [
+  'body.dispatch_queued === true',
+  'linecrew_enqueue_due_push_reminders',
+  '.from("push_notification_outbox")',
+  'status: "processing"',
+  'event: "push_queue_dispatch_completed"'
+]) assert(pushNotifier.includes(marker), `Push queue delivery marker missing: ${marker}`);
+for (const marker of [
+  'alter table public.push_notification_preferences enable row level security',
+  'revoke all on public.push_notification_preferences from public, anon, authenticated',
+  "default 'submitted_and_reminders'",
+  'linecrew_set_my_gf_notification_preference',
+  'linecrew_my_gf_notification_preference',
+  'linecrew_queue_daily_report_push',
+  'linecrew_queue_completed_jsa_push',
+  'linecrew_queue_uploaded_jsa_push',
+  'linecrew_enqueue_due_push_reminders',
+  "assignment.foreman_id = new.foreman_id",
+  "assignment.foreman_id = new.created_by",
+  "'linecrew-push-dispatch'",
+  "where secret.name = 'linecrew_push_cron_secret'",
+  "set search_path to ''"
+]) assert(pushNotificationPhase2.includes(marker), `Phase 2 push marker missing: ${marker}`);
+assert(index.includes('id="gfNotificationDeliveryMode"'), 'GF notification preference must be selectable.');
+assert(index.includes("sb.rpc('linecrew_set_my_gf_notification_preference'"), 'GF notification preference must be saved through its RPC.');
+assert(index.includes('id="dailyReportReminderTime"'), 'Company settings must expose the Daily Report reminder time.');
+assert(index.includes('id="jsaReminderTime"'), 'Company settings must expose the JSA reminder time.');
 assert(
   /\[functions\.send-push-notification\]\s+verify_jwt = false/.test(supabaseConfig),
   'Push delivery must disable the legacy gateway verifier and authenticate both modes in the handler.'
@@ -715,7 +743,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v59"),
+    serviceWorker.includes("linecrew-pro-shell-v60"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
 );
 
