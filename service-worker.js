@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v58';
+const CACHE_NAME = 'linecrew-pro-shell-v59';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
