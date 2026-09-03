@@ -278,12 +278,117 @@ Live, in this order:
 Schedule with `pg_cron`, following the existing `linecrew-daily-crew-usage` job,
 calling the function with `mode: "notify"` and the cron secret.
 
-| Trigger | Audience | Body (no PII) |
-|---|---|---|
-| Daily Report submitted and unapproved > 48h | GF / Admin | "A Daily Report is waiting for approval" |
-| Packet import failed | the uploader | "A job packet could not be read" |
-| Weekly summary, Monday | Owner / Admin | "Last week's production summary is ready" |
+### Routing rule — do not hardcode role lists
 
-Each needs a query that identifies target `user_ids`, and each must be
-idempotent — a cron that fires hourly must not re-notify about the same report
-every hour. Record what was sent, or use `tag` so the device collapses repeats.
+Every audience below must be resolved with the **same capability functions that
+gate the screens**:
+
+```
+can_review_daily_reports()          owner, admin, gf, or superintendent WITH 'production_review'
+linecrew_can_manage_job_packages()  owner, admin, gf, or superintendent WITH 'job_packages'
+linecrew_can_manage_jobs()          owner, admin, gf, or superintendent WITH 'jobs'
+```
+
+A hardcoded list drifts away from the permission model, and notifying someone
+about a screen they cannot open is worse than not notifying them at all.
+
+Three scoping constraints follow from this and must be honoured in every query:
+
+- **Superintendents are capability-gated, not role-gated.** One without
+  `production_review` must never receive report notifications.
+- **Foremen see only assigned jobs** — scope with
+  `linecrew_foreman_has_job_assignment`.
+- **GFs have crew scope** — scope with `gf_foreman_assignments`. A GF must not
+  hear about foremen outside it.
+
+### Trigger matrix
+
+Bodies carry no customer data, no dollar amounts and no addresses — they render
+on a locked screen.
+
+| Trigger | Audience | Body | Link |
+|---|---|---|---|
+| Report returned for correction | the report's foreman | "Your Daily Report was returned — tap to see why" | that report |
+| Report approved | the report's foreman | "Your Daily Report was approved" | that report |
+| Job assigned to you | that foreman | "You were assigned to a new job" | that job |
+| Report not submitted by the company's cutoff | that foreman | "Today's Daily Report has not been submitted" | new report |
+| Report submitted | GF in scope, then `can_review_daily_reports()` | "A Daily Report is ready for review" | review queue |
+| Report unapproved > 48h | same, escalating to Admin | "A Daily Report has been waiting 2 days" | review queue |
+| Redline needs approval | GF, only when `companies.require_gf_redline_approval` | "A redline needs your approval" | that report |
+| Packet import failed | the uploader | "A job packet could not be read" | that job |
+| Packet parsed, ready for review | the uploader | "A job packet is ready for review" | that packet |
+| Daily digest — never per report | Admin | "6 Daily Reports are awaiting approval" | review queue |
+| Timekeeping period ready to lock | Admin | "A pay period is ready to close" | timekeeping |
+| Active crew limit reached | Owner, Admin | "Your plan's active crew limit was reached" | billing |
+| Weekly summary, Monday | Owner | "Last week's production summary is ready" | dashboard |
+| Payment failed / trial ending | Owner | "Action needed on your subscription" | billing |
+| Role changed to Admin or Owner | Owner | "A team member's role was changed" | team |
+| Support access requested | Owner, Admin | "A support access request needs a decision" | support |
+
+### JSA triggers
+
+Read the schema before building these. `daily_report_jsas` has exactly one
+state that matters: **`foreman_acknowledged` / `acknowledged_at`**. There is
+**no GF review or approval step for a JSA** — do not invent one, and do not add
+an approval workflow as part of this feature.
+
+A JSA is a pre-job briefing, so its reminders belong in the **morning**, before
+work starts. That is the opposite end of the day from the Daily Report
+reminder, and the two must be configured separately.
+
+| Trigger | Audience | Body | Link |
+|---|---|---|---|
+| No JSA logged for today by the company's JSA cutoff | that foreman | "Today's JSA has not been completed" | new JSA |
+| JSA created but not acknowledged | that foreman | "Today's JSA is not signed" | that JSA |
+| Crews working today with no acknowledged JSA | GF, for crews in scope only | "A crew has no signed JSA for today" | crew list |
+
+The third is the one with real value: it is the company's live safety exposure,
+and today nothing surfaces it. Send it **once per day as a summary**, not once
+per crew — a GF with six crews must not receive six notifications.
+
+Respect `companies.jsa_method`: a company on uploaded JSAs should be reminded
+to upload, not to fill in a digital form.
+
+### Configurable reminder times — required, not a nicety
+
+The cutoffs above are **not hardcoded**. Different companies start and finish at
+different hours, and storm work moves them again.
+
+Add to `public.companies`, following the existing `week_start_day` and
+`jsa_method` settings:
+
+| Column | Type | Default | Meaning |
+|---|---|---|---|
+| `daily_report_reminder_time` | `time` | `18:00` | Local time to remind a foreman with no submitted report |
+| `jsa_reminder_time` | `time` | `09:00` | Local time to remind a foreman with no JSA |
+
+`NULL` in either column means that reminder is **off** for the company.
+
+Expose them through an RPC modelled on `set_company_jsa_method` and
+`update_company_week_start` — Owner/Admin only, `security definer`,
+`set search_path to ''` — and surface both in the existing company settings
+screen alongside JSA method and week start.
+
+**Timezone handling is the part that will be got wrong.** `companies.timezone`
+already exists and holds an IANA name (`America/Chicago`), which is why DST
+works automatically — never replace it with a fixed UTC offset.
+
+Because each company has its own timezone, a single fixed UTC cron cannot serve
+all of them. Run the job **hourly** and let the query decide who is due:
+
+```sql
+where c.daily_report_reminder_time is not null
+  and date_trunc('hour', (now() at time zone c.timezone))
+      = date_trunc('hour', ((now() at time zone c.timezone)::date
+                            + c.daily_report_reminder_time))
+```
+
+Verify this against at least two companies in different timezones, and once
+across a DST boundary.
+
+### Every trigger must be idempotent
+
+An hourly cron must not re-notify about the same report every hour. Either
+record what was sent per (user, trigger, subject, day), or use the `tag` field
+so the device collapses repeats — `tag` alone is not sufficient, because it
+only dedupes on a device that is currently online.
