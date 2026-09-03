@@ -276,7 +276,7 @@ for (const marker of [
   'email-bound, one-time link',
   'multiple Foremen/General Foremen',
   'Manage Foreman Crews',
-  'Regular + 1.5 × OT',
+  'Regular + OT',
   'The same form accepts an optional PDF, Excel or CSV Job Jacket / Utility Packet',
   'Supervisors review but do not edit a Foreman',
   'green at or above the exact target',
