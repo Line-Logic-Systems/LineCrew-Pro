@@ -1,0 +1,19 @@
+-- Daily Units failed to load with SQLSTATE 25006,
+-- "cannot execute UPDATE in a read-only transaction".
+--
+-- The screen calls get_daily_report_unit_catalog_visible(uuid), the money-masking
+-- wrapper added in archive/20260901073000_mask_detailed_field_money.sql. That wrapper
+-- was declared STABLE, but it selects from get_daily_report_unit_catalog(uuid), which
+-- is VOLATILE and lazily backfills daily_reports.price_book_id and
+-- daily_reports.field_value_percent_snapshot. PostgREST picks the transaction mode
+-- from the called function's volatility, so a STABLE RPC runs READ ONLY and those
+-- nested UPDATEs fail.
+--
+-- Postgres accepted the STABLE marking because the wrapper performs no write of its
+-- own; the write is one call level down, past the static check. A wrapper must
+-- therefore inherit the volatility of what it calls.
+--
+-- ALTER FUNCTION ... VOLATILE changes only provolatile. The body, owner,
+-- SECURITY DEFINER, SET search_path = '' and the existing REVOKE/GRANT ACL are all
+-- preserved, so this restates none of the access-control invariants.
+alter function public.get_daily_report_unit_catalog_visible(uuid) volatile;
