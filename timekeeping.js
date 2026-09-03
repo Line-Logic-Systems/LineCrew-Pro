@@ -870,7 +870,7 @@
     const field=parseMoney(find('Field Unit Value'));
     const reg=parseHours(find('Regular Hours'));
     const ot=parseHours(find('OT Hours'));
-    const denominator=reg+(ot*1.5);
+    const denominator=reg+ot;
     const desired=[['Actual MH Run Rate',denominator?actual/denominator:0],['Field MH Run Rate',denominator?field/denominator:0]];
     desired.forEach(([label,value])=>{
       let span=spans.find(s=>s.textContent.includes(label));

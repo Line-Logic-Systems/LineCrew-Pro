@@ -182,7 +182,7 @@ REPORTING AND EXPORTS
 - Production filters include search, status, date range, job, Foreman, unit-review state, completion stage, crew and storm context when available.
 - Production Review Queue summarizes submitted reports, redlines and Pending Packet entries.
 - Production Reporting totals reports, completed reports, actual/field value, hours and exceptions for the active filters.
-- Field MH Run Rate equals permitted field unit value divided by weighted crew hours (Regular + 1.5 × OT). It is an operational productivity rate, not payroll cost or profit by itself.
+- Field MH Run Rate equals permitted field unit value divided by total actual crew hours (Regular + OT). Regular and OT remain separate in Timekeeping, but each actual hour counts equally for production. It is an operational productivity rate, not payroll cost or profit by itself.
 - Foremen see Field MH Run Rate on their own Daily Reports in Production by default. Actual MH Run Rate appears only if Owner/Admin enables that person's Actual Money visibility; Field MH Run Rate appears only while Field Money is enabled.
 - Export Filtered CSV exports the visible filtered dataset. Price Books and company setup lists also provide their relevant CSV exports.
 - Actual-value visibility follows role and capability permissions; Foreman visibility follows the contract's field adjustment policy.
