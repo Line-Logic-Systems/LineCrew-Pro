@@ -1855,25 +1855,6 @@ Cancel
 <button id="saveMyProfile" class="success small">Save My Profile</button>
 <button id="cancelMyProfile" class="secondary small">Cancel</button>
 </div>
-<div id="pushNotificationsCard" class="job-card">
-<h3>Notifications</h3>
-<p id="pushNotificationStatus" class="muted" aria-live="polite">Checking notification status…</p>
-<div class="button-row">
-<button id="enablePushNotifications" class="success small hidden" type="button">Enable Notifications</button>
-<button id="sendTestPushNotification" class="secondary small hidden" type="button">Send Test Notification</button>
-<button id="disablePushNotifications" class="danger small hidden" type="button">Disable Notifications</button>
-</div>
-<div id="gfNotificationPreference" class="hidden" style="margin-top:14px">
-<label for="gfNotificationDeliveryMode">General Foreman Alerts</label>
-<select id="gfNotificationDeliveryMode">
-<option value="submitted_and_reminders">Submitted + reminders</option>
-<option value="submitted_only">Submitted only</option>
-</select>
-<p class="muted" style="font-size:12px;margin-top:5px">Submitted alerts include completed JSAs and Daily Reports from your assigned Foremen. Reminders cover missing or late items.</p>
-<button id="saveGfNotificationPreference" class="success small" type="button">Save Alert Choice</button>
-<span id="gfNotificationPreferenceStatus" class="muted" aria-live="polite"></span>
-</div>
-</div>
 </div>
 <div class="grid" id="dashboardTileGrid">
 <div class="metric" id="jobsTile">
@@ -2097,6 +2078,25 @@ Save Storm Mode & Crews
 </div>
 </div>
 </details>
+<div id="pushNotificationsCard" class="card">
+<h3>Notifications</h3>
+<p id="pushNotificationStatus" class="muted" aria-live="polite">Checking notification status…</p>
+<div class="button-row">
+<button id="enablePushNotifications" class="success small hidden" type="button">Enable Notifications</button>
+<button id="sendTestPushNotification" class="secondary small hidden" type="button">Send Test Notification</button>
+<button id="disablePushNotifications" class="danger small hidden" type="button">Disable Notifications</button>
+</div>
+<div id="gfNotificationPreference" class="hidden" style="margin-top:14px">
+<label for="gfNotificationDeliveryMode">General Foreman Alerts</label>
+<select id="gfNotificationDeliveryMode">
+<option value="submitted_and_reminders">Submitted + reminders</option>
+<option value="submitted_only">Submitted only</option>
+</select>
+<p class="muted" style="font-size:12px;margin-top:5px">Submitted alerts include completed JSAs and Daily Reports from your assigned Foremen. Reminders cover missing or late items.</p>
+<button id="saveGfNotificationPreference" class="success small" type="button">Save Alert Choice</button>
+<span id="gfNotificationPreferenceStatus" class="muted" aria-live="polite"></span>
+</div>
+</div>
 <button class="secondary" id="signOutBtn">
 Sign Out
 </button>
