@@ -192,14 +192,6 @@ Deno.serve(async (request) => {
     params.set("subscription_data[metadata][company_id]", company.id);
     params.set("subscription_data[metadata][plan_code]", planCode);
     params.set("subscription_data[metadata][licensed_crews]", String(crewQuantity));
-    // Promote whichever card actually settles an invoice to the subscription
-    // default. Without this a company that rescues a past-due invoice with a
-    // new card on the hosted invoice page keeps the old failing card on file
-    // and goes past due again on the next cycle.
-    params.set(
-      "subscription_data[payment_settings][save_default_payment_method]",
-      "on_subscription",
-    );
     params.set("allow_promotion_codes", "true");
 
     // Reuse the same Stripe response for retries or double-clicks so one
@@ -208,7 +200,7 @@ Deno.serve(async (request) => {
       "/checkout/sessions",
       params,
       stripeKey,
-      `linecrew-checkout-${company.id}-${planCode}-${crewQuantity}`,
+      `linecrew-checkout-v2-${company.id}-${planCode}-${crewQuantity}`,
     );
     if (!session?.url) throw new Error("Stripe did not return a Checkout URL.");
     return json({ url: session.url, plan_code: planCode, licensed_crews: crewQuantity });
