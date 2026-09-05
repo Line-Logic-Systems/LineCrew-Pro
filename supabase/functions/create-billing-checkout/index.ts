@@ -120,15 +120,6 @@ Deno.serve(async (request) => {
     const crewQuantity = Math.max(requestedCrewQuantity, Number(activeCrewCount || 0));
     const planCode = LINECREW_PLAN_CODE;
 
-    if (
-      existing?.stripe_subscription_id &&
-      !["canceled"].includes(String(existing.status || "").toLowerCase())
-    ) {
-      return json({
-        error: "This company already has a Stripe subscription. Use Manage Billing instead of starting another subscription.",
-      }, 409);
-    }
-
     let customerId = existing?.stripe_customer_id || null;
     if (!customerId) {
       const customerParams = new URLSearchParams();

@@ -13,6 +13,17 @@ export function normalizeCrewQuantity(value: unknown, fallback = INCLUDED_CREWS)
   return quantity;
 }
 
+// Checkout and the crew-capacity change both reject an out-of-range quantity
+// before Stripe ever sees it. The webhook is different: it reports what Stripe
+// already believes, so a quantity edited by hand in the Stripe Dashboard must
+// still be recordable. Clamping keeps status and access syncing for that
+// company instead of wedging every later event behind a throw.
+export function clampCrewQuantity(value: unknown, fallback = INCLUDED_CREWS) {
+  const quantity = Math.trunc(Number(value));
+  if (!Number.isFinite(quantity)) return fallback;
+  return Math.min(10_000, Math.max(INCLUDED_CREWS, quantity));
+}
+
 export function linecrewMonthlyCents(quantity: unknown) {
   const crews = normalizeCrewQuantity(quantity);
   return BASE_MONTHLY_CENTS + Math.max(0, crews - INCLUDED_CREWS) * ADDITIONAL_CREW_MONTHLY_CENTS;

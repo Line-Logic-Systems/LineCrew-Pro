@@ -243,6 +243,22 @@ if (!checkout.includes('normalizeCrewQuantity(payload.crew_quantity)')) throw ne
 if (!checkout.includes('Math.max(requestedCrewQuantity, Number(activeCrewCount || 0))')) throw new Error('Checkout must not license fewer slots than the company already has active crews.');
 if (!checkout.includes('line_items[0][quantity]", String(crewQuantity)')) throw new Error('Checkout must bill Stripe using the selected licensed crew quantity.');
 if (!checkout.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner or Admin role.');
+
+// Regression guards for the September 2026 Checkout outage: this parameter is
+// valid on the Subscriptions API and rejected by Checkout Sessions, so it must
+// live in the webhook and never in the Checkout request.
+if (checkout.includes('subscription_data[payment_settings]')) {
+  throw new Error('Checkout must not send subscription_data[payment_settings]; Stripe rejects it and every Checkout attempt 400s.');
+}
+if (!webhook.includes('payment_settings[save_default_payment_method]')) {
+  throw new Error('The webhook must apply save_default_payment_method through the Subscription API.');
+}
+if (!webhook.includes('Could not set save_default_payment_method on')) {
+  throw new Error('The webhook payment_settings update must be caught and logged so it cannot block the subscription sync.');
+}
+if (!webhook.includes('clampCrewQuantity(item?.quantity)')) {
+  throw new Error('The webhook must clamp an out-of-range Stripe quantity instead of throwing and wedging later events.');
+}
 for (const [name, source] of [
   ['Checkout', checkout],
   ['Billing portal', portal],
