@@ -80,19 +80,14 @@ for (const file of htmlFiles) {
 const home = readFileSync(join(docsDir, 'index.html'), 'utf8');
 const pricing = readFileSync(join(docsDir, 'pricing.html'), 'utf8');
 for (const [file, html] of [['index.html', home], ['pricing.html', pricing]]) {
-  for (const marker of ['$1,799', '21–40 crews', 'Running 41+ active crews?', 'Get 41+ Crew Information']) {
+  for (const marker of ['$599', '$85/month for each additional crew', 'No upper crew tier']) {
     if (!html.includes(marker)) fail(file, `pricing presentation is missing: ${marker}`);
   }
-  if (!html.includes('LineCrew%20Pro%2041%2B%20Crew%20Information')) {
-    fail(file, '41+ crew action must open its dedicated prewritten sales email');
+  if (!html.includes('https://app.linecrewpro.com/?plan=linecrew')) {
+    fail(file, 'pricing must provide the single LineCrew Pro subscription action');
   }
-  if (!html.includes('operates%20more%20than%2040%20active%20crews') || !html.includes('Active%20crew%20count')) {
-    fail(file, '41+ crew email must use the approved concise custom-plan message');
-  }
-  for (const plan of ['starter', 'business', 'pro', 'enterprise']) {
-    if (!html.includes(`https://app.linecrewpro.com/?plan=${plan}`)) {
-      fail(file, `pricing must provide Start Now for the ${plan} plan`);
-    }
+  if ((html.match(/\?plan=linecrew/g) || []).length !== 1) {
+    fail(file, 'pricing must show exactly one subscription action');
   }
   for (const marker of ['Interested in becoming a Beta/Pilot company?', 'Approved pilots are free and require no card.', 'Apply for Beta/Pilot']) {
     if (!html.includes(marker)) fail(file, `Beta/Pilot presentation is missing: ${marker}`);

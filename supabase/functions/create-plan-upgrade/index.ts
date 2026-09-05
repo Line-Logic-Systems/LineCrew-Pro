@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.112.4";
 import { getPublishableKey, getSecretKey } from "../_shared/api-keys.ts";
+import { INCLUDED_CREWS, normalizeCrewQuantity, readLinecrewPriceId } from "../_shared/billing-pricing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,9 +13,7 @@ const json = (body: unknown, status = 200) =>
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 
-const planOrder = ["starter", "business", "pro", "enterprise"] as const;
-type PlanCode = typeof planOrder[number];
-const upgradePortalPurpose = "linecrew_upgrade_only_v1";
+const upgradePortalPurpose = "linecrew_crew_quantity_v1";
 
 class RequestError extends Error {
   status: number;
@@ -22,42 +21,6 @@ class RequestError extends Error {
     super(message);
     this.status = status;
   }
-}
-
-function readPlanPriceMap(raw: string | undefined) {
-  if (!raw) throw new Error("Billing plan mapping is not configured.");
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("Billing plan mapping is invalid JSON.");
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Billing plan mapping must be an object.");
-  }
-
-  const map = new Map<PlanCode, string>();
-  for (const plan of planOrder) {
-    const price = String((parsed as Record<string, unknown>)[plan] || "")
-      .trim();
-    if (!/^price_[A-Za-z0-9]+$/.test(price)) {
-      throw new Error(
-        `Billing plan mapping is missing a valid ${plan} Price ID.`,
-      );
-    }
-    map.set(plan, price);
-  }
-  if (new Set(map.values()).size !== planOrder.length) {
-    throw new Error("Each billing plan must use a different Stripe Price ID.");
-  }
-  return map;
-}
-
-function planForPrice(priceMap: Map<PlanCode, string>, priceId: string) {
-  for (const [plan, configuredPrice] of priceMap.entries()) {
-    if (configuredPrice === priceId) return plan;
-  }
-  return null;
 }
 
 async function stripeGet(path: string, stripeKey: string) {
@@ -75,12 +38,14 @@ async function stripePost(
   path: string,
   body: URLSearchParams,
   stripeKey: string,
+  idempotencyKey?: string,
 ) {
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${stripeKey}`,
       "Content-Type": "application/x-www-form-urlencoded",
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     },
     body,
   });
@@ -107,7 +72,7 @@ function portalConfigurationSupportsSafeUpgrades(
     configuration.active === true &&
     update?.enabled === true &&
     allowedUpdates.length === 1 &&
-    allowedUpdates[0] === "price" &&
+    allowedUpdates[0] === "quantity" &&
     update?.proration_behavior === "always_invoice"
   );
 }
@@ -126,12 +91,8 @@ async function resolveUpgradePortalConfiguration(
       `/billing_portal/configurations/${encodeURIComponent(configuredId)}`,
       stripeKey,
     );
-    if (!portalConfigurationSupportsSafeUpgrades(configured)) {
-      throw new Error(
-        "The configured Stripe upgrade Portal is not price-only with immediate proration.",
-      );
-    }
-    return configuredId;
+    if (portalConfigurationSupportsSafeUpgrades(configured)) return configuredId;
+    console.warn("Ignoring legacy Stripe Portal configuration that is not quantity-only.");
   }
 
   const listed = await stripeGet(
@@ -146,15 +107,33 @@ async function resolveUpgradePortalConfiguration(
       return metadata?.linecrew_purpose === upgradePortalPurpose;
     },
   );
-  if (matches.length !== 1) {
+  if (matches.length > 1) {
     throw new Error(
-      "Exactly one active Stripe upgrade-only Portal configuration must be provisioned.",
+      "More than one active LineCrew Pro quantity Portal configuration exists.",
     );
+  }
+  if (matches.length === 0) {
+    const params = new URLSearchParams();
+    params.set("features[subscription_update][enabled]", "true");
+    params.set("features[subscription_update][default_allowed_updates][0]", "quantity");
+    params.set("features[subscription_update][proration_behavior]", "always_invoice");
+    params.set("features[payment_method_update][enabled]", "true");
+    params.set("metadata[linecrew_purpose]", upgradePortalPurpose);
+    const created = await stripePost(
+      "/billing_portal/configurations",
+      params,
+      stripeKey,
+      `linecrew-crew-quantity-portal-${upgradePortalPurpose}`,
+    );
+    if (!portalConfigurationSupportsSafeUpgrades(created)) {
+      throw new Error("Stripe did not create a safe quantity-only Portal configuration.");
+    }
+    return String(created.id);
   }
   const match = matches[0] as Record<string, unknown>;
   if (!portalConfigurationSupportsSafeUpgrades(match)) {
     throw new Error(
-      "The discovered Stripe upgrade Portal is not price-only with immediate proration.",
+      "The discovered Stripe billing Portal is not quantity-only with immediate proration.",
     );
   }
   const id = String(match.id || "");
@@ -184,7 +163,10 @@ Deno.serve(async (request) => {
       "STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID",
     );
     const appUrl = (Deno.env.get("APP_URL") || "").replace(/\/$/, "");
-    const priceMap = readPlanPriceMap(Deno.env.get("BILLING_PLAN_PRICE_MAP"));
+    const linecrewPrice = readLinecrewPriceId(
+      Deno.env.get("BILLING_PLAN_PRICE_MAP"),
+      Deno.env.get("STRIPE_ENVIRONMENT"),
+    );
     if (!supabaseUrl || !anonKey || !serviceKey || !stripeKey || !appUrl) {
       throw new Error("Plan upgrade service is not fully configured.");
     }
@@ -192,18 +174,13 @@ Deno.serve(async (request) => {
     try {
       payload = await request.json();
     } catch {
-      throw new RequestError("A target plan is required.");
+      throw new RequestError("A licensed crew quantity is required.");
     }
-    const targetPlan = String(
-      (payload as { target_plan?: unknown })?.target_plan || "",
-    ).trim().toLowerCase();
-    if (!planOrder.includes(targetPlan as PlanCode)) {
-      throw new RequestError("Choose a valid LineCrew Pro plan.");
-    }
-    const targetPlanCode = targetPlan as PlanCode;
-    const targetPrice = priceMap.get(targetPlanCode);
-    if (!targetPrice) {
-      throw new Error("The selected plan is not enabled for Stripe upgrades.");
+    let targetCrewLimit: number;
+    try {
+      targetCrewLimit = normalizeCrewQuantity((payload as { target_crew_limit?: unknown })?.target_crew_limit);
+    } catch (error) {
+      throw new RequestError(error instanceof Error ? error.message : `Choose at least ${INCLUDED_CREWS} crews.`);
     }
 
     const userClient = createClient(supabaseUrl, anonKey, {
@@ -242,13 +219,6 @@ Deno.serve(async (request) => {
       throw new RequestError("Company Owner or Admin access required.", 403);
     }
 
-    // Do not make any Stripe request until the caller is proven to be an
-    // active company Owner/Admin. Configuration discovery can expose account state.
-    const portalConfiguration = await resolveUpgradePortalConfiguration(
-      configuredPortalId,
-      stripeKey,
-    );
-
     const { data: stored, error: storedError } = await service
       .from("company_subscriptions")
       .select(
@@ -263,7 +233,7 @@ Deno.serve(async (request) => {
       !/^sub_[A-Za-z0-9]+$/.test(String(stored?.stripe_subscription_id || ""))
     ) {
       throw new RequestError(
-        "This company does not have an active Stripe subscription to upgrade.",
+        "This company does not have an active Stripe subscription to change.",
         409,
       );
     }
@@ -314,24 +284,40 @@ Deno.serve(async (request) => {
       );
     }
     const currentPrice = String(item?.price?.id || "");
-    const currentPlan = planForPrice(priceMap, currentPrice);
-    if (!currentPlan) {
+    if (currentPrice !== linecrewPrice) {
       throw new RequestError(
-        "The current Stripe price is not mapped to a LineCrew Pro plan.",
+        "This legacy subscription must be migrated by LineCrew Pro support before changing crew capacity.",
         409,
       );
     }
-    if (planOrder.indexOf(targetPlanCode) <= planOrder.indexOf(currentPlan)) {
-      throw new RequestError(
-        "Self-service billing can only move to a higher plan.",
-        409,
-      );
+    const currentCrewLimit = normalizeCrewQuantity(item?.quantity);
+    if (targetCrewLimit === currentCrewLimit) throw new RequestError("Crew capacity is already set to that amount.", 409);
+
+    const { count: activeCrews, error: activeCrewsError } = await service
+      .from("crews").select("id", { count: "exact", head: true })
+      .eq("company_id", profile.company_id).eq("active", true);
+    if (activeCrewsError) throw activeCrewsError;
+    if (targetCrewLimit < Number(activeCrews || 0)) {
+      throw new RequestError(`Deactivate crews first. This company currently has ${activeCrews || 0} active crews.`, 409);
     }
+
+    if (targetCrewLimit < currentCrewLimit) {
+      const params = new URLSearchParams();
+      params.set("quantity", String(targetCrewLimit));
+      params.set("proration_behavior", "none");
+      await stripePost(`/subscription_items/${encodeURIComponent(String(item.id))}`, params, stripeKey);
+      return json({ updated: true, current_crew_limit: currentCrewLimit, target_crew_limit: targetCrewLimit });
+    }
+
+    const portalConfiguration = await resolveUpgradePortalConfiguration(
+      configuredPortalId,
+      stripeKey,
+    );
 
     const returnUrl = `${appUrl}/billing.html?billing=portal-return`;
     const completedUrl =
-      `${appUrl}/billing.html?billing=upgrade-return&target_plan=${
-        encodeURIComponent(targetPlanCode)
+      `${appUrl}/billing.html?billing=capacity-return&target_crews=${
+        encodeURIComponent(String(targetCrewLimit))
       }`;
     const params = new URLSearchParams();
     params.set("customer", stored.stripe_customer_id);
@@ -348,11 +334,11 @@ Deno.serve(async (request) => {
     );
     params.set(
       "flow_data[subscription_update_confirm][items][0][price]",
-      targetPrice,
+      linecrewPrice,
     );
     params.set(
       "flow_data[subscription_update_confirm][items][0][quantity]",
-      "1",
+      String(targetCrewLimit),
     );
     params.set("flow_data[after_completion][type]", "redirect");
     params.set(
@@ -370,8 +356,8 @@ Deno.serve(async (request) => {
     }
     return json({
       url: session.url,
-      current_plan: currentPlan,
-      target_plan: targetPlanCode,
+      current_crew_limit: currentCrewLimit,
+      target_crew_limit: targetCrewLimit,
     });
   } catch (error) {
     console.error(error);
@@ -379,7 +365,7 @@ Deno.serve(async (request) => {
     return json({
       error: error instanceof Error
         ? error.message
-        : "Unable to start plan upgrade.",
+        : "Unable to change crew capacity.",
     }, status);
   }
 });

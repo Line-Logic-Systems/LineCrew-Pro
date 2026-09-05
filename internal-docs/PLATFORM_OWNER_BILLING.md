@@ -103,15 +103,15 @@ Set these Supabase Edge Function secrets/config values:
 - `STRIPE_WEBHOOK_SECRET` — signing secret for the deployed webhook endpoint.
 - `STRIPE_ENVIRONMENT` — exactly `test` or `live`; the webhook rejects events from the other Stripe mode. If omitted, the webhook derives the mode only from a recognizable `sk_test_` or `sk_live_` secret.
 - `APP_URL` — LineCrew Pro base URL with no trailing slash.
-- `BILLING_PLAN_PRICE_MAP` — JSON object mapping LineCrew Pro plan codes to Stripe Price IDs.
+- `BILLING_PLAN_PRICE_MAP` — retained for legacy subscription Price IDs during migration. The current test/live LineCrew Pro Price IDs are non-secret, reviewed constants in `_shared/billing-pricing.ts`, selected only by `STRIPE_ENVIRONMENT`.
 - `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated normal Manage Billing Portal. If omitted, the server discovers exactly one active configuration labeled `linecrew_purpose=linecrew_manage_only_v1`.
-- `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated Stripe Customer Portal configuration used only by the upgrade-confirmation flow. If omitted, the server discovers exactly one active configuration labeled with metadata `linecrew_purpose=linecrew_upgrade_only_v1` and otherwise fails closed.
+- `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the quantity-only Stripe Customer Portal configuration. A legacy or missing configuration is ignored and the server idempotently provisions/discovers the configuration labeled `linecrew_purpose=linecrew_crew_quantity_v1`.
 - `CREW_USAGE_CRON_SECRET` — a separate random secret required by the optional `capture-crew-usage` Edge Function in addition to the named `edge_functions_admin` key in the `apikey` header.
 
 Example shape only:
 
 ```json
-{"starter":"price_REPLACE_ME","business":"price_REPLACE_ME","pro":"price_REPLACE_ME","enterprise":"price_REPLACE_ME"}
+{"starter":"price_LEGACY","business":"price_LEGACY","pro":"price_LEGACY","enterprise":"price_LEGACY"}
 ```
 
 The real Price IDs belong in the Edge Function secret/config store, not in `billing.html`, `owner.html`, `index.html`, or the repository.
@@ -120,15 +120,15 @@ Supabase supplies `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS`, and `SUPABASE_SEC
 
 ## 6. Checkout security model
 
-A contractor Admin does not submit or choose a Stripe Price ID directly.
+A contractor Owner/Admin does not submit or choose a Stripe Price ID directly.
 
 Checkout instead:
 1. authenticates the user,
-2. verifies active Admin role,
+2. verifies active Owner/Admin role and AAL2,
 3. derives the company from the signed-in profile,
-4. reads the plan already assigned to that company,
-5. resolves that plan to a Stripe Price from server-side `BILLING_PLAN_PRICE_MAP`,
-6. refuses plans that are not present in the map,
+4. counts the company's active crews,
+5. selects the environment-specific LineCrew Pro graduated Price,
+6. starts with at least five licensed crews and never below the active-crew count,
 7. refuses to create another live Stripe subscription when one is already linked,
 8. creates/reuses the Stripe customer, and
 9. places company ID and plan code into server-generated Checkout/subscription metadata.
@@ -144,9 +144,7 @@ page would keep the old failing card on file and fail again the next cycle.
 
 Create a normal Customer Portal configuration for **Manage Billing**, keep subscription plan switching **off**, and label it with metadata `linecrew_purpose=linecrew_manage_only_v1`. You may put its `bpc_...` ID in `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID`. The function verifies the configuration on every request and fails closed if plan switching is enabled.
 
-Create a separate Stripe Customer Portal configuration for upgrade confirmations. Label it with metadata `linecrew_purpose=linecrew_upgrade_only_v1`. You may also put its `bpc_...` ID in `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`; the explicit ID takes precedence.
-
-The dedicated configuration must allow **price changes only**, use `always_invoice` proration, and include the Starter, Business, Pro, and Enterprise monthly products/prices. It is never opened as a general portal. `create-plan-upgrade` verifies the price-only and immediate-proration settings on every request; Stripe rejects a server-selected target that is not in the configuration. The endpoint uses the configuration only with Stripe's `subscription_update_confirm` deep-link flow, which displays the exact server-selected higher plan and its immediate prorated charge for confirmation.
+The capacity-confirmation Portal is quantity-only, uses `always_invoice` proration, and is labeled `linecrew_purpose=linecrew_crew_quantity_v1`. The server verifies an explicit compatible configuration, otherwise discovers or idempotently creates the dedicated configuration. It is used only with Stripe's `subscription_update_confirm` deep-link so Stripe shows the exact prorated increase before confirmation.
 
 The upgrade endpoint fails closed unless all of these checks pass:
 
@@ -154,12 +152,12 @@ The upgrade endpoint fails closed unless all of these checks pass:
 2. the company has one active or trialing Stripe subscription;
 3. Stripe's customer on that subscription matches the customer stored for the company;
 4. the subscription has exactly one item;
-5. its current Stripe Price maps to a known LineCrew Pro plan;
-6. the requested plan ranks strictly above the current plan;
-7. the target Stripe Price comes from server-side `BILLING_PLAN_PRICE_MAP`; and
+5. its current Stripe Price is the LineCrew Pro Price for the configured environment;
+6. the requested crew capacity is a whole number of at least five and is not below active crews;
+7. increases use Stripe's hosted prorated confirmation while reductions create no current-period credit and lower the next renewal; and
 8. the subscription is not already scheduled to cancel.
 
-The browser submits only a plan code such as `business`. It never submits or controls a Stripe Price ID. Stripe shows the prorated amount and handles payment authentication. Only the signed webhook changes the stored plan and active-crew limit after Stripe confirms the update.
+The browser submits only the requested licensed-crew quantity. It never submits or controls a Stripe Price ID. Only the signed webhook changes the stored plan, monthly amount and active-crew limit after Stripe confirms the update.
 
 ## 7. Stripe webhook endpoint
 
@@ -192,7 +190,7 @@ If Stripe retries an event:
 
 `checkout.session.completed` links identifiers but does not blindly mark the company active. Subscription events remain the source of truth for actual subscription state.
 
-For every subscription event, the webhook retrieves the current canonical Subscription from Stripe and resolves the LineCrew Pro plan from that current Stripe Price ID using `BILLING_PLAN_PRICE_MAP`. This is required because Stripe does not guarantee delivery order and Event `created` timestamps have only one-second precision. Customer Portal plan changes do not rewrite old subscription metadata, so metadata alone must never determine the new crew limit. An unmapped Stripe Price fails closed and is retried rather than silently assigning the wrong plan.
+For every subscription event, the webhook retrieves the current canonical Subscription from Stripe. For the current graduated Price, the subscription item's licensed quantity becomes `included_crew_limit`, and monthly list price is recalculated as `$599 + max(quantity - 5, 0) × $85`. Legacy fixed-tier Price IDs remain mapped only so existing subscriptions can be transitioned safely. An unmapped Stripe Price fails closed.
 
 Invoice events are audit-only and cannot change stored plan, status, or access. `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted` all reconcile from Stripe's latest Subscription state. This prevents a delayed invoice or same-second event from reactivating, canceling, or downgrading the wrong state.
 

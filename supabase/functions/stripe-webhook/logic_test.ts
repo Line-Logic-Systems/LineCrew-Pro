@@ -27,6 +27,7 @@ function throws(fn: () => unknown, message: string) {
   if (!threw) throw new Error(message);
 }
 const priceMap = JSON.stringify({
+  linecrew: "price_l",
   starter: "price_s",
   business: "price_b",
   pro: "price_p",
@@ -35,6 +36,8 @@ const priceMap = JSON.stringify({
 
 Deno.test("known plan codes normalize", () =>
   equal(knownPlanCode(" Pro "), "pro"));
+Deno.test("licensed crew plan code normalizes", () =>
+  equal(knownPlanCode(" LineCrew "), "linecrew"));
 Deno.test("unknown plan codes fail closed", () =>
   equal(knownPlanCode("pilot"), null));
 Deno.test("mapped price resolves", () =>
