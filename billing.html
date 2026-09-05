@@ -216,7 +216,15 @@ async function invokeAndRedirect(name,body={}){
   document.querySelectorAll('.upgradeBtn').forEach(button=>button.disabled=true);
   try{
     const {data,error}=await sb.functions.invoke(name,{body});
-    if(error) throw error;
+    if(error){
+      let message=error.message||'Unable to open billing.';
+      try{
+        const response=error.context;
+        const payload=response&&typeof response.json==='function'?await response.json():null;
+        if(payload?.error) message=String(payload.error);
+      }catch(_ignored){}
+      throw new Error(message);
+    }
     if(data?.error) throw new Error(data.error);
     if(data?.url){location.assign(data.url);return}
     if(data?.updated){showReturnNotice('Crew capacity was reduced. Your next renewal will use the lower quantity.','success');await load();return}
