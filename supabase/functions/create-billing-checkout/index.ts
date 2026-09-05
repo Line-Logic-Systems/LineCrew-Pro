@@ -200,7 +200,7 @@ Deno.serve(async (request) => {
       "/checkout/sessions",
       params,
       stripeKey,
-      `linecrew-checkout-${company.id}-${planCode}-${crewQuantity}`,
+      `linecrew-checkout-v2-${company.id}-${planCode}-${crewQuantity}`,
     );
     if (!session?.url) throw new Error("Stripe did not return a Checkout URL.");
     return json({ url: session.url, plan_code: planCode, licensed_crews: crewQuantity });
