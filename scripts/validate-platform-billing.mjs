@@ -268,6 +268,12 @@ if (!upgrade.includes('clampCrewQuantity(item?.quantity)')) {
 if (!upgrade.includes('normalizeCrewQuantity((payload as { target_crew_limit?: unknown })?.target_crew_limit)')) {
   throw new Error('The crew-capacity change must still validate the requested target_crew_limit strictly.');
 }
+if (!checkout.includes('params.set("payment_method_types[1]", "us_bank_account")')) {
+  throw new Error('Checkout must offer ACH Direct Debit alongside card.');
+}
+for (const marker of ['id="graceNotice"', 'renderGraceNotice()', 'past_due_since']) {
+  if (!billing.includes(marker)) throw new Error(`billing.html is missing the past-due grace countdown: ${marker}`);
+}
 for (const [name, source] of [
   ['Checkout', checkout],
   ['Billing portal', portal],

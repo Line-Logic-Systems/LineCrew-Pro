@@ -207,6 +207,7 @@ assert(!pushNotifier.includes('console.log(subscription'), 'Push delivery logs m
 for (const marker of [
   'body.dispatch_queued === true',
   'linecrew_enqueue_due_push_reminders',
+  'linecrew_enqueue_billing_grace_warnings',
   '.from("push_notification_outbox")',
   'status: "processing"',
   'event: "push_queue_dispatch_completed"'

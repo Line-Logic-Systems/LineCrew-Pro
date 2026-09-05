@@ -183,11 +183,15 @@ Deno.serve(async (request) => {
     params.set("subscription_data[metadata][company_id]", company.id);
     params.set("subscription_data[metadata][plan_code]", planCode);
     params.set("subscription_data[metadata][licensed_crews]", String(crewQuantity));
-    // Card settles inline, so Checkout returns with the subscription already
-    // active. An asynchronous method can return with it still incomplete,
-    // which sets access_enabled false and would lock a converting Pilot out of
-    // the app it just paid for.
+    // Enumerated on purpose. Dynamic payment methods would add Klarna, Cash
+    // App and Amazon Pay, which are consumer methods nobody buying crew
+    // software wants and which can settle asynchronously with no grace behind
+    // them. Card settles inline. ACH takes up to four business days, but
+    // Stripe starts the subscription active while it clears and moves it to
+    // past_due on failure, which lands in the seven-day grace in
+    // enforce_linecrew_company_access.
     params.set("payment_method_types[0]", "card");
+    params.set("payment_method_types[1]", "us_bank_account");
     params.set("allow_promotion_codes", "true");
 
     // Reuse the same Stripe response for retries or double-clicks so one
@@ -196,7 +200,7 @@ Deno.serve(async (request) => {
       "/checkout/sessions",
       params,
       stripeKey,
-      `linecrew-checkout-v3-${company.id}-${planCode}-${crewQuantity}`,
+      `linecrew-checkout-v4-${company.id}-${planCode}-${crewQuantity}`,
     );
     if (!session?.url) throw new Error("Stripe did not return a Checkout URL.");
     return json({ url: session.url, plan_code: planCode, licensed_crews: crewQuantity });

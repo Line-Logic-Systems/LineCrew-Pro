@@ -193,6 +193,14 @@ Deno.serve(async (request) => {
         const { error: reminderError } = await service.rpc("linecrew_enqueue_due_push_reminders");
         if (reminderError) throw reminderError;
 
+        // Billing grace warnings are de-duplicated by event_key, so running
+        // them on every dispatch pass is safe. A failure here must not abort
+        // the outbox drain: the queued reminders above still need delivering.
+        const { error: graceError } = await service.rpc("linecrew_enqueue_billing_grace_warnings");
+        if (graceError) {
+          console.warn("Could not enqueue billing grace warnings", graceError.message);
+        }
+
         const staleBefore = new Date(Date.now() - 10 * 60 * 1000).toISOString();
         const { error: staleError } = await service.from("push_notification_outbox").update({
           status: "pending",
