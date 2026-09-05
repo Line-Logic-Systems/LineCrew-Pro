@@ -275,7 +275,7 @@ async function main() {
 
   const summaryAfterOverage = await rpc(tokenA, "my_company_billing_summary");
   assert(firstRow(summaryAfterOverage.data)?.crew_overage_status === "upgrade_required", "Company Admin billing did not expose crew tier upgrade status.");
-  assert(firstRow(summaryAfterOverage.data)?.recommended_plan_code === "business", "Company Admin billing did not expose the recommended crew plan.");
+  assert(firstRow(summaryAfterOverage.data)?.recommended_plan_code === "linecrew", "Company Admin billing did not expose the licensed-crew plan recommendation.");
 
   await servicePatch("profiles", userB.id, { role: "foreman" });
   const foremanBilling = await rpc(tokenB, "my_company_billing_summary");
