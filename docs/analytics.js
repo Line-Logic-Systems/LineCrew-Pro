@@ -1,19 +1,4 @@
 (() => {
-  const measurementId = 'G-ZEMV5NWG5';
-
-  window.dataLayer = window.dataLayer || [];
-  window.gtag = window.gtag || function () {
-    window.dataLayer.push(arguments);
-  };
-
-  window.gtag('js', new Date());
-  window.gtag('config', measurementId);
-
-  const googleTag = document.createElement('script');
-  googleTag.async = true;
-  googleTag.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
-  document.head.appendChild(googleTag);
-
   function trackVideoEvent(eventName, video, index) {
     const label =
       video.getAttribute('aria-label') ||
