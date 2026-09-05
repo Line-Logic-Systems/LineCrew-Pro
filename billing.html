@@ -8,7 +8,7 @@
 <style>
 :root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--card:#fff;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754;--red:#b83232;--orange:#d97706}
 *{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:var(--navy);color:white;padding:24px 20px}header h1{margin:0;font-size:28px}header p{margin:6px 0 0;opacity:.86}main{max-width:820px;margin:auto;padding:24px 16px 90px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.hidden{display:none!important}.muted{color:var(--muted)}button,a.button{display:inline-block;border:0;border-radius:9px;padding:11px 15px;background:var(--blue);color:#fff;font-weight:700;cursor:pointer;text-decoration:none;margin:4px 6px 4px 0}button.secondary,a.secondary{background:#e8eef4;color:var(--text)}input{width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;margin:5px 0 12px;font:inherit}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.metric{border:1px solid var(--border);border-radius:12px;padding:15px;background:#f8fafc}.metric strong{display:block;font-size:21px;margin-top:5px}.badge{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:700;background:#e8eef4}.badge.active,.badge.within_plan{background:#d1fae5;color:#065f46}.badge.trialing,.badge.grace{background:#fef3c7;color:#92400e}.badge.past_due,.badge.paused,.badge.canceled,.badge.upgrade_required,.badge.custom_quote_required{background:#fee2e2;color:#991b1b}.notice{border-left:4px solid var(--blue);padding:12px 14px;background:#eff6ff;border-radius:8px}.notice.warn{border-left-color:var(--orange);background:#fff7ed}.notice.success{border-left-color:var(--green);background:#ecfdf5}@media(max-width:620px){.grid{grid-template-columns:1fr}}
-.capacity-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}.capacity-row button{margin-bottom:12px}@media(max-width:620px){.capacity-row{grid-template-columns:1fr}.capacity-row button{margin-bottom:0}}
+.capacity-row{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}.capacity-row button{margin-bottom:12px}.checkout-capacity{max-width:480px;margin:14px 0 8px;padding:15px;border:1px solid var(--border);border-radius:12px;background:#f8fafc}.checkout-capacity label{font-weight:700}.checkout-capacity p{margin:0 0 8px}.checkout-capacity input{max-width:180px;margin-bottom:6px}@media(max-width:620px){.capacity-row{grid-template-columns:1fr}.capacity-row button{margin-bottom:0}}
 </style>
 </head>
 <body>
@@ -60,6 +60,13 @@
     <h3 style="margin-top:0">Subscription</h3>
     <p id="period" class="muted"></p>
     <p id="billingHelp" class="muted"></p>
+    <div id="checkoutCapacity" class="checkout-capacity hidden">
+      <p><strong>Choose your licensed crew capacity</strong></p>
+      <p class="muted">$599 per month includes 5 crews. Each additional crew is $85 per month.</p>
+      <label for="checkoutCrewQuantity">Licensed crews</label>
+      <input id="checkoutCrewQuantity" type="number" min="5" max="10000" step="1" inputmode="numeric" value="5">
+      <p id="checkoutPrice" class="muted">5 licensed crews · $599.00/month</p>
+    </div>
     <button id="checkoutBtn" class="hidden">Start Stripe Billing</button>
     <button id="portalBtn" class="hidden">Manage Billing</button>
     <button id="refreshBtn" class="secondary">Refresh</button>
@@ -186,7 +193,14 @@ async function load(){
   renderReturnNotice();
 
   $('portalBtn').classList.toggle('hidden',!billing.stripe_customer_linked);
-  $('checkoutBtn').classList.toggle('hidden',billing.stripe_subscription_linked&&billing.status!=='canceled');
+  const canStartCheckout=!(billing.stripe_subscription_linked&&billing.status!=='canceled');
+  $('checkoutBtn').classList.toggle('hidden',!canStartCheckout);
+  $('checkoutCapacity').classList.toggle('hidden',!canStartCheckout);
+  if(canStartCheckout){
+    const suggestedCrews=Math.max(5,Number(billing.included_crew_limit)||0,Number(billing.rolling_peak_billable_crews)||0);
+    $('checkoutCrewQuantity').value=String(suggestedCrews);
+    renderCheckoutPrice();
+  }
   $('billingHelp').textContent=billing.stripe_customer_linked
     ? 'Stripe manages payment methods, invoices and subscription self-service through the secure Customer Portal.'
     : 'LineCrew Pro support must assign a Stripe-enabled plan before Checkout can begin. No card information is stored in LineCrew Pro.';
@@ -208,6 +222,18 @@ function renderCapacity(){
 }
 
 function renderCapacityPrice(){const crews=Math.max(5,Math.trunc(Number($('targetCrews').value)||5));$('capacityPrice').textContent=crews+' licensed crews · '+money(monthlyCents(crews))+'/month';}
+
+function checkoutCrewQuantity(){
+  const crews=Number($('checkoutCrewQuantity').value);
+  if(!Number.isSafeInteger(crews)||crews<5||crews>10000) throw new Error('Choose a whole number from 5 to 10,000 crews.');
+  return crews;
+}
+
+function renderCheckoutPrice(){
+  const raw=Number($('checkoutCrewQuantity').value);
+  const crews=Number.isSafeInteger(raw)&&raw>=5&&raw<=10000?raw:5;
+  $('checkoutPrice').textContent=crews+' licensed crews · '+money(monthlyCents(crews))+'/month';
+}
 
 async function invokeAndRedirect(name,body={}){
   $('actionStatus').textContent='Opening secure billing...';
@@ -237,7 +263,8 @@ async function invokeAndRedirect(name,body={}){
   }
 }
 
-$('checkoutBtn').onclick=()=>invokeAndRedirect('create-billing-checkout');
+$('checkoutCrewQuantity').oninput=renderCheckoutPrice;
+$('checkoutBtn').onclick=()=>{try{invokeAndRedirect('create-billing-checkout',{crew_quantity:checkoutCrewQuantity()})}catch(e){$('actionStatus').textContent=e.message||'Choose a valid crew capacity.'}};
 $('targetCrews').oninput=renderCapacityPrice;
 $('changeCapacityBtn').onclick=()=>{const crews=Math.trunc(Number($('targetCrews').value));if(!Number.isSafeInteger(crews)||crews<5){$('upgradeStatus').textContent='Choose a whole number of at least 5 crews.';return}invokeAndRedirect('create-plan-upgrade',{target_crew_limit:crews})};
 $('portalBtn').onclick=()=>invokeAndRedirect('create-billing-portal');
