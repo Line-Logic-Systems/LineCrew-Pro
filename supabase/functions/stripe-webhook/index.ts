@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.112.4";
 import { getSecretKey } from "../_shared/api-keys.ts";
-import { linecrewMonthlyCents, normalizeCrewQuantity, withLinecrewPrice } from "../_shared/billing-pricing.ts";
+import { clampCrewQuantity, linecrewMonthlyCents, withLinecrewPrice } from "../_shared/billing-pricing.ts";
 import {
   accessForStatus,
   assertEventEnvironment,
@@ -251,13 +251,27 @@ Deno.serve(async (request) => {
         String(subscription.status || "") !== "canceled" &&
         subscription.payment_settings?.save_default_payment_method !== "on_subscription"
       ) {
-        const paymentSettings = new URLSearchParams();
-        paymentSettings.set("payment_settings[save_default_payment_method]", "on_subscription");
-        subscription = await stripePost(
-          `/subscriptions/${encodeURIComponent(subscriptionId)}`,
-          paymentSettings,
-          stripeKey,
-        );
+        // Promoting the settling card to the subscription default is a
+        // convenience. Syncing status and access is the money path, so a
+        // Stripe failure here must never abort the write below and leave a
+        // paying company stranded at incomplete/no-access.
+        try {
+          const paymentSettings = new URLSearchParams();
+          paymentSettings.set("payment_settings[save_default_payment_method]", "on_subscription");
+          subscription = await stripePost(
+            `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+            paymentSettings,
+            stripeKey,
+          );
+        } catch (paymentSettingsError) {
+          console.warn(
+            "Could not set save_default_payment_method on",
+            subscriptionId,
+            paymentSettingsError instanceof Error
+              ? paymentSettingsError.message
+              : paymentSettingsError,
+          );
+        }
       }
       const canonicalCustomerId = stripeId(subscription.customer, "cus_");
       if (!canonicalCustomerId) {
@@ -338,8 +352,15 @@ Deno.serve(async (request) => {
           String(subscription.status || (deleted ? "canceled" : "incomplete")),
         );
         const licensedCrews = deleted
-          ? Number(prior?.included_crew_limit || 5)
-          : normalizeCrewQuantity(item?.quantity);
+          ? clampCrewQuantity(prior?.included_crew_limit)
+          : clampCrewQuantity(item?.quantity);
+        if (!deleted && Number(item?.quantity) !== licensedCrews) {
+          console.warn(
+            "Stripe subscription quantity is outside the licensed crew range",
+            subscriptionId,
+            item?.quantity,
+          );
+        }
         const currentPeriodEndUnix = Number(
           subscription.current_period_end || item?.current_period_end || 0,
         );

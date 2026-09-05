@@ -243,6 +243,31 @@ if (!checkout.includes('normalizeCrewQuantity(payload.crew_quantity)')) throw ne
 if (!checkout.includes('Math.max(requestedCrewQuantity, Number(activeCrewCount || 0))')) throw new Error('Checkout must not license fewer slots than the company already has active crews.');
 if (!checkout.includes('line_items[0][quantity]", String(crewQuantity)')) throw new Error('Checkout must bill Stripe using the selected licensed crew quantity.');
 if (!checkout.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner or Admin role.');
+
+// Regression guards for the September 2026 Checkout outage: this parameter is
+// valid on the Subscriptions API and rejected by Checkout Sessions, so it must
+// live in the webhook and never in the Checkout request.
+if (checkout.includes('subscription_data[payment_settings]')) {
+  throw new Error('Checkout must not send subscription_data[payment_settings]; Stripe rejects it and every Checkout attempt 400s.');
+}
+if (!webhook.includes('payment_settings[save_default_payment_method]')) {
+  throw new Error('The webhook must apply save_default_payment_method through the Subscription API.');
+}
+if (!webhook.includes('Could not set save_default_payment_method on')) {
+  throw new Error('The webhook payment_settings update must be caught and logged so it cannot block the subscription sync.');
+}
+if (!webhook.includes('clampCrewQuantity(item?.quantity)')) {
+  throw new Error('The webhook must clamp an out-of-range Stripe quantity instead of throwing and wedging later events.');
+}
+if (!checkout.includes('params.set("payment_method_types[0]", "card")')) {
+  throw new Error('Checkout must collect card only; an asynchronous method can return with the subscription incomplete and revoke a converting Pilot\'s access.');
+}
+if (!upgrade.includes('clampCrewQuantity(item?.quantity)')) {
+  throw new Error('The crew-capacity change must clamp the quantity Stripe already holds instead of rejecting the admin who needs to correct it.');
+}
+if (!upgrade.includes('normalizeCrewQuantity((payload as { target_crew_limit?: unknown })?.target_crew_limit)')) {
+  throw new Error('The crew-capacity change must still validate the requested target_crew_limit strictly.');
+}
 for (const [name, source] of [
   ['Checkout', checkout],
   ['Billing portal', portal],

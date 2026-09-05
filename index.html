@@ -3800,7 +3800,7 @@ $('acceptInvitationCard').classList.add('hidden');
 const planNotice = $('selectedPlanNotice');
 planNotice.classList.toggle('hidden', !requestedSignupPlan || invited);
 if(requestedSignupPlan && !invited){
-planNotice.textContent = 'LineCrew Pro selected: $599/month includes 5 crews, then $85/month per additional crew. After creating your company, you will continue to secure Stripe Checkout.';
+planNotice.textContent = 'LineCrew Pro selected: $599/month includes 5 crews, then $85/month per additional crew. After creating your company, you will choose your licensed crew capacity before continuing to secure Stripe Checkout.';
 }
 }
 function privilegedRoleRequiresMfa(profile){

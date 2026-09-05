@@ -120,15 +120,6 @@ Deno.serve(async (request) => {
     const crewQuantity = Math.max(requestedCrewQuantity, Number(activeCrewCount || 0));
     const planCode = LINECREW_PLAN_CODE;
 
-    if (
-      existing?.stripe_subscription_id &&
-      !["canceled"].includes(String(existing.status || "").toLowerCase())
-    ) {
-      return json({
-        error: "This company already has a Stripe subscription. Use Manage Billing instead of starting another subscription.",
-      }, 409);
-    }
-
     let customerId = existing?.stripe_customer_id || null;
     if (!customerId) {
       const customerParams = new URLSearchParams();
@@ -192,6 +183,11 @@ Deno.serve(async (request) => {
     params.set("subscription_data[metadata][company_id]", company.id);
     params.set("subscription_data[metadata][plan_code]", planCode);
     params.set("subscription_data[metadata][licensed_crews]", String(crewQuantity));
+    // Card settles inline, so Checkout returns with the subscription already
+    // active. An asynchronous method can return with it still incomplete,
+    // which sets access_enabled false and would lock a converting Pilot out of
+    // the app it just paid for.
+    params.set("payment_method_types[0]", "card");
     params.set("allow_promotion_codes", "true");
 
     // Reuse the same Stripe response for retries or double-clicks so one
@@ -200,7 +196,7 @@ Deno.serve(async (request) => {
       "/checkout/sessions",
       params,
       stripeKey,
-      `linecrew-checkout-v2-${company.id}-${planCode}-${crewQuantity}`,
+      `linecrew-checkout-v3-${company.id}-${planCode}-${crewQuantity}`,
     );
     if (!session?.url) throw new Error("Stripe did not return a Checkout URL.");
     return json({ url: session.url, plan_code: planCode, licensed_crews: crewQuantity });
