@@ -8,6 +8,7 @@ const markdownFiles = readdirSync(docsDir, { recursive: true })
   .filter((file) => extname(file) === '.md')
   .sort();
 const failures = [];
+const googleAnalyticsMeasurementId = 'G-ZEMV5NWVG5';
 
 const requiredCanonical = new Set([
   'index.html',
@@ -40,6 +41,12 @@ for (const file of htmlFiles) {
   if (!html.includes('accessibility.css?v=site5')) fail(file, 'must load the accessibility stylesheet');
   if (!html.includes('class="skip-link"')) fail(file, 'must include a keyboard skip link');
   if (!html.includes('<main id="main-content">')) fail(file, 'must identify the main content target');
+
+  const googleTagUrl = `https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsMeasurementId}`;
+  if (!html.includes(googleTagUrl)) fail(file, `must load Google Analytics ${googleAnalyticsMeasurementId}`);
+  if (!html.includes(`gtag('config', '${googleAnalyticsMeasurementId}')`)) {
+    fail(file, `must configure Google Analytics ${googleAnalyticsMeasurementId}`);
+  }
 
   if (requiredCanonical.has(file) && !html.includes('<link rel="canonical"')) {
     fail(file, 'must include a canonical URL');
