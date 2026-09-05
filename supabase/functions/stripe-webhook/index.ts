@@ -83,6 +83,22 @@ async function stripeGet(path: string, stripeKey: string) {
   return data;
 }
 
+async function stripePost(path: string, body: URLSearchParams, stripeKey: string) {
+  const response = await fetch(`https://api.stripe.com/v1${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${stripeKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message || "Stripe request failed.");
+  }
+  return data;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "POST required." }, 405);
   let service: any = null;
@@ -227,10 +243,22 @@ Deno.serve(async (request) => {
       // Stripe does not guarantee webhook delivery order, and Event.created has
       // only one-second precision. Read the current canonical Subscription so
       // two events created in the same second cannot roll plan/status backward.
-      const subscription = await stripeGet(
+      let subscription = await stripeGet(
         `/subscriptions/${encodeURIComponent(subscriptionId)}`,
         stripeKey,
       );
+      if (
+        String(subscription.status || "") !== "canceled" &&
+        subscription.payment_settings?.save_default_payment_method !== "on_subscription"
+      ) {
+        const paymentSettings = new URLSearchParams();
+        paymentSettings.set("payment_settings[save_default_payment_method]", "on_subscription");
+        subscription = await stripePost(
+          `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+          paymentSettings,
+          stripeKey,
+        );
+      }
       const canonicalCustomerId = stripeId(subscription.customer, "cus_");
       if (!canonicalCustomerId) {
         throw new Error("Stripe subscription customer identity is invalid.");
