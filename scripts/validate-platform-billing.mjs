@@ -133,6 +133,21 @@ for (const marker of ['is_platform_owner','platform_owner_company_dashboard','pl
 for (const marker of ['my_company_billing_summary','create-billing-checkout','create-billing-portal','create-plan-upgrade','stripe_subscription_linked','rolling_peak_billable_crews','crew_overage_status']) {
   if (!billing.includes(marker)) throw new Error(`billing.html is missing ${marker}`);
 }
+if (!app.includes("window.location.replace('/billing.html?signup=1')")) {
+  throw new Error('New paid companies must choose licensed crew capacity on Company Billing before Stripe Checkout.');
+}
+if (app.includes("sb.functions.invoke(\n'create-billing-checkout'")) {
+  throw new Error('The new-company signup flow must not bypass the licensed crew selector with automatic Checkout.');
+}
+for (const marker of [
+  "get('signup')==='1'",
+  "if(!billing&&isNewPaidSignup)",
+  "plan_code:'linecrew'",
+  "status:'incomplete'",
+  'Choose your licensed crew capacity, then continue to secure Stripe Checkout.',
+]) {
+  if (!billing.includes(marker)) throw new Error(`billing.html is missing new-company signup fallback: ${marker}`);
+}
 for (const marker of [
   'Choose your licensed crew capacity',
   'id="checkoutCrewQuantity"',

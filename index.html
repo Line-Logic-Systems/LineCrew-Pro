@@ -4953,22 +4953,10 @@ show('setupPage');
 return;
 }
 if(requestedSignupPlan){
-const selectedPlan = requestedSignupPlan;
-const {data:checkout,error:checkoutError}=await sb.functions.invoke(
-'create-billing-checkout',
-{body:{requested_plan:selectedPlan}}
-);
-if(checkoutError || checkout?.error || !checkout?.url){
-alert('Your company is ready, but secure checkout could not be opened. Use LineCrew Pro Subscription on the dashboard to try again.');
-}else{
 requestedSignupPlan = '';
 try{ sessionStorage.removeItem('linecrew_requested_plan'); }catch{}
-const cleanSignupUrl = new URL(window.location.href);
-cleanSignupUrl.searchParams.delete('plan');
-window.history.replaceState(null, '', cleanSignupUrl.pathname + cleanSignupUrl.search + cleanSignupUrl.hash);
-window.location.assign(checkout.url);
+window.location.replace('/billing.html?signup=1');
 return;
-}
 }
 const {
 data:company,

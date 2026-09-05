@@ -85,6 +85,7 @@ const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 let billing=null;
 const billingResult=new URLSearchParams(location.search).get('billing');
+const isNewPaidSignup=new URLSearchParams(location.search).get('signup')==='1';
 const requestedCrewLimit=Number(new URLSearchParams(location.search).get('target_crews'))||null;
 let portalSyncAttempts=0;
 const MAX_PORTAL_SYNC_ATTEMPTS=5;
@@ -160,6 +161,9 @@ async function load(){
   const {data,error}=await sb.rpc('my_company_billing_summary');
   if(error) throw error;
   billing=Array.isArray(data)?data[0]:data;
+  if(!billing&&isNewPaidSignup){
+    billing={plan_code:'linecrew',monthly_price_cents:0,currency:'usd',status:'incomplete',access_enabled:false,provider:'stripe',trial_ends_at:null,current_period_end:null,cancel_at_period_end:false,stripe_customer_linked:false,stripe_subscription_linked:false,included_crew_limit:5,rolling_peak_billable_crews:0,rolling_overage_crew_days:0,crew_overage_status:'within_plan',recommended_plan_code:'linecrew',company_name:'Your Company',contact_email:null};
+  }
   if(!billing) throw new Error('Billing summary is unavailable.');
 
   $('companyName').textContent=(billing.company_name||'LineCrew Pro')+' Billing';
@@ -203,7 +207,9 @@ async function load(){
   }
   $('billingHelp').textContent=billing.stripe_customer_linked
     ? 'Stripe manages payment methods, invoices and subscription self-service through the secure Customer Portal.'
-    : 'LineCrew Pro support must assign a Stripe-enabled plan before Checkout can begin. No card information is stored in LineCrew Pro.';
+    : isNewPaidSignup
+      ? 'Choose your licensed crew capacity, then continue to secure Stripe Checkout. No card information is stored in LineCrew Pro.'
+      : 'LineCrew Pro support must assign a Stripe-enabled plan before Checkout can begin. No card information is stored in LineCrew Pro.';
 
   $('authCard').classList.add('hidden');
   $('billingCard').classList.remove('hidden');
