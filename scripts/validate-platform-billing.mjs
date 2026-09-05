@@ -134,6 +134,16 @@ for (const marker of ['my_company_billing_summary','create-billing-checkout','cr
   if (!billing.includes(marker)) throw new Error(`billing.html is missing ${marker}`);
 }
 for (const marker of [
+  'Choose your licensed crew capacity',
+  'id="checkoutCrewQuantity"',
+  'min="5"',
+  'max="10000"',
+  '{crew_quantity:checkoutCrewQuantity()}',
+  "monthlyCents(crews)",
+]) {
+  if (!billing.includes(marker)) throw new Error(`billing.html is missing initial crew-capacity checkout marker: ${marker}`);
+}
+for (const marker of [
   "billingResult==='portal-return'",
   'Returned from Stripe Billing. Checking for subscription updates...',
   'Cancellation scheduled for ',
@@ -214,6 +224,9 @@ for (const marker of [
 if (!checkout.includes('BILLING_PLAN_PRICE_MAP')) throw new Error('Checkout must use the server-side BILLING_PLAN_PRICE_MAP.');
 if (checkout.includes('BILLING_ALLOWED_PRICE_IDS')) throw new Error('Checkout still contains the older client-selected Price ID allowlist path.');
 if (!checkout.includes('readLinecrewPriceId')) throw new Error('Checkout must bind the single LineCrew Pro price server-side.');
+if (!checkout.includes('normalizeCrewQuantity(payload.crew_quantity)')) throw new Error('Checkout must validate the selected licensed crew quantity server-side.');
+if (!checkout.includes('Math.max(requestedCrewQuantity, Number(activeCrewCount || 0))')) throw new Error('Checkout must not license fewer slots than the company already has active crews.');
+if (!checkout.includes('line_items[0][quantity]", String(crewQuantity)')) throw new Error('Checkout must bill Stripe using the selected licensed crew quantity.');
 if (!checkout.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner or Admin role.');
 for (const [name, source] of [
   ['Checkout', checkout],
