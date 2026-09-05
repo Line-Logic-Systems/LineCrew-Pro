@@ -7,6 +7,16 @@ const assert = (condition, message) => {
   if (!condition) failures.push(message);
 };
 
+const dashboardTileGridIndex = html.indexOf('id="dashboardTileGrid"');
+const pushNotificationsCardIndex = html.indexOf('id="pushNotificationsCard"');
+const signOutButtonIndex = html.indexOf('id="signOutBtn"');
+assert(
+  dashboardTileGridIndex >= 0 &&
+    pushNotificationsCardIndex > dashboardTileGridIndex &&
+    signOutButtonIndex > pushNotificationsCardIndex,
+  'Dashboard notifications must appear below the role dashboard and before Sign Out.'
+);
+
 const extractNamedFunction = (source, name) => {
   const starts = [`async function ${name}(`, `function ${name}(`];
   const start = starts
