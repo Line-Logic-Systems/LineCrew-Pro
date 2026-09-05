@@ -80,7 +80,7 @@ for (const file of htmlFiles) {
 const home = readFileSync(join(docsDir, 'index.html'), 'utf8');
 const pricing = readFileSync(join(docsDir, 'pricing.html'), 'utf8');
 for (const [file, html] of [['index.html', home], ['pricing.html', pricing]]) {
-  for (const marker of ['$599', '$85/month for each additional crew', 'No upper crew tier']) {
+  for (const marker of ['$599', '$85/month for each additional crew', 'LineCrew AI guidance', 'Job-packet uploading', 'Crew timekeeping']) {
     if (!html.includes(marker)) fail(file, `pricing presentation is missing: ${marker}`);
   }
   if (!html.includes('https://app.linecrewpro.com/?plan=linecrew')) {
