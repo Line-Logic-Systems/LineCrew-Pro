@@ -259,6 +259,9 @@ if (!webhook.includes('Could not set save_default_payment_method on')) {
 if (!webhook.includes('clampCrewQuantity(item?.quantity)')) {
   throw new Error('The webhook must clamp an out-of-range Stripe quantity instead of throwing and wedging later events.');
 }
+if (!checkout.includes('params.set("payment_method_types[0]", "card")')) {
+  throw new Error('Checkout must collect card only; an asynchronous method can return with the subscription incomplete and revoke a converting Pilot\'s access.');
+}
 for (const [name, source] of [
   ['Checkout', checkout],
   ['Billing portal', portal],
