@@ -271,6 +271,17 @@ if (!upgrade.includes('normalizeCrewQuantity((payload as { target_crew_limit?: u
 if (!checkout.includes('params.set("payment_method_types[1]", "us_bank_account")')) {
   throw new Error('Checkout must offer ACH Direct Debit alongside card.');
 }
+// Supabase re-grants EXECUTE to anon whenever a function is created, so any
+// migration that recreates a billing RPC must revoke it again.
+{
+  const migrations = fs.readdirSync('supabase/migrations')
+    .filter(name => name.endsWith('.sql'))
+    .map(name => fs.readFileSync(`supabase/migrations/${name}`, 'utf8'))
+    .join('\n');
+  if (!/revoke execute on function public\.my_company_billing_summary\(\) from anon/i.test(migrations)) {
+    throw new Error('my_company_billing_summary must have EXECUTE revoked from anon; Supabase re-grants it on every create.');
+  }
+}
 for (const marker of ['id="graceNotice"', 'renderGraceNotice()', 'past_due_since']) {
   if (!billing.includes(marker)) throw new Error(`billing.html is missing the past-due grace countdown: ${marker}`);
 }
