@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.112.4";
 import { getPublishableKey, getSecretKey } from "../_shared/api-keys.ts";
-import { INCLUDED_CREWS, normalizeCrewQuantity, readLinecrewPriceId } from "../_shared/billing-pricing.ts";
+import { clampCrewQuantity, INCLUDED_CREWS, normalizeCrewQuantity, readLinecrewPriceId } from "../_shared/billing-pricing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -290,8 +290,15 @@ Deno.serve(async (request) => {
         409,
       );
     }
-    const currentCrewLimit = normalizeCrewQuantity(item?.quantity);
-    if (targetCrewLimit === currentCrewLimit) throw new RequestError("Crew capacity is already set to that amount.", 409);
+    // This is what Stripe already holds, not something the admin typed. A
+    // quantity edited by hand in the Dashboard must not lock them out of the
+    // page that fixes it, so clamp here and keep the strict check on
+    // target_crew_limit above. Compare "no change" against the raw Stripe
+    // quantity, so a subscription sitting below the floor can still be
+    // corrected up to it rather than being reported as already correct.
+    const stripeCrewQuantity = Number(item?.quantity);
+    const currentCrewLimit = clampCrewQuantity(item?.quantity);
+    if (targetCrewLimit === stripeCrewQuantity) throw new RequestError("Crew capacity is already set to that amount.", 409);
 
     const { count: activeCrews, error: activeCrewsError } = await service
       .from("crews").select("id", { count: "exact", head: true })

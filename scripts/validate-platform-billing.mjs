@@ -262,6 +262,12 @@ if (!webhook.includes('clampCrewQuantity(item?.quantity)')) {
 if (!checkout.includes('params.set("payment_method_types[0]", "card")')) {
   throw new Error('Checkout must collect card only; an asynchronous method can return with the subscription incomplete and revoke a converting Pilot\'s access.');
 }
+if (!upgrade.includes('clampCrewQuantity(item?.quantity)')) {
+  throw new Error('The crew-capacity change must clamp the quantity Stripe already holds instead of rejecting the admin who needs to correct it.');
+}
+if (!upgrade.includes('normalizeCrewQuantity((payload as { target_crew_limit?: unknown })?.target_crew_limit)')) {
+  throw new Error('The crew-capacity change must still validate the requested target_crew_limit strictly.');
+}
 for (const [name, source] of [
   ['Checkout', checkout],
   ['Billing portal', portal],
