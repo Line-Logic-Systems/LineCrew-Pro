@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.112.4";
 import { getSecretKey } from "../_shared/api-keys.ts";
+import { linecrewMonthlyCents, normalizeCrewQuantity, withLinecrewPrice } from "../_shared/billing-pricing.ts";
 import {
   accessForStatus,
   assertEventEnvironment,
@@ -74,6 +75,22 @@ function stripeId(value: unknown, prefix: string) {
 async function stripeGet(path: string, stripeKey: string) {
   const response = await fetch(`https://api.stripe.com/v1${path}`, {
     headers: { Authorization: `Bearer ${stripeKey}` },
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message || "Stripe request failed.");
+  }
+  return data;
+}
+
+async function stripePost(path: string, body: URLSearchParams, stripeKey: string) {
+  const response = await fetch(`https://api.stripe.com/v1${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${stripeKey}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
   });
   const data = await response.json();
   if (!response.ok) {
@@ -226,10 +243,22 @@ Deno.serve(async (request) => {
       // Stripe does not guarantee webhook delivery order, and Event.created has
       // only one-second precision. Read the current canonical Subscription so
       // two events created in the same second cannot roll plan/status backward.
-      const subscription = await stripeGet(
+      let subscription = await stripeGet(
         `/subscriptions/${encodeURIComponent(subscriptionId)}`,
         stripeKey,
       );
+      if (
+        String(subscription.status || "") !== "canceled" &&
+        subscription.payment_settings?.save_default_payment_method !== "on_subscription"
+      ) {
+        const paymentSettings = new URLSearchParams();
+        paymentSettings.set("payment_settings[save_default_payment_method]", "on_subscription");
+        subscription = await stripePost(
+          `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+          paymentSettings,
+          stripeKey,
+        );
+      }
       const canonicalCustomerId = stripeId(subscription.customer, "cus_");
       if (!canonicalCustomerId) {
         throw new Error("Stripe subscription customer identity is invalid.");
@@ -259,7 +288,7 @@ Deno.serve(async (request) => {
         "company_subscriptions",
       )
         .select(
-          "company_id,plan_code,status,past_due_since,stripe_customer_id,stripe_subscription_id,last_stripe_event_created",
+          "company_id,plan_code,status,past_due_since,stripe_customer_id,stripe_subscription_id,last_stripe_event_created,included_crew_limit",
         )
         .eq("company_id", companyId).maybeSingle();
       if (priorError) throw priorError;
@@ -288,6 +317,10 @@ Deno.serve(async (request) => {
         !isStaleEvent(eventCreated, prior?.last_stripe_event_created)
       ) {
         const deleted = String(subscription.status || "") === "canceled";
+        const items = Array.isArray(subscription.items?.data) ? subscription.items.data : [];
+        if (!deleted && items.length !== 1) {
+          throw new Error("LineCrew Pro subscriptions must contain exactly one billing item.");
+        }
         const item = subscription.items?.data?.[0];
         const priceId = stripeId(item?.price, "price_");
         const planCode = planForSubscriptionEvent(
@@ -295,12 +328,18 @@ Deno.serve(async (request) => {
             ? "customer.subscription.deleted"
             : "customer.subscription.updated",
           priceId,
-          Deno.env.get("BILLING_PLAN_PRICE_MAP"),
+          withLinecrewPrice(
+            Deno.env.get("BILLING_PLAN_PRICE_MAP"),
+            Deno.env.get("STRIPE_ENVIRONMENT"),
+          ),
           prior?.plan_code,
         );
         const status = mapStatus(
           String(subscription.status || (deleted ? "canceled" : "incomplete")),
         );
+        const licensedCrews = deleted
+          ? Number(prior?.included_crew_limit || 5)
+          : normalizeCrewQuantity(item?.quantity);
         const currentPeriodEndUnix = Number(
           subscription.current_period_end || item?.current_period_end || 0,
         );
@@ -337,11 +376,16 @@ Deno.serve(async (request) => {
           ...(!deleted
             ? {
               stripe_price_id: priceId,
-              monthly_price_cents: normalizedMonthlyAmount(
-                Number(item?.price?.unit_amount || 0),
-                item?.price?.recurring?.interval || null,
-                Number(item?.price?.recurring?.interval_count || 1),
-              ),
+              monthly_price_cents: planCode === "linecrew"
+                ? linecrewMonthlyCents(licensedCrews)
+                : normalizedMonthlyAmount(
+                  Number(item?.price?.unit_amount || 0),
+                  item?.price?.recurring?.interval || null,
+                  Number(item?.price?.recurring?.interval_count || 1),
+                ),
+              included_crew_limit: planCode === "linecrew"
+                ? licensedCrews
+                : prior?.included_crew_limit,
               currency: String(item?.price?.currency || "usd").toLowerCase(),
               billing_interval: item?.price?.recurring?.interval || null,
               billing_interval_count: item?.price?.recurring?.interval

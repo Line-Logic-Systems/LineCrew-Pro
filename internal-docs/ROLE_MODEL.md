@@ -2,20 +2,20 @@
 
 ## Hierarchy
 
-1. **Owner** — highest company role. Full company access, including role/access governance and control of Admins.
-2. **Admin** — full operational administration. Can manage Superintendent/GF/Foreman roles and Superintendent permissions, but cannot add, remove, demote or modify an Owner or another Admin.
+1. **Owner** — single highest company role. Full company access, including role/access governance, control of existing Admins and explicit ownership transfer.
+2. **Admin** — full operational administration. Can manage Superintendent/GF/Foreman roles, promote an active lower-role member to Admin and manage Superintendent permissions, but cannot alter an existing Owner/Admin or assign Owner.
 3. **Superintendent** — broad Admin-like operational access, with individual capabilities removable by an Owner/Admin.
 4. **General Foreman** — field supervision/review role.
 5. **Foreman** — field reporting/JSA role and default new-member role.
 
 ## Owner governance
 
-- An Owner can promote a member to Admin or remove/demote an Admin.
-- Only an Owner can assign another Owner.
-- An Admin cannot promote anyone to Owner or Admin.
-- An Admin cannot demote or otherwise alter an Owner or another Admin.
-- A company must always retain at least one Owner. The last Owner cannot be demoted until another Owner exists.
-- Existing companies with no Owner may allow one authenticated current Admin to claim the initial Owner role exactly once through the company-scoped bootstrap RPC.
+- An Owner or Admin can promote an active Foreman, General Foreman or Superintendent to Admin.
+- Only the Owner can demote or otherwise alter an existing Admin.
+- An Admin cannot assign Owner or change an existing Owner/Admin.
+- A company has at most one Owner. The generic role controls cannot create or remove Owner.
+- Existing companies with no Owner allow one authenticated active Admin to claim the initial Owner role through the company-scoped bootstrap RPC.
+- Once an Owner exists, ownership changes only through the explicit Owner-controlled transfer. The chosen active Admin becomes Owner and the prior Owner becomes Admin atomically.
 
 ## Superintendent capability model
 

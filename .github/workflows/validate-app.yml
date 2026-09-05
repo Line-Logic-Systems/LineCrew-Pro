@@ -33,6 +33,9 @@ jobs:
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
+      - name: Validate job-packet model fallback
+        run: node supabase/functions/parse-utility-job-packet/packet-logic.test.mjs
+
       - name: Verify GitHub Actions are commit-pinned
         run: node scripts/validate-github-action-pins.mjs
 
@@ -47,7 +50,7 @@ jobs:
       - name: Validate Superintendent compatibility generator
         run: |
           node scripts/generate-superintendent-compatibility.mjs
-          test -s supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
-          grep -q "linecrew_has_capability" supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
-          grep -q "superintendent" supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
-          head -n 40 supabase/migrations/202608190200_superintendent_legacy_compatibility.sql
+          test -s supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql
+          grep -q "linecrew_has_capability" supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql
+          grep -q "superintendent" supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql
+          head -n 40 supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql

@@ -271,11 +271,11 @@ async function main() {
   assert(recalc.ok, `Crew overage recalc after seventh crew-day failed: ${JSON.stringify(recalc.data)}`);
   assert(firstRow(recalc.data)?.rolling_overage_crew_days === 7, "Seventh rolling overage crew-day was not retained after an off-gap.");
   assert(firstRow(recalc.data)?.overage_status === "upgrade_required", "Seventh rolling overage crew-day should require an upgrade.");
-  assert(firstRow(recalc.data)?.recommended_plan === "business", "Starter overage should recommend Business.");
+  assert(firstRow(recalc.data)?.recommended_plan === "linecrew", "Legacy overage should recommend the licensed-crew plan.");
 
   const summaryAfterOverage = await rpc(tokenA, "my_company_billing_summary");
   assert(firstRow(summaryAfterOverage.data)?.crew_overage_status === "upgrade_required", "Company Admin billing did not expose crew tier upgrade status.");
-  assert(firstRow(summaryAfterOverage.data)?.recommended_plan_code === "business", "Company Admin billing did not expose the recommended crew plan.");
+  assert(firstRow(summaryAfterOverage.data)?.recommended_plan_code === "linecrew", "Company Admin billing did not expose the licensed-crew plan recommendation.");
 
   await servicePatch("profiles", userB.id, { role: "foreman" });
   const foremanBilling = await rpc(tokenB, "my_company_billing_summary");

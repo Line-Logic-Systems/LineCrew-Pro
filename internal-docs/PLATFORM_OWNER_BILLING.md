@@ -103,15 +103,15 @@ Set these Supabase Edge Function secrets/config values:
 - `STRIPE_WEBHOOK_SECRET` — signing secret for the deployed webhook endpoint.
 - `STRIPE_ENVIRONMENT` — exactly `test` or `live`; the webhook rejects events from the other Stripe mode. If omitted, the webhook derives the mode only from a recognizable `sk_test_` or `sk_live_` secret.
 - `APP_URL` — LineCrew Pro base URL with no trailing slash.
-- `BILLING_PLAN_PRICE_MAP` — JSON object mapping LineCrew Pro plan codes to Stripe Price IDs.
+- `BILLING_PLAN_PRICE_MAP` — retained for legacy subscription Price IDs during migration. The current test/live LineCrew Pro Price IDs are non-secret, reviewed constants in `_shared/billing-pricing.ts`, selected only by `STRIPE_ENVIRONMENT`.
 - `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated normal Manage Billing Portal. If omitted, the server discovers exactly one active configuration labeled `linecrew_purpose=linecrew_manage_only_v1`.
-- `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the dedicated Stripe Customer Portal configuration used only by the upgrade-confirmation flow. If omitted, the server discovers exactly one active configuration labeled with metadata `linecrew_purpose=linecrew_upgrade_only_v1` and otherwise fails closed.
+- `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID` — optional explicit ID for the quantity-only Stripe Customer Portal configuration. A legacy or missing configuration is ignored and the server idempotently provisions/discovers the configuration labeled `linecrew_purpose=linecrew_crew_quantity_v1`.
 - `CREW_USAGE_CRON_SECRET` — a separate random secret required by the optional `capture-crew-usage` Edge Function in addition to the named `edge_functions_admin` key in the `apikey` header.
 
 Example shape only:
 
 ```json
-{"starter":"price_REPLACE_ME","business":"price_REPLACE_ME","pro":"price_REPLACE_ME","enterprise":"price_REPLACE_ME"}
+{"starter":"price_LEGACY","business":"price_LEGACY","pro":"price_LEGACY","enterprise":"price_LEGACY"}
 ```
 
 The real Price IDs belong in the Edge Function secret/config store, not in `billing.html`, `owner.html`, `index.html`, or the repository.
@@ -120,28 +120,31 @@ Supabase supplies `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEYS`, and `SUPABASE_SEC
 
 ## 6. Checkout security model
 
-A contractor Admin does not submit or choose a Stripe Price ID directly.
+A contractor Owner/Admin does not submit or choose a Stripe Price ID directly.
 
 Checkout instead:
 1. authenticates the user,
-2. verifies active Admin role,
+2. verifies active Owner/Admin role and AAL2,
 3. derives the company from the signed-in profile,
-4. reads the plan already assigned to that company,
-5. resolves that plan to a Stripe Price from server-side `BILLING_PLAN_PRICE_MAP`,
-6. refuses plans that are not present in the map,
+4. counts the company's active crews,
+5. selects the environment-specific LineCrew Pro graduated Price,
+6. starts with at least five licensed crews and never below the active-crew count,
 7. refuses to create another live Stripe subscription when one is already linked,
 8. creates/reuses the Stripe customer, and
 9. places company ID and plan code into server-generated Checkout/subscription metadata.
 
 The plan map fails closed: no configured mapping means no Checkout.
 
+Checkout also sets `save_default_payment_method=on_subscription`, so whichever
+card actually settles an invoice becomes the subscription default. Without it a
+company that rescues a past-due invoice with a new card on the hosted invoice
+page would keep the old failing card on file and fail again the next cycle.
+
 ### Upgrade-only Stripe Portal configuration
 
 Create a normal Customer Portal configuration for **Manage Billing**, keep subscription plan switching **off**, and label it with metadata `linecrew_purpose=linecrew_manage_only_v1`. You may put its `bpc_...` ID in `STRIPE_MANAGE_PORTAL_CONFIGURATION_ID`. The function verifies the configuration on every request and fails closed if plan switching is enabled.
 
-Create a separate Stripe Customer Portal configuration for upgrade confirmations. Label it with metadata `linecrew_purpose=linecrew_upgrade_only_v1`. You may also put its `bpc_...` ID in `STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID`; the explicit ID takes precedence.
-
-The dedicated configuration must allow **price changes only**, use `always_invoice` proration, and include the Starter, Business, Pro, and Enterprise monthly products/prices. It is never opened as a general portal. `create-plan-upgrade` verifies the price-only and immediate-proration settings on every request; Stripe rejects a server-selected target that is not in the configuration. The endpoint uses the configuration only with Stripe's `subscription_update_confirm` deep-link flow, which displays the exact server-selected higher plan and its immediate prorated charge for confirmation.
+The capacity-confirmation Portal is quantity-only, uses `always_invoice` proration, and is labeled `linecrew_purpose=linecrew_crew_quantity_v1`. The server verifies an explicit compatible configuration, otherwise discovers or idempotently creates the dedicated configuration. It is used only with Stripe's `subscription_update_confirm` deep-link so Stripe shows the exact prorated increase before confirmation.
 
 The upgrade endpoint fails closed unless all of these checks pass:
 
@@ -149,12 +152,12 @@ The upgrade endpoint fails closed unless all of these checks pass:
 2. the company has one active or trialing Stripe subscription;
 3. Stripe's customer on that subscription matches the customer stored for the company;
 4. the subscription has exactly one item;
-5. its current Stripe Price maps to a known LineCrew Pro plan;
-6. the requested plan ranks strictly above the current plan;
-7. the target Stripe Price comes from server-side `BILLING_PLAN_PRICE_MAP`; and
+5. its current Stripe Price is the LineCrew Pro Price for the configured environment;
+6. the requested crew capacity is a whole number of at least five and is not below active crews;
+7. increases use Stripe's hosted prorated confirmation while reductions create no current-period credit and lower the next renewal; and
 8. the subscription is not already scheduled to cancel.
 
-The browser submits only a plan code such as `business`. It never submits or controls a Stripe Price ID. Stripe shows the prorated amount and handles payment authentication. Only the signed webhook changes the stored plan and active-crew limit after Stripe confirms the update.
+The browser submits only the requested licensed-crew quantity. It never submits or controls a Stripe Price ID. Only the signed webhook changes the stored plan, monthly amount and active-crew limit after Stripe confirms the update.
 
 ## 7. Stripe webhook endpoint
 
@@ -187,7 +190,7 @@ If Stripe retries an event:
 
 `checkout.session.completed` links identifiers but does not blindly mark the company active. Subscription events remain the source of truth for actual subscription state.
 
-For every subscription event, the webhook retrieves the current canonical Subscription from Stripe and resolves the LineCrew Pro plan from that current Stripe Price ID using `BILLING_PLAN_PRICE_MAP`. This is required because Stripe does not guarantee delivery order and Event `created` timestamps have only one-second precision. Customer Portal plan changes do not rewrite old subscription metadata, so metadata alone must never determine the new crew limit. An unmapped Stripe Price fails closed and is retried rather than silently assigning the wrong plan.
+For every subscription event, the webhook retrieves the current canonical Subscription from Stripe. For the current graduated Price, the subscription item's licensed quantity becomes `included_crew_limit`, and monthly list price is recalculated as `$599 + max(quantity - 5, 0) × $85`. Legacy fixed-tier Price IDs remain mapped only so existing subscriptions can be transitioned safely. An unmapped Stripe Price fails closed.
 
 Invoice events are audit-only and cannot change stored plan, status, or access. `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted` all reconcile from Stripe's latest Subscription state. This prevents a delayed invoice or same-second event from reactivating, canceling, or downgrading the wrong state.
 
@@ -227,34 +230,58 @@ If a manually processed downgrade leaves a company above its new limit, LineCrew
 
 ## 10. Current access policy
 
-Current billing-foundation behavior:
-- existing companies are seeded as `pilot`, `trialing`, access enabled
-- manual/pilot account records can be configured by the platform owner
-- `my_company_subscription_access()` returns effective access
-- Stripe status updates are stored when the webhook is deployed
-- `active`, `trialing`, `past_due`, and `incomplete` currently retain base access during pilot
-- `paused` and `canceled` disable base access
-- an owner override can always force allow or force block without being overwritten by Stripe
+Billing access **is enforced in production**. `enforce_linecrew_company_access()`
+(`20260825133736_harden_subscription_entitlements.sql`) runs as a database
+pre-request hook and fails closed:
 
-The production app does **not** yet enforce this billing value. That omission is deliberate.
+- `access_override` is authoritative when set: `coalesce(access_override, access_enabled)`.
+- Otherwise access requires a subscription row with `access_enabled` and one of:
+  - `status = 'active'`;
+  - `status = 'trialing'` **and** `trial_ends_at > now()`;
+  - `status = 'past_due'` **and** `past_due_since > now() - interval '7 days'`.
+- `paused` and `canceled` disable base access.
+- `/rpc/my_company_billing_summary` is exempt so a blocked Owner/Admin can still
+  reach the Company Billing recovery page.
 
-Before hard-blocking contractor sign-in, choose a grace/dunning policy for past-due accounts. A practical first-launch policy is usually a grace period rather than immediate field lockout, because crews may need continued access to safety and production records while an office payment issue is resolved.
+The past-due grace policy is therefore settled at **seven days**, not an
+immediate field lockout.
 
-## 11. What is intentionally not automatic yet
+### Legacy `companies.subscription_status` projection
 
-The branch does not silently block the existing production app. Wiring `access_enabled=false` into `index.html` should be done as a separate reviewed release only after:
+The webhook also projects a coarse status onto `companies.subscription_status`
+(`active` / `trial` / `suspended`). `company_subscriptions` remains the access
+source of truth, but `index.html` still reads the legacy column as a secondary
+gate. A blocked Owner or Admin is routed to
+`/billing.html?billing=access-blocked` with their session intact; other roles
+are signed out and told to ask their Owner or Admin.
 
-1. the migration passes in the disposable Supabase test project,
-2. a test platform-owner account is granted,
-3. a normal contractor Admin is proven unable to open `owner.html`,
-4. manual plan/access changes are proven company-specific,
-5. Stripe test-mode Checkout succeeds,
-6. signed webhook state changes and retries are verified,
-7. Customer Portal succeeds,
-8. the two-company isolation test still passes, and
-9. the past-due grace policy is approved.
+Note that `platform_owner_set_subscription()` does **not** write the legacy
+column. Restoring a company that the webhook marked `suspended` requires either
+a new Stripe subscription reaching `active` or a direct update to
+`companies.subscription_status`. An owner access override alone will not clear it.
 
-This sequence prevents a billing configuration mistake from becoming a field-operations outage.
+## 11. Verified in production
+
+The full live-mode revenue path was exercised end to end on 2026-08-31 against a
+test contractor company on the real Starter price, discounted to $20 with a
+single-use promotion code:
+
+1. Checkout completed on `price_...` for Starter; the promotion code affected
+   only the invoice amount, never the Price ID.
+2. `checkout.session.completed`, `customer.subscription.created` and
+   `invoice.paid` were signature-validated and processed without error.
+3. The company row moved to `status=active`, `access_enabled=true`,
+   `included_crew_limit=5`, and `monthly_price_cents` was rewritten from the
+   Stripe Price rather than from client input.
+4. Cancellation produced `customer.subscription.deleted`; base access dropped to
+   `false` while a deliberate owner override correctly continued to hold.
+
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_ENVIRONMENT` and
+`BILLING_PLAN_PRICE_MAP` are confirmed correct in production by that run.
+
+Still unexercised: `create-billing-portal` (Customer Portal), `create-plan-upgrade`
+(the upgrade/proration flow), and the active-crew ceiling, which has never been
+reached with real crew records.
 
 ## 12. Recommended B2B plan setup
 

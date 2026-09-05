@@ -6,6 +6,12 @@ const hasVersionedAsset = (source, assetName) => {
   const escapedName = assetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(`${escapedName}\\?v=[A-Za-z0-9._-]+`).test(source);
 };
+const sourceBetween = (source, startMarker, endMarker) => {
+  const start = source.indexOf(startMarker);
+  if (start < 0) return '';
+  const end = source.indexOf(endMarker, start + startMarker.length);
+  return end > start ? source.slice(start, end) : '';
+};
 
 const mustExist = [
   'index.html',
@@ -14,44 +20,55 @@ const mustExist = [
   'scripts/validate-app.mjs',
   'supabase/functions/linecrew-assistant/index.ts',
   'scripts/validate-assistant-memory.mjs',
-  'supabase/migrations/20260830174354_assistant_memory_reminders.sql',
-  'supabase/migrations/20260830175934_index_assistant_memory_foreign_keys.sql',
+  'supabase/migrations/archive/20260830174354_assistant_memory_reminders.sql',
+  'supabase/migrations/archive/20260830175934_index_assistant_memory_foreign_keys.sql',
   'supabase/functions/send-team-invitation/index.ts',
   'supabase/functions/notify-pilot-feedback/index.ts',
   'supabase/functions/complete-team-invitation-signup/index.ts',
   'supabase/functions/_shared/api-keys.ts',
   'supabase/functions/_shared/api-keys_test.ts',
-  'supabase/migrations/20260818_owner_superintendent_roles.sql',
-  'supabase/migrations/20260818_owner_superintendent_team_access.sql',
-  'supabase/migrations/202608190100_owner_legacy_compatibility.sql',
-  'supabase/migrations/202608190200_superintendent_legacy_compatibility.sql',
-  'supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql',
-  'supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql',
-  'supabase/migrations/20260823004222_superintendent_customers_contracts_policies.sql',
-  'supabase/migrations/20260823015316_one_click_company_invitations.sql',
-  'supabase/migrations/20260823021011_automate_invited_foreman_signup.sql',
-  'supabase/migrations/20260823023639_restrict_foremen_to_assigned_jobs.sql',
-  'supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql',
-  'supabase/migrations/20260823030000_company_employee_roster_assignment.sql',
-  'supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql',
-  'supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql',
-  'supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql',
-  'supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql',
-  'supabase/migrations/20260824190000_enforce_privileged_mfa_without_deadline.sql',
-  'supabase/migrations/20260824070000_append_only_job_closeout_history.sql',
-  'supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql',
-  'supabase/migrations/20260825143000_harden_report_and_final_billing_controls.sql',
-  'supabase/migrations/20260825150000_close_direct_rest_authorization_gaps.sql',
-  'supabase/migrations/20260825151500_dynamic_backup_table_inventory.sql',
-  'supabase/migrations/20260825152000_restore_owner_job_rpc_access.sql',
+  'supabase/functions/send-push-notification/index.ts',
+  'supabase/migrations/20260903023149_push_subscriptions.sql',
+  'supabase/migrations/archive/20260818_owner_superintendent_roles.sql',
+  'supabase/migrations/archive/20260818_owner_superintendent_team_access.sql',
+  'supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql',
+  'supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql',
+  'supabase/migrations/archive/20260822220000_production_role_compatibility_drift_repair.sql',
+  'supabase/migrations/archive/20260822223611_close_post_fix_rpc_access_gaps.sql',
+  'supabase/migrations/archive/20260823004222_superintendent_customers_contracts_policies.sql',
+  'supabase/migrations/archive/20260823015316_one_click_company_invitations.sql',
+  'supabase/migrations/archive/20260823021011_automate_invited_foreman_signup.sql',
+  'supabase/migrations/archive/20260823023639_restrict_foremen_to_assigned_jobs.sql',
+  'supabase/migrations/archive/20260823024700_show_job_assignees_to_supervisors.sql',
+  'supabase/migrations/archive/20260823030000_company_employee_roster_assignment.sql',
+  'supabase/migrations/archive/20260823051008_allow_foreman_delete_own_draft_reports.sql',
+  'supabase/migrations/archive/20260823053000_add_company_man_hour_rate_target.sql',
+  'supabase/migrations/archive/20260824060308_restrict_daily_report_reads_by_role.sql',
+  'supabase/migrations/archive/20260824063000_enforce_privileged_mfa_server_side.sql',
+  'supabase/migrations/archive/20260824190000_enforce_privileged_mfa_without_deadline.sql',
+  'supabase/migrations/archive/20260824070000_append_only_job_closeout_history.sql',
+  'supabase/migrations/archive/20260824071000_daily_report_scale_and_integrity.sql',
+  'supabase/migrations/archive/20260825143000_harden_report_and_final_billing_controls.sql',
+  'supabase/migrations/archive/20260825150000_close_direct_rest_authorization_gaps.sql',
+  'supabase/migrations/archive/20260825151500_dynamic_backup_table_inventory.sql',
+  'supabase/migrations/archive/20260825152000_restore_owner_job_rpc_access.sql',
   'number-input-polish.js',
   'foreman-field-tools.js',
   'leadership-my-time.js',
   'scripts/validate-leadership-self-time.mjs',
-  'supabase/migrations/20260828172839_leadership_self_time.sql',
-  'supabase/migrations/20260828173009_consolidate_leadership_self_time_policies.sql',
-  'supabase/migrations/20260826234242_foreman_remaining_job_units.sql',
-  'supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql',
+  'supabase/migrations/archive/20260828172839_leadership_self_time.sql',
+  'supabase/migrations/archive/20260828173009_consolidate_leadership_self_time_policies.sql',
+  'supabase/migrations/archive/20260826234242_foreman_remaining_job_units.sql',
+  'supabase/migrations/archive/20260827120000_fix_remaining_units_job_scope.sql',
+  'supabase/migrations/archive/20260901030000_job_jacket_end_to_end_integrity.sql',
+  'supabase/migrations/archive/20260901031500_job_jacket_reimport_and_revision_delta.sql',
+  'supabase/migrations/archive/20260901045812_optimize_job_packet_review_import.sql',
+  'supabase/migrations/archive/20260901055156_admin_promotion_and_single_owner_governance.sql',
+  'supabase/migrations/archive/20260901070000_member_money_visibility.sql',
+  'supabase/migrations/archive/20260901071000_fix_member_money_permission_update.sql',
+  'supabase/migrations/archive/20260901072000_preserve_field_role_money_permissions.sql',
+  'supabase/migrations/archive/20260901073000_mask_detailed_field_money.sql',
+  'supabase/migrations/archive/20260901074000_admin_owner_recovery.sql',
   'scripts/generate-production-drift-repair.mjs',
   'scripts/verify-production-schema.sql',
   'scripts/post-restore-security.sql',
@@ -69,29 +86,32 @@ const teamInvitation = fs.readFileSync('supabase/functions/send-team-invitation/
 const pilotFeedbackNotifier = fs.readFileSync('supabase/functions/notify-pilot-feedback/index.ts', 'utf8');
 const invitationSignup = fs.readFileSync('supabase/functions/complete-team-invitation-signup/index.ts', 'utf8');
 const edgeApiKeys = fs.readFileSync('supabase/functions/_shared/api-keys.ts', 'utf8');
-const roleMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_roles.sql', 'utf8');
-const accessMigration = fs.readFileSync('supabase/migrations/20260818_owner_superintendent_team_access.sql', 'utf8');
-const ownerCompat = fs.readFileSync('supabase/migrations/202608190100_owner_legacy_compatibility.sql', 'utf8');
-const superintendentCompat = fs.readFileSync('supabase/migrations/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
-const driftRepair = fs.readFileSync('supabase/migrations/20260822220000_production_role_compatibility_drift_repair.sql', 'utf8');
-const rpcAccessRepair = fs.readFileSync('supabase/migrations/20260822223611_close_post_fix_rpc_access_gaps.sql', 'utf8');
-const superintendentContractsPolicies = fs.readFileSync('supabase/migrations/20260823004222_superintendent_customers_contracts_policies.sql', 'utf8');
-const companyInvitations = fs.readFileSync('supabase/migrations/20260823015316_one_click_company_invitations.sql', 'utf8');
-const automaticInvitationSignup = fs.readFileSync('supabase/migrations/20260823021011_automate_invited_foreman_signup.sql', 'utf8');
-const foremanJobAssignments = fs.readFileSync('supabase/migrations/20260823023639_restrict_foremen_to_assigned_jobs.sql', 'utf8');
-const supervisorJobAssignees = fs.readFileSync('supabase/migrations/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
-const employeeRosterAssignment = fs.readFileSync('supabase/migrations/20260823030000_company_employee_roster_assignment.sql', 'utf8');
-const foremanDraftDeletion = fs.readFileSync('supabase/migrations/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
-const manHourRateTarget = fs.readFileSync('supabase/migrations/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
-const dailyReportReadScope = fs.readFileSync('supabase/migrations/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
-const privilegedMfaFoundation = fs.readFileSync('supabase/migrations/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
-const privilegedMfaServer = fs.readFileSync('supabase/migrations/20260824190000_enforce_privileged_mfa_without_deadline.sql', 'utf8');
-const jobCloseoutHistory = fs.readFileSync('supabase/migrations/20260824070000_append_only_job_closeout_history.sql', 'utf8');
-const dailyReportScaleIntegrity = fs.readFileSync('supabase/migrations/20260824071000_daily_report_scale_and_integrity.sql', 'utf8');
-const reportAndFinalBillingHardening = fs.readFileSync('supabase/migrations/20260825143000_harden_report_and_final_billing_controls.sql', 'utf8');
-const directRestHardening = fs.readFileSync('supabase/migrations/20260825150000_close_direct_rest_authorization_gaps.sql', 'utf8');
-const dynamicBackupInventory = fs.readFileSync('supabase/migrations/20260825151500_dynamic_backup_table_inventory.sql', 'utf8');
-const ownerJobAccess = fs.readFileSync('supabase/migrations/20260825152000_restore_owner_job_rpc_access.sql', 'utf8');
+const pushNotifier = fs.readFileSync('supabase/functions/send-push-notification/index.ts', 'utf8');
+const pushSubscriptions = fs.readFileSync('supabase/migrations/20260903023149_push_subscriptions.sql', 'utf8');
+const pushNotificationPhase2 = fs.readFileSync('supabase/migrations/20260903150000_push_notification_phase_2.sql', 'utf8');
+const supabaseConfig = fs.readFileSync('supabase/config.toml', 'utf8');
+const roleMigration = fs.readFileSync('supabase/migrations/archive/20260818_owner_superintendent_roles.sql', 'utf8');
+const ownerCompat = fs.readFileSync('supabase/migrations/archive/202608190100_owner_legacy_compatibility.sql', 'utf8');
+const superintendentCompat = fs.readFileSync('supabase/migrations/archive/202608190200_superintendent_legacy_compatibility.sql', 'utf8');
+const driftRepair = fs.readFileSync('supabase/migrations/archive/20260822220000_production_role_compatibility_drift_repair.sql', 'utf8');
+const rpcAccessRepair = fs.readFileSync('supabase/migrations/archive/20260822223611_close_post_fix_rpc_access_gaps.sql', 'utf8');
+const superintendentContractsPolicies = fs.readFileSync('supabase/migrations/archive/20260823004222_superintendent_customers_contracts_policies.sql', 'utf8');
+const companyInvitations = fs.readFileSync('supabase/migrations/archive/20260823015316_one_click_company_invitations.sql', 'utf8');
+const automaticInvitationSignup = fs.readFileSync('supabase/migrations/archive/20260823021011_automate_invited_foreman_signup.sql', 'utf8');
+const foremanJobAssignments = fs.readFileSync('supabase/migrations/archive/20260823023639_restrict_foremen_to_assigned_jobs.sql', 'utf8');
+const supervisorJobAssignees = fs.readFileSync('supabase/migrations/archive/20260823024700_show_job_assignees_to_supervisors.sql', 'utf8');
+const employeeRosterAssignment = fs.readFileSync('supabase/migrations/archive/20260823030000_company_employee_roster_assignment.sql', 'utf8');
+const foremanDraftDeletion = fs.readFileSync('supabase/migrations/archive/20260823051008_allow_foreman_delete_own_draft_reports.sql', 'utf8');
+const manHourRateTarget = fs.readFileSync('supabase/migrations/archive/20260823053000_add_company_man_hour_rate_target.sql', 'utf8');
+const dailyReportReadScope = fs.readFileSync('supabase/migrations/archive/20260824060308_restrict_daily_report_reads_by_role.sql', 'utf8');
+const privilegedMfaFoundation = fs.readFileSync('supabase/migrations/archive/20260824063000_enforce_privileged_mfa_server_side.sql', 'utf8');
+const privilegedMfaServer = fs.readFileSync('supabase/migrations/archive/20260824190000_enforce_privileged_mfa_without_deadline.sql', 'utf8');
+const jobCloseoutHistory = fs.readFileSync('supabase/migrations/archive/20260824070000_append_only_job_closeout_history.sql', 'utf8');
+const dailyReportScaleIntegrity = fs.readFileSync('supabase/migrations/archive/20260824071000_daily_report_scale_and_integrity.sql', 'utf8');
+const reportAndFinalBillingHardening = fs.readFileSync('supabase/migrations/archive/20260825143000_harden_report_and_final_billing_controls.sql', 'utf8');
+const directRestHardening = fs.readFileSync('supabase/migrations/archive/20260825150000_close_direct_rest_authorization_gaps.sql', 'utf8');
+const dynamicBackupInventory = fs.readFileSync('supabase/migrations/archive/20260825151500_dynamic_backup_table_inventory.sql', 'utf8');
+const ownerJobAccess = fs.readFileSync('supabase/migrations/archive/20260825152000_restore_owner_job_rpc_access.sql', 'utf8');
 const backupScript = fs.readFileSync('scripts/backup-supabase.mjs', 'utf8');
 const numberInputPolish = fs.readFileSync('number-input-polish.js', 'utf8');
 const appPolish = fs.readFileSync('app-polish.js', 'utf8');
@@ -100,9 +120,19 @@ const expandedJsa = fs.readFileSync('expanded-jsa.js', 'utf8');
 const serviceWorker = fs.readFileSync('service-worker.js', 'utf8');
 const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
+const timekeepingInput = fs.readFileSync('timekeeping-input-v2.js', 'utf8');
 const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
 const foremanFieldTools = fs.readFileSync('foreman-field-tools.js', 'utf8');
-const remainingUnitsMigration = fs.readFileSync('supabase/migrations/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
+const remainingUnitsMigration = fs.readFileSync('supabase/migrations/archive/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
+const jobJacketIntegrity = fs.readFileSync('supabase/migrations/archive/20260901030000_job_jacket_end_to_end_integrity.sql', 'utf8');
+const jobJacketReimport = fs.readFileSync('supabase/migrations/archive/20260901031500_job_jacket_reimport_and_revision_delta.sql', 'utf8');
+const packetTimeoutFix = fs.readFileSync('supabase/migrations/archive/20260901045812_optimize_job_packet_review_import.sql', 'utf8');
+const roleGovernance = fs.readFileSync('supabase/migrations/archive/20260901055156_admin_promotion_and_single_owner_governance.sql', 'utf8');
+const moneyVisibility = fs.readFileSync('supabase/migrations/archive/20260901070000_member_money_visibility.sql', 'utf8');
+const moneyVisibilityUpdateFix = fs.readFileSync('supabase/migrations/archive/20260901071000_fix_member_money_permission_update.sql', 'utf8');
+const fieldRoleMoneyPermissions = fs.readFileSync('supabase/migrations/archive/20260901072000_preserve_field_role_money_permissions.sql', 'utf8');
+const detailedFieldMoney = fs.readFileSync('supabase/migrations/archive/20260901073000_mask_detailed_field_money.sql', 'utf8');
+const adminOwnerRecovery = fs.readFileSync('supabase/migrations/archive/20260901074000_admin_owner_recovery.sql', 'utf8');
 const independentBackup = fs.readFileSync('.github/workflows/independent-backup.yml', 'utf8');
 const dailyCompanyBackup = fs.readFileSync('.github/workflows/daily-company-data-backup.yml', 'utf8');
 const disasterRestoreWorkflow = fs.readFileSync('.github/workflows/test-disaster-restore.yml', 'utf8');
@@ -133,6 +163,12 @@ for (const header of ['X-Content-Type-Options','X-Frame-Options','Referrer-Polic
 }
 assert(vercelText.includes("frame-ancestors 'none'"), 'App must prevent framing/clickjacking.');
 assert(vercelText.includes('noindex, nofollow'), 'Operational app should not be indexed by search engines.');
+assert(
+  vercel.headers
+    .filter(rule => rule.headers?.some(header => header.key === 'Content-Security-Policy'))
+    .every(rule => rule.headers.find(header => header.key === 'Content-Security-Policy').value.includes("connect-src 'self' https://cdn.jsdelivr.net")),
+  'Every app CSP must allow the service worker to cache the pinned Supabase runtime from jsDelivr.'
+);
 
 const publicSecretPatterns = [
   ['OpenAI secret key', /sk-(?:proj-)?[A-Za-z0-9_-]{20,}/],
@@ -141,6 +177,64 @@ const publicSecretPatterns = [
   ['Private key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/]
 ];
 for (const [label, pattern] of publicSecretPatterns) assert(!pattern.test(index), `${label} appears in public index.html`);
+
+for (const marker of [
+  'alter table public.push_subscriptions enable row level security',
+  'revoke all on public.push_subscriptions from public, anon, authenticated',
+  'grant select, update, delete on public.push_subscriptions to service_role',
+  'security definer',
+  "set search_path to ''",
+  'linecrew_save_push_subscription',
+  'linecrew_delete_push_subscription',
+  'linecrew_my_push_status',
+  'on conflict (endpoint) do update',
+  'subscription.user_id = v_user_id',
+  'grant execute on function public.linecrew_my_push_status() to authenticated'
+]) assert(pushSubscriptions.includes(marker), `Push subscription security marker missing: ${marker}`);
+for (const marker of [
+  'npm:web-push@3.6.7',
+  'Deno.env.get("CORS_ALLOWED_ORIGINS")',
+  'if (origin && !allowedOrigins.has(origin))',
+  'mode === "test"',
+  '.eq("user_id", userData.user.id)',
+  'request.headers.get("x-push-cron-secret")',
+  'status === 404 || status === 410',
+  'nextFailureCount > 10',
+  'last_success_at: new Date().toISOString()',
+  'event: "push_delivery_completed"'
+]) assert(pushNotifier.includes(marker), `Push delivery marker missing: ${marker}`);
+assert(!pushNotifier.includes('console.log(subscription'), 'Push delivery logs must not expose subscription endpoints or keys.');
+for (const marker of [
+  'body.dispatch_queued === true',
+  'linecrew_enqueue_due_push_reminders',
+  '.from("push_notification_outbox")',
+  'status: "processing"',
+  'event: "push_queue_dispatch_completed"'
+]) assert(pushNotifier.includes(marker), `Push queue delivery marker missing: ${marker}`);
+for (const marker of [
+  'alter table public.push_notification_preferences enable row level security',
+  'revoke all on public.push_notification_preferences from public, anon, authenticated',
+  "default 'submitted_and_reminders'",
+  'linecrew_set_my_gf_notification_preference',
+  'linecrew_my_gf_notification_preference',
+  'linecrew_queue_daily_report_push',
+  'linecrew_queue_completed_jsa_push',
+  'linecrew_queue_uploaded_jsa_push',
+  'linecrew_enqueue_due_push_reminders',
+  "assignment.foreman_id = new.foreman_id",
+  "assignment.foreman_id = new.created_by",
+  "'linecrew-push-dispatch'",
+  "where secret.name = 'linecrew_push_cron_secret'",
+  "set search_path to ''"
+]) assert(pushNotificationPhase2.includes(marker), `Phase 2 push marker missing: ${marker}`);
+assert(index.includes('id="gfNotificationDeliveryMode"'), 'GF notification preference must be selectable.');
+assert(index.includes("sb.rpc('linecrew_set_my_gf_notification_preference'"), 'GF notification preference must be saved through its RPC.');
+assert(index.includes('id="dailyReportReminderTime"'), 'Company settings must expose the Daily Report reminder time.');
+assert(index.includes('id="jsaReminderTime"'), 'Company settings must expose the JSA reminder time.');
+assert(
+  /\[functions\.send-push-notification\]\s+verify_jwt = false/.test(supabaseConfig),
+  'Push delivery must disable the legacy gateway verifier and authenticate both modes in the handler.'
+);
 
 assert(assistant.includes('client.auth.getUser()'), 'AI assistant must authenticate the caller.');
 assert(assistant.includes('.select("company_id, role, active")'), 'AI assistant must load role and active status server-side.');
@@ -156,7 +250,7 @@ assert(assistant.includes('"https://app.linecrewpro.com"'), 'AI assistant must a
 assert(assistant.includes('Deno.env.get("CORS_ALLOWED_ORIGINS")'), 'AI assistant must support explicit development-origin configuration.');
 assert(assistant.includes('if (origin && !allowedOrigins.has(origin))'), 'AI assistant must reject unapproved browser origins before processing.');
 assert(assistant.includes('request.method !== "POST"'), 'AI assistant must reject methods other than POST and OPTIONS.');
-assert(assistant.includes('2026-08-30-read-only-navigation-v8'), 'AI assistant knowledge version marker must track the current workflow release.');
+assert(assistant.includes('2026-09-01-admin-owner-recovery-v13'), 'AI assistant knowledge version marker must track the current workflow release.');
 assert(assistant.includes('loadLiveCompanyContext('), 'AI assistant must load permission-scoped live company context.');
 assert(assistant.includes('assistantModelConfig(requestPlan.route'), 'AI assistant must route complex questions to the reasoning model.');
 assert(assistant.includes('safety_identifier: safetyIdentifier'), 'AI assistant requests must include a privacy-preserving safety identifier.');
@@ -182,8 +276,8 @@ for (const marker of [
   'email-bound, one-time link',
   'multiple Foremen/General Foremen',
   'Manage Foreman Crews',
-  'Regular + 1.5 × OT',
-  'There is no separate bulk Job-file import',
+  'Regular + OT',
+  'The same form accepts an optional PDF, Excel or CSV Job Jacket / Utility Packet',
   'Supervisors review but do not edit a Foreman',
   'green at or above the exact target',
   'Offline JSA Mode',
@@ -201,11 +295,11 @@ for (const marker of [
 assert(index.includes("function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }"), 'AI assistant launcher must be Owner/Admin-only.');
 assert(!index.includes("['ai_assistant','AI Assistant']"), 'AI assistant must not be configurable as a Superintendent capability.');
 for (const marker of [
-  'Save & Import Authorized Units',
+  'Create Job & Review Jacket',
   'Create Account & Join Company',
   'Assign Another Foreman / Leader',
   'Manage Foreman Crews',
-  'There is no separate bulk Job-file import',
+  'A confirmed packet becomes the active authorization baseline',
   'Red is below 95% of target',
   'Offline JSA Mode',
   'searches by Work Point',
@@ -396,6 +490,19 @@ assert(verifyPostRestoreSecurity.includes("has_function_privilege('anon', proc.o
 assert(verifyPostRestoreSecurity.includes("public.admin_update_user(uuid,text,boolean)"), 'The recovery verifier must keep the legacy role-escalation RPC closed after restore.');
 assert(packetParser.includes('if (origin && !allowedOrigins.has(origin))'), 'Job-packet parsing must reject unapproved browser origins.');
 assert(!packetParser.includes('"Access-Control-Allow-Origin": "*"'), 'Job-packet parsing must not allow every browser origin.');
+assert(packetParser.includes('|| "gpt-5.4-mini"'), 'Job-packet parsing must default to the cost-controlled document model.');
+assert(
+  packetParser.includes('attempt === "primary" ? "low" : "medium"'),
+  'Job-packet parsing must use low reasoning first and reserve medium reasoning for full-model fallback.'
+);
+assert(
+  index.includes('async function splitPdfForPacketImport(file, pagesPerChunk = 3)') &&
+    index.includes('retrySmaller:detail.retry_smaller === true') &&
+    index.includes("retryMode:'smaller'"),
+  'Job-packet parsing must retry only slow dense groups as single pages.'
+);
+assert(packetParser.includes('event: "packet_parse_completed"') && packetParser.includes('reasoning_tokens:'), 'Job-packet parsing must log token usage for cost monitoring.');
+assert(packetParser.includes('Math.min(2, totalPages - pageOffset)'), 'Job-packet parsing must remain compatible with already-open two-page client sessions during rollout.');
 assert(appPolish.includes("tile.setAttribute('role','link')") && appPolish.includes("tile.addEventListener('keydown'"), 'Dashboard tiles must support keyboard and screen-reader navigation.');
 assert(index.includes('Create, review and report daily production'), 'The Production dashboard description must reflect the shipped workflow.');
 
@@ -455,6 +562,46 @@ assert(!timekeeping.includes('setTimeout(() => persistCrewTime'), 'Crew time mus
 assert(index.includes('if(requestId !== teamLoadRequest) return;'), 'Team rendering must ignore stale overlapping refreshes.');
 assert(timekeeping.includes('+ Add Extra Man'), 'Foreman Crew Time must provide an explicit extra-man action.');
 assert(timekeeping.includes('tk-crew-group'), 'Leadership employee roster must group crew members by Foreman.');
+assert(timekeeping.includes('id="tkSaveAssignmentsBtn"'), 'Personnel assignments must provide one explicit batch-save action.');
+assert(timekeeping.includes('const rosterAssignmentDrafts = new Map();'), 'Personnel assignments must remain staged while several employees are selected.');
+assert(timekeeping.includes("select.onchange = () => updateRosterDraft"), 'Personnel assignment changes must not immediately reload and collapse the roster.');
+assert(timekeeping.includes('renderRoster(openGroups);'), 'Personnel assignment save must restore the groups that the manager had open.');
+assert(timekeeping.includes('id="tkCompleteRoster"'), 'Owner/Admin Timekeeping must provide a consolidated company roster.');
+assert(timekeeping.includes('Complete Company Roster — ${activePeople.length} people / ${activeEquipment.length} equipment'), 'The consolidated roster must summarize active people and equipment.');
+assert(timekeeping.includes('Unassigned Crew Members')&&timekeeping.includes('Unassigned Equipment'), 'The consolidated roster must make unassigned personnel and equipment obvious.');
+assert(timekeeping.includes("const canViewCompleteRoster = () => ['admin','owner'].includes(role())"), 'The complete company roster must remain Owner/Admin-only.');
+assert(timekeeping.includes(".select('id,full_name,email,role,active')")&&timekeeping.includes('profileOnlyPeople'), 'The complete company roster must include Team login accounts without duplicating linked employees.');
+assert(timekeepingInput.includes('await window.LineCrewRefreshCompleteRoster?.();'), 'Equipment changes must refresh the consolidated company roster.');
+assert(timekeeping.includes('id="tkCompleteRosterSearch"')&&timekeeping.includes('id="tkCompleteRosterAssignment"')&&timekeeping.includes('id="tkCompleteRosterForeman"'), 'The complete company roster must support search, assignment, and Foreman/crew filters.');
+assert(timekeeping.includes('Export Filtered Excel')&&timekeeping.includes('filteredCompleteRosterRecords()'), 'Complete roster export must honor the active filters.');
+assert(timekeeping.includes("XLSX.utils.book_append_sheet(workbook,sheet,'People')")&&timekeeping.includes("XLSX.utils.book_append_sheet(workbook,sheet,'Equipment')"), 'Complete roster Excel export must separate People and Equipment sheets.');
+assert(timekeeping.includes('safeRosterExportCell'), 'Complete roster exports must neutralize spreadsheet formulas.');
+assert(timekeeping.includes("<strong>Timekeeping / Roster</strong>")&&timekeeping.includes('<h2>Timekeeping / Roster</h2>'), 'The dashboard tile and page heading must identify the combined Timekeeping / Roster workspace.');
+assert(foremanFieldTools.includes("isForeman ? 'Crew Time' : 'Timekeeping / Roster'"), 'Leadership must see Timekeeping / Roster while Foremen retain the simpler Crew Time label.');
+assert(index.includes("timekeeping:{label:'Timekeeping / Roster'}"), 'Assistant navigation must use the Timekeeping / Roster label.');
+const completeRosterFilterStart = timekeeping.indexOf('function filteredCompleteRosterRecords(){');
+const completeRosterFilterEnd = timekeeping.indexOf('\n  function applyCompleteRosterFilters()', completeRosterFilterStart);
+assert(completeRosterFilterStart >= 0 && completeRosterFilterEnd > completeRosterFilterStart, 'Complete roster filter function could not be isolated for regression testing.');
+const completeRosterFilterFixture = new Function(
+  'completeRosterFilters',
+  'completeRosterPeople',
+  'completeRosterEquipment',
+  `${timekeeping.slice(completeRosterFilterStart, completeRosterFilterEnd)}; return filteredCompleteRosterRecords();`
+);
+const fixturePeople = [
+  {id:'p1',searchText:'alpha lineman foreman one',status:'active',assignment:'assigned',foremanFilter:'f1'},
+  {id:'p2',searchText:'beta operator unassigned',status:'inactive',assignment:'unassigned',foremanFilter:'unassigned'}
+];
+const fixtureEquipment = [
+  {id:'e1',searchText:'truck 100 alpha foreman one',status:'active',assignment:'assigned',foremanFilter:'f1'},
+  {id:'e2',searchText:'trailer 200 unassigned',status:'active',assignment:'unassigned',foremanFilter:'unassigned'}
+];
+let filteredRosterFixture = completeRosterFilterFixture({query:'alpha',kind:'all',status:'all',assignment:'all',foreman:'all'}, fixturePeople, fixtureEquipment);
+assert(filteredRosterFixture.people.map(row=>row.id).join(',')==='p1'&&filteredRosterFixture.equipment.map(row=>row.id).join(',')==='e1', 'Complete roster search must filter both People and Equipment.');
+filteredRosterFixture = completeRosterFilterFixture({query:'',kind:'people',status:'inactive',assignment:'unassigned',foreman:'unassigned'}, fixturePeople, fixtureEquipment);
+assert(filteredRosterFixture.people.map(row=>row.id).join(',')==='p2'&&filteredRosterFixture.equipment.length===0, 'Complete roster People filters must combine kind, status, assignment, and crew.');
+filteredRosterFixture = completeRosterFilterFixture({query:'',kind:'equipment',status:'active',assignment:'unassigned',foreman:'unassigned'}, fixturePeople, fixtureEquipment);
+assert(filteredRosterFixture.people.length===0&&filteredRosterFixture.equipment.map(row=>row.id).join(',')==='e2', 'Complete roster Equipment filters must combine kind, status, assignment, and crew.');
 assert(timekeepingRoster.includes('My Assigned Crew'), 'Foreman Crew Time options must identify assigned crew members first.');
 assert(index.includes('window.openLineCrewTimekeeping({ focusRoster:true })'), 'Team must provide an obvious Manage Foreman Crews path.');
 assert(timekeeping.includes("const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;"), 'Foreman Daily Reports must identify the logged-in Foreman employee directly.');
@@ -467,8 +614,8 @@ assert(foremanFieldTools.includes("title.textContent = titleText"), 'Foreman Tim
 assert(foremanFieldTools.includes("rpc('get_remaining_job_units_for_field'"), 'Remaining Units must load through the scoped database function.');
 assert(foremanFieldTools.includes('Saved Draft') && foremanFieldTools.includes('Awaiting GF') && foremanFieldTools.includes('Approved') && foremanFieldTools.includes('Remaining'), 'Remaining Units must separate draft, submitted, approved and remaining quantities.');
 assert(foremanFieldTools.includes("role() !== 'foreman'"), 'Remaining Units dashboard access must remain Foreman-only in the client.');
-assert(expandedJsa.includes("foreman-field-tools.js?v=20260828b"), 'Foreman field tools must load as a versioned application asset.');
-assert(serviceWorker.includes("/foreman-field-tools.js?v=20260828b"), 'Offline app shell must cache the Foreman field tools asset.');
+assert(expandedJsa.includes("foreman-field-tools.js?v=20260901a"), 'Foreman field tools must load as a versioned application asset.');
+assert(serviceWorker.includes("/foreman-field-tools.js?v=20260901a"), 'Offline app shell must cache the Foreman field tools asset.');
 assert(foremanFieldTools.includes('@media(max-width:720px)') && foremanFieldTools.includes('.remaining-units-tools{grid-template-columns:1fr}'), 'Remaining Units must collapse its controls for phone screens.');
 assert(foremanFieldTools.includes('-webkit-line-clamp:2') && foremanFieldTools.includes('remaining-unit-toggle'), 'Remaining Unit descriptions must stay compact and expand on demand.');
 assert(foremanFieldTools.includes('aria-expanded="false"') && foremanFieldTools.includes("toggle.setAttribute('aria-expanded'"), 'Remaining Unit description expansion must remain keyboard and screen-reader accessible.');
@@ -511,6 +658,96 @@ assert(index.includes('id="jobPackageInlineImportMount"'), 'Job-package setup mu
 assert(index.includes('Save Package &amp; Preview File'), 'Job-package save must name the inline file-preview workflow.');
 assert(index.includes("$('jobPackageInlineImportMount').appendChild($('jobPackageImportForm'))"), 'Adding a utility package must place file selection and mapping inside the same package box.');
 assert(index.includes("return alert('Choose the Excel or CSV job packet file in this box.')"), 'Saving a utility package must require the inline packet file.');
+for (const marker of [
+  'linecrew_resolve_job_price_book',
+  'public.linecrew_can_manage_job_packages()',
+  'create or replace function public.resolve_utility_packet_price_item',
+  'create or replace function public.finalize_utility_packet_import',
+  'create or replace function public.finalize_job_package_spreadsheet_import',
+  'public.linecrew_foreman_has_job_assignment(job.id)',
+  'else coalesce(report.price_book_id, v_price_book_id)',
+  "report.price_book_id is null",
+  "package.id <> new.id",
+  "package.status = 'active'",
+  'linecrew_report_counts_toward_progress',
+  "nullif(btrim(coalesce(p_review_notes, '')), '') is null",
+  'create or replace function public.get_remaining_job_units_for_field',
+  'create or replace function public.get_job_progress_dashboard',
+  'from public, anon, authenticated'
+]) assert(jobJacketIntegrity.includes(marker), `Job Jacket end-to-end integrity marker missing: ${marker}`);
+assert(
+  index.includes("sb.rpc('finalize_job_package_spreadsheet_import'") &&
+    index.includes("if(importedStatus !== 'active')"),
+  'Spreadsheet jacket UI must use the atomic finalizer and confirm activation before claiming success.'
+);
+assert(
+  index.includes("'finalize_utility_packet_import_review'") &&
+    index.includes('{ p_import_id:importId, p_rows:reviewRows }') &&
+    index.includes('Packet saved for review') &&
+    index.includes('Open Saved Review'),
+  'PDF jacket review must bulk-save rows and preserve a resumable draft after a review timeout.'
+);
+for (const marker of [
+  'linecrew_utility_packet_import_matches',
+  'create_and_stage_utility_packet_import',
+  "'resumed', true",
+  'source_keys as materialized',
+  'update_utility_packet_import_rows_bulk',
+  'finalize_utility_packet_import_review',
+  'jsonb_to_recordset(p_rows)',
+  'Review between 1 and 4,000 packet rows at a time.',
+  'job_package_work_points_package_canonical_key_idx',
+  'public.normalize_work_point_key(work_point_code)',
+  'with matches as materialized',
+  'on conflict (work_point_id, price_book_item_id) do update',
+  "package.status = 'draft'",
+  'from public, anon, authenticated'
+]) assert(packetTimeoutFix.includes(marker), `Packet timeout/atomic import marker missing: ${marker}`);
+for (const marker of [
+  'delete from public.job_package_authorized_units',
+  'delete from public.job_package_work_points',
+  "package.status = 'draft'",
+  'Upload a new job-jacket revision; only a draft package can be imported.',
+  'revoke all on function public.import_job_package_units(uuid, jsonb, text)',
+  'from public, anon, authenticated',
+  'create trigger enforce_draft_job_package_work_point_mutation',
+  'create trigger enforce_draft_job_package_authorized_unit_mutation',
+  'create trigger prevent_non_draft_job_package_delete',
+  'Active job-jacket revisions are read-only. Upload a new revision.',
+  'if auth.uid() is null then',
+  'create or replace function public.get_job_package_revision_delta_v2',
+  'public.normalize_work_point_key(point.work_point_code)',
+  'authorized.authorized_transfer_quantity',
+  'transfer_change numeric'
+]) assert(jobJacketReimport.includes(marker), `Job Jacket replacement/revision marker missing: ${marker}`);
+assert(
+  index.includes("sb.rpc('get_job_package_revision_delta_v2'") &&
+    index.includes("escapeHtml(change.prior_transfer)+' → '+escapeHtml(change.new_transfer)"),
+  'Revision comparison must use canonical work points and display transfer changes.'
+);
+assert(
+  index.includes("$('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || !isDraft)") &&
+    index.includes("String(currentOpenJobPackage?.status || 'draft').toLowerCase() === 'draft'"),
+  'Active jacket baselines must be read-only and corrected through a new revision.'
+);
+assert(
+  index.includes("String(jobPackage.status || 'draft').toLowerCase() === 'draft'") &&
+    index.includes("deleteButton.textContent = 'Delete Draft Package'"),
+  'Only draft jacket revisions may expose a destructive delete action.'
+);
+assert(
+  index.includes('function jobPackageRevisionLabel(jobPackage)') &&
+    (index.match(/jobPackageRevisionLabel\(/g) || []).length >= 6,
+  'Job history, billing exports and PDF records must share one revision label.'
+);
+assert(
+  index.includes('expanded-jsa.js?v=20260901a') &&
+    serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
+    serviceWorker.includes("linecrew-pro-shell-v61") &&
+    expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
+    serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
+  'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
+);
 
 for (const marker of [
   'required_man_hour_rate numeric(12,2)',
@@ -530,8 +767,42 @@ assert(index.includes("' supervisor-compact-report'"), 'Supervisor Production re
 assert(index.includes('jobName + \' · \' + foreman'), 'Compact supervisor rows must identify both the job and Foreman.');
 assert(hasVersionedAsset(expandedJsa, 'role-workspace-polish.js'), 'Role workspace management labels must use a cache version.');
 assert(index.includes('dailyReportValueSummaryMarkup(report, valueSummary)'), 'Production cards must calculate run rates from each report’s own hours.');
+assert((index.match(/const totalHours =/g) || []).length === 2, 'Both production run-rate paths must use total actual hours.');
+assert(!index.includes('weightedHours') && !index.includes('(Number(report?.overtime_hours || 0) * 1.5)'), 'Production run rates must not weight OT hours.');
+assert(timekeeping.includes('const denominator=reg+ot;') && !timekeeping.includes('const denominator=reg+(ot*1.5);'), 'Role-level Actual and Field MH Run Rates must use Regular + OT actual hours.');
 assert(index.includes("'<br>Actual MH Run Rate: <strong>'"), 'Supervision report cards must show the actual man-hour run rate when actual pricing is permitted.');
-assert(index.includes("'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)"), 'Supervision report cards must color only the field man-hour rate number.');
+assert(index.includes('function userCanSeeFieldMoney()'), 'Field-money visibility helper is missing.');
+assert(index.includes("'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)"), 'Production report cards must color only the field man-hour rate number.');
+for (const marker of [
+  'linecrew_set_member_money_permissions',
+  "'actual_pricing', can_see_actual",
+  "'field_pricing', can_see_field",
+  "v_can_see_actual := public.linecrew_has_capability('actual_pricing')",
+  "v_can_see_field := public.linecrew_has_capability('field_pricing')",
+  'profile.company_id = actor.company_id'
+]) assert(moneyVisibility.includes(marker), `Money visibility security marker missing: ${marker}`);
+for (const marker of [
+  'v_actor_company_id',
+  'profile.company_id = v_actor_company_id',
+  'get diagnostics v_updated = row_count',
+  'if v_updated <> 1 then'
+]) assert(moneyVisibilityUpdateFix.includes(marker), `Money visibility update marker missing: ${marker}`);
+for (const marker of [
+  "new.role in ('foreman','gf')",
+  "'actual_pricing', new.role_permissions -> 'actual_pricing'",
+  "'field_pricing', new.role_permissions -> 'field_pricing'",
+  "new.role in ('admin','owner')"
+]) assert(fieldRoleMoneyPermissions.includes(marker), `Field-role money permission marker missing: ${marker}`);
+for (const marker of [
+  'get_price_book_items_visible',
+  'get_daily_report_unit_catalog_visible',
+  'get_daily_report_unit_locations_visible_v2',
+  "linecrew_has_capability('field_pricing')",
+  'then item.adjusted_line_value else null end'
+]) assert(detailedFieldMoney.includes(marker), `Detailed Field Money mask missing: ${marker}`);
+for (const marker of ['Money Visibility','Actual Money','Field Money']) {
+  assert(index.includes(marker), `Team money visibility UI marker missing: ${marker}`);
+}
 assert(/\.daily-review-counts\s+\.authorized,\s*\.daily-review-counts\s+\.pending,\s*\.daily-review-counts\s+\.redline\s*\{[^}]*color\s*:\s*inherit\s*;/m.test(index), 'Authorization, Pending Packet and Redline summary counts must remain neutral.');
 assert(!index.includes('mh-rate-target'), 'Man-hour target status must not render as a separate colored badge.');
 assert(timekeeping.includes('window.manHourRateNumberMarkup(value)'), 'Production totals must color only the Field MH Run Rate value.');
@@ -578,19 +849,136 @@ for (const role of ['foreman', 'gf', 'superintendent', 'admin', 'owner']) assert
 assert(roleMigration.includes('drop constraint if exists profiles_role_supported'), 'Role migration must replace the legacy three-role constraint.');
 assert(roleMigration.includes('linecrew_claim_initial_owner'), 'Role migration must provide a safe initial Owner claim path.');
 assert(roleMigration.includes('linecrew_set_member_role'), 'Role migration must centralize role changes.');
-assert(roleMigration.includes('Only an Owner can manage Owner or Admin roles'), 'Admins must not be able to manage Owners or peer Admins.');
-assert(roleMigration.includes('Assign another Owner before removing the last Owner'), 'The last Owner must be protected from removal.');
 assert(roleMigration.includes('A Superintendent can manage General Foreman and Foreman roles only'), 'Superintendent delegated role management must stop above GF/Foreman.');
 assert(roleMigration.includes("role_permissions ->> 'role_management'"), 'Superintendent role-management capability must be enforced server-side.');
 assert(roleMigration.includes('linecrew_set_superintendent_permissions'), 'Superintendent permission overrides must be server-enforced.');
 assert(roleMigration.includes("jsonb_typeof(item.value) <> 'boolean'"), 'Superintendent overrides must accept boolean values only.');
 assert(roleMigration.includes('actor.active is not true'), 'Role-management RPCs must reject suspended leadership profiles.');
 assert(roleMigration.includes('and p.active is true'), 'Capability checks must reject suspended profiles.');
+for (const marker of [
+  'profiles_one_owner_per_company_idx',
+  "requested_role not in ('foreman','gf','superintendent','admin')",
+  'Admins may promote a Foreman, General Foreman, or Superintendent to Admin.',
+  'Only the Owner can change an existing Admin.',
+  'linecrew_transfer_company_owner',
+  'company_ownership_transferred',
+  "Restore this team member''s access before changing their role.",
+  "'role_permissions', target.role_permissions",
+  'Your role or access changed while the access update was starting.',
+  "set search_path = ''",
+  'for update'
+]) assert(roleGovernance.includes(marker), `Current Owner/Admin governance is missing: ${marker}`);
+assert(!roleGovernance.includes("requested_role not in ('foreman','gf','superintendent','admin','owner')"), 'Generic role management must not assign Owner.');
+for (const marker of [
+  'linecrew_admin_replace_company_owner',
+  "requested_former_role not in ('foreman','gf','superintendent','admin')",
+  "auth.jwt() ->> 'aal'",
+  "lower(coalesce(actor.role, '')) <> 'admin'",
+  "lower(coalesce(current_owner.role, '')) <> 'owner'",
+  "lower(coalesce(replacement.role, '')) <> 'admin'",
+  "and company_id = actor_company_id",
+  "select count(*)",
+  "company_ownership_recovered_by_admin",
+  "set search_path = ''",
+  'for update',
+  'from public, anon, authenticated',
+  'to authenticated'
+]) assert(adminOwnerRecovery.includes(marker), `Admin Owner recovery is missing: ${marker}`);
+assert(
+  adminOwnerRecovery.indexOf("set role = requested_former_role") < adminOwnerRecovery.indexOf("set role = 'owner'"),
+  'Admin Owner recovery must demote the previous Owner before promoting the replacement to satisfy the single-Owner index.'
+);
+const setMemberRoleGovernance = sourceBetween(
+  roleGovernance,
+  'create or replace function public.linecrew_set_member_role(',
+  'create or replace function public.linecrew_transfer_company_owner('
+);
+const targetActiveGuard = setMemberRoleGovernance.indexOf('if target.active is not true then');
+const roleUpdate = setMemberRoleGovernance.indexOf('update public.profiles');
+assert(
+  targetActiveGuard >= 0 && roleUpdate > targetActiveGuard,
+  'The member-role RPC must reject every suspended target before updating their profile.'
+);
 
-assert(accessMigration.includes('set_company_member_active'), 'Team access changes need a secured hierarchy RPC.');
-assert(accessMigration.includes("target_role in ('owner','admin')"), 'Admins must not suspend Owners or peer Admins.');
-assert(accessMigration.includes("target_role not in ('foreman','gf')"), 'Superintendents must not suspend peers or higher roles.');
-assert(accessMigration.includes('Assign another active Owner before suspending the last Owner'), 'The final active Owner must be protected from suspension.');
+const teamRoleOptions = sourceBetween(
+  index,
+  'function roleOptionsForMember(member){',
+  'function canTransferOwnershipTo(member){'
+);
+const adminRoleOptions = sourceBetween(
+  teamRoleOptions,
+  "if(actor === 'admin'){",
+  "if(actor === 'superintendent'"
+);
+assert(
+  teamRoleOptions.indexOf('if(member.active === false) return [];') >= 0 &&
+    teamRoleOptions.indexOf('if(member.active === false) return [];') < teamRoleOptions.indexOf("if(actor === 'admin'){"),
+  'Team role controls must reject suspended members before evaluating Admin options.'
+);
+assert(
+  adminRoleOptions.includes("if(['owner','admin'].includes(target)) return [];") &&
+    adminRoleOptions.includes("return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];") &&
+    !adminRoleOptions.includes("['owner','Owner']"),
+  'The Admin branch must manage active lower roles through Admin without exposing Owner or peer-Admin controls.'
+);
+
+const transferOwnershipHandler = sourceBetween(
+  index,
+  'async function transferCompanyOwnership(member,button){',
+  'function canChangeMemberAccess(member){'
+);
+const adminOwnerRecoveryHandler = sourceBetween(
+  index,
+  'async function replaceCompanyOwnerAsAdmin(owner,replacement,formerRole,button,replacementSelect,roleSelect){',
+  'function canChangeMemberAccess(member){'
+);
+const claimOwnerHandler = sourceBetween(
+  index,
+  'async function claimInitialOwner(button){',
+  'let teamLoadRequest = 0;'
+);
+const updateRoleHandler = sourceBetween(
+  index,
+  'async function updateTeamMemberRole(member,nextRole,button,roleSelect){',
+  'async function changeTeamMemberAccess(member){'
+);
+const teamRenderer = sourceBetween(
+  index,
+  'async function loadTeamMembers(){',
+  "$('manageFieldEmployeesBtn').onclick"
+);
+for (const [handler, pendingLabel, restoreMarker, message] of [
+  [transferOwnershipHandler, "button.textContent = 'Transferring...'", 'button.textContent = priorText;', 'ownership transfer'],
+  [adminOwnerRecoveryHandler, "button.textContent = 'Recovering Ownership...'", 'replacementSelect.disabled = false;', 'Admin ownership recovery'],
+  [claimOwnerHandler, "button.textContent = 'Assigning Owner...'", 'button.textContent = priorText;', 'initial Owner claim'],
+  [updateRoleHandler, "button.textContent = 'Saving...'", 'roleSelect.disabled = false;', 'member role save']
+]) {
+  assert(
+    handler.includes('button?.disabled') &&
+      handler.includes('button.disabled = true') &&
+      handler.includes(pendingLabel) &&
+      handler.includes('button.disabled = false') &&
+      handler.includes(restoreMarker),
+    `The ${message} UI must prevent duplicate requests and restore controls after an error.`
+  );
+}
+assert(
+  updateRoleHandler.includes('roleSelect.disabled = true;') &&
+    teamRenderer.includes('button.onclick = ()=>claimInitialOwner(button);') &&
+    teamRenderer.includes('save.onclick=()=>updateTeamMemberRole(member,roleSelect.value,save,roleSelect);') &&
+    teamRenderer.includes('transfer.onclick=()=>transferCompanyOwnership(member,transfer);') &&
+    teamRenderer.includes('renderAdminOwnershipRecovery(member,members,card);'),
+  'Team role controls must pass their rendered buttons/select into the single-flight handlers.'
+);
+assert(transferOwnershipHandler.includes("'linecrew_transfer_company_owner'"), 'Team UI must use the explicit ownership-transfer RPC.');
+assert(adminOwnerRecoveryHandler.includes("'linecrew_admin_replace_company_owner'"), 'Team UI must use the MFA-protected Admin ownership-recovery RPC.');
+assert(assistant.includes('May promote an active Foreman, General Foreman or Superintendent to Admin'), 'Live Assistant role guidance must explain Admin promotion safely.');
+assert(assistant.includes('Ownership Recovery'), 'Live Assistant role guidance must explain Admin ownership recovery.');
+
+assert(roleGovernance.includes('set_company_member_active'), 'Current team access changes need the governance-serialized hierarchy RPC.');
+assert(roleGovernance.includes("target_role in ('owner','admin')"), 'Admins must not suspend Owners or peer Admins.');
+assert(roleGovernance.includes("target_role not in ('foreman','gf')"), 'Superintendents must not suspend peers or higher roles.');
+assert(roleGovernance.includes('Transfer ownership before suspending the company Owner.'), 'The single Owner must be protected from suspension.');
 
 assert(ownerCompat.includes("'owner'"), 'Legacy secured RPCs must recognize Owner.');
 assert(superintendentCompat.includes('linecrew_has_capability'), 'Legacy Superintendent RPC compatibility must be capability-gated.');
@@ -642,6 +1030,7 @@ for (const marker of [
   "linecrew_set_member_role",
   "linecrew_set_superintendent_permissions",
   "linecrew_claim_initial_owner",
+  "linecrew_transfer_company_owner",
   "userCanManageCustomersContracts()",
   "userCanManagePriceBooks()",
   "userCanManageJobPackages()",
@@ -666,7 +1055,9 @@ for (const marker of [
   "$('createCompanyCard').classList.toggle('hidden', invited)",
   "$('joinCompanyCard').classList.toggle('hidden', invited)",
   'id="newPriceBookImportFile"',
+  'id="newPriceBookFileCheck"',
   'Save Unit Pricing &amp; Continue',
+  'spreadsheet rows were found.',
   'await handlePriceBookImportFile(selectedImportFile)',
   'Review the preview'
 ]) assert(marker instanceof RegExp ? marker.test(index) : index.includes(marker), `Onboarding workflow marker missing: ${marker}`);

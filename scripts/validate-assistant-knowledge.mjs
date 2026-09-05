@@ -87,6 +87,26 @@ const scenarios = [
     expected: ['Assistant Memory from the Dashboard', 'no Edit button', 'remove and resave']
   },
   {
+    role: 'Admin',
+    question: 'How do I make someone else an Admin?',
+    expected: ['Owner or Admin', 'authenticator setup']
+  },
+  {
+    role: 'Admin',
+    question: 'Can I claim the Owner role?',
+    expected: ['no Owner', 'Make Me Company Owner']
+  },
+  {
+    role: 'Admin',
+    question: 'What do I do if the registered Owner leaves?',
+    expected: ['Ownership Recovery', 'active Admin', 'one transaction']
+  },
+  {
+    role: 'Owner',
+    question: 'How do I transfer company ownership?',
+    expected: ['Transfer Ownership', 'previous Owner to Admin']
+  },
+  {
     role: 'Superintendent',
     question: 'How does a Superintendent enter overhead time in My Time?',
     expected: ['General Foreman, Superintendent, Admin and Owner', 'Company Overhead']
@@ -105,6 +125,11 @@ const scenarios = [
     role: 'Foreman',
     question: 'How do I check Remaining Units left at a work point?',
     expected: ['searches by Work Point', 'Redlines stay separate']
+  },
+  {
+    role: 'Foreman',
+    question: 'Where do I see my man hour rate?',
+    expected: ['Field MH Run Rate on their own Daily Reports', 'Actual Money and Field Money']
   }
 ];
 

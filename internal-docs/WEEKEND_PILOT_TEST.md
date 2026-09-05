@@ -18,7 +18,8 @@ Use this checklist only against the disposable LineCrew Pro Test environment. Ne
 3. Claim/assign Owner using the supported Team flow.
 4. Sign out and back in after the role change.
 5. Confirm Owner can see company controls, Team, customers/contracts, Price Books, jobs, production review/reporting, safety records, storm controls and assistant.
-6. Confirm Owner can assign/remove Admin while the final-Owner protection remains enforced.
+6. Confirm Owner/Admin can promote a lower-role active member to Admin.
+7. Confirm only Owner can modify an existing Admin and transfer ownership to another active Admin.
 
 Expected: no role escalation is possible outside the Team controls/RPCs.
 
@@ -26,9 +27,11 @@ Expected: no role escalation is possible outside the Team controls/RPCs.
 
 Create one user for each role and verify:
 
-- Owner can manage Admin, Superintendent, GF and Foreman roles.
-- Admin cannot modify Owner or another Admin.
-- Admin can promote/demote Superintendent, GF and Foreman as permitted.
+- Owner can manage existing Admin, Superintendent, GF and Foreman roles.
+- Admin can promote an active Foreman, GF or Superintendent to Admin.
+- Admin cannot modify Owner or an existing Admin and cannot assign Owner.
+- With zero Owners, one active Admin can claim the initial Owner role; after that, a second claim fails.
+- Owner transfer changes the chosen active Admin to Owner and the prior Owner to Admin in one step, leaving exactly one Owner.
 - Superintendent can only manage GF/Foreman when `role_management` is enabled.
 - Superintendent cannot modify/suspend Owner, Admin or another Superintendent.
 - GF cannot manage company roles.
@@ -51,7 +54,6 @@ For the Superintendent, test each permission both ON and OFF where practical:
 - storm mode
 - safety records
 - actual pricing
-- AI assistant
 
 Expected: turning a capability off removes both the UI path and the server-authorized action where applicable. Re-enable it and verify access returns.
 

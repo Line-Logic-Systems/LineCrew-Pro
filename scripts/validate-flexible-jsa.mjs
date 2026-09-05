@@ -4,8 +4,8 @@ const html = fs.readFileSync('index.html','utf8');
 const offlineJsa = fs.readFileSync('offline-jsa.js','utf8');
 const timekeepingInput = fs.readFileSync('timekeeping-input-v2.js','utf8');
 const serviceWorker = fs.readFileSync('service-worker.js','utf8');
-const migration = fs.readFileSync('supabase/migrations/202608190700_flexible_jsa_upload.sql','utf8');
-const compat = fs.readFileSync('supabase/migrations/202608190710_flexible_jsa_digital_compat.sql','utf8');
+const migration = fs.readFileSync('supabase/migrations/archive/202608190700_flexible_jsa_upload.sql','utf8');
+const compat = fs.readFileSync('supabase/migrations/archive/202608190710_flexible_jsa_digital_compat.sql','utf8');
 
 const requiredHtml = [
   'companyJsaMethod',
@@ -53,12 +53,12 @@ if(!timekeepingInput.includes('window.LineCrewOfflineColdStart||!navigator.onLin
 }
 
 for(const token of [
-  'linecrew-pro-shell-v55',
+  'linecrew-pro-shell-v61',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
-  '/expanded-jsa.js?v=20260829e',
+  '/expanded-jsa.js?v=20260901a',
   '/offline-jsa.js?v=20260827b',
-  '/timekeeping-input-v2.js?v=20260829c',
+  '/timekeeping-input-v2.js?v=20260901a',
   '/jsa-signatures.js?v=20260828a'
 ]){
   if(!serviceWorker.includes(token)) throw new Error('Missing Offline JSA app-shell token: ' + token);

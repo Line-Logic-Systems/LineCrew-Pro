@@ -6,6 +6,11 @@ on:
       - main
     paths:
       - 'supabase/migrations/**'
+      # Role, capability and money-visibility gating is read and applied in
+      # index.html, so a change there can alter who reaches another company's
+      # data without touching a migration. Cross-company isolation is exactly
+      # what this job proves, so it runs for those changes too.
+      - 'index.html'
       - 'scripts/test-two-company-isolation.mjs'
       - '.github/workflows/test-two-company-isolation.yml'
   workflow_dispatch:

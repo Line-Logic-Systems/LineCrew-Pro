@@ -10,6 +10,11 @@
 <link rel="icon" href="linecrew-pro-logo.png" type="image/png">
 <link rel="stylesheet" href="styles.css?v=site7">
 <link rel="stylesheet" href="accessibility.css?v=site5">
+<script>
+window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<script defer src="/analytics.js?v=1"></script>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -30,7 +35,7 @@
 <div><label for="admin-email">Owner email</label><input id="admin-email" name="admin-email" type="email" autocomplete="email" placeholder="owner@company.com"></div>
 <div><label for="primary-contact">Primary contact</label><input id="primary-contact" name="primary-contact" autocomplete="name" placeholder="First and last name"></div>
 <div><label for="phone">Phone</label><input id="phone" name="phone" type="tel" autocomplete="tel" placeholder="(555) 555-5555"></div>
-<div><label for="active-crews">Active crews</label><select id="active-crews" name="active-crews"><option>1–5 crews · Starter</option><option>6–10 crews · Business</option><option>11–20 crews · Pro</option><option>21–40 crews · Enterprise</option><option>41+ crews · Contact Sales</option></select></div>
+<div><label for="active-crews">Active crews</label><input id="active-crews" name="active-crews" type="number" min="1" step="1" value="5"></div>
 <div><label for="state">State</label><input id="state" name="state" autocomplete="address-level1" placeholder="TX"></div>
 </div>
 <div class="actions"><button class="btn disabled" type="button" disabled>Continue to secure checkout</button><span class="inline-note">Checkout is not active yet. Request early access and we’ll contact you directly.</span><a class="btn ghost" href="mailto:sales@linecrewpro.com?subject=LineCrew%20Pro%20Demo%20Request&amp;body=Hello%20LineCrew%20Pro%20team%2C%0A%0AI'm%20interested%20in%20scheduling%20a%20personalized%20demo%20for%20our%20company.%0A%0ACompany%20name%3A%0AName%3A%0APhone%3A%0ANumber%20of%20active%20crews%3A%0APreferred%20demo%20day%2Ftime%3A%0A%0AThank%20you.">Request Early Access</a></div>

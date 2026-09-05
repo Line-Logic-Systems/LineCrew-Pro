@@ -1522,7 +1522,54 @@ margin:12px 0;
 }
 .mapping-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .mapping-grid label{margin-top:8px}
+#priceBookImportCard.new-price-book-inline-mapping{
+margin:12px 0;
+padding:14px;
+border-color:#9fc7ad;
+background:#f7fbf8;
+}
+#priceBookImportCard.new-price-book-inline-mapping>h3:first-child,
+#priceBookImportCard.new-price-book-inline-mapping>p:first-of-type,
+#priceBookImportCard.new-price-book-inline-mapping>label[for="priceBookImportFile"],
+#priceBookImportCard.new-price-book-inline-mapping #priceBookFileDrop,
+#priceBookImportCard.new-price-book-inline-mapping>label[for="priceBookImportMode"],
+#priceBookImportCard.new-price-book-inline-mapping #priceBookImportMode,
+#priceBookImportCard.new-price-book-inline-mapping #priceBookImportMode+p,
+#priceBookImportCard.new-price-book-inline-mapping #downloadPriceBookTemplateBtn,
+#priceBookImportCard.new-price-book-inline-mapping>label[for="priceBookImportPaste"],
+#priceBookImportCard.new-price-book-inline-mapping #priceBookImportPaste,
+#priceBookImportCard.new-price-book-inline-mapping #previewPastedPriceBookItemsBtn,
+#priceBookImportCard.new-price-book-inline-mapping #confirmPriceBookImportBtn,
+#priceBookImportCard.new-price-book-inline-mapping #cancelPriceBookImportBtn{
+display:none!important;
+}
+#priceBookImportCard.new-price-book-inline-mapping #priceBookColumnMapping>h3:before{
+content:'Review and ';
+}
+/* Surfaced by the global error and unhandledrejection listeners. Fixed to the
+   bottom so it cannot be missed the way an off-screen card was, and above the
+   app rather than inside any one screen, since these errors come from anywhere. */
+.app-error-banner{
+position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;
+display:flex;gap:12px;align-items:flex-start;justify-content:space-between;
+background:#fdecec;border:1px solid var(--red,#c0392b);border-radius:8px;
+padding:12px 14px;font-size:14px;color:#7a1c14;
+box-shadow:0 6px 20px rgba(0,0,0,.18);max-width:720px;margin:0 auto;
+}
+.app-error-banner-frame{margin-top:6px;font-size:12px;opacity:.85;word-break:break-all}
+.app-error-banner button{flex:none;cursor:pointer}
 .import-table-wrap{overflow-x:auto;margin-top:12px}
+/* Every other cell is nowrap, which pushed the packet review's Check column --
+   the one carrying the Map Unit button -- off the right edge and behind a
+   horizontal scrollbar. Let this one column wrap and stack its button so the
+   control is reachable without scrolling sideways. */
+.import-table td.smart-check-cell{white-space:normal;min-width:132px}
+.import-table td.smart-check-cell .smart-row-map{display:block;margin-top:6px}
+/* Utility unit codes run long -- "COOP ML 20 - 200A 240V" rendered as
+   "COOP ML" in a default-width input, so the reviewer could not read the code
+   they were about to map or bill. */
+.import-table .smart-row-unit{min-width:180px}
+.import-table .smart-row-point{min-width:96px}
 .import-table{
 width:100%;
 border-collapse:collapse;
@@ -1808,6 +1855,25 @@ Cancel
 <button id="saveMyProfile" class="success small">Save My Profile</button>
 <button id="cancelMyProfile" class="secondary small">Cancel</button>
 </div>
+<div id="pushNotificationsCard" class="job-card">
+<h3>Notifications</h3>
+<p id="pushNotificationStatus" class="muted" aria-live="polite">Checking notification status…</p>
+<div class="button-row">
+<button id="enablePushNotifications" class="success small hidden" type="button">Enable Notifications</button>
+<button id="sendTestPushNotification" class="secondary small hidden" type="button">Send Test Notification</button>
+<button id="disablePushNotifications" class="danger small hidden" type="button">Disable Notifications</button>
+</div>
+<div id="gfNotificationPreference" class="hidden" style="margin-top:14px">
+<label for="gfNotificationDeliveryMode">General Foreman Alerts</label>
+<select id="gfNotificationDeliveryMode">
+<option value="submitted_and_reminders">Submitted + reminders</option>
+<option value="submitted_only">Submitted only</option>
+</select>
+<p class="muted" style="font-size:12px;margin-top:5px">Submitted alerts include completed JSAs and Daily Reports from your assigned Foremen. Reminders cover missing or late items.</p>
+<button id="saveGfNotificationPreference" class="success small" type="button">Save Alert Choice</button>
+<span id="gfNotificationPreferenceStatus" class="muted" aria-live="polite"></span>
+</div>
+</div>
 </div>
 <div class="grid" id="dashboardTileGrid">
 <div class="metric" id="jobsTile">
@@ -1956,9 +2022,9 @@ Save Company Settings
 <div id="companyMhRateSettings" class="job-card hidden">
 <h3>Required Man-Hour Rate</h3>
 <p class="muted">
-Set the company break-even target per weighted man-hour. Supervision sees red more than 5% below it, yellow within 5% below it, and green at or above it.
+Set the company production target per man-hour. Production views show red more than 5% below it, yellow within 5% below it, and green at or above it.
 </p>
-<label for="companyRequiredMhRate">Target ($ per weighted man-hour)</label>
+<label for="companyRequiredMhRate">Target ($ per man-hour)</label>
 <input id="companyRequiredMhRate" type="number" min="0" max="1000000" step="0.01" inputmode="decimal" placeholder="Example: 45.00">
 <p class="muted">Leave blank or enter 0 to turn off target colors.</p>
 <button id="saveCompanyMhRate" class="success small">Save MH Rate Target</button>
@@ -1980,6 +2046,21 @@ Review, approve, deny or revoke temporary LineCrew Pro diagnostic access. Every 
 <option value="both">Allow Both</option>
 </select>
 <button id="saveCompanyJsaMethod" class="success small">Save JSA Option</button>
+</div>
+<div id="notificationReminderSettingsCard" class="job-card hidden">
+<h3>Notification Reminder Times</h3>
+<p class="muted">Times use the company time zone. Leave a time blank to turn that reminder off.</p>
+<div class="form-grid">
+<div>
+<label for="dailyReportReminderTime">Daily Report Reminder</label>
+<input id="dailyReportReminderTime" type="time">
+</div>
+<div>
+<label for="jsaReminderTime">JSA Reminder</label>
+<input id="jsaReminderTime" type="time">
+</div>
+</div>
+<button id="saveNotificationReminderTimes" class="success small" type="button">Save Reminder Times</button>
 </div>
 <div class="job-card">
 <h3>Redline Approval</h3>
@@ -2093,7 +2174,7 @@ Company job management
 id="showAddJobPackageBtn"
 class="success hidden"
 >
-+ Add Utility Package to Existing Job
++ Add Job Jacket to Existing Job
 </button>
 <button
 id="showCreateJobBtn"
@@ -2271,6 +2352,18 @@ placeholder="Example: Feeder Rebuild"
 The selected contract controls which Price Book units and values can be
 used for this job.
 </p>
+<div id="createJobPacketField">
+<label for="createJobPacketFile">Job Jacket / Utility Packet (optional)</label>
+<input
+id="createJobPacketFile"
+type="file"
+accept=".pdf,.csv,.tsv,.txt,.xlsx,.xls,.ods"
+>
+<p class="muted">
+PDF, Excel or CSV. After the job is created, you will review the jacket
+before any authorized units are imported. PDF files can be up to 20 MB.
+</p>
+</div>
 <button class="success" id="createJobBtn">
 Create Job
 </button>
@@ -2283,7 +2376,7 @@ Cancel
 </div>
 <div id="jobPackageFormHome"></div>
 <div id="jobPackageFormCard" class="card hidden">
-<h2>Add Utility Job Package</h2>
+<h2>Add Job Jacket / Utility Packet</h2>
 <p class="muted">
 Importing the package's authorized units lets LineCrew Pro distinguish
 normal authorized production from redlines, reconcile Pending Job Units
@@ -2871,6 +2964,11 @@ Save the pole to start a clean entry for the next location.
 <input id="dailyUnitPoleLocation" list="dailyUnitPoleLocations"
 maxlength="200" placeholder="Example: Pole 18">
 </div>
+<div id="dailyAuthorizedUnitPanel" class="job-card hidden">
+<strong>Authorized Units From Job Jacket</strong>
+<p id="dailyAuthorizedUnitHelp" class="muted"></p>
+<div id="dailyAuthorizedUnitChoices" class="button-row"></div>
+</div>
 <div id="dailyUnitBatchRows"></div>
 <div class="button-row">
 <button id="addDailyUnitRowsBtn" class="secondary">
@@ -3196,6 +3294,11 @@ id="newPriceBookImportFile"
 type="file"
 accept=".csv,.tsv,.txt,.xlsx,.xls,.ods"
 >
+<div
+id="newPriceBookFileCheck"
+class="hidden"
+aria-live="polite"
+></div>
 <button id="savePriceBookBtn" class="success">
 Save Unit Pricing &amp; Continue
 </button>
@@ -3643,6 +3746,7 @@ const SUPABASE_URL = IS_LINECREW_PRODUCTION
 const SUPABASE_KEY = IS_LINECREW_PRODUCTION
 ? 'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF'
 : 'sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx';
+const VAPID_PUBLIC_KEY = 'BGJsa3SAbOkoEWevDwhvoGG1fT4v2CkeQjX7QD-Tblo4Hh2I7YZYfQWx9CWiF8xPHRWGWYkjVAO6774-hHFKx30';
 const sb = supabase.createClient(
 SUPABASE_URL,
 SUPABASE_KEY
@@ -3660,7 +3764,8 @@ document.getElementById(id);
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
 const requestedBillingReturn = new URLSearchParams(window.location.search).get('billing') === '1';
-const PAID_SIGNUP_PLANS = Object.freeze({starter:'Starter',business:'Business',pro:'Pro',enterprise:'Enterprise'});
+const requestedNotificationDestination = String(new URLSearchParams(window.location.search).get('notification') || '').trim().toLowerCase();
+const PAID_SIGNUP_PLANS = Object.freeze({linecrew:'LineCrew Pro'});
 let requestedSignupPlan = String(new URLSearchParams(window.location.search).get('plan') || '').trim().toLowerCase();
 if(!requestedSignupPlan){
 try{ requestedSignupPlan = String(sessionStorage.getItem('linecrew_requested_plan') || '').trim().toLowerCase(); }catch{}
@@ -3695,7 +3800,7 @@ $('acceptInvitationCard').classList.add('hidden');
 const planNotice = $('selectedPlanNotice');
 planNotice.classList.toggle('hidden', !requestedSignupPlan || invited);
 if(requestedSignupPlan && !invited){
-planNotice.textContent = PAID_SIGNUP_PLANS[requestedSignupPlan] + ' selected. After creating your company, you will continue to secure Stripe Checkout.';
+planNotice.textContent = 'LineCrew Pro selected: $599/month includes 5 crews, then $85/month per additional crew. After creating your company, you will continue to secure Stripe Checkout.';
 }
 }
 function privilegedRoleRequiresMfa(profile){
@@ -3879,6 +3984,15 @@ let currentPriceBookSourceRows = [];
 let currentPriceBookStructuredSheets = new Map();
 let currentPriceBookImportNotice = '';
 let currentPriceBookMappingNeedsReview = false;
+let newPriceBookFilePreflight = null;
+let newPriceBookFileCheckSequence = 0;
+let newPriceBookPreSaveMappingActive = false;
+let newPriceBookPendingMappings = null;
+let newPriceBookPendingWorksheet = '';
+let newPriceBookInlineMappingSequence = 0;
+let newPriceBookInlineMappingTask = Promise.resolve();
+const priceBookImportCardHome = $('priceBookImportCard').parentNode;
+const priceBookImportCardHomeNext = $('priceBookImportCard').nextSibling;
 let priceBookNavigationRecords = new Map();
 let currentPriceBookCatalog = [];
 let currentPriceBookContractsById = new Map();
@@ -3905,9 +4019,12 @@ let currentOpenJobPackage = null;
 let currentJobPackageImportWorkbook = null;
 let currentJobPackageImportRows = [];
 let currentJobPackageImportFilename = null;
+let currentJobPackageImportReadToken = 0;
 let currentUtilityPacketImportId = null;
 let currentDailyUnitCatalog = [];
 let currentDailySavedUnits = [];
+let currentDailyAuthorizedRows = [];
+let currentDailyAuthorizedLoadError = '';
 let currentDailyUnitUsageMemory = new Map();
 let currentDailyUnitReport = null;
 let currentDailyUnitBatchRows = [];
@@ -4098,19 +4215,25 @@ return [...document.querySelectorAll('main > section')]
 .find(section => !section.classList.contains('hidden'))?.id ||
 window.location.pathname || 'app';
 }
-function recordTechnicalError(area,code,message){
+async function recordTechnicalError(area,code,message){
 if(!currentProfile?.company_id) return;
 const safeMessage = String(message || 'Unexpected application error').slice(0,300);
 const fingerprint = `${area}|${code}|${safeMessage}`;
 if(fingerprint === lastRecordedError && Date.now()-lastRecordedErrorAt < 10000) return;
 lastRecordedError = fingerprint;
 lastRecordedErrorAt = Date.now();
-void sb.rpc('record_app_error',{
+try{
+const {error} = await sb.rpc('record_app_error',{
 p_area:String(area || 'app').slice(0,60),
 p_error_code:String(code || 'operation_failed').slice(0,80),
 p_page:currentErrorPage().slice(0,100),
 p_message:safeMessage
 });
+if(error) console.warn('Unable to record application error:',error.message);
+}catch(error){
+// Error telemetry must never become another unhandled application error.
+console.warn('Unable to record application error:',error?.message || error);
+}
 }
 function updatePilotFeedbackUi(){
 const isPilot = String(currentCompany?.subscription_status || '').toLowerCase() === 'trial';
@@ -4171,10 +4294,52 @@ recordTechnicalError('user_operation','operation_failed',text);
 }
 lineCrewNativeAlert(message);
 };
-window.addEventListener('error',event =>
-recordTechnicalError('browser','uncaught_error',event.message));
-window.addEventListener('unhandledrejection',event =>
-recordTechnicalError('browser','unhandled_promise',event.reason?.message || event.reason));
+// The first stack frame -- file, line and column. Reading a stack trace out of
+// the browser console is not something the office admin hitting an error can be
+// asked to do, so this goes on screen where it can be read back to support.
+function firstStackFrame(error){
+return String(error?.stack || '')
+.split('\n')
+.map(line => line.trim())
+.find(line => /:\d+:\d+/.test(line)) || '';
+}
+// Every uncaught error and rejected promise used to be recorded to the database
+// and shown to nobody, so a real failure and a slow load looked identical: the
+// button simply did nothing. Four separate defects presented that way before the
+// cause of any of them could be seen. They are now surfaced as well as recorded.
+function showAppErrorBanner(message, frame){
+const text = String(message || '').trim();
+// A fetch cancelled because a newer one superseded it is normal operation.
+// A banner that cries wolf teaches the user to ignore it, which is worse than
+// the silence this replaces.
+if(!text || /\bAbortError\b|\bThe operation was aborted\b|\bsignal is aborted\b/i.test(text)) return;
+let banner = document.getElementById('appErrorBanner');
+if(!banner){
+banner = document.createElement('div');
+banner.id = 'appErrorBanner';
+banner.className = 'app-error-banner';
+document.body.appendChild(banner);
+}
+banner.innerHTML = '<div><strong>Something went wrong on this screen.</strong>' +
+'<div>' + escapeHtml(text.slice(0, 220)) + '</div>' +
+(frame ? '<div class="app-error-banner-frame">Support detail: ' +
+escapeHtml(String(frame).slice(0, 200)) + '</div>' : '') +
+'</div><button type="button" aria-label="Dismiss">Dismiss</button>';
+banner.querySelector('button').onclick = () => banner.remove();
+}
+window.addEventListener('error',event => {
+recordTechnicalError('browser','uncaught_error',event.message);
+showAppErrorBanner(
+event.message,
+firstStackFrame(event.error) ||
+(event.filename ? event.filename + ':' + event.lineno + ':' + event.colno : '')
+);
+});
+window.addEventListener('unhandledrejection',event => {
+const reason = event.reason;
+recordTechnicalError('browser','unhandled_promise',reason?.message || reason);
+showAppErrorBanner(reason?.message || reason, firstStackFrame(reason));
+});
 const APP_PAGE_IDS = new Set([
 'dashboardPage',
 'teamPage',
@@ -4196,8 +4361,11 @@ const SUPERINTENDENT_CAPABILITIES = [
 ['reporting','Reporting','View company reports; billing exports also require Actual Contract Pricing.'],
 ['storm_mode','Storm Mode','Configure storm events and participating crews.'],
 ['safety_records','Safety Records','View and manage company JSA records.'],
-['actual_pricing','Actual Contract Pricing','See contract dollars; billing exports also require Reporting.'],
 ['exports','Exports','Download permitted reports; dollar exports still require pricing access.']
+];
+const MONEY_VISIBILITY_PERMISSIONS = [
+['actual_pricing','Actual Money','See actual contract prices, actual unit values and Actual MH Run Rate.'],
+['field_pricing','Field Money','See field-adjusted unit values and Field MH Run Rate.']
 ];
 function currentUserRole(){
 return String(currentProfile?.role || 'foreman').toLowerCase();
@@ -4415,6 +4583,13 @@ dashboardDraggedTile = null;
 function userHasCapability(capability){
 const role = currentUserRole();
 if(role === 'owner' || role === 'admin') return true;
+if(capability === 'actual_pricing'){
+const defaultValue = role !== 'foreman';
+return currentProfile?.role_permissions?.actual_pricing ?? defaultValue;
+}
+if(capability === 'field_pricing'){
+return currentProfile?.role_permissions?.field_pricing ?? true;
+}
 if(role === 'superintendent'){
 return currentProfile?.role_permissions?.[capability] !== false;
 }
@@ -4446,9 +4621,9 @@ return userHasCapability('job_packages') || currentUserRole() === 'gf';
 function userCanExport(){ return userHasCapability('exports') || currentUserRole() === 'gf'; }
 function userCanSeeSafetyRecords(){ return userHasCapability('safety_records') || ['gf','foreman'].includes(currentUserRole()); }
 function userCanSeeActualContractPrices(){
-return ['owner','admin','gf'].includes(currentUserRole()) ||
-(currentUserRole() === 'superintendent' && userHasCapability('actual_pricing'));
+return userHasCapability('actual_pricing');
 }
+function userCanSeeFieldMoney(){ return userHasCapability('field_pricing'); }
 function userCanUseBillingExports(){
 return ['owner','admin'].includes(currentUserRole()) ||
 (currentUserRole() === 'superintendent' &&
@@ -4778,22 +4953,10 @@ show('setupPage');
 return;
 }
 if(requestedSignupPlan){
-const selectedPlan = requestedSignupPlan;
-const {data:checkout,error:checkoutError}=await sb.functions.invoke(
-'create-billing-checkout',
-{body:{requested_plan:selectedPlan}}
-);
-if(checkoutError || checkout?.error || !checkout?.url){
-alert('Your company is ready, but secure checkout could not be opened. Use LineCrew Pro Subscription on the dashboard to try again.');
-}else{
 requestedSignupPlan = '';
 try{ sessionStorage.removeItem('linecrew_requested_plan'); }catch{}
-const cleanSignupUrl = new URL(window.location.href);
-cleanSignupUrl.searchParams.delete('plan');
-window.history.replaceState(null, '', cleanSignupUrl.pathname + cleanSignupUrl.search + cleanSignupUrl.hash);
-window.location.assign(checkout.url);
+window.location.replace('/billing.html?signup=1');
 return;
-}
 }
 const {
 data:company,
@@ -4818,6 +4981,17 @@ subscriptionStatus === 'trial' &&
 company.subscription_expires_at &&
 new Date(company.subscription_expires_at) <= new Date();
 if(['suspended','cancelled'].includes(subscriptionStatus) || trialExpired){
+// A lapsed or canceled subscription must not strand the people who can fix it.
+// Owner/Admin keep their session and land on the exempt Company Billing
+// recovery page, mirroring the company_subscriptions gate above.
+const legacyBlockedRole = String(profile.role || '').toLowerCase();
+if(['owner','admin'].includes(legacyBlockedRole)){
+clearOfflineJsaAccess();
+currentProfile = null;
+currentCompany = null;
+window.location.replace('/billing.html?billing=access-blocked');
+return;
+}
 clearOfflineJsaAccess();
 await sb.auth.signOut();
 currentProfile = null;
@@ -4826,7 +5000,7 @@ show('authPage');
 lineCrewNativeAlert(
 trialExpired
 ? 'This LineCrew Pro trial has ended. Contact LineCrew Pro Support to continue service.'
-: 'This company’s LineCrew Pro access is not active. Contact LineCrew Pro Support.'
+: 'This company’s LineCrew Pro access is not active. Ask your company Owner or Admin to open LineCrew Pro Subscription.'
 );
 return;
 }
@@ -4860,6 +5034,13 @@ $('companyPrimaryColor').value =
 $('companyTimezone').value =
 company?.timezone || 'America/Chicago';
 $('companyWeekStartDay').value = String(Number.isInteger(Number(company?.week_start_day)) ? Number(company.week_start_day) : 1);
+$('notificationReminderSettingsCard').classList.toggle('hidden', !userIsCompanyAdmin());
+$('dailyReportReminderTime').value = company?.daily_report_reminder_time
+? String(company.daily_report_reminder_time).slice(0,5)
+: '';
+$('jsaReminderTime').value = company?.jsa_reminder_time
+? String(company.jsa_reminder_time).slice(0,5)
+: '';
 $('companyMhRateSettings').classList.toggle('hidden', !userIsCompanyAdmin());
 $('companyRequiredMhRate').value =
 Number(company?.required_man_hour_rate || 0) > 0
@@ -4894,7 +5075,16 @@ window.location.replace('/billing.html');
 return;
 }
 const savedState = window.history.state;
-if(
+if(['production-review','my-reports'].includes(requestedNotificationDestination)){
+setAppHistory({ lineCrewPage:'productionPage' },true);
+await displayAppPage('productionPage');
+}else if(['safety','new-jsa'].includes(requestedNotificationDestination)){
+setAppHistory({ lineCrewPage:'safetyPage' },true);
+await displayAppPage('safetyPage');
+if(requestedNotificationDestination === 'new-jsa'){
+setTimeout(() => $('createJsaBtn')?.click(),0);
+}
+}else if(
 savedState?.lineCrewApp &&
 APP_PAGE_IDS.has(savedState.lineCrewPage)
 ){
@@ -4909,6 +5099,10 @@ true
 );
 show('dashboardPage');
 }
+// Push support is optional and iOS can leave serviceWorker.ready pending.
+// Never let notification detection hold the authenticated app startup open.
+void loadPushNotificationStatus();
+void loadGfNotificationPreference();
 }
 /* LOGIN */
 $('loginBtn').onclick = async()=>{
@@ -5570,16 +5764,87 @@ return roleLabels[String(role || '').toLowerCase()] || 'Foreman';
 function roleOptionsForMember(member){
 const actor = currentUserRole();
 const target = String(member.role || 'foreman').toLowerCase();
-if(actor === 'owner') return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin'],['owner','Owner']];
+if(member.id === currentProfile.id) return [];
+if(member.active === false) return [];
+if(actor === 'owner'){
+if(target === 'owner') return [];
+return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];
+}
 if(actor === 'admin'){
 if(['owner','admin'].includes(target)) return [];
-return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent']];
+return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];
 }
 if(actor === 'superintendent' && userCanManageRoles()){
 if(!['foreman','gf'].includes(target)) return [];
 return [['foreman','Foreman'],['gf','General Foreman']];
 }
 return [];
+}
+function canTransferOwnershipTo(member){
+return userIsOwner() &&
+member.id !== currentProfile.id &&
+member.active !== false &&
+String(member.role || '').toLowerCase() === 'admin';
+}
+function canAdminReplaceOwner(member){
+return currentUserRole() === 'admin' &&
+member.id !== currentProfile.id &&
+String(member.role || '').toLowerCase() === 'owner';
+}
+async function transferCompanyOwnership(member,button){
+if(!canTransferOwnershipTo(member) || button?.disabled) return;
+const memberName = member.full_name || 'this Admin';
+const confirmed = confirm(
+'Transfer company ownership to '+memberName+'?\n\n'
++'They will become the single Owner and your account will become Admin. This changes company governance immediately.'
+);
+if(!confirmed) return;
+const priorText = button?.textContent;
+if(button){ button.disabled = true; button.textContent = 'Transferring...'; }
+const { error } = await sb.rpc(
+'linecrew_transfer_company_owner',
+{ target_admin_id:member.id }
+);
+if(error){
+alert('Unable to transfer ownership: '+error.message);
+if(button){ button.disabled = false; button.textContent = priorText; }
+await loadTeamMembers();
+return;
+}
+alert('Ownership transferred to '+memberName+'. Your role is now Admin.');
+await loadApp();
+}
+async function replaceCompanyOwnerAsAdmin(owner,replacement,formerRole,button,replacementSelect,roleSelect){
+if(!canAdminReplaceOwner(owner) || button?.disabled) return;
+if(!replacement || replacement.active === false || String(replacement.role || '').toLowerCase() !== 'admin'){
+return alert('Choose an active Admin to become the new Owner.');
+}
+const ownerName = owner.full_name || 'the current Owner';
+const replacementName = replacement.full_name || 'the selected Admin';
+const confirmed = confirm(
+'Recover company ownership from '+ownerName+'?\n\n'
++replacementName+' will become the single Owner and '+ownerName+' will become '+formatTeamRole(formerRole)+'. Both changes happen together.'
+);
+if(!confirmed) return;
+const priorText = button?.textContent;
+if(button){ button.disabled = true; button.textContent = 'Recovering Ownership...'; }
+if(replacementSelect) replacementSelect.disabled = true;
+if(roleSelect) roleSelect.disabled = true;
+const { error } = await sb.rpc('linecrew_admin_replace_company_owner',{
+current_owner_id:owner.id,
+replacement_admin_id:replacement.id,
+former_owner_role:formerRole
+});
+if(error){
+alert('Unable to recover ownership: '+error.message);
+if(button){ button.disabled = false; button.textContent = priorText; }
+if(replacementSelect) replacementSelect.disabled = false;
+if(roleSelect) roleSelect.disabled = false;
+await loadTeamMembers();
+return;
+}
+alert('Ownership recovered. '+replacementName+' is now Owner and '+ownerName+' is now '+formatTeamRole(formerRole)+'.');
+if(replacement.id === currentProfile.id) await loadApp(); else await loadTeamMembers();
 }
 function canChangeMemberAccess(member){
 if(member.id === currentProfile.id || !userCanManageTeam()) return false;
@@ -5630,13 +5895,128 @@ await loadTeamMembers();
 details.appendChild(save);
 card.appendChild(details);
 }
-async function claimInitialOwner(){
-if(currentUserRole() !== 'admin') return;
+function renderMoneyVisibilityPermissions(member,card){
+const role = String(member.role || 'foreman').toLowerCase();
+if(!['foreman','gf','superintendent'].includes(role) || !userIsCompanyAdmin()) return;
+const details = document.createElement('details');
+details.className = 'job-card';
+const summary = document.createElement('summary');
+summary.textContent = 'Money Visibility';
+details.appendChild(summary);
+const intro = document.createElement('p');
+intro.className = 'muted';
+intro.textContent = 'Choose which dollar values this person may see. These settings do not change units, quantities, or report access.';
+details.appendChild(intro);
+const checks = new Map();
+MONEY_VISIBILITY_PERMISSIONS.forEach(([key,labelText,helpText]) => {
+const label = document.createElement('label');
+label.className = 'checkbox-row';
+const input = document.createElement('input');
+input.type = 'checkbox';
+const defaultValue = key === 'actual_pricing' ? role !== 'foreman' : true;
+input.checked = member.role_permissions?.[key] ?? defaultValue;
+checks.set(key,input);
+const text = document.createElement('span');
+text.innerHTML = '<strong>'+escapeHtml(labelText)+'</strong><br><span class="muted">'+escapeHtml(helpText)+'</span>';
+label.append(input,text);
+details.appendChild(label);
+});
+const save = document.createElement('button');
+save.className = 'success small';
+save.textContent = 'Save Money Visibility';
+save.onclick = async () => {
+if(save.disabled) return;
+save.disabled = true;
+const priorText = save.textContent;
+save.textContent = 'Saving...';
+const { error } = await sb.rpc('linecrew_set_member_money_permissions', {
+target_user_id:member.id,
+can_see_actual:checks.get('actual_pricing').checked,
+can_see_field:checks.get('field_pricing').checked
+});
+if(error){
+save.disabled = false;
+save.textContent = priorText;
+alert('Unable to save money visibility: ' + error.message);
+await loadTeamMembers();
+return;
+}
+alert('Money visibility saved. The team member may need to refresh or sign in again.');
+await loadTeamMembers();
+};
+details.appendChild(save);
+card.appendChild(details);
+}
+async function claimInitialOwner(button){
+if(currentUserRole() !== 'admin' || button?.disabled) return;
 if(!confirm('Make your account the Owner for this company? The Owner controls Admin access and company governance.')) return;
+const priorText = button?.textContent;
+if(button){ button.disabled = true; button.textContent = 'Assigning Owner...'; }
 const { error } = await sb.rpc('linecrew_claim_initial_owner');
-if(error) return alert('Unable to assign Owner: ' + error.message);
+if(error){
+if(button){ button.disabled = false; button.textContent = priorText; }
+return alert('Unable to assign Owner: ' + error.message);
+}
 alert('You are now the company Owner.');
 await loadApp();
+}
+function renderAdminOwnershipRecovery(member,members,card){
+if(!canAdminReplaceOwner(member)) return;
+const activeAdmins = members.filter(candidate =>
+candidate.active !== false && String(candidate.role || '').toLowerCase() === 'admin'
+);
+const details = document.createElement('details');
+details.className = 'job-card';
+details.open = true;
+const summary = document.createElement('summary');
+summary.textContent = 'Ownership Recovery';
+details.appendChild(summary);
+const intro = document.createElement('p');
+intro.className = 'muted';
+intro.textContent = 'If this Owner has left or is unavailable, choose an active Admin to become Owner and choose the former Owner’s new role. The handoff saves together so the company always has one Owner.';
+details.appendChild(intro);
+if(!activeAdmins.length){
+const missing = document.createElement('p');
+missing.className = 'muted';
+missing.textContent = 'An active Admin is required before ownership can be recovered.';
+details.appendChild(missing);
+card.appendChild(details);
+return;
+}
+const replacementLabel = document.createElement('label');
+replacementLabel.textContent = 'New Owner (active Admin)';
+const replacementSelect = document.createElement('select');
+replacementSelect.className = 'team-role-select';
+activeAdmins.forEach(admin => {
+const option = document.createElement('option');
+option.value = admin.id;
+option.textContent = (admin.full_name || 'Unnamed Admin') + (admin.id === currentProfile.id ? ' (You)' : '');
+replacementSelect.appendChild(option);
+});
+if(activeAdmins.some(admin => admin.id === currentProfile.id)) replacementSelect.value = currentProfile.id;
+replacementLabel.appendChild(replacementSelect);
+details.appendChild(replacementLabel);
+const roleLabel = document.createElement('label');
+roleLabel.textContent = 'Former Owner’s new role';
+const roleSelect = document.createElement('select');
+roleSelect.className = 'team-role-select';
+[['admin','Admin'],['superintendent','Superintendent'],['gf','General Foreman'],['foreman','Foreman']].forEach(([value,label]) => {
+const option = document.createElement('option');
+option.value = value;
+option.textContent = label;
+roleSelect.appendChild(option);
+});
+roleLabel.appendChild(roleSelect);
+details.appendChild(roleLabel);
+const button = document.createElement('button');
+button.className = 'warning small';
+button.textContent = 'Change Owner & Transfer Ownership';
+button.onclick = () => {
+const replacement = activeAdmins.find(admin => admin.id === replacementSelect.value);
+replaceCompanyOwnerAsAdmin(member,replacement,roleSelect.value,button,replacementSelect,roleSelect);
+};
+details.appendChild(button);
+card.appendChild(details);
 }
 let teamLoadRequest = 0;
 async function loadTeamMembers(){
@@ -5661,7 +6041,7 @@ notice.innerHTML = '<strong>Company Owner not assigned</strong><p class="muted">
 const button = document.createElement('button');
 button.className = 'success small';
 button.textContent = 'Make Me Company Owner';
-button.onclick = claimInitialOwner;
+button.onclick = ()=>claimInitialOwner(button);
 notice.appendChild(button);
 $('teamList').appendChild(notice);
 }
@@ -5680,13 +6060,22 @@ const controls=document.createElement('div'); controls.className='import-actions
 const roleSelect=document.createElement('select'); roleSelect.className='team-role-select';
 options.forEach(([value,label]) => { const option=document.createElement('option'); option.value=value; option.textContent=label; roleSelect.appendChild(option); });
 roleSelect.value=String(member.role||'foreman').toLowerCase();
-const save=document.createElement('button'); save.className='secondary small'; save.textContent='Save Role'; save.onclick=()=>updateTeamMemberRole(member,roleSelect.value);
+const save=document.createElement('button'); save.className='secondary small'; save.textContent='Save Role'; save.onclick=()=>updateTeamMemberRole(member,roleSelect.value,save,roleSelect);
 controls.append(roleSelect,save); card.appendChild(controls);
 }
+if(canTransferOwnershipTo(member)){
+const transfer=document.createElement('button');
+transfer.className='warning small';
+transfer.textContent='Transfer Ownership';
+transfer.onclick=()=>transferCompanyOwnership(member,transfer);
+card.appendChild(transfer);
+}
+renderAdminOwnershipRecovery(member,members,card);
 if(canChangeMemberAccess(member)){
 const access=document.createElement('button'); access.className=(member.active===false?'success':'warning')+' small'; access.textContent=member.active===false?'Restore Access':'Suspend Access'; access.onclick=()=>changeTeamMemberAccess(member); card.appendChild(access);
 }
 renderSuperintendentPermissions(member,card);
+renderMoneyVisibilityPermissions(member,card);
 fragment.appendChild(card);
 });
 $('teamList').appendChild(fragment);
@@ -5695,13 +6084,26 @@ $('manageFieldEmployeesBtn').onclick = () => {
 if(typeof window.openLineCrewTimekeeping === 'function') window.openLineCrewTimekeeping({ focusRoster:true });
 else alert('Employee roster is still loading. Please try again.');
 };
-async function updateTeamMemberRole(member,nextRole){
-if(!userCanManageRoles()) return;
+async function updateTeamMemberRole(member,nextRole,button,roleSelect){
+if(!userCanManageRoles() || button?.disabled) return;
 const currentRole=String(member.role||'foreman').toLowerCase();
 if(currentRole===nextRole) return alert('This team member already has that role.');
-if(!confirm('Change '+(member.full_name||'this team member')+' from '+formatTeamRole(currentRole)+' to '+formatTeamRole(nextRole)+'?')) return;
+const adminWarning = nextRole === 'admin'
+?'\n\nAdmins have full company access, including billing, pricing, contracts and team controls. If no Owner exists, an Admin can claim the initial Owner role.'
+:'';
+if(!confirm('Change '+(member.full_name||'this team member')+' from '+formatTeamRole(currentRole)+' to '+formatTeamRole(nextRole)+'?'+adminWarning)) return;
+const priorText = button?.textContent;
+if(button){ button.disabled = true; button.textContent = 'Saving...'; }
+if(roleSelect) roleSelect.disabled = true;
 const { error } = await sb.rpc('linecrew_set_member_role',{ target_user_id:member.id,new_role:nextRole });
-if(error){ alert('Unable to update the team member’s role: '+error.message); await loadTeamMembers(); return; }
+if(error){
+alert('Unable to update the team member’s role: '+error.message);
+if(button){ button.disabled = false; button.textContent = priorText; }
+if(roleSelect) roleSelect.disabled = false;
+await loadTeamMembers();
+return;
+}
+if(nextRole === 'admin') alert('Admin role assigned. Have the new Admin refresh or sign in again and complete authenticator setup when prompted.');
 if(member.id===currentProfile.id) await loadApp(); else await loadTeamMembers();
 }
 async function changeTeamMemberAccess(member){
@@ -5809,7 +6211,7 @@ detail.innerHTML='<div class="card"><button id="closeCompletedJobDetail" class="
 '<div class="card"><h3>Supervision & Crew History</h3><p>'+escapeHtml(r.assignments.map(item=>item.full_name+' — '+formatTeamRole(item.member_role)).join('; ')||'No retained job-leader assignments.')+'</p></div>'+
 '<div class="card"><h3>Daily Reports ('+r.reports.length+')</h3>'+((r.reports.map(report=>'<div class="daily-history-event"><strong>'+escapeHtml(report.work_date)+' — '+escapeHtml(report.foreman_name||'Foreman not recorded')+'</strong><br>'+escapeHtml(report.crew_name||'Crew not recorded')+' · '+Number(report.regular_hours||0)+' regular / '+Number(report.overtime_hours||0)+' OT · '+escapeHtml(String(report.status||'').toUpperCase())+(report.notes?'<br>'+escapeHtml(report.notes):'')+'</div>').join(''))||'<p class="muted">No Daily Reports.</p>')+'</div>'+
 '<div class="card"><h3>Unit Production ('+r.units.length+')</h3>'+((completedJobUnitRows(r).slice(0,100).map(unit=>'<div class="daily-history-event"><strong>'+escapeHtml(unit['Work Date'])+' · '+escapeHtml(unit['Pole / Work Point'])+' · '+escapeHtml(unit['Unit Code'])+'</strong><br>Installed '+unit.Installed+' · Transferred '+unit.Transferred+' · Removed '+unit.Removed+' · '+escapeHtml(unit.Authorization)+'</div>').join(''))||'<p class="muted">No unit production.</p>')+(r.units.length>100?'<p class="muted">Showing the first 100 unit lines. Export Excel for the complete record.</p>':'')+'</div>'+
-'<div class="card"><h3>Utility Packet Revisions ('+r.packages.length+')</h3>'+((r.packages.map(item=>'<div class="daily-history-event"><strong>Revision '+Number(item.revision_number||1)+' — '+escapeHtml(item.package_name||item.package_number||'Utility Job Packet')+'</strong><br>'+escapeHtml(String(item.status||'').toUpperCase())+' · '+escapeHtml(item.source_filename||'No source filename')+'</div>').join(''))||'<p class="muted">No utility packet revisions.</p>')+'</div>'+
+'<div class="card"><h3>Utility Packet Revisions ('+r.packages.length+')</h3>'+((r.packages.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(jobPackageRevisionLabel(item))+' — '+escapeHtml(item.package_name||item.package_number||'Utility Job Packet')+'</strong><br>'+escapeHtml(String(item.status||'').toUpperCase())+' · '+escapeHtml(item.source_filename||'No source filename')+'</div>').join(''))||'<p class="muted">No utility packet revisions.</p>')+'</div>'+
 '<div class="card"><h3>Report Attachments ('+r.attachments.length+')</h3><div id="completedJobAttachments">'+((r.attachments.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(item.original_filename||'Attachment')+'</strong>'+(item.caption?'<br>'+escapeHtml(item.caption):'')+'<br><span class="muted">'+escapeHtml(formatCompletedJobDate(item.created_at))+'</span><br><button class="secondary small completed-attachment-open" data-attachment-id="'+escapeHtml(item.id)+'">Open Read-Only</button></div>').join(''))||'<p class="muted">No report attachments.</p>')+'</div></div>'+
 '<div class="card"><h3>Closeout & Reopen History ('+r.closeoutHistory.length+')</h3>'+((r.closeoutHistory.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(String(item.action||'').replaceAll('_',' ').toUpperCase())+'</strong><br>'+escapeHtml(item.actor_name||'System')+' · '+escapeHtml(formatTeamRole(item.actor_role))+' · '+escapeHtml(formatCompletedJobDate(item.occurred_at))+(item.reason?'<br>'+escapeHtml(item.reason):'')+(item.action==='override_closed'?'<br><span class="muted">Owner-authorized unresolved-work override</span>':'')+'</div>').join(''))||'<p class="muted">No closeout history was recorded before audit tracking was enabled.</p>')+'</div>'+
 '<div class="card"><h3>Audit History ('+r.audit.length+')</h3>'+((r.audit.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(String(item.event_type||'updated').replaceAll('_',' '))+'</strong><br>'+escapeHtml(item.actor_name||'System')+' · '+escapeHtml(formatCompletedJobDate(item.event_at))+(item.event_notes?'<br>'+escapeHtml(item.event_notes):'')+'</div>').join(''))||'<p class="muted">No recorded audit events.</p>')+'</div>'+
@@ -5831,7 +6233,7 @@ XLSX.utils.book_append_sheet(wb,completedJobSheet(summary,'No summary'),'Job Sum
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.assignments.map(item=>({'Name':item.full_name||'','Role':formatTeamRole(item.member_role),'Assigned At':item.assigned_at||'','Assigned By':item.assigned_by_name||''})),'No assignments'),'Supervision');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.reports.map(item=>({'Work Date':item.work_date||'','Foreman':item.foreman_name||'','Crew':item.crew_name||'','Regular Hours':Number(item.regular_hours||0),'OT Hours':Number(item.overtime_hours||0),'Weather':item.weather_conditions||'','Delay Hours':Number(item.delay_hours||0),'Delay Reason':item.delay_reason||'','Status':String(item.status||'').toUpperCase(),'Storm Mode':item.storm_mode?'Yes':'No','Storm Event':item.storm_event_name||'','Report Notes':item.notes||'','Review Notes':item.review_notes||''})),'No Daily Reports'),'Daily Reports');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(completedJobUnitRows(r),'No unit production'),'Unit Production');
-XLSX.utils.book_append_sheet(wb,completedJobSheet(r.packages.map(item=>({'Revision':Number(item.revision_number||1),'Package Name':item.package_name||'','Package Number':item.package_number||'','Status':String(item.status||'').toUpperCase(),'Received':item.received_date||'','Source File':item.source_filename||'','Created':item.created_at||'','Notes':item.notes||''})),'No packet revisions'),'Packet Revisions');
+XLSX.utils.book_append_sheet(wb,completedJobSheet(r.packages.map(item=>({'Revision':jobPackageRevisionLabel(item),'Package Name':item.package_name||'','Package Number':item.package_number||'','Status':String(item.status||'').toUpperCase(),'Received':item.received_date||'','Source File':item.source_filename||'','Created':item.created_at||'','Notes':item.notes||''})),'No packet revisions'),'Packet Revisions');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.jsas.map(item=>({'Work Date':item.work_date||'','Foreman':item.foreman_name||item.creator_name||'','Crew':item.crew_name||'','Status':item.status||'','Created':item.created_at||''})),'No JSAs'),'JSA Index');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.attachments.map(item=>({'Daily Report ID':item.daily_report_id||'','File Name':item.original_filename||'','Caption':item.caption||'','MIME Type':item.mime_type||'','Size Bytes':Number(item.file_size_bytes||0),'Created':item.created_at||''})),'No attachments'),'Attachment Index');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.closeoutHistory.map(item=>({'Action':String(item.action||'').replaceAll('_',' '),'Actor':item.actor_name||'System','Role':formatTeamRole(item.actor_role),'Event Time':item.occurred_at||'','Reason':item.reason||'','Paid Final Bill':item.blockers?.has_paid_final_bill===true?'Yes':item.action==='override_closed'?'No':'','Approved Unbilled':Number(item.blockers?.approved_unbilled_value||0),'Awaiting Review':Number(item.blockers?.awaiting_review_count||0),'Draft or Returned':Number(item.blockers?.draft_report_count||0)})),'No closeout history'),'Closeout History');
@@ -5889,19 +6291,48 @@ returnToDashboard();
 };
 /* CREATE JOB FORM */
 $('showAddJobPackageBtn').onclick = ()=> showJobPackageForm();
+function updateCreateJobActionLabel(){
+if($('createJobCard').dataset.jobId){
+$('createJobBtn').textContent = 'Save Changes';
+return;
+}
+const hasJacket = Boolean($('createJobPacketFile').files?.[0]);
+$('createJobBtn').textContent = hasJacket
+? 'Create Job & Review Jacket'
+: 'Create Job';
+}
+function resetCreateJobPacketSelection(){
+$('createJobPacketFile').value = '';
+updateCreateJobActionLabel();
+}
 $('showCreateJobBtn').onclick = ()=>{
 delete $('createJobCard').dataset.jobId;
 $('createJobCard').querySelector('h2').textContent = 'Create Job';
-$('createJobBtn').textContent = 'Create Job';
 $('jobNumber').value = '';
 $('jobName').value = '';
+resetCreateJobPacketSelection();
+$('createJobPacketField').classList.toggle(
+'hidden',
+!userCanManageJobPackages()
+);
 loadJobContractOptions();
 $('createJobCard')
 .classList
 .remove('hidden');
 };
+$('createJobPacketFile').onchange = ()=>{
+const file = $('createJobPacketFile').files?.[0] || null;
+const fileError = jobPacketFileValidationMessage(file);
+if(fileError){
+alert(fileError);
+resetCreateJobPacketSelection();
+return;
+}
+updateCreateJobActionLabel();
+};
 $('cancelCreateJobBtn').onclick = ()=>{
 delete $('createJobCard').dataset.jobId;
+resetCreateJobPacketSelection();
 $('createJobCard')
 .classList
 .add('hidden');
@@ -5946,6 +6377,9 @@ $('jobContract').appendChild(option);
 /* CREATE JOB */
 $('createJobBtn').onclick = async()=>{
 const jobId = $('createJobCard').dataset.jobId || null;
+const jacketFile = jobId
+? null
+: ($('createJobPacketFile').files?.[0] || null);
 const number =
 $('jobNumber').value.trim();
 const name =
@@ -5956,6 +6390,15 @@ return alert(
 'Job number, job name and contract are required.'
 );
 }
+const fileError = jobPacketFileValidationMessage(jacketFile);
+if(fileError){
+return alert(fileError);
+}
+const button = $('createJobBtn');
+button.disabled = true;
+button.textContent = jobId ? 'Saving Changes...' : 'Creating Job...';
+let createdJobId = null;
+try{
 const result = jobId
 ? await sb.rpc('update_contract_job', {
 p_job_id:jobId,
@@ -5968,19 +6411,58 @@ p_contract_id:contractId,
 p_job_number:number,
 p_job_name:name
 });
-const { error } = result;
-if(error){
-return alert(error.message);
+if(result.error){
+return alert(result.error.message);
 }
+createdJobId = jobId ? null : result.data;
 $('jobNumber').value = '';
 $('jobName').value = '';
 $('jobContract').value = '';
 delete $('createJobCard').dataset.jobId;
+resetCreateJobPacketSelection();
 $('createJobCard')
 .classList
 .add('hidden');
+if(jacketFile && createdJobId){
+currentOpenJobId = createdJobId;
+}
 await loadJobs();
+if(jacketFile){
+const createdJob = currentJobsCatalog.find(
+job => String(job.id) === String(createdJobId)
+);
+if(!createdJob){
+return alert(
+'Job ' + number + ' was created, but its jacket review did not open. ' +
+'Open that job and choose + Add Job Packet to retry the jacket. Do not create the job again.'
+);
+}
+setAppHistory({
+lineCrewPage:'jobsPage',
+view:'jobDetail',
+jobId:createdJob.id
+});
+await handleJobPacketFileForJob(createdJob, jacketFile);
+return;
+}
 alert(jobId ? 'Job updated.' : 'Job created.');
+}catch(error){
+if(!jobId && createdJobId){
+alert(
+'Job ' + number + ' was created, but the page could not finish loading it: ' +
+(error?.message || 'Unexpected error') + '. Open the existing job to continue. ' +
+'Do not create the job again.'
+);
+return;
+}
+alert(
+'Unable to finish ' + (jobId ? 'saving the job' : 'creating the job') +
+': ' + (error?.message || 'Unexpected error')
+);
+}finally{
+button.disabled = false;
+updateCreateJobActionLabel();
+}
 };
 /* LOAD JOBS */
 async function loadJobs(){
@@ -6208,10 +6690,12 @@ pending += Number(summary.pending_packet_count || 0);
 });
 $('jobProgressTotals').innerHTML =
 '<span><strong>' + activeJobs.length + '</strong><br>Active Jobs</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(authorized)) + '</strong><br>Authorized</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(reported)) + '</strong><br>Reported</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(approved)) + '</strong><br>Approved</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(remaining)) + '</strong><br>Remaining</span>' +
+(userCanSeeFieldMoney()
+? '<span><strong>' + escapeHtml(formatCurrency(authorized)) + '</strong><br>Authorized</span>' +
+  '<span><strong>' + escapeHtml(formatCurrency(reported)) + '</strong><br>Reported</span>' +
+  '<span><strong>' + escapeHtml(formatCurrency(approved)) + '</strong><br>Approved</span>' +
+  '<span><strong>' + escapeHtml(formatCurrency(remaining)) + '</strong><br>Remaining</span>'
+: '') +
 '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
 '<span><strong>' + pending + '</strong><br>Pending Job Units</span>';
 $('jobProgressCount').textContent =
@@ -6248,10 +6732,12 @@ Number(summary.work_point_count || 0) + ' work point(s) · ' +
 Number(summary.report_count || 0) + ' daily report(s)</div>' +
 '<div class="job-progress-assignees"><strong>Assigned Foremen / Job Leaders:</strong> ' +
 escapeHtml(assignmentLabel) + '</div>' +
-'<div class="daily-review-counts"><span class="authorized">' +
-escapeHtml(formatCurrency(summary.authorized_value || 0)) + ' Authorized</span>' +
-' &nbsp;•&nbsp; ' + escapeHtml(formatCurrency(summary.remaining_value || 0)) + ' Remaining' +
-' &nbsp;•&nbsp; <span class="redline">' + Number(summary.redline_count || 0) + ' Redline</span>' +
+'<div class="daily-review-counts">' +
+(userCanSeeFieldMoney()
+? '<span class="authorized">' + escapeHtml(formatCurrency(summary.authorized_value || 0)) + ' Authorized</span>' +
+  ' &nbsp;•&nbsp; ' + escapeHtml(formatCurrency(summary.remaining_value || 0)) + ' Remaining &nbsp;•&nbsp; '
+: '') +
+'<span class="redline">' + Number(summary.redline_count || 0) + ' Redline</span>' +
 ' &nbsp;•&nbsp; <span class="pending">' + Number(summary.pending_packet_count || 0) + ' Pending</span></div>';
 row.title = 'Open ' + job.job_number + ' job details';
 row.setAttribute('role', 'button');
@@ -6621,6 +7107,10 @@ return;
 }
 await loadJobs();
 }
+function jobPackageRevisionLabel(jobPackage){
+const revision = Math.max(1, Number(jobPackage?.revision_number || 1));
+return revision > 1 ? 'Revision ' + (revision - 1) : 'Original Packet';
+}
 function renderJobPackages(job, container){
 const packages = currentJobPackageCatalog.filter(
 jobPackage => String(jobPackage.job_id) === String(job.id)
@@ -6642,9 +7132,7 @@ row.innerHTML = `
 <div>
 <strong>${escapeHtml(jobPackage.package_name)}</strong>
 <div class="muted">
-${jobPackage.revision_number > 1
-? 'Revision ' + escapeHtml(jobPackage.revision_number - 1)
-: 'Original Packet'} ·
+${escapeHtml(jobPackageRevisionLabel(jobPackage))} ·
 Reference: ${escapeHtml(jobPackage.package_number || 'Not provided')}
 ${jobPackage.received_date
 ? ' · Received: ' + escapeHtml(jobPackage.received_date)
@@ -6671,10 +7159,13 @@ changesButton.textContent = 'View Revision Changes';
 changesButton.onclick = ()=> toggleJobPackageRevisionChanges(jobPackage,row,changesButton);
 row.appendChild(changesButton);
 }
-if(userCanManageJobPackages()){
+if(
+userCanManageJobPackages() &&
+String(jobPackage.status || 'draft').toLowerCase() === 'draft'
+){
 const deleteButton = document.createElement('button');
 deleteButton.className = 'danger small';
-deleteButton.textContent = 'Delete Test Package';
+deleteButton.textContent = 'Delete Draft Package';
 deleteButton.onclick = ()=> deleteJobPackage(jobPackage);
 row.appendChild(deleteButton);
 }
@@ -6685,7 +7176,7 @@ async function toggleJobPackageRevisionChanges(jobPackage,row,button){
 const existing = row.querySelector('.packet-revision-delta');
 if(existing){ existing.remove(); button.textContent='View Revision Changes'; return; }
 button.disabled=true; button.textContent='Loading Changes...';
-const { data,error } = await sb.rpc('get_job_package_revision_delta',{ p_package_id:jobPackage.id });
+const { data,error } = await sb.rpc('get_job_package_revision_delta_v2',{ p_package_id:jobPackage.id });
 button.disabled=false; button.textContent='Hide Revision Changes';
 if(error){ button.textContent='View Revision Changes'; return alert('Unable to compare packet revisions: '+error.message); }
 const panel=document.createElement('div'); panel.className='daily-report-history packet-revision-delta';
@@ -6695,7 +7186,9 @@ panel.innerHTML='<strong>Revision Changes</strong><p class="muted">No authorized
 panel.innerHTML='<strong>Revision Changes</strong>' + data.map(change =>
 '<div class="daily-history-event"><strong>WP '+escapeHtml(change.work_point)+' · '+escapeHtml(change.unit_code)+'</strong><br>'+
 'Install: '+escapeHtml(change.prior_install)+' → '+escapeHtml(change.new_install)+
-' ('+(Number(change.install_change)>=0?'+':'')+escapeHtml(change.install_change)+') · Remove: '+
+' ('+(Number(change.install_change)>=0?'+':'')+escapeHtml(change.install_change)+') · Transfer: '+
+escapeHtml(change.prior_transfer)+' → '+escapeHtml(change.new_transfer)+
+' ('+(Number(change.transfer_change)>=0?'+':'')+escapeHtml(change.transfer_change)+') · Remove: '+
 escapeHtml(change.prior_remove)+' → '+escapeHtml(change.new_remove)+
 ' ('+(Number(change.remove_change)>=0?'+':'')+escapeHtml(change.remove_change)+')</div>'
 ).join('');
@@ -6727,10 +7220,36 @@ currentOpenJobPackage = jobPackage;
 $('jobPackageDetailTitle').textContent = jobPackage.package_name;
 refreshOpenJobPackageControls();
 resetJobPackageImport();
-$('jobPackageDetailCard').classList.remove('hidden');
+const detailCard = $('jobPackageDetailCard');
+detailCard.classList.remove('hidden');
+// Scroll before loading, not after. This card sits near the top of the jobs
+// page while the job being read renders further down, so opening a package
+// used to unhide a card the reviewer could not see, wait on two round trips,
+// and only then scroll -- and if either threw, the scroll never ran and the
+// rejection was silent. Clicking Open Package did nothing at all.
+detailCard.scrollIntoView({ behavior:'smooth' });
+const progress = $('jobPackageProgress');
+progress.textContent = 'Loading package…';
+try{
 await loadPendingUtilityPacketReview(jobPackage);
 await loadJobPackageWorkPoints();
-$('jobPackageDetailCard').scrollIntoView({ behavior:'smooth' });
+}catch(error){
+// Show where it failed, not just what failed. Reading a stack trace out of
+// the browser console is not a reasonable thing to ask of the office admin
+// who hits this, so the first frame -- file, line and column -- is put on
+// screen next to the message where it can simply be read back to support.
+const firstFrame = firstStackFrame(error);
+progress.innerHTML = '<span class="import-error">This package could not be opened: ' +
+escapeHtml(error?.message || 'Unknown error.') + '</span>' +
+(firstFrame
+? '<div class="muted">Support detail: ' + escapeHtml(firstFrame.slice(0, 200)) + '</div>'
+: '');
+console.error('openJobPackageDetails failed', error);
+return;
+}
+// The work points change the card's height, so settle the scroll on the
+// finished layout rather than the empty one.
+detailCard.scrollIntoView({ behavior:'smooth' });
 }
 async function loadPendingUtilityPacketReview(jobPackage){
 const container = $('jobPackagePendingReview');
@@ -6746,11 +7265,10 @@ return;
 }
 const pending = pendingRows?.[0];
 if(!pending) return;
-const { data:rows, error:reviewError } = await sb.rpc(
-'get_utility_packet_import_review',
-{ p_import_id:pending.import_id }
-);
-if(reviewError){
+let rows;
+try{
+rows = await fetchAllPacketReviewRows(pending.import_id);
+}catch(reviewError){
 container.innerHTML = '<p class="import-error">Unable to load packet review: ' +
 escapeHtml(reviewError.message) + '</p>';
 return;
@@ -6766,6 +7284,171 @@ confidence:pending.extraction_confidence,
 warnings:pending.extraction_summary?.warnings || []
 }, rows || []);
 }
+// PostgREST caps every response at its max-rows setting, so asking for a whole
+// packet review in one request silently truncated it: a 1203-row import
+// rendered 1000 rows, and the reviewer could neither see nor correct the other
+// 203. Nothing was ever imported unreviewed -- update_utility_packet_import_rows_bulk
+// requires the submitted rows to match the import's row count exactly -- but
+// that made the packet unimportable instead, failing with "The packet review
+// changed. Reopen it before saving." every time, because reopening truncated
+// again. An oversized packet was a dead end.
+//
+// Page instead, advancing by the rows actually received rather than the size
+// requested, so a server cap smaller than the page size cannot end the loop
+// early. Only an empty page stops it.
+const PACKET_REVIEW_PAGE_SIZE = 500;
+async function fetchAllPacketReviewRows(importId){
+const rows = [];
+const seen = new Set();
+let expectedTotal = null;
+while(true){
+const { data, error, count } = await sb
+.rpc('get_utility_packet_import_review',
+{ p_import_id:importId },
+expectedTotal === null ? { count:'exact' } : undefined)
+.range(rows.length, rows.length + PACKET_REVIEW_PAGE_SIZE - 1);
+if(error) throw new Error(error.message);
+if(expectedTotal === null && Number.isFinite(count)) expectedTotal = Number(count);
+const page = data || [];
+if(!page.length) break;
+page.forEach(row => {
+if(seen.has(row.row_id)) return;
+seen.add(row.row_id);
+rows.push(row);
+});
+if(rows.length > 20000){
+throw new Error(
+'This packet has more review rows than LineCrew Pro can show at once. ' +
+'Nothing was changed. Contact LineCrew Pro Support.'
+);
+}
+}
+// The reviewer must see every row before any of them import. If the server
+// reported a total we could not fully retrieve, refuse rather than render a
+// review that looks complete and is not.
+if(expectedTotal !== null && rows.length !== expectedTotal){
+throw new Error(
+'Only ' + rows.length + ' of ' + expectedTotal + ' packet rows could be loaded, ' +
+'so this review is incomplete. Nothing was changed. Reopen the packet to try again.'
+);
+}
+return rows;
+}
+// A utility writes units in its own vocabulary -- United calls #4 ACSR
+// "C4 7/1" and a 5 kVA transformer "DTran5Kva" -- so codes that are perfectly
+// valid on the packet are absent from the contract Price Book and block the
+// import. Mapping the code beats the two older workarounds: editing the box
+// overwrites what the utility authorized, and adding the code to the Price Book
+// fills a contract's book with units that are not in the contract. The mapping
+// is saved per contract, so it applies to every future packet from that utility
+// and never touches another utility's book.
+async function openPacketUnitMapper(container, job, packageRecord, importId, parsed, packetCode){
+const code = String(packetCode || '').trim();
+if(!code){
+alert('This row has no production unit to map.');
+return;
+}
+// Only one mapper at a time: the picker owns fixed element ids, so a second
+// open would leave duplicate ids and the datalist would attach to the wrong
+// input.
+container.querySelectorAll('.packet-unit-map-panel').forEach(open => open.remove());
+const panel = document.createElement('div');
+panel.className = 'job-card packet-unit-map-panel';
+panel.innerHTML = '<strong>Loading Price Book units…</strong>';
+container.prepend(panel);
+try{
+const { data:units, error } = await sb.rpc(
+'linecrew_price_book_units_for_import', { p_import_id:importId }
+);
+if(error) throw new Error(error.message);
+const options = (units || []).map(unit =>
+'<option value="' + escapeHtml(unit.item_code) + '">' +
+escapeHtml([unit.item_name, unit.description].filter(Boolean).join(' · ')) +
+'</option>'
+).join('');
+panel.innerHTML =
+'<div class="section-header"><div><strong>Map “' + escapeHtml(code) + '” to a Price Book unit</strong>' +
+'<div class="muted">Saved for this contract. Every row using “' + escapeHtml(code) +
+'” matches from now on, on this packet and future ones. The packet keeps its own code.</div>' +
+'</div></div>' +
+'<label for="packetUnitMapTarget">Price Book unit</label>' +
+'<input id="packetUnitMapTarget" list="packetUnitMapOptions" autocomplete="off" ' +
+'style="width:100%" placeholder="Start typing a unit code">' +
+'<datalist id="packetUnitMapOptions">' + options + '</datalist>' +
+'<div class="packet-unit-map-preview import-summary"></div>' +
+'<p class="muted">' + (units || []).length + ' units in this job’s Price Book.</p>' +
+'<div class="button-row">' +
+'<button type="button" class="success small packet-unit-map-save">Save Mapping</button>' +
+'<button type="button" class="secondary small packet-unit-map-clear">Remove Mapping</button>' +
+'<button type="button" class="secondary small packet-unit-map-cancel">Cancel</button>' +
+'</div><p class="packet-unit-map-error import-error"></p>';
+const input = panel.querySelector('#packetUnitMapTarget');
+const errorLine = panel.querySelector('.packet-unit-map-error');
+const preview = panel.querySelector('.packet-unit-map-preview');
+// The input holds the unit code, and a Price Book code can be far longer than
+// the box -- "10-15-25 kVA Conventional Transformer" shows as a fragment. A
+// mapping sets what the work bills at, so the chosen unit and its rates are
+// spelled out here before saving rather than inferred from a truncated field.
+const unitPrice = value =>
+value === null || value === undefined || value === '' ? '—' : '$' + Number(value).toFixed(2);
+const describeTarget = () => {
+const typed = String(input.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+if(!typed){
+preview.textContent = 'Choose the Price Book unit this code bills as.';
+return;
+}
+const unit = (units || []).find(item =>
+String(item.item_code || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === typed
+);
+if(!unit){
+preview.textContent = 'No Price Book unit matches that yet — keep typing or pick from the list.';
+return;
+}
+preview.innerHTML = '<strong>' + escapeHtml(unit.item_code) + '</strong>' +
+(unit.description ? ' · ' + escapeHtml(unit.description) : '') +
+'<br>Install ' + unitPrice(unit.install_price) +
+' · Transfer ' + unitPrice(unit.transfer_price) +
+' · Remove ' + unitPrice(unit.retirement_price);
+};
+input.addEventListener('input', describeTarget);
+describeTarget();
+input.focus();
+const apply = async target => {
+errorLine.textContent = '';
+panel.querySelectorAll('button').forEach(button => { button.disabled = true; });
+try{
+const { error:saveError } = await sb.rpc(
+'linecrew_set_packet_unit_alias',
+{ p_import_id:importId, p_packet_code:code, p_target_item_code:target }
+);
+if(saveError) throw new Error(saveError.message);
+// Matching is recomputed server-side on read, so re-reading the review is
+// what proves the mapping took rather than assuming it did.
+const refreshed = await fetchAllPacketReviewRows(importId);
+panel.remove();
+renderSmartPacketReview(container, job, packageRecord, importId, parsed, refreshed);
+}catch(saveError){
+errorLine.textContent = saveError.message || 'The mapping could not be saved.';
+panel.querySelectorAll('button').forEach(button => { button.disabled = false; });
+}
+};
+panel.querySelector('.packet-unit-map-save').onclick = () => {
+const target = input.value.trim();
+if(!target){
+errorLine.textContent = 'Choose the Price Book unit this code means.';
+return;
+}
+apply(target);
+};
+panel.querySelector('.packet-unit-map-clear').onclick = () => apply('');
+panel.querySelector('.packet-unit-map-cancel').onclick = () => panel.remove();
+}catch(error){
+panel.innerHTML = '<strong>Unit mapping unavailable</strong><p class="import-error">' +
+escapeHtml(error.message || 'The Price Book units could not be loaded.') + '</p>' +
+'<button type="button" class="secondary small">Close</button>';
+panel.querySelector('button').onclick = () => panel.remove();
+}
+}
 function refreshOpenJobPackageControls(){
 if(!currentOpenJobPackage){
 return;
@@ -6778,9 +7461,9 @@ $('jobPackageDetailSubtitle').textContent =
 'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +
 ' · Status: ' + status.toUpperCase() + source;
 const canManagePackage = userCanManageJobPackages();
-const isClosed = status === 'closed';
-$('jobPackageAdminTools').classList.toggle('hidden', !canManagePackage || isClosed);
-$('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || isClosed);
+const isDraft = status === 'draft';
+$('jobPackageAdminTools').classList.toggle('hidden', !canManagePackage || !isDraft);
+$('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || !isDraft);
 const statusButton = $('jobPackageStatusActionBtn');
 statusButton.classList.toggle('hidden', !canManagePackage);
 if(!canManagePackage){
@@ -6844,7 +7527,7 @@ renderJobPackageWorkPoints(lines || []);
 function renderJobPackageWorkPoints(lines){
 const pointGroups = new Map();
 const packageIsEditable = userCanManageJobPackages() &&
-String(currentOpenJobPackage?.status || 'draft').toLowerCase() !== 'closed';
+String(currentOpenJobPackage?.status || 'draft').toLowerCase() === 'draft';
 lines.forEach(line => {
 if(!pointGroups.has(line.work_point_id)){
 pointGroups.set(line.work_point_id, {
@@ -6875,7 +7558,7 @@ const approvedPercent = authorizedValue > 0
 ? Math.min(100, approvedValue / authorizedValue * 100)
 : 0;
 $('jobPackageProgress').innerHTML = `
-<strong>Authorized Value: ${escapeHtml(formatCurrency(authorizedValue))}</strong>
+${userCanSeeFieldMoney() ? '<strong>Authorized Value: ' + escapeHtml(formatCurrency(authorizedValue)) + '</strong>' : ''}
 <strong>Reported: ${reportedPercent.toFixed(1)}%</strong>
 <strong>Approved: ${approvedPercent.toFixed(1)}%</strong>
 <strong>Work Points: ${pointGroups.size}</strong>
@@ -6903,6 +7586,21 @@ unitContainer.innerHTML = '<p class="muted">No authorized units added.</p>';
 point.units.forEach(unit => {
 const row = document.createElement('div');
 row.className = 'unit-compact-card';
+const remainingInstall = Math.max(
+Number(unit.authorized_install_quantity || 0) -
+Number(unit.reported_install_quantity || 0),
+0
+);
+const remainingTransfer = Math.max(
+Number(unit.authorized_transfer_quantity || 0) -
+Number(unit.reported_transfer_quantity || 0),
+0
+);
+const remainingRetirement = Math.max(
+Number(unit.authorized_retirement_quantity || 0) -
+Number(unit.reported_retirement_quantity || 0),
+0
+);
 row.innerHTML = `
 <strong>${escapeHtml(unit.unit_code)}</strong> —
 ${escapeHtml(unit.unit_name || unit.unit_description || '')}
@@ -6915,7 +7613,10 @@ T: ${unit.reported_transfer_quantity} ·
 R: ${unit.reported_retirement_quantity} ·
 Approved I: ${unit.approved_install_quantity} ·
 T: ${unit.approved_transfer_quantity} ·
-R: ${unit.approved_retirement_quantity}
+R: ${unit.approved_retirement_quantity}<br>
+<strong>Remaining I: ${dailyQuantityText(remainingInstall)} ·
+T: ${dailyQuantityText(remainingTransfer)} ·
+R: ${dailyQuantityText(remainingRetirement)}</strong>
 </div>
 `;
 if(packageIsEditable){
@@ -7030,6 +7731,7 @@ const jobPacketMappingDefinitions = [
 { id:'jobMapRemoveQuantity', aliases:['removequantity','removeqty','retirementquantity','retireqty','remove','retirement'] }
 ];
 function resetJobPackageImport(){
+currentJobPackageImportReadToken += 1;
 currentJobPackageImportWorkbook = null;
 currentJobPackageImportRows = [];
 currentJobPackageImportFilename = null;
@@ -7073,11 +7775,14 @@ const column = $(selectId).value;
 return column ? row[column] : '';
 }
 function normalizeJobPacketPoint(value){
-return String(value || '')
+const key = String(value || '')
 .trim()
 .toLowerCase()
 .replace(/^(pole|wp|work[\s_-]*point)[\s#:_-]*/i, '')
 .replace(/[^a-z0-9]+/g, '');
+return /^\d+$/.test(key)
+? (key.replace(/^0+(?=\d)/, '') || '0')
+: key;
 }
 async function previewJobPackageImport(){
 if(!$('jobMapWorkPoint').value || !$('jobMapUnitCode').value){
@@ -7211,11 +7916,25 @@ if(!file) return;
 if(typeof XLSX === 'undefined'){
 return alert('The spreadsheet reader did not load. Refresh and try again.');
 }
+const readToken = ++currentJobPackageImportReadToken;
+currentJobPackageImportWorkbook = null;
+currentJobPackageImportRows = [];
+currentJobPackageImportFilename = null;
+$('jobPackageImportMapping').classList.add('hidden');
+$('previewJobPackageImportBtn').classList.add('hidden');
+$('confirmJobPackageImportBtn').classList.add('hidden');
+$('jobPackageImportPreview').innerHTML = '';
 try{
-currentJobPackageImportFilename = file.name;
-currentJobPackageImportWorkbook = XLSX.read(await file.arrayBuffer());
-const names = currentJobPackageImportWorkbook.SheetNames || [];
+const workbook = XLSX.read(await file.arrayBuffer());
+if(readToken !== currentJobPackageImportReadToken) return false;
+const names = workbook.SheetNames || [];
 if(!names.length) throw new Error('The file does not contain a worksheet.');
+const rows = XLSX.utils.sheet_to_json(workbook.Sheets[names[0]], {
+defval:'', raw:false, blankrows:false
+});
+if(!rows.length) throw new Error('No completed rows were found.');
+currentJobPackageImportFilename = file.name;
+currentJobPackageImportWorkbook = workbook;
 $('jobPackageImportWorksheet').innerHTML = '';
 names.forEach(name => {
 const option = document.createElement('option');
@@ -7224,10 +7943,6 @@ option.textContent = name;
 $('jobPackageImportWorksheet').appendChild(option);
 });
 $('jobPackageImportWorksheetWrap').classList.toggle('hidden', names.length < 2);
-const rows = XLSX.utils.sheet_to_json(currentJobPackageImportWorkbook.Sheets[names[0]], {
-defval:'', raw:false, blankrows:false
-});
-if(!rows.length) throw new Error('No completed rows were found.');
 configureJobPacketMappings(Object.keys(rows[0]));
 if(
 $('jobPackageFormCard').contains($('jobPackageImportForm')) &&
@@ -7237,10 +7952,13 @@ $('jobPackageName').value = String(file.name || '')
 .replace(/\.[^.]+$/, '')
 .trim();
 }
+return true;
 }catch(error){
+if(readToken !== currentJobPackageImportReadToken) return false;
 currentJobPackageImportWorkbook = null;
 currentJobPackageImportFilename = null;
 alert('Unable to read packet: ' + error.message);
+return false;
 }
 }
 $('jobPackageImportFile').onchange = async event => {
@@ -7255,7 +7973,7 @@ if(!confirm(
 const button = $('confirmJobPackageImportBtn');
 button.disabled = true;
 button.textContent = 'Importing...';
-const { data, error } = await sb.rpc('import_job_package_units', {
+const { data, error } = await sb.rpc('finalize_job_package_spreadsheet_import', {
 p_package_id:currentOpenJobPackage.id,
 p_rows:currentJobPackageImportRows.map(({errors, ...row}) => row),
 p_source_filename:currentJobPackageImportFilename
@@ -7265,7 +7983,19 @@ if(error){
 button.textContent = 'Confirm Import';
 return alert('Nothing was imported: ' + error.message);
 }
-alert(`${data?.imported_rows || currentJobPackageImportRows.length} authorized unit rows imported.`);
+const importedStatus = String(data?.status || data?.package_status || '').toLowerCase();
+if(importedStatus !== 'active'){
+button.textContent = 'Confirm Import';
+return alert(
+'The authorized rows were processed, but LineCrew Pro could not confirm that the ' +
+'job jacket became active. Reopen the existing job and package before retrying.'
+);
+}
+currentOpenJobPackage.status = importedStatus;
+alert(
+`${data?.imported_rows || currentJobPackageImportRows.length} authorized unit rows imported. ` +
+'The job jacket is active and available to assigned Foremen.'
+);
 const inlineCreation =
 $('jobPackageFormCard').contains($('jobPackageImportForm'));
 resetJobPackageImport();
@@ -7298,7 +8028,7 @@ return [...new Uint8Array(digest)]
 .map(value => value.toString(16).padStart(2, '0'))
 .join('');
 }
-async function splitPdfForPacketImport(file, pagesPerChunk = 2){
+async function splitPdfForPacketImport(file, pagesPerChunk = 3){
 if(!window.PDFLib?.PDFDocument){
 throw new Error('The PDF page reader did not load. Refresh and try again.');
 }
@@ -7327,19 +8057,91 @@ total_pages:totalPages
 }
 return chunks;
 }
-async function packetFunctionErrorMessage(error){
+async function packetFunctionErrorDetails(error){
 try{
 const detail = await error?.context?.json();
-if(detail?.error) return detail.error;
+if(detail?.error){
+const supportCode = detail.request_id
+? ' Support code: ' + String(detail.request_id).slice(0, 36) + '.'
+: '';
+return {
+message:detail.error + supportCode,
+code:String(detail.code || 'packet_parse_failed'),
+retryOriginal:detail.retry_original === true,
+retrySmaller:detail.retry_smaller === true
+};
+}
 }catch(contextError){
 // Keep the normal client error when the response body is unavailable.
 }
-return error?.message || 'The packet could not be analyzed.';
+return {
+message:error?.message || 'The packet could not be analyzed.',
+code:'packet_request_failed',
+retryOriginal:false,
+retrySmaller:false
+};
+}
+async function packetFunctionErrorMessage(error){
+return (await packetFunctionErrorDetails(error)).message;
+}
+async function analyzePacketPageGroupsWithFallback(
+chunks,
+analyzeChunk,
+analyzeOriginal,
+onProgress = () => {}
+){
+const parsedChunks = new Array(chunks.length);
+const failedChunks = new Array(chunks.length);
+let nextChunkIndex = 0;
+let completedChunks = 0;
+let completedPages = 0;
+const analyzeNextChunk = async () => {
+while(nextChunkIndex < chunks.length){
+const index = nextChunkIndex;
+nextChunkIndex += 1;
+try{
+parsedChunks[index] = await analyzeChunk(chunks[index], index);
+}catch(error){
+failedChunks[index] = error instanceof Error
+? error
+: new Error(String(error || 'Unable to analyze this page group.'));
+}finally{
+completedChunks += 1;
+completedPages += Number(chunks[index]?.page_count || 0);
+onProgress(completedChunks, chunks.length, chunks[index], false, completedPages);
+}
+}
+};
+await Promise.all(
+Array.from({ length:Math.min(3, chunks.length) }, () => analyzeNextChunk())
+);
+const failedCount = failedChunks.filter(Boolean).length;
+if(!failedCount){
+return { parsedChunks, retriedOriginal:false, failedCount:0 };
+}
+const nonRetryableFailure = failedChunks.find(error =>
+error && error.retryOriginal === false && error.retrySmaller !== true
+);
+if(nonRetryableFailure) throw nonRetryableFailure;
+onProgress(completedChunks, chunks.length, null, true, completedPages);
+const recoveryResult = await analyzeOriginal(failedChunks.filter(Boolean));
+if(recoveryResult && Array.isArray(recoveryResult.parsedChunks)){
+return {
+parsedChunks:recoveryResult.retryMode === 'original'
+? recoveryResult.parsedChunks
+: [...parsedChunks.filter(Boolean), ...recoveryResult.parsedChunks],
+retriedOriginal:recoveryResult.retryMode === 'original',
+retriedSmaller:recoveryResult.retryMode === 'smaller',
+failedCount
+};
+}
+return { parsedChunks:[recoveryResult], retriedOriginal:true, retriedSmaller:false, failedCount };
 }
 async function parsePdfJobPacketForJob(job, file){
 const packageContainer = document.getElementById('job-packages-' + job.id);
 if(!packageContainer) return;
 const review = document.createElement('div');
+let stagedPacket = null;
 review.className = 'job-card job-packet-smart-review';
 review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) +
 '…</strong><p class="muted">Detecting the utility and packet format. Nothing has been added to the job yet.</p>';
@@ -7351,52 +8153,115 @@ throw new Error('The PDF must be 20 MB or smaller.');
 const [chunks, sourceSha256] = await Promise.all([
 splitPdfForPacketImport(file), sha256File(file)
 ]);
-const parsedChunks = new Array(chunks.length);
-let nextChunkIndex = 0;
-let completedChunks = 0;
-const analyzeNextChunk = async () => {
-while(nextChunkIndex < chunks.length){
-const index = nextChunkIndex;
-nextChunkIndex += 1;
-const chunk = chunks[index];
+const analyzePacketData = async packet => {
 const { data, error } = await sb.functions.invoke(
 'parse-utility-job-packet',
 { body:{
 filename:file.name,
-file_data:chunk.file_data,
+file_data:packet.file_data,
 source_sha256:sourceSha256,
-page_offset:chunk.page_offset,
-total_pages:chunk.total_pages
+page_offset:packet.page_offset,
+page_count:packet.page_count,
+total_pages:packet.total_pages
 } }
 );
-if(error) throw new Error(await packetFunctionErrorMessage(error));
+if(error){
+const detail = await packetFunctionErrorDetails(error);
+const packetError = new Error(detail.message);
+packetError.code = detail.code;
+packetError.retryOriginal = detail.retryOriginal;
+packetError.retrySmaller = detail.retrySmaller;
+packetError.pageOffset = packet.page_offset;
+packetError.pageCount = packet.page_count;
+throw packetError;
+}
 if(data?.error) throw new Error(data.error);
-parsedChunks[index] = data;
-completedChunks += 1;
+return data;
+};
+const originalPacket = async () => ({
+file_data:await fileAsDataUrl(file),
+page_offset:0,
+page_count:chunks[0].total_pages,
+total_pages:chunks[0].total_pages
+});
+const analysis = await analyzePacketPageGroupsWithFallback(
+chunks,
+analyzePacketData,
+async failedChunks => {
+if(failedChunks.every(error => error?.retrySmaller === true && Number(error?.pageCount) > 1)){
 review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
-'<p class="muted">Analyzed ' + completedChunks + ' of ' + chunks.length +
-' page groups (' + (completedChunks * 2 > chunk.total_pages ? chunk.total_pages : completedChunks * 2) +
+'<p class="muted">Some dense pages need a closer look. Rechecking only those pages in smaller groups. Nothing has been added to the job yet.</p>';
+const singlePages = await splitPdfForPacketImport(file, 1);
+const retryPages = singlePages.filter(page => failedChunks.some(error =>
+page.page_offset >= Number(error.pageOffset) &&
+page.page_offset < Number(error.pageOffset) + Number(error.pageCount)
+));
+const smallerAnalysis = await analyzePacketPageGroupsWithFallback(
+retryPages,
+analyzePacketData,
+async remainingFailures => { throw remainingFailures.find(Boolean); },
+(completed, total) => {
+review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+'<p class="muted">Rechecked ' + completed + ' of ' + total +
+' dense pages. Nothing has been added to the job yet.</p>';
+}
+);
+return { parsedChunks:smallerAnalysis.parsedChunks, retryMode:'smaller' };
+}
+try{
+return { parsedChunks:[await analyzePacketData(await originalPacket())], retryMode:'original' };
+}catch(error){
+const firstFailure = failedChunks.find(Boolean);
+const supportDetail = /Support code:/i.test(String(error?.message || ''))
+? error.message
+: firstFailure?.message || error?.message || '';
+throw new Error(
+'The packet analyzer could not read this PDF after retrying the untouched original file. ' +
+'Nothing was saved. Try opening the packet and using Print to PDF, then upload that new PDF. ' +
+supportDetail
+);
+}
+},
+(completedChunks, chunkCount, chunk, retrying, completedPages) => {
+if(retrying){
+review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+'<p class="muted">Rechecking slow or unclear pages automatically. Nothing has been added to the job yet.</p>';
+return;
+}
+review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+'<p class="muted">Analyzed ' + completedChunks + ' of ' + chunkCount +
+' page groups (' + Math.min(completedPages, chunk.total_pages) +
 ' of ' + chunk.total_pages + ' pages). Nothing has been added to the job yet.</p>';
 }
-};
-review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
-'<p class="muted">Analyzing ' + chunks.length +
-' page groups, three at a time. Nothing has been added to the job yet.</p>';
-await Promise.all(
-Array.from({ length:Math.min(3, chunks.length) }, () => analyzeNextChunk())
 );
+review.innerHTML = '<strong>Reading ' + escapeHtml(file.name) + '…</strong>' +
+'<p class="muted">Finishing packet analysis. Nothing has been added to the job yet.</p>';
+const parsedChunks = analysis.parsedChunks;
 const supported = parsedChunks.filter(chunk =>
-chunk?.status === 'supported' && chunk?.provider_key === 'oncor' &&
+chunk?.status === 'supported' &&
 Array.isArray(chunk?.rows) && chunk.rows.length
 );
 if(!supported.length){
-const warning = parsedChunks.flatMap(chunk => chunk?.warnings || []).join(' ') ||
-'This utility or packet layout is not supported yet.';
-throw new Error(warning + ' Nothing was added to the job.');
+const analyzerNotes = [...new Set(parsedChunks
+.flatMap(chunk => chunk?.warnings || [])
+.map(value => String(value || '').trim())
+.filter(Boolean))];
+const firstNote = analyzerNotes[0]
+? ' Analyzer note: ' + analyzerNotes[0].slice(0, 280) +
+  (analyzerNotes[0].length > 280 ? '…' : '')
+: '';
+throw new Error(
+'No reliable authorized construction-unit rows were available for review.' +
+firstNote + ' Nothing was added to the job.'
+);
 }
+const detectedProvider = parsedChunks
+.map(chunk => String(chunk?.provider_key || '').trim())
+.find(value => value && value !== 'unknown') ||
+String(supported[0].provider_key || 'unknown');
 const parsed = {
 status:'supported',
-provider_key:'oncor',
+provider_key:detectedProvider,
 format_key:supported[0].format_key,
 profile_version:supported[0].profile_version,
 work_order:supported.map(chunk => chunk.work_order).find(Boolean) || '',
@@ -7404,6 +8269,19 @@ confidence:Math.min(...supported.map(chunk => Number(chunk.confidence || 0))),
 warnings:[...new Set(parsedChunks.flatMap(chunk => chunk?.warnings || []))],
 rows:supported.flatMap(chunk => chunk.rows)
 };
+if(analysis.retriedOriginal){
+parsed.warnings.unshift(
+'The page-group analysis was retried using the untouched original PDF.'
+);
+}
+if(analysis.retriedSmaller){
+parsed.warnings.unshift(
+'Dense page groups were automatically rechecked one page at a time.'
+);
+}
+parsed.rows.sort((left,right) =>
+Number(left.source_page || 0) - Number(right.source_page || 0)
+);
 review.innerHTML = '<strong>Saving packet review…</strong>';
 const { data:staged, error:stageError } = await sb.rpc(
 'create_and_stage_utility_packet_import',
@@ -7421,6 +8299,7 @@ p_rows:parsed.rows
 }
 );
 if(stageError) throw new Error(stageError.message);
+stagedPacket = staged;
 currentUtilityPacketImportId = staged.import_id;
 const packageRecord = {
 id:staged.package_id,
@@ -7431,13 +8310,24 @@ package_number:parsed.work_order || null,
 source_filename:file.name,
 status:'draft'
 };
-const { data:rows, error:reviewError } = await sb.rpc(
-'get_utility_packet_import_review',
-{ p_import_id:staged.import_id }
-);
-if(reviewError) throw new Error(reviewError.message);
+const rows = await fetchAllPacketReviewRows(staged.import_id);
 renderSmartPacketReview(review, job, packageRecord, staged.import_id, parsed, rows || []);
 }catch(error){
+if(stagedPacket?.package_id){
+review.innerHTML = '<strong>Packet saved for review</strong>' +
+'<p class="import-error">The packet was saved, but its review could not open: ' +
+escapeHtml(error.message || 'Unable to load the saved packet review.') + '</p>' +
+'<button type="button" class="secondary small">Open Saved Review</button>';
+review.querySelector('button').onclick = async () => {
+currentOpenJobId = job.id;
+await loadJobs();
+const savedPackage = currentJobPackageCatalog.find(
+item => String(item.id) === String(stagedPacket.package_id)
+);
+if(savedPackage) await openJobPackageDetails(savedPackage);
+};
+return;
+}
 review.innerHTML = '<strong>Packet not added</strong><p class="import-error">' +
 escapeHtml(error.message || 'Unable to analyze this packet.') + '</p>' +
 '<button type="button" class="secondary small">Close</button>';
@@ -7450,15 +8340,15 @@ const unmatched = rows.filter(row => row.include_in_import && !row.price_book_ma
 const lowConfidence = rows.filter(row => Number(row.confidence) < 0.9).length;
 container.innerHTML = `
 <div class="section-header"><div>
-<strong>Review Oncor Job Packet</strong>
-<div class="muted">${escapeHtml(parsed.work_order || fileNameWithoutExtension(packageRecord.source_filename))} · ${rows.length} source rows</div>
+<strong>Review Utility Job Packet</strong>
+<div class="muted">${escapeHtml(parsed.work_order || fileNameWithoutExtension(packageRecord.source_filename))} · ${escapeHtml(String(parsed.provider_key || 'Utility').replace(/[-_]+/g, ' '))} · ${rows.length} source rows</div>
 </div></div>
 <div class="import-summary"><strong>Review required before import</strong><br>
 ${materialOnly} material-only · ${unmatched} Contractor Units not matched to Price Book · ${lowConfidence} low-confidence rows
 </div>
-<p class="muted">Est Qty is the authorized quantity. Contractor CU is the production/pay unit. CU is retained only as storeroom reference. Uncheck material-only or unwanted rows.</p>
+<p class="muted">Confirm the work point, action, production/pay unit and authorized quantity against the source packet. Material-only rows should remain unchecked.</p>
 <div class="import-table-wrap"><table class="import-table"><thead><tr>
-<th>Use</th><th>Page</th><th>Station</th><th>Work</th><th>CU (material)</th><th>Contractor Unit</th><th>Est Qty</th><th>Check</th>
+<th>Use</th><th>Page</th><th>Work Point</th><th>Work</th><th>Material Ref</th><th>Production Unit</th><th>Authorized Qty</th><th>Check</th>
 </tr></thead><tbody></tbody></table></div>
 <div class="button-row">
 <button type="button" class="success smart-packet-confirm">Import Reviewed Contractor Units</button>
@@ -7476,10 +8366,19 @@ tr.innerHTML = `
 <td>${escapeHtml(row.material_cu || '—')}</td>
 <td><input class="smart-row-unit" value="${escapeHtml(row.contractor_unit_code || '')}" placeholder="Material only"></td>
 <td><input class="smart-row-qty" type="number" min="0.01" step="0.01" value="${Number(row.estimated_quantity)}"></td>
-<td class="${row.price_book_match || !row.include_in_import ? '' : 'import-error'}">${
-!row.contractor_unit_code ? 'Material only' : row.price_book_match ? 'Matched' : 'Needs Price Book match'
+<td class="smart-check-cell ${row.price_book_match || !row.include_in_import ? '' : 'import-error'}">${
+!row.contractor_unit_code ? 'Material only' : row.price_book_match ? 'Matched'
+: 'Not in Price Book<button type="button" class="secondary small smart-row-map">Map Unit</button>'
 }</td>`;
 tr.querySelector('.smart-row-type').value = row.work_type;
+tr.querySelector('.smart-row-map')?.addEventListener('click', () => {
+// Map whatever is in the box now, not what the packet shipped: an edit made
+// here and not yet saved is what the reviewer means by "this unit".
+openPacketUnitMapper(
+container, job, packageRecord, importId, parsed,
+tr.querySelector('.smart-row-unit').value.trim() || row.contractor_unit_code
+);
+});
 tbody.appendChild(tr);
 });
 container.querySelector('.smart-packet-close').onclick = () => container.remove();
@@ -7488,22 +8387,20 @@ const button = event.currentTarget;
 button.disabled = true;
 button.textContent = 'Saving review…';
 try{
-for(const tr of tbody.querySelectorAll('tr')){
-const { error } = await sb.rpc('update_utility_packet_import_row', {
-p_row_id:tr.dataset.rowId,
-p_work_point_code:tr.querySelector('.smart-row-point').value.trim(),
-p_work_type:tr.querySelector('.smart-row-type').value,
-p_contractor_unit_code:tr.querySelector('.smart-row-unit').value.trim() || null,
-p_estimated_quantity:Number(tr.querySelector('.smart-row-qty').value),
-p_include_in_import:tr.querySelector('.smart-row-use').checked,
-p_review_note:null
-});
-if(error) throw new Error(error.message);
-}
+const reviewRows = [...tbody.querySelectorAll('tr')].map(tr => ({
+row_id:tr.dataset.rowId,
+work_point_code:tr.querySelector('.smart-row-point').value.trim(),
+work_type:tr.querySelector('.smart-row-type').value,
+contractor_unit_code:tr.querySelector('.smart-row-unit').value.trim() || null,
+estimated_quantity:Number(tr.querySelector('.smart-row-qty').value),
+include_in_import:tr.querySelector('.smart-row-use').checked,
+review_note:null
+}));
 button.textContent = 'Validating and importing…';
-const { data:result, error } = await sb.rpc('finalize_utility_packet_import', {
-p_import_id:importId
-});
+const { data:result, error } = await sb.rpc(
+'finalize_utility_packet_import_review',
+{ p_import_id:importId, p_rows:reviewRows }
+);
 if(error) throw new Error(error.message);
 currentOpenJobPackage = packageRecord;
 container.innerHTML = '<strong>Packet imported</strong><p>' +
@@ -7523,6 +8420,36 @@ alert('Nothing was imported: ' + error.message);
 function fileNameWithoutExtension(value){
 return String(value || 'Job Packet').replace(/\.[^.]+$/, '');
 }
+function jobPacketFileValidationMessage(file){
+if(!file) return '';
+const filename = String(file.name || '').trim();
+if(!/\.(pdf|csv|tsv|txt|xlsx|xls|ods)$/i.test(filename)){
+return 'Choose a PDF, Excel, CSV, TSV, TXT or ODS job jacket.';
+}
+if(/\.pdf$/i.test(filename) && Number(file.size || 0) > 20 * 1024 * 1024){
+return 'The PDF job jacket must be 20 MB or smaller.';
+}
+return '';
+}
+async function handleJobPacketFileForJob(job, file){
+const fileError = jobPacketFileValidationMessage(file);
+if(fileError){
+alert(fileError);
+return false;
+}
+if(!job?.id || !file) return false;
+currentOpenJobId = job.id;
+if(!document.getElementById('job-packages-' + job.id)){
+showJobDetail(job, false);
+}
+if(file.name.toLowerCase().endsWith('.pdf')){
+await parsePdfJobPacketForJob(job, file);
+return true;
+}
+showJobPackageForm(job, { inline:true, fileName:file.name });
+await handleJobPackageImportFile(file);
+return true;
+}
 function chooseJobPacketFileForJob(job){
 const fileInput = document.createElement('input');
 fileInput.type = 'file';
@@ -7530,12 +8457,7 @@ fileInput.accept = '.pdf,.csv,.tsv,.txt,.xlsx,.xls,.ods';
 fileInput.onchange = async () => {
 const file = fileInput.files?.[0];
 if(!file) return;
-if(file.name.toLowerCase().endsWith('.pdf')){
-await parsePdfJobPacketForJob(job, file);
-return;
-}
-showJobPackageForm(job, { inline:true, fileName:file.name });
-await handleJobPackageImportFile(file);
+await handleJobPacketFileForJob(job, file);
 };
 fileInput.click();
 }
@@ -7692,7 +8614,9 @@ await previewJobPackageImport();
 async function editJob(job){
 $('createJobCard').dataset.jobId = job.id;
 $('createJobCard').querySelector('h2').textContent = 'Edit Job';
-$('createJobBtn').textContent = 'Save Changes';
+resetCreateJobPacketSelection();
+$('createJobPacketField').classList.add('hidden');
+updateCreateJobActionLabel();
 $('jobNumber').value = job.job_number || '';
 $('jobName').value = job.job_name || '';
 await loadJobContractOptions(job.contract_id || '');
@@ -8513,7 +9437,7 @@ const summarySheet=XLSX.utils.aoa_to_sheet(summary); summarySheet['!cols']=[{wch
 XLSX.utils.book_append_sheet(workbook,summarySheet,completeBillingSheetName('Job Summary',usedSheets));
 const historySheet=XLSX.utils.json_to_sheet(batchHistory); historySheet['!cols']=[18,18,14,22,22,22,26,24,16,14,16,20,32,40,12].map(wch=>({wch}));
 XLSX.utils.book_append_sheet(workbook,historySheet,completeBillingSheetName('Batch History',usedSheets));
-const revisionRows=packages.map(item=>({'Revision':Number(item.revision_number || 1),'Package Name':item.package_name || '',
+const revisionRows=packages.map(item=>({'Revision':jobPackageRevisionLabel(item),'Package Name':item.package_name || '',
 'Package / Reference Number':item.package_number || '','Status':String(item.status || '').toUpperCase(),
 'Received Date':item.received_date || '','Source File':item.source_filename || '',
 'Supersedes Package ID':item.supersedes_package_id || '','Created':item.created_at || '','Notes':item.notes || ''}));
@@ -8561,7 +9485,7 @@ if(attachments.length) pdfLine('Attachments: '+attachments.map(item=>item.origin
 y-=6;
 });
 pdfLine('Utility Packet Revision History',{bold:true,size:12,gap:18});
-packages.forEach(item=>pdfLine('Revision '+Number(item.revision_number || 1)+' | '+(item.package_name || item.package_number || 'Utility Job Packet')+' | '+String(item.status || '').toUpperCase()+' | '+(item.source_filename || 'No source filename'),{size:8}));
+packages.forEach(item=>pdfLine(jobPackageRevisionLabel(item)+' | '+(item.package_name || item.package_number || 'Utility Job Packet')+' | '+String(item.status || '').toUpperCase()+' | '+(item.source_filename || 'No source filename'),{size:8}));
 const pdfBytes=await pdf.save();
 if(exportType==='pdf'){
 downloadGeneratedBlob(new Blob([pdfBytes],{type:'application/pdf'}),fileStem+'.pdf');
@@ -8649,11 +9573,15 @@ answer:'Every LineCrew Pro role can choose Desktop View from the profile card on
 },
 {
 terms:['add job','new job','create job','start job','job setup','import jobs','upload jobs','bulk jobs'],
-answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General Foreman and a Superintendent with Jobs permission use Jobs & Crew Progress. Choose + Create Job, enter the job number/name and correct Contract, then save. There is no separate bulk Job-file import in this release. Utility Job Package authorized-unit import belongs to an existing Job and does not create Jobs. Foremen use Assigned Jobs and see only active jobs assigned to them.'
+answer:'Job-management steps: Owner/Admin uses Job Setup & Management; General Foreman and a Superintendent with Jobs permission use Jobs & Crew Progress. Choose + Create Job, enter the job number/name and correct Contract, then optionally choose the PDF, Excel or CSV Job Jacket / Utility Packet. Create Job & Review Jacket creates the job first and opens the required packet review; nothing imports until you confirm it. A jacket can also be added later from + Add Job Packet. Assign the job to its Foreman so it appears in Daily Reports and Remaining Units.'
 },
 {
 terms:['add admin','more admins','new admin','promote admin','make admin'],
-answer:'Only an Owner can add, remove, promote, or demote an Admin. Open Team, find the member, choose Admin in the Role dropdown, and Save Role. Admins cannot change Owners or other Admins. Keep at least one active Owner at all times.'
+answer:'Owner or Admin opens Team, finds an active Foreman, General Foreman or Superintendent, chooses Admin in the Role dropdown and selects Save Role. An Admin cannot alter a peer Admin through the normal Role dropdown. The new Admin should refresh or sign in again and complete authenticator setup when prompted. If the company has no Owner, any active Admin sees Make Me Company Owner. If an existing Owner leaves or is unavailable, an active Admin uses Ownership Recovery on the Owner’s Team card to choose a new Owner and the former Owner’s new role in one transaction.'
+},
+{
+terms:['claim owner','claim the owner role','make owner','become owner','transfer owner','transfer ownership','company owner','owner left','owner leaves','replace owner','ownership recovery','change owner role'],
+answer:'Owner is a single company-governance role. When a company has no Owner, an active Admin opens Team and chooses Make Me Company Owner. The current Owner can use Transfer Ownership on another active Admin; that normal handoff changes the previous Owner to Admin. If the registered Owner leaves or is unavailable, an active Admin opens that Owner’s Team card, expands Ownership Recovery, chooses the active Admin who will become Owner, chooses the former Owner’s new role, and selects Change Owner & Transfer Ownership. Both role changes save in one transaction, so the company always has exactly one Owner.'
 },
 {
 terms:['promote foreman','make general foreman','promote to general','change role','save role'],
@@ -8665,7 +9593,7 @@ answer:'To upload pricing for a new Price Book: open Price Books, choose + Add P
 },
 {
 terms:['job packet','utility packet','work point','pole packet','authorized units','normal units','import package','percent complete'],
-answer:'Open Jobs, select the existing job, choose + Add Utility Package, enter the package details, then choose Save & Import Authorized Units. The saved package opens its CSV/Excel import immediately. Select the file/worksheet; map work point, description, unit code, work type and authorized quantities; preview and confirm. Imported authorized units define normal/authorized production, identify excess or unlisted redlines, reconcile Pending Job Units and calculate reported/approved job completion percentage.'
+answer:'When creating a job, choose its optional Job Jacket / Utility Packet and then Create Job & Review Jacket. For an existing job, choose + Add Job Packet. PDF jackets open a structured review; Excel/CSV jackets open worksheet and column mapping for work point, description, unit code, work type and authorized quantities. Nothing imports until confirmation. A confirmed packet becomes the active authorization baseline, feeds Foreman jacket-unit choices and Remaining Units, identifies redlines or Pending Packet work, and drives Admin reported, approved and remaining progress.'
 },
 {
 terms:['remaining units','units left','what is left','left on job','left at work point','crew time tab'],
@@ -8677,7 +9605,7 @@ answer:'Admin/Owner opens Jobs and chooses Billing Exports beside Active Job Pro
 },
 {
 terms:['daily report','approve','review','submitted','return report','correct report','edit returned','re-submit'],
-answer:'A Foreman creates and edits field reports. Submitted reports appear in Production Review for General Foremen within their assigned-crew scope and leadership with Production Review permission. The number on the Production Dashboard tile is the in-app count waiting for review; LineCrew Pro does not currently promise background phone push notifications. Expand a report and review the full Crew Time table—employee, Start, Stop, Lunch, Regular, OT, Total, Per diem and Equipment—plus units, poles, attachments and exceptions. Choose Approve or Return Report with correction notes. The owning Foreman corrects the returned draft and submits it again; supervisors do not directly edit that draft. If GF redline approval is required, leadership override requires a recorded reason.'
+answer:'A Foreman creates and edits field reports. Submitted reports appear in Production Review for the assigned General Foreman within that GF’s assigned-crew scope. When device notifications are enabled, background phone push notifications can alert that assigned GF; each GF can choose Submitted only or Submitted + reminders in the Dashboard Notifications card. Expand a report and review the full Crew Time table—employee, Start, Stop, Lunch, Regular, OT, Total, Per diem and Equipment—plus units, poles, attachments and exceptions. Choose Approve or Return Report with correction notes. The owning Foreman is notified, corrects the returned draft and submits it again; supervisors do not directly edit that draft. If GF redline approval is required, leadership override requires a recorded reason.'
 },
 {
 terms:['redline','not authorized','extra unit'],
@@ -8689,7 +9617,7 @@ answer:'Pending Job Units means production was reported before a utility job pac
 },
 {
 terms:['team','foreman','general foreman','role','permissions','superintendent permissions','change role'],
-answer:'Open Team for login accounts and role controls. Hierarchy: Owner > Admin > Superintendent > General Foreman > Foreman. Only Owner manages Owner/Admin roles; Admin manages Superintendent/GF/Foreman; a Superintendent with Role Management may manage GF/Foreman only. Owner/Admin can set each Superintendent capability. Role changes may require refresh or sign-out/sign-in.'
+answer:'Open Team for login accounts and role controls. Hierarchy: Owner > Admin > Superintendent > General Foreman > Foreman. Owner/Admin can promote a lower-role member to Admin, but only Owner can change an existing Admin. Admin cannot assign Owner. A company with no Owner lets one active Admin claim it; later changes use Owner-controlled Transfer Ownership. A Superintendent with Role Management may manage GF/Foreman only. Owner/Admin can set each Superintendent operational capability and can separately check Actual Money and Field Money visibility for each Foreman, General Foreman and Superintendent. Role or visibility changes may require refresh or sign-out/sign-in.'
 },
 {
 terms:['assign job','job assignment','multiple foremen','more than one foreman','assignment history','who assigned'],
@@ -8725,11 +9653,11 @@ answer:'Owner/Admin opens Timekeeping and uses Truck / Equipment Roster. Upload 
 },
 {
 terms:['adjustment','adjusted price','field value','foreman price','percentage'],
-answer:'Owner/Admin or an authorized Superintendent edits the Contract and sets the Foreman field-value adjustment percentage. Foremen see the permitted field value. Owner/Admin/GF and a Superintendent with Actual Contract Pricing permission can see actual values. Verify the percentage and contract before field rollout.'
+answer:'Owner/Admin or an authorized Superintendent edits the Contract and sets the field-value adjustment percentage. Owner/Admin then uses Team > Money Visibility to choose whether each Foreman, General Foreman and Superintendent may see Actual Money, Field Money, both or neither. Foremen default to Field Money only; General Foremen and Superintendents default to both. Verify the percentage, contract and each person’s visibility before field rollout.'
 },
 {
-terms:['job progress','percentage complete','completion','authorized value','remaining value','man hour rate','mh rate','burn rate','red yellow green','rate target'],
-answer:'Supervisors open Jobs & Crew Progress or Production for progress and Field MH Run Rate. Authorized value comes from imported utility-package units; reported and approved percentages use eligible production against that baseline. Field MH Run Rate is field unit value divided by weighted hours (Regular + 1.5 × OT). Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Red is below 95% of target, yellow is 95% up to but not including the exact target, and green is at or above target. It is an operational rate, not payroll cost or guaranteed profit.'
+terms:['job progress','percentage complete','completion','authorized value','remaining value','man hour rate','my man hour rate','mh rate','burn rate','red yellow green','rate target'],
+answer:'By default, Foremen see Field MH Run Rate on their own Daily Reports in Production, calculated only from field unit value. Owner/Admin can separately allow or hide Actual Money and Field Money for each Foreman, General Foreman and Superintendent in Team > Money Visibility. Actual MH Run Rate appears only when Actual Money is checked; Field MH Run Rate appears only when Field Money is checked. Supervisors open Jobs & Crew Progress or Production for progress. Field MH Run Rate is field unit value divided by total actual crew hours (Regular + OT). Owner/Admin sets Required Man-Hour Rate in Admin Controls > Company Settings. Red is below 95% of target, yellow is 95% up to but not including the exact target, and green is at or above target. It is an operational rate, not payroll cost or guaranteed profit.'
 },
 {
 terms:['attachment','photo','print','pdf','save pdf'],
@@ -8789,7 +9717,7 @@ completed_jobs:{label:'Completed Jobs'},
 production:{label:'Production'},
 safety:{label:'Safety / JSA'},
 price_books:{label:'Price Books'},
-timekeeping:{label:'Timekeeping'},
+timekeeping:{label:'Timekeeping / Roster'},
 billing_exports:{label:'Billing Exports'},
 company_settings:{label:'Company Settings'},
 assistant_memory:{label:'Assistant Memory'},
@@ -9555,6 +10483,213 @@ return;
 window.location.reload();
 };
 updateDesktopViewToggle();
+function urlBase64ToUint8Array(value){
+const padding = '='.repeat((4 - value.length % 4) % 4);
+const base64 = (value + padding).replace(/-/g, '+').replace(/_/g, '/');
+const raw = window.atob(base64);
+return Uint8Array.from(raw, character => character.charCodeAt(0));
+}
+function setPushNotificationUi(status,{enable=false,test=false,disable=false}={}){
+$('pushNotificationStatus').textContent = status;
+$('enablePushNotifications').classList.toggle('hidden', !enable);
+$('sendTestPushNotification').classList.toggle('hidden', !test);
+$('disablePushNotifications').classList.toggle('hidden', !disable);
+}
+function pushUnsupportedReason(){
+if(!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)){
+return 'Not supported on this browser.';
+}
+if(/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.navigator.standalone){
+return 'On iPhone, add LineCrew Pro to your Home Screen first: Share → Add to Home Screen.';
+}
+if(Notification.permission === 'denied'){
+return 'Blocked in browser settings. Allow notifications for LineCrew Pro in this device’s browser or app settings.';
+}
+return '';
+}
+function pushPromiseWithTimeout(promise, timeoutMs, message){
+let timeoutId;
+const timeout = new Promise((_, reject) => {
+timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+});
+return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+async function getPushServiceWorkerRegistration(){
+const timeoutMessage = 'Notification setup did not finish on this device. Close LineCrew Pro, reopen it from the Home Screen, and try again.';
+let registration = await pushPromiseWithTimeout(
+navigator.serviceWorker.getRegistration(),
+5000,
+timeoutMessage
+);
+if(!registration){
+registration = await pushPromiseWithTimeout(
+navigator.serviceWorker.register('/service-worker.js'),
+8000,
+timeoutMessage
+);
+}
+if(!registration.active){
+registration = await pushPromiseWithTimeout(
+navigator.serviceWorker.ready,
+8000,
+timeoutMessage
+);
+}
+return registration;
+}
+async function loadPushNotificationStatus(){
+const reason = pushUnsupportedReason();
+if(reason){
+setPushNotificationUi(reason);
+return;
+}
+if(!navigator.onLine){
+setPushNotificationUi('Notification status is unavailable while offline.');
+return;
+}
+if(Notification.permission !== 'granted'){
+setPushNotificationUi('Off on this device.', {enable:true});
+return;
+}
+try{
+const registration = await getPushServiceWorkerRegistration();
+const subscription = await registration.pushManager.getSubscription();
+const {data,error} = await sb.rpc('linecrew_my_push_status');
+if(error) throw error;
+const count = Number((Array.isArray(data) ? data[0]?.subscription_count : data?.subscription_count) || 0);
+if(subscription && count > 0){
+setPushNotificationUi('On for this device.', {test:true,disable:true});
+}else if(subscription){
+setPushNotificationUi('Off on this device. Enable notifications to reconnect this device.', {enable:true,disable:true});
+}else{
+setPushNotificationUi(count > 0 ? 'Off on this device. Notifications are enabled on another device.' : 'Off on this device.', {enable:true});
+}
+}catch(error){
+console.warn('Unable to load push notification status.', error);
+setPushNotificationUi('Unable to verify notification status. Try again.', {enable:true});
+}
+}
+async function loadGfNotificationPreference(){
+const panel = $('gfNotificationPreference');
+const status = $('gfNotificationPreferenceStatus');
+const isGf = currentUserRole() === 'gf';
+panel.classList.toggle('hidden', !isGf);
+if(!isGf) return;
+if(!navigator.onLine){
+status.textContent = ' Your saved alert choice will load when this device is online.';
+return;
+}
+status.textContent = ' Loading saved choice…';
+const { data,error } = await sb.rpc('linecrew_my_gf_notification_preference');
+if(error){
+console.warn('Unable to load GF notification preference.',error);
+status.textContent = ' Unable to load saved choice.';
+return;
+}
+const mode = String(data || 'submitted_and_reminders');
+$('gfNotificationDeliveryMode').value = mode === 'submitted_only'
+? 'submitted_only'
+: 'submitted_and_reminders';
+status.textContent = ' Saved choice loaded.';
+}
+async function saveGfNotificationPreference(){
+if(currentUserRole() !== 'gf') return;
+const button = $('saveGfNotificationPreference');
+const status = $('gfNotificationPreferenceStatus');
+button.disabled = true;
+button.textContent = 'Saving...';
+status.textContent = '';
+const { data,error } = await sb.rpc('linecrew_set_my_gf_notification_preference', {
+p_mode:$('gfNotificationDeliveryMode').value
+});
+button.disabled = false;
+button.textContent = 'Save Alert Choice';
+if(error){
+status.textContent = ' Choice was not saved.';
+alert('Unable to save alert choice: ' + error.message);
+return;
+}
+$('gfNotificationDeliveryMode').value = data === 'submitted_only'
+? 'submitted_only'
+: 'submitted_and_reminders';
+status.textContent = ' Saved.';
+}
+async function enablePushNotifications(){
+const button = $('enablePushNotifications');
+button.disabled = true;
+setPushNotificationUi('Requesting notification permission…');
+try{
+const reason = pushUnsupportedReason();
+if(reason) throw new Error(reason);
+const permission = await Notification.requestPermission();
+if(permission !== 'granted'){
+await loadPushNotificationStatus();
+return;
+}
+setPushNotificationUi('Connecting this device…');
+const registration = await getPushServiceWorkerRegistration();
+const subscription = await registration.pushManager.subscribe({
+userVisibleOnly:true,
+applicationServerKey:urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+});
+const json = subscription.toJSON();
+if(!json.keys?.p256dh || !json.keys?.auth) throw new Error('This device did not return valid notification keys.');
+const {error} = await sb.rpc('linecrew_save_push_subscription', {
+p_endpoint:subscription.endpoint,
+p_p256dh:json.keys.p256dh,
+p_auth:json.keys.auth,
+p_user_agent:navigator.userAgent.slice(0, 300)
+});
+if(error) throw error;
+await loadPushNotificationStatus();
+}catch(error){
+console.warn('Unable to enable push notifications.', error);
+setPushNotificationUi(error?.message || 'Unable to enable notifications on this device.', {enable:true});
+}finally{
+button.disabled = false;
+}
+}
+async function disablePushNotifications(){
+const button = $('disablePushNotifications');
+button.disabled = true;
+try{
+const registration = await getPushServiceWorkerRegistration();
+const subscription = await registration.pushManager.getSubscription();
+if(subscription){
+const endpoint = subscription.endpoint;
+await subscription.unsubscribe();
+const {error} = await sb.rpc('linecrew_delete_push_subscription', {p_endpoint:endpoint});
+if(error) throw error;
+}
+await loadPushNotificationStatus();
+}catch(error){
+console.warn('Unable to disable push notifications.', error);
+setPushNotificationUi(error?.message || 'Unable to disable notifications on this device.', {disable:true});
+}finally{
+button.disabled = false;
+}
+}
+async function sendTestPushNotification(){
+const button = $('sendTestPushNotification');
+button.disabled = true;
+button.textContent = 'Sending…';
+try{
+const {data,error} = await sb.functions.invoke('send-push-notification', {body:{mode:'test'}});
+if(error || data?.error) throw new Error(data?.error || error?.message || 'Test notification failed.');
+if(Number(data?.sent || 0) < 1) throw new Error('No enabled notification device was found.');
+setPushNotificationUi('Test sent. Close or background LineCrew Pro and confirm the notification appears.', {test:true,disable:true});
+}catch(error){
+console.warn('Unable to send a test push notification.', error);
+setPushNotificationUi(error?.message || 'Unable to send a test notification.', {test:true,disable:true});
+}finally{
+button.disabled = false;
+button.textContent = 'Send Test Notification';
+}
+}
+$('enablePushNotifications').onclick = enablePushNotifications;
+$('disablePushNotifications').onclick = disablePushNotifications;
+$('sendTestPushNotification').onclick = sendTestPushNotification;
+$('saveGfNotificationPreference').onclick = saveGfNotificationPreference;
 $('toggleMyProfile').onclick = () => {
 $('myProfileEditor').classList.remove('hidden');
 $('myProfileName').focus();
@@ -10013,6 +11148,20 @@ setContractSetupStage('customer');
 }
 $('reviewSetupPriceBookBtn').onclick = () => {
 const priceBookId = $('contractSetupReview').dataset.priceBookId;
+$('manageExistingContracts').open = true;
+if(
+priceBookId &&
+currentOpenPriceBook?.id === priceBookId &&
+$('priceBookDetail').dataset.priceBookId === priceBookId
+){
+$('priceBookDetail').classList.remove('hidden');
+const reviewTarget =
+!$('priceBookImportCard').classList.contains('hidden')
+? $('priceBookImportCard')
+: $('priceBookDetail');
+reviewTarget.scrollIntoView({ behavior:'auto',block:'start' });
+return;
+}
 const record = priceBookNavigationRecords.get(priceBookId);
 if(!record){
 alert('Refresh the page, then open the saved Price Book under Manage Existing Contracts.');
@@ -10777,7 +11926,210 @@ await loadContracts();
 await loadPriceBooks();
 }
 /* UNIT PRICING FORM */
+function newPriceBookFileSignature(file){
+return [
+String(file?.name || ''),
+Number(file?.size || 0),
+Number(file?.lastModified || 0)
+].join(':');
+}
+function resetNewPriceBookFileCheck(invalidatePending = true){
+if(invalidatePending) newPriceBookFileCheckSequence += 1;
+newPriceBookFilePreflight = null;
+const check = $('newPriceBookFileCheck');
+check.className = 'hidden';
+check.replaceChildren();
+}
+const priceBookMappingSelectIds = [
+'mapUnitCode','mapDescription','mapUnitName','mapInstallPrice',
+'mapTransferPrice','mapRetirementPrice','mapUnitPrice','mapWorkType',
+'mapUnitOfMeasure','mapCategory'
+];
+function capturePriceBookColumnMappings(){
+return Object.fromEntries(priceBookMappingSelectIds.map(id => [id,$(id).value]));
+}
+function restorePriceBookColumnMappings(mapping){
+if(!mapping) return;
+priceBookMappingSelectIds.forEach(id => {
+if(Array.from($(id).options).some(option => option.value === mapping[id])){
+$(id).value = mapping[id];
+}
+});
+}
+function restorePriceBookImportCardHome(){
+const card = $('priceBookImportCard');
+card.classList.remove('new-price-book-inline-mapping');
+newPriceBookPreSaveMappingActive = false;
+if(card.parentNode !== priceBookImportCardHome){
+priceBookImportCardHome.insertBefore(card,priceBookImportCardHomeNext);
+}
+}
+function closeNewPriceBookInlineMapping(){
+restorePriceBookImportCardHome();
+newPriceBookPendingMappings = null;
+newPriceBookPendingWorksheet = '';
+resetPriceBookImport();
+}
+async function showNewPriceBookInlineMapping(file,sequence){
+const card = $('priceBookImportCard');
+$('priceBookForm').insertBefore(card,$('savePriceBookBtn'));
+card.classList.remove('hidden');
+card.classList.add('new-price-book-inline-mapping');
+newPriceBookPreSaveMappingActive = true;
+await handlePriceBookImportFile(file);
+if(
+sequence !== newPriceBookInlineMappingSequence ||
+newPriceBookFileSignature($('newPriceBookImportFile').files?.[0]) !== newPriceBookFileSignature(file)
+) return;
+newPriceBookPendingMappings = capturePriceBookColumnMappings();
+newPriceBookPendingWorksheet = $('priceBookWorksheet').value;
+if(currentPriceBookImportRows.length){
+renderPriceBookImportPreview();
+}
+}
+function newPriceBookPreviewPrice(value){
+const price = numericImportPrice(value);
+return price === null ? '—' : formatCurrency(price);
+}
+function renderNewPriceBookFileCheck(result){
+const check = $('newPriceBookFileCheck');
+check.className = 'import-summary';
+if(result.error){
+check.innerHTML =
+'<p class="import-error">This pricing file could not be read.</p>' +
+'<p>' + escapeHtml(result.error) + '</p>' +
+'<p class="muted">Nothing has been saved. Choose a different spreadsheet or correct the file and try again.</p>';
+return;
+}
+if(result.rawRowCount === 0){
+check.innerHTML =
+'<p class="import-error">No completed spreadsheet rows were found.</p>' +
+'<p class="muted">Nothing has been saved. Choose a worksheet that contains headings and unit rows.</p>';
+return;
+}
+let html =
+'<strong>' + result.rawRowCount + ' spreadsheet row' +
+(result.rawRowCount === 1 ? '' : 's') + ' detected</strong>' +
+'<p class="muted">Found across ' + result.rawSheetCount + ' worksheet' +
+(result.rawSheetCount === 1 ? '' : 's') +
+'. This is the spreadsheet as supplied. Save and continue to match or rename its columns before anything imports.</p>';
+html +=
+'<div class="import-table-wrap"><table class="import-table">' +
+'<thead><tr>' + result.rawHeaders.map(header => '<th>' + escapeHtml(header) + '</th>').join('') + '</tr></thead><tbody>';
+result.rawSampleRows.forEach(row => {
+html += '<tr>' + result.rawHeaders.map((header,index) =>
+'<td>' + escapeHtml(String(row[index] ?? '') || '—') + '</td>'
+).join('') + '</tr>';
+});
+html += '</tbody></table></div>';
+check.innerHTML = html;
+}
+async function inspectNewPriceBookImportFile(file){
+const extension = String(file?.name || '')
+.toLowerCase()
+.split('.')
+.pop();
+if(!['csv','tsv','txt','xlsx','xls','ods'].includes(extension)){
+throw new Error('Choose a CSV, TSV, TXT, XLSX, XLS or ODS pricing file.');
+}
+if(typeof XLSX === 'undefined'){
+throw new Error('The spreadsheet reader did not load. Refresh the page and try again.');
+}
+const workbook = await workbookFromPricingFile(file,extension);
+let tableCount = 0;
+let pricedRowCount = 0;
+let recognizedSheetCount = 0;
+const sampleRows = [];
+let rawRowCount = 0;
+let rawSheetCount = 0;
+let rawHeaders = [];
+let rawSampleRows = [];
+workbook.SheetNames.forEach(sheetName => {
+const matrix = XLSX.utils.sheet_to_json(
+workbook.Sheets[sheetName],
+{ header:1,defval:'',raw:false,blankrows:true }
+);
+const nonEmptyRows = matrix.filter(row =>
+row.some(value => String(value ?? '').trim() !== '')
+);
+if(nonEmptyRows.length){
+rawSheetCount += 1;
+let headerIndex = 0;
+let bestScore = -1;
+nonEmptyRows.slice(0,25).forEach((row,index) => {
+const score = importHeaderScore(row);
+if(score > bestScore){ bestScore = score; headerIndex = index; }
+});
+const headers = nonEmptyRows[headerIndex].map((value,index) =>
+String(value ?? '').trim() || spreadsheetColumnName(index)
+);
+const dataRows = nonEmptyRows.slice(headerIndex + 1);
+rawRowCount += dataRows.length;
+if(!rawHeaders.length){
+rawHeaders = headers;
+rawSampleRows = dataRows.slice(0,5);
+}
+}
+const analysis = extractStructuredPricingRows(sheetName,matrix);
+tableCount += analysis.tableCount;
+pricedRowCount += analysis.rows.length;
+if(analysis.rows.length){
+recognizedSheetCount += 1;
+analysis.rows.forEach(entry => {
+if(sampleRows.length < 5) sampleRows.push(entry);
+});
+}
+});
+return {
+fileSignature:newPriceBookFileSignature(file),
+tableCount,
+pricedRowCount,
+recognizedSheetCount,
+sampleRows,
+rawRowCount,
+rawSheetCount,
+rawHeaders,
+rawSampleRows,
+error:null
+};
+}
+async function checkNewPriceBookImportFile(file){
+const sequence = ++newPriceBookFileCheckSequence;
+resetNewPriceBookFileCheck(false);
+if(!file) return null;
+const check = $('newPriceBookFileCheck');
+check.className = 'import-summary';
+check.innerHTML = '<strong>Checking the pricing file...</strong>';
+$('savePriceBookBtn').disabled = true;
+$('savePriceBookBtn').textContent = 'Checking Pricing File...';
+try{
+const result = await inspectNewPriceBookImportFile(file);
+if(sequence !== newPriceBookFileCheckSequence) return null;
+newPriceBookFilePreflight = result;
+renderNewPriceBookFileCheck(result);
+return result;
+}catch(error){
+if(sequence !== newPriceBookFileCheckSequence) return null;
+const result = {
+fileSignature:newPriceBookFileSignature(file),
+tableCount:0,
+pricedRowCount:0,
+recognizedSheetCount:0,
+sampleRows:[],
+error:error?.message || 'Unable to read this pricing file.'
+};
+newPriceBookFilePreflight = result;
+renderNewPriceBookFileCheck(result);
+return result;
+}finally{
+if(sequence === newPriceBookFileCheckSequence){
+$('savePriceBookBtn').disabled = false;
+$('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
+}
+}
+}
 async function openPriceBookFormForContract(selectedContract = null){
+closeNewPriceBookInlineMapping();
 showContractSetupForm('priceBookForm', 'pricing');
 $('priceBookFormTitle').textContent = selectedContract
 ? 'Add Unit Pricing for ' + selectedContract.contract_name
@@ -10788,6 +12140,7 @@ $('priceBookName').value = selectedContract
 $('priceBookEffectiveDate').value = selectedContract?.start_date || '';
 $('priceBookNotes').value = '';
 $('newPriceBookImportFile').value = '';
+resetNewPriceBookFileCheck();
 $('priceBookContract').innerHTML =
 '<option value="">Select contract</option>';
 const {
@@ -10818,9 +12171,39 @@ $('priceBookContract').value = selectedContract.id;
 }
 }
 $('addPriceBookBtn').onclick = () => openPriceBookFormForContract();
+$('newPriceBookImportFile').onchange = event => {
+const file = event.target.files?.[0] || null;
+const sequence = ++newPriceBookInlineMappingSequence;
+closeNewPriceBookInlineMapping();
+newPriceBookInlineMappingTask = newPriceBookInlineMappingTask.then(async () => {
+if(sequence !== newPriceBookInlineMappingSequence) return;
+const result = await checkNewPriceBookImportFile(file);
+if(sequence !== newPriceBookInlineMappingSequence) return;
+if(file && result && !result.error && result.rawRowCount > 0){
+$('savePriceBookBtn').disabled = true;
+$('savePriceBookBtn').textContent = 'Preparing Column Review...';
+try{
+await showNewPriceBookInlineMapping(file,sequence);
+}finally{
+if(sequence === newPriceBookInlineMappingSequence){
+$('savePriceBookBtn').disabled = false;
+$('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
+}
+}
+}
+}).catch(error => {
+if(sequence === newPriceBookInlineMappingSequence){
+showImportReadError(error);
+$('savePriceBookBtn').disabled = false;
+$('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
+}
+});
+};
 $('cancelPriceBookBtn').onclick = () => {
+closeNewPriceBookInlineMapping();
 $('priceBookForm').classList.add('hidden');
 $('newPriceBookImportFile').value = '';
+resetNewPriceBookFileCheck();
 resetContractSetup();
 $('manageExistingContracts').open = true;
 };
@@ -10841,10 +12224,30 @@ if(!name){
 alert('Enter a unit-pricing version name.');
 return;
 }
-$('savePriceBookBtn').disabled = true;
-$('savePriceBookBtn').textContent = 'Saving...';
 const selectedImportFile =
 $('newPriceBookImportFile').files?.[0] || null;
+if(selectedImportFile){
+newPriceBookPendingMappings = capturePriceBookColumnMappings();
+newPriceBookPendingWorksheet = $('priceBookWorksheet').value;
+const selectedSignature = newPriceBookFileSignature(selectedImportFile);
+if(newPriceBookFilePreflight?.fileSignature !== selectedSignature){
+await checkNewPriceBookImportFile(selectedImportFile);
+}
+if(newPriceBookFilePreflight?.error){
+$('newPriceBookFileCheck').scrollIntoView({ behavior:'auto',block:'center' });
+alert('The pricing file could not be read. Nothing was saved.');
+return;
+}
+if(
+newPriceBookFilePreflight?.rawRowCount === 0
+){
+$('newPriceBookFileCheck').scrollIntoView({ behavior:'auto',block:'center' });
+alert('This workbook does not contain any completed spreadsheet rows. Nothing was saved.');
+return;
+}
+}
+$('savePriceBookBtn').disabled = true;
+$('savePriceBookBtn').textContent = 'Saving...';
 const {
 data:savedPriceBook,
 error
@@ -10859,7 +12262,20 @@ effective_start: effectiveDate,
 notes: notes,
 active: true
 })
-.select('id')
+.select(`
+id,
+contract_id,
+name,
+effective_date,
+effective_start,
+effective_end,
+version_name,
+notes,
+source_filename,
+active,
+created_at,
+updated_at
+`)
 .single();
 $('savePriceBookBtn').disabled = false;
 $('savePriceBookBtn').textContent = 'Save Unit Pricing & Continue';
@@ -10870,10 +12286,26 @@ error.message
 );
 return;
 }
+restorePriceBookImportCardHome();
 $('priceBookForm').classList.add('hidden');
 await loadPriceBooks();
-const savedRecord =
+let savedRecord =
 priceBookNavigationRecords.get(savedPriceBook?.id);
+if(!savedRecord && savedPriceBook?.id){
+const contract =
+currentPriceBookContractsById.get(contractId) ||
+currentContractCatalog.find(item => item.id === contractId) ||
+null;
+const customer = contract
+? currentPriceBookCustomersById.get(contract.customer_id) || null
+: null;
+savedRecord = {
+priceBook:savedPriceBook,
+contract,
+customer
+};
+priceBookNavigationRecords.set(savedPriceBook.id,savedRecord);
+}
 if(savedRecord){
 showContractSetupReview(
 savedRecord.priceBook,
@@ -10893,13 +12325,39 @@ savedRecord.customer
 if(selectedImportFile){
 $('priceBookImportCard').classList.remove('hidden');
 await handlePriceBookImportFile(selectedImportFile);
+if(
+newPriceBookPendingWorksheet &&
+Array.from($('priceBookWorksheet').options).some(option => option.value === newPriceBookPendingWorksheet)
+){
+$('priceBookWorksheet').value = newPriceBookPendingWorksheet;
+loadImportWorksheet(newPriceBookPendingWorksheet);
+}
+restorePriceBookColumnMappings(newPriceBookPendingMappings);
+currentPriceBookMappingNeedsReview = false;
+applyImportColumnMapping(true);
+const validUnitCount = currentPriceBookImportRows.filter(
+row => row.errors.length === 0
+).length;
+showContractSetupReview(
+savedRecord.priceBook,
+savedRecord.contract,
+savedRecord.customer,
+{
+message:validUnitCount
+? validUnitCount + ' valid unit' + (validUnitCount === 1 ? '' : 's') + ' are ready below. Review the column matches and click Import to finish.'
+: 'The file is open below. Review the detected headings or correct the displayed pricing errors before importing.'
+}
+);
 $('priceBookImportCard').scrollIntoView({
-behavior:'smooth',
+behavior:'auto',
 block:'start'
 });
-alert('Unit Pricing saved. Review the preview, match the columns, and confirm the import.');
 return;
 }
+}
+if(savedPriceBook?.id && !savedRecord){
+alert('Unit Pricing was saved, but its review screen could not open. Open the saved Unit Pricing record and choose Upload Unit Prices.');
+return;
 }
 alert('Unit Pricing saved. You can now add or upload contract unit prices.');
 };
@@ -11234,6 +12692,7 @@ contract,
 customer,
 recordHistory = true
 ){
+$('manageExistingContracts').open = true;
 if(recordHistory){
 const currentState = window.history.state;
 if(
@@ -12088,7 +13547,7 @@ currency: 'USD'
 }
 async function fetchPriceBookItemsForCurrentUser(priceBookId){
 return sb.rpc(
-'get_price_book_items_for_user',
+'get_price_book_items_visible',
 { p_price_book_id:priceBookId }
 );
 }
@@ -12180,7 +13639,14 @@ const workType=normalizeImportHeader(value);
 if(/^(transfer|xfer|move|reframe|relocate)/.test(workType)) return 'transfer';
 if(/^(remove|removal|retire|retirement|demo|salvage)/.test(workType)) return 'retirement';
 if(/^(install|installation|new|construct|construction|set)/.test(workType)) return 'install';
-const suffix=String(itemCode || '').trim().toUpperCase().slice(-1);
+// Only read a work-type suffix where it follows a digit, which is how real
+// utility unit codes are built (CV3030I, OH4112R, PS1095I). Matching a bare
+// final letter classified word-style codes from other utilities silently and
+// confidently: CONDUIT as a transfer, ANCHOR as a retirement. Those now fall
+// through to the ordinary default instead of being filed under a price type
+// the Admin never chose.
+const suffixMatch=String(itemCode || '').trim().toUpperCase().match(/[0-9]([IRT])$/);
+const suffix=suffixMatch ? suffixMatch[1] : '';
 if(suffix === 'T') return 'transfer';
 if(suffix === 'R') return 'retirement';
 if(suffix === 'I') return 'install';
@@ -12507,7 +13973,7 @@ const updateExisting =
 $('priceBookImportMode').value ===
 'update-existing';
 const existingCodes = new Set(
-currentPriceBookItems.map(item =>
+(newPriceBookPreSaveMappingActive ? [] : currentPriceBookItems).map(item =>
 String(item.item_code || '')
 .trim()
 .toLowerCase()
@@ -12572,6 +14038,9 @@ invalidRows.length +
 (currentPriceBookImportNotice
 ? '<br><span class="muted">' + escapeHtml(currentPriceBookImportNotice) + '</span>'
 : '') +
+(newPriceBookPreSaveMappingActive
+? '<br><span class="muted">Review or change the column matches above. The units will not import until you save this Unit Pricing record and confirm the import.</span>'
+: '') +
 '</div>';
 html +=
 '<div class="import-table-wrap">' +
@@ -12635,7 +14104,7 @@ $('confirmPriceBookImportBtn')
 .classList
 .toggle(
 'hidden',
-validRows.length === 0
+validRows.length === 0 || newPriceBookPreSaveMappingActive
 );
 $('confirmPriceBookImportBtn').textContent =
 'Import ' +
@@ -13057,15 +14526,6 @@ applyImportColumnMapping();
 return;
 }
 if(!currentPriceBookWorkbook.Sheets[sheetName]) throw new Error('The selected worksheet could not be read.');
-const structuredAnalysis = currentPriceBookStructuredSheets.get(sheetName);
-if(structuredAnalysis?.rows.length){
-if(structuredAnalysis.rows.length > 5000) throw new Error('Import up to 5,000 completed pricing rows at a time. Split larger files and try again.');
-currentPriceBookSourceRows = structuredAnalysis.rows;
-currentPriceBookImportNotice = structuredImportNotice([structuredAnalysis]);
-configureImportColumnMappings(Object.keys(structuredAnalysis.rows[0].row));
-applyImportColumnMapping();
-return;
-}
 const sheet=currentPriceBookWorkbook.Sheets[sheetName];
 const matrix=XLSX.utils.sheet_to_json(sheet,{header:1,defval:'',raw:false,blankrows:false});
 if(!matrix.length) throw new Error('No pricing rows were found in this worksheet.');
@@ -13121,9 +14581,7 @@ workbook.SheetNames.length < 2 &&
 currentPriceBookStructuredSheets.size < 2
 )
 );
-const initialSheet = currentPriceBookStructuredSheets.size > 1
-? '__all_recognized_pricing__'
-: currentPriceBookStructuredSheets.keys().next().value || workbook.SheetNames[0];
+const initialSheet = workbook.SheetNames[0];
 $('priceBookWorksheet').value = initialSheet;
 loadImportWorksheet(initialSheet);
 }
@@ -13393,11 +14851,20 @@ files[0]
 }
 );
 $('confirmPriceBookImportBtn').onclick = async () => {
+if(newPriceBookPreSaveMappingActive){
+alert('Save the Unit Pricing record before importing its units.');
+return;
+}
 const priceBookId =
 $('priceBookDetail')
 .dataset
 .priceBookId;
-if(!priceBookId || !currentProfile?.company_id){
+if(
+!priceBookId ||
+!currentProfile?.company_id ||
+!currentOpenPriceBook ||
+currentOpenPriceBook.id !== priceBookId
+){
 alert('Open a Price Book before importing units.');
 return;
 }
@@ -13683,36 +15150,19 @@ return filteredItems;
 }
 function priceBookItemPriceMarkup(item){
 const canSeeActual = userCanSeeActualContractPrices();
-if(canSeeActual && item.has_adjustment){
-return (
-'Actual I: <strong>' +
-escapeHtml(formatCurrency(item.actual_install_price)) +
-'</strong> T: <strong>' +
-escapeHtml(formatCurrency(item.actual_transfer_price)) +
-'</strong> R: <strong>' +
-escapeHtml(formatCurrency(item.actual_retirement_price)) +
-'</strong><br>Field I: <strong>' +
-escapeHtml(formatCurrency(item.adjusted_install_price)) +
-'</strong> T: <strong>' +
-escapeHtml(formatCurrency(item.adjusted_transfer_price)) +
-'</strong> R: <strong>' +
-escapeHtml(formatCurrency(item.adjusted_retirement_price)) +
-'</strong>'
-);
+const canSeeField = userCanSeeFieldMoney();
+const lines = [];
+if(canSeeActual){
+lines.push('Actual I: <strong>' + escapeHtml(formatCurrency(item.actual_install_price)) +
+'</strong> T: <strong>' + escapeHtml(formatCurrency(item.actual_transfer_price)) +
+'</strong> R: <strong>' + escapeHtml(formatCurrency(item.actual_retirement_price)) + '</strong>');
 }
-const label =
-canSeeActual || !item.has_adjustment
-? 'Actual'
-: 'Field';
-return (
-label + ' I: <strong>' +
-escapeHtml(formatCurrency(item.install_price)) +
-'</strong> T: <strong>' +
-escapeHtml(formatCurrency(item.transfer_price)) +
-'</strong> R: <strong>' +
-escapeHtml(formatCurrency(item.retirement_price)) +
-'</strong>'
-);
+if(canSeeField){
+lines.push('Field I: <strong>' + escapeHtml(formatCurrency(item.adjusted_install_price)) +
+'</strong> T: <strong>' + escapeHtml(formatCurrency(item.adjusted_transfer_price)) +
+'</strong> R: <strong>' + escapeHtml(formatCurrency(item.adjusted_retirement_price)) + '</strong>');
+}
+return lines.join('<br>') || '<span class="muted">Money hidden by company permissions.</span>';
 }
 function renderPriceBookItems(){
 const filteredItems =
@@ -13943,70 +15393,36 @@ if(items.length === 0){
 alert('There are no matching units to export.');
 return;
 }
-const includeBothPrices =
-userCanSeeActualContractPrices() &&
-items.some(item => item.has_adjustment);
-const hasFieldAdjustment =
-items.some(item => item.has_adjustment);
-const headers = includeBothPrices
-? [
+const includeActual = userCanSeeActualContractPrices();
+const includeField = userCanSeeFieldMoney();
+const headers = [
 'Unit Code',
 'Unit Name',
 'Description',
-'Actual Install Price',
-'Actual Transfer Price',
-'Actual Retirement Price',
-'Field Install Value',
-'Field Transfer Value',
-'Field Retirement Value',
-'Unit of Measure',
-'Category',
-'Status'
-]
-: [
-'Unit Code',
-'Unit Name',
-'Description',
-userCanSeeActualContractPrices() || !hasFieldAdjustment
-? 'Actual Install Price'
-: 'Field Install Value',
-userCanSeeActualContractPrices() || !hasFieldAdjustment
-? 'Actual Transfer Price'
-: 'Field Transfer Value',
-userCanSeeActualContractPrices() || !hasFieldAdjustment
-? 'Actual Retirement Price'
-: 'Field Retirement Value',
+...(includeActual ? ['Actual Install Price','Actual Transfer Price','Actual Retirement Price'] : []),
+...(includeField ? ['Field Install Value','Field Transfer Value','Field Retirement Value'] : []),
 'Unit of Measure',
 'Category',
 'Status'
 ];
-const rows = items.map(item => includeBothPrices
-? [
+const rows = items.map(item => [
 item.item_code,
 item.item_name,
 item.description,
-Number(item.actual_install_price || 0).toFixed(2),
-Number(item.actual_transfer_price || 0).toFixed(2),
-Number(item.actual_retirement_price || 0).toFixed(2),
-Number(item.adjusted_install_price || 0).toFixed(2),
-Number(item.adjusted_transfer_price || 0).toFixed(2),
-Number(item.adjusted_retirement_price || 0).toFixed(2),
+...(includeActual ? [
+  Number(item.actual_install_price || 0).toFixed(2),
+  Number(item.actual_transfer_price || 0).toFixed(2),
+  Number(item.actual_retirement_price || 0).toFixed(2)
+] : []),
+...(includeField ? [
+  Number(item.adjusted_install_price || 0).toFixed(2),
+  Number(item.adjusted_transfer_price || 0).toFixed(2),
+  Number(item.adjusted_retirement_price || 0).toFixed(2)
+] : []),
 item.unit_of_measure,
 item.category,
 item.active ? 'Active' : 'Inactive'
-]
-: [
-item.item_code,
-item.item_name,
-item.description,
-Number(item.install_price || 0).toFixed(2),
-Number(item.transfer_price || 0).toFixed(2),
-Number(item.retirement_price || 0).toFixed(2),
-item.unit_of_measure,
-item.category,
-item.active ? 'Active' : 'Inactive'
-]
-);
+]);
 const csv = [headers, ...rows]
 .map(row => row.map(csvCell).join(','))
 .join('\r\n');
@@ -14405,8 +15821,12 @@ if(String(report.status || '').toLowerCase() === 'approved') approved += 1;
 $('productionReportingMetrics').innerHTML =
 '<span><strong>' + reports.length + '</strong><br>Reports</span>' +
 '<span><strong>' + approved + '</strong><br>Completed</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(actualValue)) + '</strong><br>Actual Unit Value</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(fieldValue)) + '</strong><br>Field Unit Value</span>' +
+(userCanSeeActualContractPrices()
+? '<span><strong>' + escapeHtml(formatCurrency(actualValue)) + '</strong><br>Actual Unit Value</span>'
+: '') +
+(userCanSeeFieldMoney()
+? '<span><strong>' + escapeHtml(formatCurrency(fieldValue)) + '</strong><br>Field Unit Value</span>'
+: '') +
 '<span><strong>' + regularHours + '</strong><br>Regular Hours</span>' +
 '<span><strong>' + overtimeHours + '</strong><br>OT Hours</span>' +
 '<span><strong>' + redlines + '</strong><br>Redlines</span>' +
@@ -14498,8 +15918,12 @@ totalPending += pending;
 summary.innerHTML =
 '<span><strong>' + stormReports.length + '</strong><br>Storm Reports</span>' +
 '<span><strong>' + crews.size + '</strong><br>Crews</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(totalActual)) + '</strong><br>Actual Value</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(totalField)) + '</strong><br>Field Value</span>' +
+(userCanSeeActualContractPrices()
+? '<span><strong>' + escapeHtml(formatCurrency(totalActual)) + '</strong><br>Actual Value</span>'
+: '') +
+(userCanSeeFieldMoney()
+? '<span><strong>' + escapeHtml(formatCurrency(totalField)) + '</strong><br>Field Value</span>'
+: '') +
 '<span><strong>' + totalRegularHours + '</strong><br>Regular Hours</span>' +
 '<span><strong>' + totalOvertimeHours + '</strong><br>OT Hours</span>' +
 '<span><strong>' + totalRedlines + '</strong><br>Redlines</span>' +
@@ -14521,8 +15945,12 @@ crew.reports + ' report' + (crew.reports === 1 ? '' : 's') +
 '</span></div>' +
 '<div class="daily-value-summary">' +
 '<span><strong>' + crew.approved + '</strong><br>Approved</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(crew.actual)) + '</strong><br>Actual Value</span>' +
-'<span><strong>' + escapeHtml(formatCurrency(crew.field)) + '</strong><br>Field Value</span>' +
+(userCanSeeActualContractPrices()
+? '<span><strong>' + escapeHtml(formatCurrency(crew.actual)) + '</strong><br>Actual Value</span>'
+: '') +
+(userCanSeeFieldMoney()
+? '<span><strong>' + escapeHtml(formatCurrency(crew.field)) + '</strong><br>Field Value</span>'
+: '') +
 '<span><strong>' + crew.regularHours + '</strong><br>Regular Hours</span>' +
 '<span><strong>' + crew.overtimeHours + '</strong><br>OT Hours</span>' +
 '<span><strong>' + crew.redlines + '</strong><br>Redlines</span>' +
@@ -14701,8 +16129,10 @@ group.pending += Number(authorization.pending_packet_count || 0);
 });
 const headers = [
 'Storm Event', 'Job Number', 'Job Name', 'From Date', 'Through Date',
-'Crews', 'Reports', 'Approved Reports', 'Actual Unit Value',
-'Field Unit Value', 'Regular Hours', 'OT Hours', 'Redlines', 'Pending Job Units'
+'Crews', 'Reports', 'Approved Reports',
+...(userCanSeeActualContractPrices() ? ['Actual Unit Value'] : []),
+...(userCanSeeFieldMoney() ? ['Field Unit Value'] : []),
+'Regular Hours', 'OT Hours', 'Redlines', 'Pending Job Units'
 ];
 const totals = {
 reports:0, approved:0, actual:0, field:0,
@@ -14719,13 +16149,17 @@ Object.keys(totals).forEach(key => totals[key] += Number(group[key] || 0));
 return [
 group.eventName, group.jobNumber, group.jobName, group.fromDate,
 group.throughDate, [...group.crews].sort().join('; '), group.reports,
-group.approved, group.actual.toFixed(2), group.field.toFixed(2),
+group.approved,
+...(userCanSeeActualContractPrices() ? [group.actual.toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [group.field.toFixed(2)] : []),
 group.regularHours, group.overtimeHours, group.redlines, group.pending
 ];
 });
 rows.push([
 'TOTAL', '', '', '', '', '', totals.reports, totals.approved,
-totals.actual.toFixed(2), totals.field.toFixed(2), totals.regularHours,
+...(userCanSeeActualContractPrices() ? [totals.actual.toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [totals.field.toFixed(2)] : []),
+totals.regularHours,
 totals.overtimeHours, totals.redlines, totals.pending
 ]);
 downloadStormCsv(
@@ -14765,7 +16199,9 @@ group.field += Number(value.adjusted_total || 0);
 const headers = [
 'Storm Event', 'Crew', 'Foreman', 'From Date', 'Through Date',
 'Reports', 'Approved Reports', 'Regular Hours', 'OT Hours',
-'Total Hours', 'Actual Unit Value', 'Field Unit Value'
+'Total Hours',
+...(userCanSeeActualContractPrices() ? ['Actual Unit Value'] : []),
+...(userCanSeeFieldMoney() ? ['Field Unit Value'] : [])
 ];
 const totals = {
 reports:0, approved:0, regularHours:0, overtimeHours:0, actual:0, field:0
@@ -14782,14 +16218,16 @@ return [
 group.eventName, group.crewName, group.foremanName, group.fromDate,
 group.throughDate, group.reports, group.approved, group.regularHours,
 group.overtimeHours, group.regularHours + group.overtimeHours,
-group.actual.toFixed(2), group.field.toFixed(2)
+...(userCanSeeActualContractPrices() ? [group.actual.toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [group.field.toFixed(2)] : [])
 ];
 });
 rows.push([
 'TOTAL', '', '', '', '', totals.reports, totals.approved,
 totals.regularHours, totals.overtimeHours,
 totals.regularHours + totals.overtimeHours,
-totals.actual.toFixed(2), totals.field.toFixed(2)
+...(userCanSeeActualContractPrices() ? [totals.actual.toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [totals.field.toFixed(2)] : [])
 ]);
 downloadStormCsv(
 headers,
@@ -14809,7 +16247,8 @@ return;
 const headers = [
 'Job Number', 'Job Name', 'Work Date', 'Foreman', 'Crew', 'Status',
 'Regular Hours', 'OT Hours', 'Weather', 'Delay Hours', 'Delay Reason',
-'Actual Unit Value', 'Field Unit Value',
+...(userCanSeeActualContractPrices() ? ['Actual Unit Value'] : []),
+...(userCanSeeFieldMoney() ? ['Field Unit Value'] : []),
 'Authorized Units', 'Pending Job Units', 'Redline Units',
 'Storm Mode', 'Storm Event', 'Report Notes', 'Review Notes'
 ];
@@ -14828,8 +16267,8 @@ Number(report.overtime_hours || 0),
 report.weather_conditions || '',
 Number(report.delay_hours || 0),
 report.delay_reason || '',
-Number(value.actual_total || 0).toFixed(2),
-Number(value.adjusted_total || 0).toFixed(2),
+...(userCanSeeActualContractPrices() ? [Number(value.actual_total || 0).toFixed(2)] : []),
+...(userCanSeeFieldMoney() ? [Number(value.adjusted_total || 0).toFixed(2)] : []),
 Number(authorization.authorized_count || 0),
 Number(authorization.pending_packet_count || 0),
 Number(authorization.redline_count || 0),
@@ -14881,6 +16320,7 @@ notes,
 status,
 archived,
 review_notes,
+reviewed_at,
 storm_mode,
 storm_event_name,
 jobs (
@@ -15548,7 +16988,7 @@ printWindow.document.write(
 '<p style="font-family:Arial;padding:24px">Preparing daily report...</p>'
 );
 const { data:units, error } = await sb.rpc(
-'get_daily_report_unit_locations_v2',
+'get_daily_report_unit_locations_visible_v2',
 { p_report_id:report.id }
 );
 if(error){
@@ -15685,25 +17125,29 @@ if(!summary || Number(summary.unit_line_count || 0) === 0){
 return '<br><span class="muted">Unit Value: No units entered</span>';
 }
 const canSeeActual = userCanSeeActualContractPrices();
+const canSeeField = userCanSeeFieldMoney();
+if(!canSeeActual && !canSeeField){
+return '<br><span class="muted">Unit values hidden by company permissions.</span>';
+}
 const hasAdjustment = summary.has_adjustment === true;
-const canSeeRunRate = userCanReviewProduction() || userCanUseReporting();
-const weightedHours =
+const totalHours =
 Number(report?.regular_hours || 0) +
-(Number(report?.overtime_hours || 0) * 1.5);
-const actualRunRate = weightedHours > 0
-? Number(summary.actual_total || 0) / weightedHours
+Number(report?.overtime_hours || 0);
+const actualRunRate = totalHours > 0
+? Number(summary.actual_total || 0) / totalHours
 : 0;
-const fieldRunRate = weightedHours > 0
-? Number(summary.adjusted_total || 0) / weightedHours
+const fieldRunRate = totalHours > 0
+? Number(summary.adjusted_total || 0) / totalHours
 : 0;
-const runRateMarkup = !canSeeRunRate
-? ''
-: (canSeeActual
+const runRateMarkup =
+(canSeeActual
 ? '<br>Actual MH Run Rate: <strong>' +
 escapeHtml(formatCurrency(actualRunRate)) + '</strong>'
 : '') +
-'<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate);
-if(canSeeActual && hasAdjustment){
+(canSeeField
+? '<br>Field MH Run Rate: ' + manHourRateNumberMarkup(fieldRunRate)
+: '');
+if(canSeeActual && canSeeField && hasAdjustment){
 return (
 '<br>Actual Unit Value: <strong>' +
 escapeHtml(formatCurrency(summary.actual_total)) +
@@ -15713,10 +17157,8 @@ escapeHtml(formatCurrency(summary.adjusted_total)) +
 '</strong>' + runRateMarkup
 );
 }
-const label = hasAdjustment ? 'Field Unit Value' : 'Actual Unit Value';
-const amount = canSeeActual
-? summary.actual_total
-: summary.visible_total;
+const label = canSeeActual ? 'Actual Unit Value' : 'Field Unit Value';
+const amount = canSeeActual ? summary.actual_total : summary.adjusted_total;
 return (
 '<br>' + label + ': <strong>' +
 escapeHtml(formatCurrency(amount)) +
@@ -15746,16 +17188,16 @@ escapeHtml(formatCurrency(rate)) + '</strong>' +
 escapeHtml(statusText) + '</span>';
 }
 function dailyReportTargetDotMarkup(report, summary){
-if(!userCanReviewProduction() && !userCanUseReporting()) return '';
-const weightedHours =
+if(!userCanSeeFieldMoney() || (!userCanReviewProduction() && !userCanUseReporting())) return '';
+const totalHours =
 Number(report?.regular_hours || 0) +
-(Number(report?.overtime_hours || 0) * 1.5);
+Number(report?.overtime_hours || 0);
 const hasRunRate =
 summary &&
 Number(summary.unit_line_count || 0) > 0 &&
-weightedHours > 0;
+totalHours > 0;
 const fieldRunRate = hasRunRate
-? Number(summary.adjusted_total || 0) / weightedHours
+? Number(summary.adjusted_total || 0) / totalHours
 : NaN;
 const status = hasRunRate ? manHourTargetStatus(fieldRunRate) : null;
 const className = status ? status.key : 'not-set';
@@ -15807,12 +17249,19 @@ $('dailyUnitList').innerHTML =
 $('dailyUnitValueSummary').innerHTML = '';
 $('dailyUnitReviewActions').innerHTML = '';
 $('dailyUnitReviewActions').classList.add('hidden');
+$('dailyAuthorizedUnitPanel').classList.add('hidden');
+$('dailyAuthorizedUnitHelp').textContent = '';
+$('dailyAuthorizedUnitChoices').innerHTML = '';
 $('productionList').classList.add('hidden');
 $('productionEmpty').classList.add('hidden');
-const [catalogResult, savedResult, usageResult] = await Promise.all([
-sb.rpc('get_daily_report_unit_catalog', { p_report_id:report.id }),
-sb.rpc('get_daily_report_unit_locations_v2', { p_report_id:report.id }),
-sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id })
+const authorizedRowsRequest = canEditDraft && report.job_id
+? sb.rpc('get_remaining_job_units_for_field', { p_job_id:report.job_id })
+: Promise.resolve({ data:[], error:null });
+const [catalogResult, savedResult, usageResult, authorizedResult] = await Promise.all([
+sb.rpc('get_daily_report_unit_catalog_visible', { p_report_id:report.id }),
+sb.rpc('get_daily_report_unit_locations_visible_v2', { p_report_id:report.id }),
+sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id }),
+authorizedRowsRequest
 ]);
 if(catalogResult.error || savedResult.error || usageResult.error){
 $('dailyUnitEditor').classList.add('hidden');
@@ -15826,6 +17275,8 @@ return;
 }
 currentDailyUnitCatalog = catalogResult.data || [];
 currentDailySavedUnits = savedResult.data || [];
+currentDailyAuthorizedRows = authorizedResult.data || [];
+currentDailyAuthorizedLoadError = authorizedResult.error?.message || '';
 currentDailyUnitUsageMemory = new Map(
 (usageResult.data || []).map(usage => [
 String(usage.item_code || '').trim().toLowerCase(),
@@ -15838,6 +17289,7 @@ lastUsed:usage.last_used || null
 renderDailyPoleLocationOptions();
 addDailyUnitBatchRows(10);
 renderDailyUnitEditor();
+renderDailyAuthorizedUnitsForLocation();
 renderDailyUnitReviewActions(report);
 $('dailyUnitPoleLocation').focus();
 $('dailyUnitEditor').scrollIntoView({ behavior:'smooth' });
@@ -16042,15 +17494,163 @@ $('dailyUnitList').appendChild(poleCard);
 });
 renderDailyUnitTotals();
 }
+function dailyWorkPointKey(value){
+const location = String(value || '').trim();
+return normalizeJobPacketPoint(location) || location.toLowerCase();
+}
+function findDailySavedUnitAtLocation(priceBookItemId, location){
+const locationKey = dailyWorkPointKey(location);
+return currentDailySavedUnits.find(saved =>
+String(saved.price_book_item_id || '') === String(priceBookItemId || '') &&
+dailyWorkPointKey(saved.pole_location) === locationKey
+);
+}
 function renderDailyPoleLocationOptions(){
-const locations = [...new Set(
-currentDailySavedUnits
-.map(item => String(item.pole_location || '').trim())
+const locationsByKey = new Map();
+[
+...currentDailySavedUnits.map(item => item.pole_location),
+...currentDailyAuthorizedRows
+.filter(item => dailyAuthorizedQuantityAvailable(item) > 0)
+.map(item => item.work_point_code)
+]
+.map(value => String(value || '').trim())
 .filter(Boolean)
-)].sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
+.forEach(location => {
+const key = dailyWorkPointKey(location);
+if(!locationsByKey.has(key)) locationsByKey.set(key, location);
+});
+const locations = [...locationsByKey.values()]
+.sort((a, b) => a.localeCompare(b, undefined, { numeric:true }));
 $('dailyUnitPoleLocations').innerHTML = locations
 .map(location => '<option value="' + escapeHtml(location) + '"></option>')
 .join('');
+}
+function authorizedDailyWorkType(value){
+return String(value || '').toLowerCase() === 'remove'
+? 'retirement'
+: String(value || '').toLowerCase();
+}
+function dailyReportIsReturnedDraft(report){
+return String(report?.status || '').toLowerCase() === 'draft' &&
+(
+Boolean(report?.reviewed_at) ||
+Boolean(String(report?.review_notes || '').trim())
+);
+}
+function returnedDraftSavedAuthorizedQuantity(authorized){
+if(!dailyReportIsReturnedDraft(currentDailyUnitReport)) return 0;
+const locationKey = normalizeJobPacketPoint(authorized.work_point_code);
+const unitCode = String(authorized.unit_code || '').trim().toLowerCase();
+const quantityField = authorizedDailyWorkType(authorized.work_type) === 'retirement'
+? 'retirement_quantity'
+: authorizedDailyWorkType(authorized.work_type) + '_quantity';
+return currentDailySavedUnits.reduce((total, item) => {
+if(
+normalizeJobPacketPoint(item.pole_location) !== locationKey ||
+String(item.item_code || '').trim().toLowerCase() !== unitCode
+){
+return total;
+}
+return total + Number(item[quantityField] || 0);
+}, 0);
+}
+function dailyAuthorizedQuantityAvailable(authorized){
+return Math.max(
+Number(authorized.remaining_quantity || 0) -
+returnedDraftSavedAuthorizedQuantity(authorized),
+0
+);
+}
+function renderDailyAuthorizedUnitsForLocation(){
+const panel = $('dailyAuthorizedUnitPanel');
+const help = $('dailyAuthorizedUnitHelp');
+const choices = $('dailyAuthorizedUnitChoices');
+choices.innerHTML = '';
+if(!userCanEditDailyReportDraft(currentDailyUnitReport)){
+panel.classList.add('hidden');
+return;
+}
+panel.classList.remove('hidden');
+if(currentDailyAuthorizedLoadError){
+help.textContent =
+'Authorized jacket units could not be loaded: ' + currentDailyAuthorizedLoadError;
+return;
+}
+if(!currentDailyAuthorizedRows.length){
+help.textContent =
+'This job does not have an active authorized-unit jacket yet. ' +
+'You can still enter completed work; it will be marked Pending Packet or Redline for review.';
+return;
+}
+const location = $('dailyUnitPoleLocation').value.trim();
+if(!location){
+const remainingPoints = new Set(
+currentDailyAuthorizedRows
+.filter(item => dailyAuthorizedQuantityAvailable(item) > 0)
+.map(item => normalizeJobPacketPoint(item.work_point_code))
+).size;
+help.textContent = remainingPoints
+? 'Choose one of the jacket work points above to load its authorized units.'
+: (dailyReportIsReturnedDraft(currentDailyUnitReport)
+? 'All authorized units are already entered on this returned draft or reported elsewhere.'
+: 'All authorized units in this job jacket have already been reported.');
+return;
+}
+const locationKey = normalizeJobPacketPoint(location);
+const matching = currentDailyAuthorizedRows.filter(item =>
+normalizeJobPacketPoint(item.work_point_code) === locationKey &&
+dailyAuthorizedQuantityAvailable(item) > 0
+);
+if(!matching.length){
+help.textContent =
+'No authorized quantity remains at this work point. ' +
+'You can still enter field changes for Redline review.';
+return;
+}
+help.textContent =
+'Select a jacket unit to add it below. Its work type and remaining quantity are shown here.';
+matching.forEach(authorized => {
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'secondary small';
+button.textContent =
+String(authorized.unit_code || 'Unit') + ' — ' +
+dailyUnitWorkTypeLabel(authorizedDailyWorkType(authorized.work_type)) +
+' — ' + dailyQuantityText(dailyAuthorizedQuantityAvailable(authorized)) + ' left';
+button.onclick = () => addAuthorizedDailyUnit(authorized, button);
+choices.appendChild(button);
+});
+}
+async function addAuthorizedDailyUnit(authorized, button){
+const catalogItem = currentDailyUnitCatalog.find(item =>
+String(item.item_code || '').trim().toLowerCase() ===
+String(authorized.unit_code || '').trim().toLowerCase()
+);
+if(!catalogItem){
+return alert(
+'Unit ' + authorized.unit_code +
+' is authorized in the job jacket but is not in this Daily Report Price Book. ' +
+'Ask an Admin to verify the job Price Book.'
+);
+}
+let batchRow = currentDailyUnitBatchRows.find(row =>
+!row.selectedItem && !row.searchInput.value.trim() && !row.quantityInput.value.trim()
+);
+if(!batchRow){
+createDailyUnitBatchRow();
+batchRow = currentDailyUnitBatchRows[currentDailyUnitBatchRows.length - 1];
+}
+button.disabled = true;
+await selectDailyBatchUnit(batchRow, catalogItem);
+button.disabled = false;
+batchRow.actionInput.value = authorizedDailyWorkType(authorized.work_type);
+batchRow.selection.insertAdjacentHTML(
+'beforeend',
+'<div class="muted">From job jacket: ' +
+escapeHtml(dailyQuantityText(dailyAuthorizedQuantityAvailable(authorized))) +
+' remaining</div>'
+);
+batchRow.quantityInput.focus();
 }
 function shortDailyUnitLabel(item){
 const text = String(item.item_name || item.description || 'Unnamed Unit').trim();
@@ -16279,15 +17879,17 @@ alert('Enter a quantity greater than zero on completed line ' + (index + 1) + '.
 row.quantityInput.focus();
 return false;
 }
-const key = row.selectedItem.price_book_item_id + '|' + location.toLowerCase();
-if(!grouped.has(key)){
-const existing = currentDailySavedUnits.find(saved =>
-saved.price_book_item_id === row.selectedItem.price_book_item_id &&
-String(saved.pole_location || '').trim().toLowerCase() === location.toLowerCase()
+const existing = findDailySavedUnitAtLocation(
+row.selectedItem.price_book_item_id,
+location
 );
+const persistedLocation = String(existing?.pole_location || '').trim() || location;
+const key = row.selectedItem.price_book_item_id + '|' +
+dailyWorkPointKey(persistedLocation);
+if(!grouped.has(key)){
 grouped.set(key, {
 item:row.selectedItem,
-location,
+location:persistedLocation,
 install:Number(existing?.install_quantity || 0),
 transfer:Number(existing?.transfer_quantity || 0),
 retirement:Number(existing?.retirement_quantity || 0)
@@ -16364,22 +17966,17 @@ await loadProductionReports();
 }
 function dailyUnitValueLabel(item){
 const canSeeActual = userCanSeeActualContractPrices();
-if(canSeeActual && item.has_adjustment){
-return (
-'Actual I: <strong>' + formatCurrency(item.actual_install_price) +
-'</strong> R: <strong>' + formatCurrency(item.actual_retirement_price) +
-'</strong><br>Field I: <strong>' +
-formatCurrency(item.adjusted_install_price) +
-'</strong> R: <strong>' +
-formatCurrency(item.adjusted_retirement_price) + '</strong>'
-);
+const canSeeField = userCanSeeFieldMoney();
+const lines = [];
+if(canSeeActual){
+lines.push('Actual I: <strong>' + formatCurrency(item.actual_install_price) +
+'</strong> R: <strong>' + formatCurrency(item.actual_retirement_price) + '</strong>');
 }
-const label = item.has_adjustment ? 'Field' : 'Actual';
-return (
-label + ' I: <strong>' + formatCurrency(item.install_price) +
-'</strong> R: <strong>' + formatCurrency(item.retirement_price) +
-'</strong>'
-);
+if(canSeeField){
+lines.push('Field I: <strong>' + formatCurrency(item.adjusted_install_price) +
+'</strong> R: <strong>' + formatCurrency(item.adjusted_retirement_price) + '</strong>');
+}
+return lines.join('<br>') || '<span class="muted">Money hidden by company permissions.</span>';
 }
 function renderDailyUnitTotals(){
 const savedItems = currentDailySavedUnits;
@@ -16396,17 +17993,21 @@ const visibleTotal = savedItems.reduce(
 0
 );
 const hasAdjustment = savedItems.some(item => item.has_adjustment);
-if(userCanSeeActualContractPrices() && hasAdjustment){
+if(userCanSeeActualContractPrices() && userCanSeeFieldMoney() && hasAdjustment){
 $('dailyUnitValueSummary').innerHTML =
 '<strong>Actual Daily Unit Value: ' +
 escapeHtml(formatCurrency(actualTotal)) + '</strong>' +
 '<strong>Field Daily Unit Value: ' +
 escapeHtml(formatCurrency(adjustedTotal)) + '</strong>';
+}else if(userCanSeeActualContractPrices()){
+$('dailyUnitValueSummary').innerHTML =
+'<strong>Actual Daily Unit Value: ' + escapeHtml(formatCurrency(actualTotal)) + '</strong>';
+}else if(userCanSeeFieldMoney()){
+$('dailyUnitValueSummary').innerHTML =
+'<strong>Field Daily Unit Value: ' + escapeHtml(formatCurrency(adjustedTotal)) + '</strong>';
 }else{
 $('dailyUnitValueSummary').innerHTML =
-'<strong>' + (hasAdjustment ? 'Field' : 'Actual') +
-' Daily Unit Value: ' +
-escapeHtml(formatCurrency(visibleTotal)) + '</strong>';
+'<span class="muted">Unit values hidden by company permissions.</span>';
 }
 }
 async function saveDailyUnitRow(item, row, button){
@@ -16458,6 +18059,10 @@ await openDailyUnitEditor(currentDailyUnitReport);
 await loadProductionReports();
 }
 $('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(5);
+$('dailyUnitPoleLocation').addEventListener(
+'input',
+renderDailyAuthorizedUnitsForLocation
+);
 $('saveDailyUnitBatchBtn').onclick = saveDailyUnitBatch;
 async function offerForemanSubmitAfterUnits(report){
 if(!report || currentUserRole() !== 'foreman') return;
@@ -16519,6 +18124,8 @@ bottomDoneButton.textContent = 'Done Adding Units';
 $('dailyUnitEditor').classList.add('hidden');
 currentDailyUnitCatalog = [];
 currentDailySavedUnits = [];
+currentDailyAuthorizedRows = [];
+currentDailyAuthorizedLoadError = '';
 currentDailyUnitUsageMemory = new Map();
 currentDailyUnitReport = null;
 currentDailyUnitBatchRows = [];
@@ -16568,8 +18175,11 @@ $('closeDailyUnitEditorBottomBtn').onclick = () => finishDailyUnitEntry($('close
 // The report list owns the secure unit-entry helpers. Expose the current
 // implementation so a newly saved report can continue directly to units.
 window.openDailyUnitEditor = openDailyUnitEditor;
+// Returning is allowed from approved as well, so an error found after
+// approval is not a dead end. Approving stays limited to submitted.
+const reviewStatus = String(report.status || '').toLowerCase();
 if(
-String(report.status || '').toLowerCase() === 'submitted' &&
+['submitted','approved'].includes(reviewStatus) &&
 userCanReviewProduction()
 ){
 const approveBtn =
@@ -16578,7 +18188,7 @@ approveBtn.className = 'success small';
 approveBtn.textContent = 'Approve';
 approveBtn.onclick = async () => {
 const { data: authorizationRows, error: authorizationError } = await sb.rpc(
-'get_daily_report_unit_locations_v2',
+'get_daily_report_unit_locations_visible_v2',
 { p_report_id: report.id }
 );
 if(authorizationError){
@@ -16646,10 +18256,13 @@ return;
 alert('Daily report approved.');
 await loadProductionReports();
 };
+const returnLabel = reviewStatus === 'approved'
+? 'Withdraw Approval & Return'
+: 'Return Report';
 const returnBtn =
 document.createElement('button');
 returnBtn.className = 'secondary small';
-returnBtn.textContent = 'Return Report';
+returnBtn.textContent = returnLabel;
 returnBtn.onclick = async () => {
 const notes =
 prompt(
@@ -16664,7 +18277,11 @@ return;
 }
 const confirmed =
 confirm(
-'Return this report to the foreman?'
+reviewStatus === 'approved'
+? 'Withdraw approval and return this report to the foreman?\n\n'
+  + 'The approval is removed and the report returns to draft for correction. '
+  + 'If it has already been billed, the billing batch is not adjusted automatically.'
+: 'Return this report to the foreman?'
 );
 if(!confirmed){
 return;
@@ -16680,7 +18297,7 @@ p_review_notes: notes.trim()
 );
 if(error){
 returnBtn.disabled = false;
-returnBtn.textContent = 'Return Report';
+returnBtn.textContent = returnLabel;
 alert(
 'Unable to return report: ' +
 error.message
@@ -16690,7 +18307,7 @@ return;
 alert('Daily report returned to draft.');
 await loadProductionReports();
 };
-card.appendChild(approveBtn);
+if(reviewStatus === 'submitted') card.appendChild(approveBtn);
 card.appendChild(returnBtn);
 }
 if(userCanManageProductionRecords() || currentUserRole() === 'foreman'){
@@ -16936,6 +18553,8 @@ created_by,
 foreman_id,
 archived,
 price_book_id,
+review_notes,
+reviewed_at,
 jobs (
 job_number,
 job_name
@@ -16956,6 +18575,19 @@ await loadProductionReports();
 await window.openDailyUnitEditor(savedReport);
 };
 /* FLEXIBLE JSA */
+// Lives at top level so the Utility Job Package screen can reach it. The
+// daily-report helpers around dailyWorkPointKey sit inside an enclosing
+// function, and this one was among them -- renderJobPackageWorkPoints is a
+// global and could not see it, so opening an imported package raised
+// "dailyQuantityText is not defined" and the card came up empty.
+function dailyQuantityText(value){
+const quantity = Number(value || 0);
+if(!Number.isFinite(quantity)) return '0';
+return Number.isInteger(quantity)
+? String(quantity)
+: quantity.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
 function applyFlexibleJsaUi(){
 const method = String(currentCompany?.jsa_method || 'both').toLowerCase();
 const canManage = userIsCompanyAdmin();
@@ -16975,6 +18607,34 @@ if(error) return alert('Unable to save JSA option: ' + error.message);
 currentCompany.jsa_method = data || method;
 applyFlexibleJsaUi();
 alert('Company JSA option saved.');
+};
+$('saveNotificationReminderTimes').onclick = async () => {
+if(!userIsCompanyAdmin()) return;
+const button = $('saveNotificationReminderTimes');
+const dailyReportTime = $('dailyReportReminderTime').value || null;
+const jsaTime = $('jsaReminderTime').value || null;
+button.disabled = true;
+button.textContent = 'Saving...';
+const { data,error } = await sb.rpc('set_company_notification_reminder_times', {
+p_daily_report_reminder_time:dailyReportTime,
+p_jsa_reminder_time:jsaTime
+});
+button.disabled = false;
+button.textContent = 'Save Reminder Times';
+if(error){
+alert('Unable to save reminder times: ' + error.message);
+return;
+}
+const saved = Array.isArray(data) ? data[0] : data;
+currentCompany.daily_report_reminder_time = saved?.daily_report_reminder_time || null;
+currentCompany.jsa_reminder_time = saved?.jsa_reminder_time || null;
+$('dailyReportReminderTime').value = currentCompany.daily_report_reminder_time
+? String(currentCompany.daily_report_reminder_time).slice(0,5)
+: '';
+$('jsaReminderTime').value = currentCompany.jsa_reminder_time
+? String(currentCompany.jsa_reminder_time).slice(0,5)
+: '';
+alert('Notification reminder times saved.');
 };
 async function populateCompanyJsaUploadJobs(){
 const select = $('companyJsaUploadJob');
@@ -17283,7 +18943,7 @@ alert('LineCrew Pro could not start: ' + (error?.message || 'Unknown error'));
 }
 startApp();
 </script>
-<script src="expanded-jsa.js?v=20260829e"></script>
+<script src="expanded-jsa.js?v=20260901a"></script>
 <script>
 (function () {
 var installPrompt = null;

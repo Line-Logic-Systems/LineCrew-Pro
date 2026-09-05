@@ -17,9 +17,9 @@ const customExport = read('custom-time-export.js');
 const payroll = read('timekeeping-payroll.js');
 const timekeeping = read('timekeeping.js');
 const foremanTools = read('foreman-field-tools.js');
-const migration = read('supabase/migrations/20260828172839_leadership_self_time.sql');
-const managedMigration = read('supabase/migrations/20260828203148_leadership_add_other_people.sql');
-const adminRosterMigration = read('supabase/migrations/20260829084727_admin_time_roster_assignments.sql');
+const migration = read('supabase/migrations/archive/20260828172839_leadership_self_time.sql');
+const managedMigration = read('supabase/migrations/archive/20260828203148_leadership_add_other_people.sql');
+const adminRosterMigration = read('supabase/migrations/archive/20260829084727_admin_time_roster_assignments.sql');
 
 if (module.includes('if (elapsed <= 0) elapsed += 1440;')) {
   throw new Error('Equal start and stop times must not be converted into a 24-hour shift.');
@@ -86,7 +86,8 @@ requireText(adminRosterMigration, "lower(coalesce(administrator.role, '')) = 'ad
 requireText(adminRosterMigration, 'timekeeping_employees_assigned_admin_idx', 'Admin roster lookup needs a covering index.');
 requireText(adminRosterMigration, 'revoke all on function public.validate_timekeeping_employee_admin_assignment()', 'The assignment trigger function must not be directly executable.');
 requireText(timekeeping, 'data-tk-admin', 'Personnel management must include an Assigned Admin control.');
-requireText(timekeeping, 'assigned_admin_id:assignedAdminId||null', 'Personnel Admin assignments must persist.');
+requireText(timekeeping, "changes.assigned_admin_id=draft.assigned_admin_id||null", 'Personnel Admin assignments must persist through the batch-save action.');
+requireText(timekeeping, "updateRosterDraft(select.dataset.tkAdmin,'assigned_admin_id',select.value)", 'Personnel Admin assignments must remain staged until the manager saves the batch.');
 requireText(timekeeping, 'id="tkChargeFilter"', 'Time Report needs a Job/Overhead charge filter.');
 requireText(timekeeping, 'id="tkLaborCodeFilter"', 'Time Report needs an overhead labor-code filter.');
 

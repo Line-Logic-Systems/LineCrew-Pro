@@ -173,3 +173,206 @@
   script.dataset.lcDarkDraftFix='1';
   document.head.appendChild(script);
 })();
+
+/* Mobile pull-to-refresh for safe, read-oriented app screens. */
+(() => {
+  'use strict';
+
+  const byId=id=>document.getElementById(id);
+  const mobilePointer=()=>window.matchMedia('(pointer: coarse)').matches && window.innerWidth<=900;
+  const visible=id=>{const el=byId(id);return !!el&&!el.classList.contains('hidden');};
+  const call=async(name,...args)=>{
+    const fn=window[name];
+    if(typeof fn==='function') return fn(...args);
+  };
+  const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+  const editors={
+    productionPage:['dailyReportForm','dailyUnitEditor'],
+    safetyPage:['companyJsaUploadForm','safetyJsaForm'],
+    jobsPage:['createJobCard','jobPackageFormCard','jobPackageImportForm'],
+    completedJobsPage:['completedJobDetail'],
+    priceBooksPage:['customerForm','contractForm','priceBookForm','editPriceBookDetailsForm','duplicatePriceBookForm','priceBookItemForm']
+  };
+  let startY=0;
+  let startX=0;
+  let distance=0;
+  let gesture=null;
+  let refreshing=false;
+  let hideTimer=null;
+  let teamRoleDirty=false;
+
+  function role(){
+    try{return String(currentProfile?.role||'').toLowerCase();}
+    catch(_){return String(window.currentProfile?.role||'').toLowerCase();}
+  }
+
+  function activePage(){
+    return ['dashboardPage','productionPage','safetyPage','jobsPage','completedJobsPage','remainingUnitsPage','timekeepingPage','priceBooksPage','teamPage']
+      .find(visible)||null;
+  }
+
+  function pageIsBlocked(page){
+    if(!navigator.onLine) return 'Reconnect to refresh.';
+    if((editors[page]||[]).some(visible)){
+      return 'Finish or cancel your current work before refreshing.';
+    }
+    if(page==='timekeepingPage'&&byId('tkSaveAssignmentsBtn')?.disabled===false){
+      return 'Save the pending crew assignments before refreshing.';
+    }
+    if(page==='teamPage'&&teamRoleDirty){
+      return 'Save the pending role change before refreshing.';
+    }
+    return '';
+  }
+
+  function addUi(){
+    if(byId('lcPullRefreshIndicator')) return;
+    const style=document.createElement('style');
+    style.id='lcPullRefreshStyles';
+    style.textContent=`
+      #lcPullRefreshIndicator{position:fixed;z-index:10020;left:50%;top:calc(env(safe-area-inset-top,0px) + 8px);transform:translate(-50%,-72px);display:flex;align-items:center;gap:8px;max-width:calc(100vw - 28px);padding:9px 13px;border-radius:999px;background:#0b2d4d;color:#fff;box-shadow:0 6px 20px rgba(4,24,42,.28);font-size:12px;font-weight:800;opacity:0;pointer-events:none;transition:transform .16s ease,opacity .16s ease}
+      #lcPullRefreshIndicator.visible{opacity:1}
+      #lcPullRefreshIndicator.blocked{background:#8a4b08}
+      #lcPullRefreshIndicator.success{background:#18764a}
+      #lcPullRefreshIndicator .lc-pull-spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%}
+      #lcPullRefreshIndicator.refreshing .lc-pull-spinner{animation:lcPullSpin .7s linear infinite}
+      @keyframes lcPullSpin{to{transform:rotate(360deg)}}
+      @media(pointer:fine),(min-width:901px){#lcPullRefreshIndicator{display:none!important}}
+    `;
+    const indicator=document.createElement('div');
+    indicator.id='lcPullRefreshIndicator';
+    indicator.setAttribute('role','status');
+    indicator.setAttribute('aria-live','polite');
+    indicator.innerHTML='<span class="lc-pull-spinner" aria-hidden="true"></span><span class="lc-pull-label">Pull to refresh</span>';
+    document.head.appendChild(style);
+    document.body.appendChild(indicator);
+  }
+
+  function showIndicator(message,pull=72,state=''){
+    addUi();
+    const indicator=byId('lcPullRefreshIndicator');
+    clearTimeout(hideTimer);
+    indicator.className=`visible ${state}`.trim();
+    indicator.querySelector('.lc-pull-label').textContent=message;
+    const offset=Math.max(-62,Math.min(12,-62+pull*.72));
+    indicator.style.transform=`translate(-50%,${offset}px)`;
+  }
+
+  function hideIndicator(delay=0){
+    clearTimeout(hideTimer);
+    hideTimer=setTimeout(()=>{
+      const indicator=byId('lcPullRefreshIndicator');
+      if(!indicator) return;
+      indicator.className='';
+      indicator.style.transform='translate(-50%,-72px)';
+    },delay);
+  }
+
+  async function refreshPage(page){
+    if(page==='dashboardPage'){
+      const tasks=[call('loadCompanyOnboarding'),call('loadPushNotificationStatus'),call('loadGfNotificationPreference')];
+      if(role()==='gf'&&typeof window.linecrewRefreshGfProductionBadge==='function'){
+        tasks.push(window.linecrewRefreshGfProductionBadge());
+      }else{
+        tasks.push(call('loadDashboardReviewAlert'));
+      }
+      await Promise.allSettled(tasks);
+      return;
+    }
+    if(page==='productionPage') return call('loadProductionReports');
+    if(page==='safetyPage'){
+      await Promise.allSettled([call('loadSafetyJsas'),call('loadUploadedCompanyJsas')]);
+      return;
+    }
+    if(page==='jobsPage') return call('loadJobs');
+    if(page==='teamPage') return call('loadTeamMembers');
+    if(page==='completedJobsPage') return call('loadCompletedJobs');
+    if(page==='priceBooksPage'){
+      await Promise.allSettled([call('loadCustomers'),call('loadContracts'),call('loadPriceBooks')]);
+      return;
+    }
+    if(page==='remainingUnitsPage'){
+      byId('remainingUnitsRefresh')?.click();
+      await wait(700);
+      return;
+    }
+    if(page==='timekeepingPage'){
+      if(window.LineCrewTimekeepingReport?.run) await window.LineCrewTimekeepingReport.run();
+      else{byId('tkRunReportBtn')?.click();await wait(700);}
+    }
+  }
+
+  async function completeRefresh(page){
+    if(refreshing) return;
+    refreshing=true;
+    showIndicator('Refreshing…',100,'refreshing');
+    try{
+      await refreshPage(page);
+      window.dispatchEvent(new CustomEvent('linecrew:mobile-data-refreshed',{detail:{page}}));
+      showIndicator('Updated',100,'success');
+      hideIndicator(850);
+    }catch(error){
+      console.warn('Mobile pull-to-refresh failed:',error?.message||error);
+      showIndicator('Could not refresh. Try again.',100,'blocked');
+      hideIndicator(1500);
+    }finally{
+      refreshing=false;
+    }
+  }
+
+  function ignoreTarget(target){
+    return !!target?.closest?.('input,textarea,select,button,a,canvas,[contenteditable="true"],[role="button"]');
+  }
+
+  function onStart(event){
+    if(refreshing||!mobilePointer()||event.touches.length!==1||window.scrollY>1||ignoreTarget(event.target)) return;
+    const page=activePage();
+    if(!page) return;
+    startY=event.touches[0].clientY;
+    startX=event.touches[0].clientX;
+    distance=0;
+    gesture={page,blocked:pageIsBlocked(page)};
+  }
+
+  function onMove(event){
+    if(!gesture||event.touches.length!==1) return;
+    const dy=event.touches[0].clientY-startY;
+    const dx=Math.abs(event.touches[0].clientX-startX);
+    if(dy<=0||dx>Math.max(28,dy*.75)){gesture=null;hideIndicator();return;}
+    if(window.scrollY>1){gesture=null;hideIndicator();return;}
+    distance=Math.min(112,dy*.58);
+    if(dy>8) event.preventDefault();
+    if(gesture.blocked){
+      showIndicator(gesture.blocked,distance,'blocked');
+    }else{
+      showIndicator(distance>=72?'Release to refresh':'Pull to refresh',distance);
+    }
+  }
+
+  function onEnd(){
+    if(!gesture) return;
+    const current=gesture;
+    gesture=null;
+    if(current.blocked){hideIndicator(900);return;}
+    if(distance>=72) void completeRefresh(current.page);
+    else hideIndicator();
+  }
+
+  function init(){
+    addUi();
+    document.addEventListener('change',event=>{
+      if(event.target?.matches?.('#teamPage .team-role-select')) teamRoleDirty=true;
+    });
+    const teamList=byId('teamList');
+    if(teamList){
+      new MutationObserver(()=>{teamRoleDirty=false;}).observe(teamList,{childList:true});
+    }
+    document.addEventListener('touchstart',onStart,{passive:true});
+    document.addEventListener('touchmove',onMove,{passive:false});
+    document.addEventListener('touchend',onEnd,{passive:true});
+    document.addEventListener('touchcancel',()=>{gesture=null;hideIndicator();},{passive:true});
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
+  else init();
+})();

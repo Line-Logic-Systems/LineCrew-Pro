@@ -1,4 +1,4 @@
-export const planOrder = ["starter", "business", "pro", "enterprise"] as const;
+export const planOrder = ["linecrew", "starter", "business", "pro", "enterprise"] as const;
 export type PlanCode = typeof planOrder[number];
 
 export function knownPlanCode(value: unknown): PlanCode | null {

@@ -1,5 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.112.4";
 import { getPublishableKey, getSecretKey } from "../_shared/api-keys.ts";
+import {
+  INCLUDED_CREWS,
+  LINECREW_PLAN_CODE,
+  normalizeCrewQuantity,
+  readLinecrewPriceId,
+} from "../_shared/billing-pricing.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,37 +37,15 @@ async function stripeRequest(
   return data;
 }
 
-function readPlanPriceMap(raw: string | undefined) {
-  if (!raw) throw new Error("Billing plan mapping is not configured.");
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("Billing plan mapping is invalid JSON.");
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Billing plan mapping must be an object.");
-  }
-  const map = new Map<string, string>();
-  for (const [plan, price] of Object.entries(parsed as Record<string, unknown>)) {
-    const cleanPlan = String(plan || "").trim().toLowerCase();
-    const cleanPrice = String(price || "").trim();
-    if (cleanPlan && /^price_[A-Za-z0-9]+$/.test(cleanPrice)) map.set(cleanPlan, cleanPrice);
-  }
-  if (!map.size) throw new Error("Billing plan mapping contains no enabled plans.");
-  return map;
-}
-
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (request.method !== "POST") return json({ error: "POST required." }, 405);
 
   try {
     const payload = await request.json().catch(() => ({})) as Record<string, unknown>;
-    const requestedPlan = String(payload.requested_plan || "").trim().toLowerCase();
-    const allowedRequestedPlans = new Set(["starter", "business", "pro", "enterprise"]);
-    if (requestedPlan && !allowedRequestedPlans.has(requestedPlan)) {
-      return json({ error: "Choose a valid LineCrew Pro plan." }, 400);
+    const requestedPlan = String(payload.requested_plan || LINECREW_PLAN_CODE).trim().toLowerCase();
+    if (requestedPlan !== LINECREW_PLAN_CODE) {
+      return json({ error: "LineCrew Pro now has one crew-based subscription." }, 400);
     }
 
     const auth = request.headers.get("Authorization");
@@ -72,7 +56,10 @@ Deno.serve(async (request) => {
     const serviceKey = getSecretKey();
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     const appUrl = (Deno.env.get("APP_URL") || "").replace(/\/$/, "");
-    const planPriceMap = readPlanPriceMap(Deno.env.get("BILLING_PLAN_PRICE_MAP"));
+    const priceId = readLinecrewPriceId(
+      Deno.env.get("BILLING_PLAN_PRICE_MAP"),
+      Deno.env.get("STRIPE_ENVIRONMENT"),
+    );
     if (!supabaseUrl || !anonKey || !serviceKey || !stripeKey || !appUrl) {
       throw new Error("Billing service is not fully configured.");
     }
@@ -123,11 +110,15 @@ Deno.serve(async (request) => {
       return json({ error: "This company already has a Stripe subscription. Use Manage Billing instead." }, 409);
     }
 
-    const planCode = requestedPlan || String(existing?.plan_code || "").trim().toLowerCase();
-    const priceId = planPriceMap.get(planCode);
-    if (!planCode || !priceId) {
-      throw new Error("This company does not yet have a Stripe-enabled plan assigned by LineCrew Pro support.");
-    }
+    const { count: activeCrewCount, error: crewCountError } = await serviceClient
+      .from("crews").select("id", { count: "exact", head: true })
+      .eq("company_id", company.id).eq("active", true);
+    if (crewCountError) throw crewCountError;
+    const requestedCrewQuantity = payload.crew_quantity == null
+      ? Math.max(INCLUDED_CREWS, Number(activeCrewCount || 0))
+      : normalizeCrewQuantity(payload.crew_quantity);
+    const crewQuantity = Math.max(requestedCrewQuantity, Number(activeCrewCount || 0));
+    const planCode = LINECREW_PLAN_CODE;
 
     if (
       existing?.stripe_subscription_id &&
@@ -191,14 +182,16 @@ Deno.serve(async (request) => {
     params.set("mode", "subscription");
     params.set("customer", customerId);
     params.set("line_items[0][price]", priceId);
-    params.set("line_items[0][quantity]", "1");
+    params.set("line_items[0][quantity]", String(crewQuantity));
     params.set("success_url", `${appUrl}/billing.html?billing=success&session_id={CHECKOUT_SESSION_ID}`);
     params.set("cancel_url", `${appUrl}/billing.html?billing=canceled`);
     params.set("client_reference_id", company.id);
     params.set("metadata[company_id]", company.id);
     params.set("metadata[plan_code]", planCode);
+    params.set("metadata[licensed_crews]", String(crewQuantity));
     params.set("subscription_data[metadata][company_id]", company.id);
     params.set("subscription_data[metadata][plan_code]", planCode);
+    params.set("subscription_data[metadata][licensed_crews]", String(crewQuantity));
     params.set("allow_promotion_codes", "true");
 
     // Reuse the same Stripe response for retries or double-clicks so one
@@ -207,10 +200,10 @@ Deno.serve(async (request) => {
       "/checkout/sessions",
       params,
       stripeKey,
-      `linecrew-checkout-${company.id}-${planCode}`,
+      `linecrew-checkout-v2-${company.id}-${planCode}-${crewQuantity}`,
     );
     if (!session?.url) throw new Error("Stripe did not return a Checkout URL.");
-    return json({ url: session.url, plan_code: planCode });
+    return json({ url: session.url, plan_code: planCode, licensed_crews: crewQuantity });
   } catch (error) {
     console.error(error);
     return json({ error: error instanceof Error ? error.message : "Unable to start billing checkout." }, 400);

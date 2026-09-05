@@ -1,5 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getPublishableKey } from "../_shared/api-keys.ts";
+import {
+  assessPacketExtraction,
+  normalizePacketExtraction,
+  parsePacketOutput,
+  runPacketModelFallback,
+} from "./packet-logic.mjs";
 
 const allowedOrigins = new Set([
   "https://app.linecrewpro.com",
@@ -17,15 +23,44 @@ function corsHeaders(request: Request) {
 }
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
-const PROFILE_VERSION = "oncor-tivoli-cu-estimate-v1";
+const PROFILE_VERSION = "adaptive-utility-packet-v2";
+const REQUEST_TIME_BUDGET_MS = 138000;
+// Backoff before each retry of a transient upstream failure. Two entries means
+// at most three attempts, which fits the time budget alongside a 90s call.
+const UPSTREAM_RETRY_DELAYS_MS = [1000, 3000];
+// A retry is only worth starting with enough budget left to finish the call.
+const UPSTREAM_RETRY_MIN_REMAINING_MS = 30000;
+
+class PacketParseError extends Error {
+  code: string;
+  status: number;
+  retryOriginal: boolean;
+  retrySmaller: boolean;
+
+  constructor(
+    message: string,
+    code = "packet_parse_failed",
+    status = 400,
+    retryOriginal = false,
+    retrySmaller = false,
+  ) {
+    super(message);
+    this.name = "PacketParseError";
+    this.code = code;
+    this.status = status;
+    this.retryOriginal = retryOriginal;
+    this.retrySmaller = retrySmaller;
+  }
+}
 
 const packetSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["status", "provider_key", "format_key", "profile_version", "work_order", "confidence", "warnings", "rows"],
+  required: ["status", "batch_disposition", "provider_key", "format_key", "profile_version", "work_order", "confidence", "warnings", "rows"],
   properties: {
     status: { type: "string", enum: ["supported", "unsupported", "uncertain"] },
-    provider_key: { type: "string", enum: ["oncor", "unknown"] },
+    batch_disposition: { type: "string", enum: ["supported_rows", "no_candidate_table", "needs_review", "unsupported_packet"] },
+    provider_key: { type: "string" },
     format_key: { type: "string" },
     profile_version: { type: "string" },
     work_order: { type: "string" },
@@ -41,7 +76,7 @@ const packetSchema = {
           source_page: { type: "integer" },
           work_point_code: { type: "string" },
           work_point_description: { type: "string" },
-          work_type: { type: "string", enum: ["install", "remove"] },
+          work_type: { type: "string", enum: ["install", "transfer", "remove"] },
           material_cu: { type: "string" },
           contractor_unit_code: { type: "string" },
           estimated_quantity: { type: "number" },
@@ -56,23 +91,37 @@ const packetSchema = {
 };
 
 const instructions = `
-You extract utility construction job packets for LineCrew Pro. Accuracy is more important than returning rows.
+You extract utility construction job packets for LineCrew Pro. Every row you return is checked by a human reviewer before anything is imported, and unchecked rows import nothing. So accuracy means never inventing a value; it does not mean withholding a row you can see. A visible row described only in warnings is lost work — return it with include_in_import=false and a review_note instead. The single exception is a black EX existing-equipment item, defined under INK COLOUR below, which is omitted and counted in warnings.
 
-First identify the utility and packet format. This release supports only the Oncor Tivoli/IBM CU Estimate table format. Strong Oncor evidence includes Tivoli/IBM branding and tables headed Station, Task ID, As Built Qty, Est Qty, CU, Contractor CU, Description with Install or Remove sections. Do not interpret a differently formatted utility/co-op packet using Oncor rules. For another utility, return status=unsupported, provider_key=unknown, no rows, and a concise warning. If identification is ambiguous, return status=uncertain and no rows.
+Identify the utility/co-op and document layout from branding, headings, labels, and table structure. Extract construction authorization rows from any utility packet; do not require a known provider or a previously seen layout. Set provider_key to a short lowercase provider slug when identifiable, otherwise "unknown". Set format_key to a concise lowercase layout description. profile_version must be exactly ${PROFILE_VERSION} whenever rows are returned.
 
-ONCOR PROFILE (${PROFILE_VERSION}):
-- Read only CU Estimate construction table pages. Ignore covers, maps, drawings, planned materials/labor, related work orders, notes, and summaries.
-- Station is the work_point_code. Preserve leading zeros exactly (0014 stays 0014).
-- Est Qty is the designed/authorized quantity and applies to both CU and Contractor CU on that row.
-- CU is storeroom/material ordering reference only. Put it in material_cu. Never use it as the production/pay unit.
-- Contractor CU is the LineCrew Pro production/pay unit. Put it in contractor_unit_code.
-- Rows with a blank Contractor CU are material-only: retain them for audit, set contractor_unit_code to an empty string, include_in_import=false, and review_note="Material-only row; no Contractor CU".
-- Install and Remove are separate work types. A section label continues until the next Install/Remove label or Station.
-- Extract every qualifying source row separately. Do not sum duplicates; deterministic database finalization will sum matching Station + work type + Contractor CU.
-- Never invent a code, quantity, Station, description, or missing digit. Lower confidence and add a review note when a cell is hard to read.
+Set batch_disposition precisely:
+- supported_rows: reliable construction authorization rows were extracted from this page batch, regardless of provider or layout.
+- no_candidate_table: this batch contains a cover, map, drawing, note, summary, material list, completed/as-built report, or other pages with no construction authorization table. Return status=uncertain and no rows. This is not an error and does not need review.
+- needs_review: a construction table is present, but scan quality or ambiguous column meaning leaves some rows unsettled. Return status=uncertain together with every row you can read, each row unsettled FOR ITS OWN REASONS carrying include_in_import=false, lowered confidence, and a review_note naming the doubt. Explain the batch-level issue once in warnings. Return no rows only when nothing on the pages is legible enough to transcribe.
+- unsupported_packet: use only when the document is not a utility construction job packet at all. Never use this merely because the utility or layout is unfamiliar.
+
+ADAPTIVE EXTRACTION PROFILE (${PROFILE_VERSION}):
+- Read construction authorization/design tables. Ignore covers, maps, drawings, planned material/labor summaries, invoices, as-built/completed quantities, notes, and unrelated work orders.
+- Map the utility's location identifier (for example Work Point, Station, Pole, Structure, Location, Task, or Assembly location) to work_point_code. A valid identifier may be numeric, alphabetic, alphanumeric, or contain punctuation/spaces (examples: 1, R1, R3, A-002, WP 4B). Preserve the exact displayed identifier and leading zeros. Never interpret a letter inside the identifier as a work action; for example, R1 remains the location R1 and does not mean Retire 1. If a table has authorized units but no location column, use the most specific visible section/location identifier. Never invent one.
+- Map only the designed, estimated, planned, or authorized quantity to estimated_quantity. Never substitute an as-built, completed, installed-to-date, cost, labor-hour, or material quantity.
+- Map the contractor production/pay/billing unit to contractor_unit_code. Labels may include Contractor Unit, Contractor CU, Pay Unit, Billing Unit, Unit Code, Assembly, or a provider-specific equivalent.
+- A material, stock, catalog, or storeroom code belongs in material_cu, not contractor_unit_code. If a row is clearly material-only, retain it for audit with contractor_unit_code empty, include_in_import=false, and an explanatory review_note.
+- If the packet has one plausible unit-code column and no separate material-code column, preserve it as contractor_unit_code but lower confidence and add a review note so the reviewer confirms it against the contract Price Book.
+- include_in_import IS NOT A HEDGE. Set it false only for a doubt about THAT ONE ROW: its cell is illegible, its quantity or action conflicts or cannot be read, or the code it carries looks like a material/stock/storeroom code rather than a pay unit. Everything else you extracted stays include_in_import=true.
+- A DOUBT THAT APPLIES TO EVERY ROW ON THE PAGE IS NOT A ROW-LEVEL DOUBT. A layout with a single code column, codes written in comments or callouts, or no column explicitly labelled Contractor Unit describes the packet, not any one row, and you cannot resolve it by looking harder. Say it once in warnings, lower confidence, and leave include_in_import=true. Unchecking every row for a layout-wide caveat makes the reviewer re-check the whole packet by hand and is a defect, not caution.
+- Doubt about whether a code matches the contract Price Book is never a reason to withhold a row OR to leave it unchecked. The reviewer holds the Price Book and you do not, and the app refuses the entire import if any checked row carries a code the Price Book does not contain, so an unpayable code cannot slip through. Return the row with the code exactly as displayed, include_in_import=true, lowered confidence, and a review_note. State price-book uncertainty once per batch in warnings rather than repeating it for each page or column.
+- Normalize work_type to install, transfer, or remove from headings, action columns, quantity columns, or section labels. Keep actions separate.
+- A unit whose own name says it is a transfer is a transfer, whatever column or section it appears under. Fibre, telephone and other foreign-attachment deadend and in-line units (for example a code reading Pcca-et, or a unit named "Transfer Fiber Deadend") describe moving an existing third-party attachment to a new pole. That work is a transfer or a removal and is never an install: the contractor does not install another company's fibre or phone cable. Classifying one as install prices it against a unit that has no install rate, which silently bills nothing.
+- In columnar staking sheets, each column heading may define a separate work point. For example, "1 New OH 0 feet", "R1 Retire OH 129 feet", and "R3 Retire OH 372 feet" have work points 1, R1, and R3; New means install and Retire means remove. Within those columns, prefixes such as N (quantity) and R (quantity) mean install/new and remove/retire.
+- INK COLOUR IS A PRIMARY SIGNAL. These packets mark authorized work in coloured ink and existing facilities in black. Blue or red text, callouts and line work indicate new, retired or transferred work that is payable. Black indicates existing equipment that is shown for reference only.
+- OMIT AN ITEM ENTIRELY, returning no row for it at all, only when BOTH signals agree that it is existing: it is marked EX (or an equivalent existing/reference marker) AND it is drawn in black rather than blue or red. Count these and state the total once per batch in warnings, for example "Omitted 12 black EX existing-equipment items on pages 41-43." Never omit one silently.
+- BOTH signals are required because either alone can be misread. If an item is marked EX but appears in blue or red, if the colour cannot be judged because the page is greyscale, faint, or poorly scanned, or if you are unsure of either signal, do NOT omit it: return the row with include_in_import=false and a review_note saying which signal was unclear. Withholding a payable row is a worse error than showing an unpayable one, and the reviewer can uncheck what you leave in but cannot recover what you drop.
+- If the unit meaning, location, action, or authorized quantity is ambiguous, do not guess and do not discard. Return the row exactly as displayed with include_in_import=false, lowered confidence, and a review_note stating what is unresolved, so the reviewer can settle it against the contract. Withholding the whole batch is a last resort for pages where nothing is legible.
+- Extract every qualifying source row separately. Do not sum duplicates; deterministic database finalization performs consolidation after human review.
+- Never invent a code, quantity, location, description, or missing digit. Lower confidence and add a concise review note when a cell is hard to read.
 - source_page is the one-based PDF page number, not a printed internal page label.
-- profile_version must be exactly ${PROFILE_VERSION} for supported Oncor packets.
-- Work order should be the packet WO/WR identifier without guessing.
+- Work order should be the packet WO/WR/job identifier without guessing.
 `;
 
 function outputText(result: Record<string, unknown>): string {
@@ -85,7 +134,85 @@ function outputText(result: Record<string, unknown>): string {
   ).join("\n");
 }
 
+function parseUpstreamError(upstreamBody: string) {
+  try {
+    const upstreamError = JSON.parse(upstreamBody)?.error;
+    return {
+      code: String(upstreamError?.code || "unknown").slice(0, 100),
+      type: String(upstreamError?.type || "unknown").slice(0, 100),
+    };
+  } catch (_error) {
+    // The upstream status and request id still make a non-JSON response traceable.
+    return { code: "unknown", type: "unknown" };
+  }
+}
+
+// A 5xx (including Cloudflare's 502/520/524 in front of the API) and a plain
+// rate limit both clear on their own. Quota exhaustion does not, and neither
+// does a bad key, so those fail immediately rather than burning the budget.
+function isTransientUpstream(status: number, upstreamCode: string) {
+  if (status >= 500) return true;
+  return status === 429 && upstreamCode !== "insufficient_quota";
+}
+
+function upstreamRetryDelayMs(response: Response) {
+  const seconds = Number(response.headers.get("Retry-After"));
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, 10000) : 0;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function upstreamPacketError(response: Response, upstreamBody: string, requestId: string) {
+  const { code: upstreamCode, type: upstreamType } = parseUpstreamError(upstreamBody);
+  console.error(JSON.stringify({
+    event: "packet_analyzer_rejected",
+    request_id: requestId,
+    upstream_status: response.status,
+    upstream_code: upstreamCode,
+    upstream_type: upstreamType,
+  }));
+  if (response.status === 429 && upstreamCode === "insufficient_quota") {
+    return new PacketParseError(
+      "The job-packet AI service is temporarily unavailable. Nothing was saved. Contact LineCrew Pro Support.",
+      "packet_analyzer_quota",
+      503,
+    );
+  }
+  if (response.status === 429) {
+    return new PacketParseError(
+      "The job-packet AI service is busy right now. Nothing was saved. Wait a few minutes and try again.",
+      "packet_analyzer_rate_limited",
+      503,
+    );
+  }
+  if ([401, 403].includes(response.status)) {
+    return new PacketParseError(
+      "The job-packet AI service is temporarily unavailable. Nothing was saved. Contact LineCrew Pro Support.",
+      "packet_analyzer_configuration",
+      503,
+    );
+  }
+  if (response.status >= 500) {
+    return new PacketParseError(
+      "The job-packet AI service is temporarily unavailable. Nothing was saved. Try again shortly.",
+      "packet_analyzer_unavailable",
+      503,
+    );
+  }
+  return new PacketParseError(
+    "The packet analyzer could not read this PDF page group.",
+    "packet_analyzer_rejected",
+    422,
+    true,
+  );
+}
+
 Deno.serve(async (request) => {
+  const requestId = crypto.randomUUID();
+  const requestStartedAt = Date.now();
+  let requestedPageCount = 0;
   const origin = request.headers.get("Origin") || "";
   if (origin && !allowedOrigins.has(origin)) {
     return new Response(JSON.stringify({ error: "Origin not allowed." }), {
@@ -122,69 +249,225 @@ Deno.serve(async (request) => {
     const sourceSha256 = String(body?.source_sha256 || "").toLowerCase();
     const pageOffset = Number(body?.page_offset || 0);
     const totalPages = Number(body?.total_pages || 0);
+    const suppliedPageCount = Number(body?.page_count || 0);
+    // Version 17 and older browsers sent two-page groups without page_count.
+    // Keep those sessions working while the five-page frontend rolls out.
+    const pageCount = Number.isInteger(suppliedPageCount) && suppliedPageCount > 0
+      ? suppliedPageCount
+      : Math.min(2, totalPages - pageOffset);
+    requestedPageCount = pageCount;
     if (!filename.toLowerCase().endsWith(".pdf")) throw new Error("This parser accepts PDF job packets only.");
     if (!/^data:application\/pdf;base64,[a-z0-9+/=\r\n]+$/i.test(fileData)) throw new Error("The PDF data is invalid.");
     const estimatedBytes = Math.floor((fileData.length - fileData.indexOf(",") - 1) * 0.75);
     if (estimatedBytes <= 0 || estimatedBytes > MAX_FILE_BYTES) throw new Error("The PDF must be 20 MB or smaller.");
     if (!/^[a-f0-9]{64}$/.test(sourceSha256)) throw new Error("The packet fingerprint is invalid.");
     if (!Number.isInteger(pageOffset) || pageOffset < 0 ||
+        !Number.isInteger(pageCount) || pageCount < 1 || pageCount > totalPages ||
+        pageOffset + pageCount > totalPages ||
         !Number.isInteger(totalPages) || totalPages < 1 || pageOffset >= totalPages) {
       throw new Error("The PDF page range is invalid.");
     }
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${openAiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: Deno.env.get("OPENAI_DOCUMENT_MODEL") || "gpt-5.4",
+    console.log(JSON.stringify({
+      event: "packet_parse_started",
+      request_id: requestId,
+      page_offset: pageOffset,
+      page_count: pageCount,
+      total_pages: totalPages,
+      estimated_bytes: estimatedBytes,
+    }));
+
+    const primaryModel = Deno.env.get("OPENAI_DOCUMENT_MODEL") || "gpt-5.4-mini";
+    const fallbackModel = Deno.env.get("OPENAI_DOCUMENT_FALLBACK_MODEL") || "gpt-5.4";
+    const usageTotal = { input:0, output:0, reasoning:0, total:0 };
+    const analyzeWithModel = async (model: string, attempt: "primary" | "fallback", fallbackReasons: string[] = []) => {
+      const requestBody = JSON.stringify({
+        model,
         instructions: `${instructions}\nThis request contains a page batch from the original PDF. ` +
           `The first page in this batch is original PDF page ${pageOffset + 1} of ${totalPages}. ` +
           `For every extracted row, source_page must be the original one-based PDF page number: ` +
-          `batch page number + ${pageOffset}. If this batch contains no supported Oncor CU Estimate construction rows, ` +
-          `return status=uncertain with an empty rows array.`,
+          `batch page number + ${pageOffset}. If this batch contains no candidate construction authorization table, ` +
+          `return status=uncertain, batch_disposition=no_candidate_table, and an empty rows array.` +
+          (attempt === "fallback"
+            ? ` This is the full-model verification pass. Re-check this page group carefully because the first pass was flagged for: ${fallbackReasons.join(", ")}.`
+            : ""),
         input: [{ role: "user", content: [
           { type: "input_file", filename, file_data: fileData, detail: "high" },
-          { type: "input_text", text: "Identify this packet and extract all supported authorized-unit source rows. Return no rows unless the provider/format is supported with confidence." },
+          { type: "input_text", text: "Identify this utility packet and extract every reliable authorized construction-unit source row, adapting to the document's actual labels and layout. Unfamiliar providers and formats are valid and must not be rejected solely for being new." },
         ] }],
-        reasoning: { effort: "high" },
+        reasoning: { effort: attempt === "primary" ? "low" : "medium" },
         text: { format: { type: "json_schema", name: "utility_packet", strict: true, schema: packetSchema } },
         max_output_tokens: 30000,
         store: false,
-      }),
-      signal: AbortSignal.timeout(140000),
-    });
-    if (!response.ok) {
-      console.error("OpenAI packet parse failed", response.status, (await response.text()).slice(0, 1000));
-      throw new Error("The packet could not be analyzed. Nothing was saved.");
-    }
-    const result = await response.json();
-    const parsed = JSON.parse(outputText(result));
-    if (parsed.status === "supported" && parsed.provider_key === "oncor") {
-      if (parsed.profile_version !== PROFILE_VERSION || !Array.isArray(parsed.rows) || parsed.rows.length === 0) {
-        throw new Error("The Oncor packet was identified, but no construction rows could be read. Nothing was saved.");
-      }
-      if (parsed.rows.length > 4000 || !Number.isFinite(parsed.confidence) || parsed.confidence < 0 || parsed.confidence > 1) {
-        throw new Error("The packet extraction failed validation. Nothing was saved.");
-      }
-      for (const row of parsed.rows) {
-        if (!Number.isInteger(row.source_page) || row.source_page < 1 ||
-            !["install", "remove"].includes(row.work_type) ||
-            !Number.isFinite(row.estimated_quantity) || row.estimated_quantity <= 0 ||
-            !Number.isFinite(row.confidence) || row.confidence < 0 || row.confidence > 1 ||
-            !String(row.work_point_code || "").trim()) {
-          throw new Error("The packet extraction contained an invalid source row. Nothing was saved.");
+      });
+      // A transient upstream failure used to discard the whole packet: one
+      // Cloudflare 520 on one page group threw away every other group's work
+      // and the AI spend behind it. The call is idempotent (store: false), so
+      // retrying in place is safe and far cheaper than re-uploading.
+      for (let retry = 0; ; retry++) {
+        const remaining = REQUEST_TIME_BUDGET_MS - (Date.now() - requestStartedAt);
+        if (remaining < 15000) {
+          throw new PacketParseError(
+            "The packet analyzer needs another attempt, but this page group took too long. Nothing was saved. Try again shortly.",
+            "packet_analyzer_timeout",
+            504,
+          );
         }
+        const response = await fetch("https://api.openai.com/v1/responses", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${openAiKey}`, "Content-Type": "application/json" },
+          body: requestBody,
+          signal: AbortSignal.timeout(Math.min(90000, remaining)),
+        });
+        if (!response.ok) {
+          const upstreamBody = (await response.text()).slice(0, 2000);
+          const { code: upstreamCode } = parseUpstreamError(upstreamBody);
+          const delayMs = Math.max(
+            UPSTREAM_RETRY_DELAYS_MS[retry] ?? 0,
+            upstreamRetryDelayMs(response),
+          );
+          const canRetry = retry < UPSTREAM_RETRY_DELAYS_MS.length &&
+            isTransientUpstream(response.status, upstreamCode) &&
+            remaining - delayMs > UPSTREAM_RETRY_MIN_REMAINING_MS;
+          if (!canRetry) throw upstreamPacketError(response, upstreamBody, requestId);
+          console.warn(JSON.stringify({
+            event: "packet_upstream_retry",
+            request_id: requestId,
+            attempt,
+            model,
+            page_offset: pageOffset,
+            page_count: pageCount,
+            upstream_status: response.status,
+            upstream_code: upstreamCode,
+            retry: retry + 1,
+            delay_ms: delayMs,
+          }));
+          await sleep(delayMs);
+          continue;
+        }
+        const result = await response.json();
+        const usage = result?.usage || {};
+        const attemptUsage = {
+          input:Number(usage.input_tokens || 0),
+          output:Number(usage.output_tokens || 0),
+          reasoning:Number(usage.output_tokens_details?.reasoning_tokens || 0),
+          total:Number(usage.total_tokens || 0),
+        };
+        usageTotal.input += attemptUsage.input;
+        usageTotal.output += attemptUsage.output;
+        usageTotal.reasoning += attemptUsage.reasoning;
+        usageTotal.total += attemptUsage.total;
+        console.log(JSON.stringify({
+          event: "packet_ai_attempt_completed",
+          request_id: requestId,
+          attempt,
+          model,
+          page_offset: pageOffset,
+          page_count: pageCount,
+          input_tokens: attemptUsage.input,
+          output_tokens: attemptUsage.output,
+          reasoning_tokens: attemptUsage.reasoning,
+          total_tokens: attemptUsage.total,
+          upstream_retries: retry,
+        }));
+        const modelOutput = parsePacketOutput(outputText(result));
+        if (modelOutput.parsed) {
+          modelOutput.parsed = normalizePacketExtraction(modelOutput.parsed, {
+            profileVersion: PROFILE_VERSION,
+            pageOffset,
+            pageCount,
+          });
+        }
+        return modelOutput;
       }
-    } else {
-      parsed.rows = [];
+    };
+
+    const fallbackRun = await runPacketModelFallback({
+      primaryModel,
+      fallbackModel,
+      analyze:async (model: string, attempt: "primary" | "fallback", fallbackReasons: string[]) => {
+        if (attempt === "fallback") {
+          console.log(JSON.stringify({
+            event: "packet_full_model_fallback_started",
+            request_id: requestId,
+            primary_model: primaryModel,
+            fallback_model: fallbackModel,
+            page_offset: pageOffset,
+            page_count: pageCount,
+            reasons: fallbackReasons,
+          }));
+        }
+        return await analyzeWithModel(model, attempt, fallbackReasons);
+      },
+      assess:(candidate: Record<string, unknown>) =>
+        assessPacketExtraction(candidate, { profileVersion:PROFILE_VERSION, pageOffset, pageCount }),
+    });
+    const { parsed, assessment, selectedModel, fallbackUsed, outputError } = fallbackRun;
+
+    if (outputError && fallbackUsed) {
+      throw new PacketParseError(
+        "The packet analyzer could not verify this PDF page group. Nothing was saved.",
+        "packet_full_model_invalid_response",
+        422,
+        true,
+      );
     }
+    if (!assessment.valid) {
+      console.error(JSON.stringify({
+        event: "packet_validation_failed",
+        request_id: requestId,
+        model: selectedModel,
+        page_offset: pageOffset,
+        page_count: pageCount,
+        reasons: assessment.invalidReasons,
+      }));
+      throw new PacketParseError(
+        "The packet extraction failed validation after review. Nothing was saved.",
+        "packet_extraction_invalid",
+        422,
+        true,
+      );
+    }
+    if (parsed.status !== "supported") parsed.rows = [];
+    console.log(JSON.stringify({
+      event: "packet_parse_completed",
+      request_id: requestId,
+      model: selectedModel,
+      primary_model: primaryModel,
+      fallback_model: fallbackModel,
+      fallback_used: fallbackUsed,
+      page_offset: pageOffset,
+      page_count: pageCount,
+      input_tokens: usageTotal.input,
+      output_tokens: usageTotal.output,
+      reasoning_tokens: usageTotal.reasoning,
+      total_tokens: usageTotal.total,
+    }));
 
     return new Response(JSON.stringify({ ...parsed, source_sha256: sourceSha256 }), {
       headers: { ...corsHeaders(request), "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unable to analyze packet." }), {
-      status: 400, headers: { ...corsHeaders(request), "Content-Type": "application/json" },
+    const packetError = error instanceof PacketParseError ? error : null;
+    const message = error instanceof Error ? error.message : "Unable to analyze packet.";
+    const timeout = error instanceof DOMException && error.name === "TimeoutError";
+    const code = timeout ? "packet_analyzer_timeout" : packetError?.code || "packet_parse_failed";
+    const status = timeout ? 504 : packetError?.status || 400;
+    const retrySmaller = requestedPageCount > 1 && (timeout || packetError?.retryOriginal === true || packetError?.retrySmaller === true);
+    console.error(JSON.stringify({
+      event: "packet_parse_failed",
+      request_id: requestId,
+      code,
+      message: message.slice(0, 300),
+    }));
+    return new Response(JSON.stringify({
+      error: message,
+      code,
+      request_id: requestId,
+      retry_original: packetError?.retryOriginal === true,
+      retry_smaller: retrySmaller,
+    }), {
+      status, headers: { ...corsHeaders(request), "Content-Type": "application/json" },
     });
   }
 });

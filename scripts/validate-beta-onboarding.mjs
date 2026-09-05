@@ -7,7 +7,7 @@ function read(path){
 function requireText(text,needle,message){if(!text.includes(needle))throw new Error(message)}
 function rejectText(text,needle,message){if(text.includes(needle))throw new Error(message)}
 
-const migration=read('supabase/migrations/20260830073000_beta_application_onboarding.sql');
+const migration=read('supabase/migrations/archive/20260830073000_beta_application_onboarding.sql');
 const submit=read('supabase/functions/submit-beta-application/index.ts');
 const review=read('supabase/functions/review-beta-application/index.ts');
 const accept=read('beta-accept.html');
@@ -68,6 +68,10 @@ requireText(polish,'billing.html?pilot_conversion=1','Pilot checklist must link 
 for(const marker of ['create-billing-checkout','requested_plan','getAuthenticatorAssuranceLevel','my_company_billing_summary']){
   requireText(convert,marker,`Pilot conversion security requirement missing: ${marker}`);
 }
+for(const marker of ['Convert Pilot to Paid Subscription','Your Pilot remains free until you confirm payment in Stripe.','id="pilotCrewQuantity"','min="5"','max="10000"','crew_quantity:crewQuantity','monthlyCents(crews)']){
+  requireText(convert,marker,`Pilot paid-conversion requirement missing: ${marker}`);
+}
+requireText(polish,'Convert Pilot to Paid Subscription','Pilot checklist must clearly label the paid conversion action.');
 requireText(vercel,'"pilot_conversion"','Vercel must route the Pilot conversion query to the dedicated chooser.');
 requireText(vercel,'"destination": "/pilot-convert.html"','Pilot conversion rewrite is missing its destination.');
 

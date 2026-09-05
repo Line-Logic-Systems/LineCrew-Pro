@@ -76,14 +76,14 @@
     const tile = byId('timekeepingTile');
     const title = tile?.querySelector('strong');
     const description = tile?.querySelector('.muted');
-    const titleText = isForeman ? 'Crew Time' : 'Timekeeping';
+    const titleText = isForeman ? 'Crew Time' : 'Timekeeping / Roster';
     if (title && title.textContent !== titleText) title.textContent = titleText;
     if (description && isForeman && description.textContent !== 'Review your crew hours and per diem') description.textContent = 'Review your crew hours and per diem';
     const page = byId('timekeepingPage');
     const heading = page?.querySelector('.section-header h2');
     const subtitle = page?.querySelector('.section-header .muted');
     const reportHeading = page?.querySelector('#timekeepingReportCard h3');
-    const headingText = isForeman ? 'Crew Time' : 'Timekeeping';
+    const headingText = isForeman ? 'Crew Time' : 'Timekeeping / Roster';
     const reportHeadingText = isForeman ? 'Crew Time Report' : 'Time Report';
     if (heading && heading.textContent !== headingText) heading.textContent = headingText;
     if (subtitle && isForeman && subtitle.textContent !== 'Review hours, overtime, per diem and equipment for your assigned crew.') subtitle.textContent = 'Review hours, overtime, per diem and equipment for your assigned crew.';

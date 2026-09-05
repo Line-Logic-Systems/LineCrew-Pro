@@ -3,19 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Convert LineCrew Pro Pilot</title>
+<title>Convert Pilot to Paid Subscription | LineCrew Pro</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
 <style>
-:root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--card:#fff;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:var(--navy);color:#fff;padding:24px 20px}header h1{margin:0;font-size:28px}header p{margin:6px 0 0;opacity:.86}main{max-width:980px;margin:auto;padding:24px 16px 90px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.hidden{display:none!important}.muted{color:var(--muted)}.plans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.plan{border:1px solid var(--border);border-radius:12px;padding:16px;background:#f8fafc}.plan h3{margin:0 0 5px}.price{font-size:23px;font-weight:900;margin:8px 0}.plan button,a.button{width:100%;display:inline-block;border:0;border-radius:9px;padding:11px 14px;background:var(--blue);color:#fff;font-weight:800;cursor:pointer;text-decoration:none;text-align:center}.plan button:disabled{opacity:.58;cursor:not-allowed}.notice{border-left:4px solid var(--blue);background:#eff6ff;border-radius:8px;padding:12px 14px;margin:12px 0}.success{border-left-color:var(--green);background:#ecfdf5}@media(max-width:820px){.plans{grid-template-columns:1fr 1fr}}@media(max-width:520px){.plans{grid-template-columns:1fr}}
+:root{--navy:#0b2d4d;--blue:#1677d2;--bg:#f3f6f9;--card:#fff;--text:#102235;--muted:#6c7a89;--border:#dce5ed;--green:#198754}*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}header{background:var(--navy);color:#fff;padding:24px 20px}header h1{margin:0;font-size:28px}header p{margin:6px 0 0;opacity:.86}main{max-width:980px;margin:auto;padding:24px 16px 90px}.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}.hidden{display:none!important}.muted{color:var(--muted)}.plans{display:grid;grid-template-columns:minmax(0,520px);gap:12px}.plan{border:1px solid var(--border);border-radius:12px;padding:16px;background:#f8fafc}.plan h3{margin:0 0 5px}.price{font-size:23px;font-weight:900;margin:8px 0}.plan label{display:block;font-weight:800;margin-top:14px}.plan input{width:100%;max-width:180px;padding:10px;border:1px solid var(--border);border-radius:8px;margin:6px 0;font:inherit}.plan button,a.button{width:100%;display:inline-block;border:0;border-radius:9px;padding:11px 14px;background:var(--blue);color:#fff;font-weight:800;cursor:pointer;text-decoration:none;text-align:center}.plan button:disabled{opacity:.58;cursor:not-allowed}.notice{border-left:4px solid var(--blue);background:#eff6ff;border-radius:8px;padding:12px 14px;margin:12px 0}.success{border-left-color:var(--green);background:#ecfdf5}@media(max-width:520px){.plans{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><h1>LineCrew Pro</h1><p>Convert Beta / Pilot to a Paid Plan</p></header>
+<header><h1>LineCrew Pro</h1><p>Convert Beta / Pilot to a Paid Subscription</p></header>
 <main>
 <section id="loadingCard" class="card"><h2>Checking your company…</h2><p id="loadingStatus" class="muted">Confirming your Admin account and Pilot status.</p></section>
 <section id="conversionCard" class="card hidden">
-<h2 style="margin-top:0">Choose the plan that fits your active crews.</h2>
+<h2 style="margin-top:0">Convert Pilot to Paid Subscription</h2>
 <p id="companyLine" class="muted"></p>
+<div class="notice"><strong>Your Pilot remains free until you confirm payment in Stripe.</strong> Opening or leaving this page does not create a charge.</div>
 <div class="notice"><strong>Your Pilot data stays in place.</strong> Stripe Checkout activates billing on this same company account. Jobs, reports, users, price books and history are not recreated or moved.</div>
 <div class="plans" id="plans"></div>
 <p id="actionStatus" class="muted" role="status" aria-live="polite"></p>
@@ -28,23 +29,26 @@ const isProduction=PRODUCTION_HOSTS.has(location.hostname.toLowerCase());
 const SUPABASE_URL=isProduction?'https://ldgkyxuozbozgkvwzadg.supabase.co':'https://yvuxrqrdprquxypiffpa.supabase.co';
 const SUPABASE_KEY=isProduction?'sb_publishable_U1i3_vuo8mMELcpcsW7aog_bcPNlYYF':'sb_publishable_4_B1KxInXhARmcfE6LLAyA_5O7bSoqx';
 const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);const $=id=>document.getElementById(id);
-const PLANS=[
- {code:'starter',name:'Starter',price:'$499',crews:'1–5 crews'},
- {code:'business',name:'Business',price:'$749',crews:'6–10 crews'},
- {code:'pro',name:'Pro',price:'$1,199',crews:'11–20 crews'},
- {code:'enterprise',name:'Enterprise',price:'$1,799',crews:'21–40 crews'}
-];
+const PLAN={code:'linecrew',name:'LineCrew Pro'};
+const monthlyCents=crews=>59900+Math.max(0,Number(crews)-5)*8500;
+const money=cents=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(cents)/100);
+let suggestedCrewQuantity=5;
 function fail(message){$('loadingStatus').textContent=message;}
 async function beginCheckout(plan,button){
+  const crewQuantity=Number($('pilotCrewQuantity').value);
+  if(!Number.isSafeInteger(crewQuantity)||crewQuantity<5||crewQuantity>10000){$('actionStatus').textContent='Choose a whole number from 5 to 10,000 crews.';return;}
   document.querySelectorAll('#plans button').forEach(btn=>btn.disabled=true);button.textContent='Opening Stripe…';$('actionStatus').textContent='Opening secure Stripe Checkout…';
   try{
-    const {data,error}=await sb.functions.invoke('create-billing-checkout',{body:{requested_plan:plan.code}});
-    if(error)throw error;if(data?.error)throw new Error(data.error);if(!data?.url)throw new Error('Billing service did not return a secure Checkout URL.');
+    const {data,error}=await sb.functions.invoke('create-billing-checkout',{body:{requested_plan:plan.code,crew_quantity:crewQuantity}});
+    if(error){let message=error.message||'Unable to open Stripe Checkout.';try{const response=error.context;const payload=response&&typeof response.json==='function'?await response.json():null;if(payload?.error)message=String(payload.error);}catch(_ignored){}throw new Error(message);}
+    if(data?.error)throw new Error(data.error);if(!data?.url)throw new Error('Billing service did not return a secure Checkout URL.');
     location.assign(data.url);
-  }catch(error){$('actionStatus').textContent=error.message||'Unable to open Stripe Checkout.';document.querySelectorAll('#plans button').forEach(btn=>btn.disabled=false);button.textContent='Choose '+plan.name;}
+  }catch(error){$('actionStatus').textContent=error.message||'Unable to open Stripe Checkout.';document.querySelectorAll('#plans button').forEach(btn=>btn.disabled=false);button.textContent='Convert Pilot to Paid Subscription';}
 }
 function renderPlans(){
-  for(const plan of PLANS){const card=document.createElement('div');card.className='plan';const h=document.createElement('h3');h.textContent=plan.name;const crews=document.createElement('div');crews.className='muted';crews.textContent=plan.crews;const price=document.createElement('div');price.className='price';price.textContent=plan.price+' / month';const btn=document.createElement('button');btn.type='button';btn.textContent='Choose '+plan.name;btn.onclick=()=>beginCheckout(plan,btn);card.append(h,crews,price,btn);$('plans').append(card);}
+  const card=document.createElement('div');card.className='plan';card.innerHTML='<h3>'+PLAN.name+'</h3><div class="muted">$599/month includes 5 crews · $85/month each additional crew</div><label for="pilotCrewQuantity">Licensed crews</label><input id="pilotCrewQuantity" type="number" min="5" max="10000" step="1" inputmode="numeric"><div id="pilotPrice" class="price"></div>';
+  const input=card.querySelector('#pilotCrewQuantity');input.value=String(suggestedCrewQuantity);const updatePrice=()=>{const value=Number(input.value);const crews=Number.isSafeInteger(value)&&value>=5&&value<=10000?value:5;$('pilotPrice').textContent=crews+' crews · '+money(monthlyCents(crews))+' / month';};
+  const btn=document.createElement('button');btn.type='button';btn.textContent='Convert Pilot to Paid Subscription';btn.onclick=()=>beginCheckout(PLAN,btn);card.append(btn);$('plans').append(card);input.oninput=updatePrice;updatePrice();
 }
 (async()=>{
   try{
@@ -52,6 +56,7 @@ function renderPlans(){
     const {data:aal}=await sb.auth.mfa.getAuthenticatorAssuranceLevel();if(aal?.currentLevel!=='aal2'){location.replace('/?billing=1');return;}
     const {data,error}=await sb.rpc('my_company_billing_summary');if(error)throw error;const billing=Array.isArray(data)?data[0]:data;if(!billing)throw new Error('Company billing information is unavailable.');
     if(String(billing.plan_code||'').toLowerCase()!=='pilot'){location.replace('/billing.html');return;}
+    suggestedCrewQuantity=Math.max(5,Number(billing.included_crew_limit)||0,Number(billing.rolling_peak_billable_crews)||0);
     $('companyLine').textContent=(billing.company_name||'Your company')+' is currently on the free Pilot plan.';
     renderPlans();$('loadingCard').classList.add('hidden');$('conversionCard').classList.remove('hidden');
   }catch(error){fail(error.message||'Unable to verify this Pilot account.');}
