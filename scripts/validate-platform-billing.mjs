@@ -23,6 +23,8 @@ const requiredFiles = [
   'supabase/functions/stripe-webhook/logic_test.ts',
   'supabase/functions/_shared/api-keys.ts',
   'supabase/functions/_shared/api-keys_test.ts',
+  'supabase/functions/_shared/billing-pricing.ts',
+  'supabase/migrations/20260905004706_licensed_crew_billing.sql',
   'supabase/config.toml',
   'scripts/test-platform-billing-isolation.mjs',
   '.github/workflows/test-platform-billing-isolation.yml',
@@ -44,6 +46,7 @@ const crewAutomation = fs.readFileSync('supabase/migrations/archive/202608180300
 const crewRpcLockdown = fs.readFileSync('supabase/migrations/archive/20260825000000_lock_crew_usage_rpc_execution.sql', 'utf8');
 const crewLimitMigration = fs.readFileSync('supabase/migrations/archive/20260824223848_enforce_active_crew_plan_limit.sql', 'utf8');
 const entitlementHardening = fs.readFileSync('supabase/migrations/archive/20260825133736_harden_subscription_entitlements.sql', 'utf8');
+const licensedBilling = fs.readFileSync('supabase/migrations/20260905004706_licensed_crew_billing.sql', 'utf8');
 const checkout = fs.readFileSync('supabase/functions/create-billing-checkout/index.ts', 'utf8');
 const portal = fs.readFileSync('supabase/functions/create-billing-portal/index.ts', 'utf8');
 const upgrade = fs.readFileSync('supabase/functions/create-plan-upgrade/index.ts', 'utf8');
@@ -153,10 +156,10 @@ for (const signature of [
 }
 if (!crewRpcLockdown.includes('last_stripe_event_created bigint')) throw new Error('Crew RPC lockdown migration must add the Stripe event ordering column.');
 for (const marker of [
-  "billingResult==='upgrade-return'",
-  'Upgrade Plan',
-  'Stripe will show the prorated charge before you confirm.',
-  "{target_plan:plan.code}",
+  "billingResult==='capacity-return'",
+  'Change Licensed Crew Slots',
+  '$85 per month, with no upper tier.',
+  '{target_crew_limit:crews}',
   "billing?.provider==='stripe'",
 ]) {
   if (!billing.includes(marker)) throw new Error(`billing.html is missing safe upgrade UI state: ${marker}`);
@@ -210,7 +213,7 @@ for (const marker of [
 
 if (!checkout.includes('BILLING_PLAN_PRICE_MAP')) throw new Error('Checkout must use the server-side BILLING_PLAN_PRICE_MAP.');
 if (checkout.includes('BILLING_ALLOWED_PRICE_IDS')) throw new Error('Checkout still contains the older client-selected Price ID allowlist path.');
-if (!checkout.includes('planPriceMap.get(planCode)')) throw new Error('Checkout must bind the company assigned plan to its Stripe Price server-side.');
+if (!checkout.includes('readLinecrewPriceId')) throw new Error('Checkout must bind the single LineCrew Pro price server-side.');
 if (!checkout.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner or Admin role.');
 for (const [name, source] of [
   ['Checkout', checkout],
@@ -249,22 +252,25 @@ for (const marker of ['STRIPE_MANAGE_PORTAL_CONFIGURATION_ID','linecrew_manage_o
 }
 for (const marker of [
   'STRIPE_UPGRADE_PORTAL_CONFIGURATION_ID',
-  'linecrew_upgrade_only_v1',
+  'linecrew_crew_quantity_v1',
   'allowedUpdates.length === 1',
   'update?.proration_behavior === "always_invoice"',
-  'Exactly one active Stripe upgrade-only Portal configuration must be provisioned.',
+  'linecrew-crew-quantity-portal-${upgradePortalPurpose}',
   'BILLING_PLAN_PRICE_MAP',
   '["owner", "admin"].includes(String(profile.role).toLowerCase())',
   'subscription.customer !== stored.stripe_customer_id',
   'items.length !== 1',
-  'planOrder.indexOf(targetPlanCode) <= planOrder.indexOf(currentPlan)',
-  'Self-service billing can only move to a higher plan.',
+  'targetCrewLimit < currentCrewLimit',
+  'proration_behavior", "none"',
   'flow_data[type]',
   'subscription_update_confirm',
   'flow_data[subscription_update_confirm][items][0][price]',
-  '/billing.html?billing=upgrade-return&target_plan=',
+  '/billing.html?billing=capacity-return&target_crews=',
 ]) {
   if (!upgrade.includes(marker)) throw new Error(`Upgrade function is missing required safety marker: ${marker}`);
+}
+for (const marker of ['59900', '8500', "when 'linecrew' then 5", 'p_included_crew_limit', 'coalesce(subscription.included_crew_limit']) {
+  if (!licensedBilling.toLowerCase().includes(marker.toLowerCase())) throw new Error(`Licensed crew billing migration is missing ${marker}.`);
 }
 if (!webhook.includes('stripe-signature') || !webhook.includes('verifyStripeSignature')) throw new Error('Stripe webhook signature validation is missing.');
 if (!webhook.includes('eventInsertError.code !== "23505"')) throw new Error('Stripe webhook must recognize unique-event retries by PostgreSQL error code.');

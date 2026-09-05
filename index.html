@@ -3765,7 +3765,7 @@ let pendingInviteToken = new URLSearchParams(window.location.search).get('invite
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
 const requestedBillingReturn = new URLSearchParams(window.location.search).get('billing') === '1';
 const requestedNotificationDestination = String(new URLSearchParams(window.location.search).get('notification') || '').trim().toLowerCase();
-const PAID_SIGNUP_PLANS = Object.freeze({starter:'Starter',business:'Business',pro:'Pro',enterprise:'Enterprise'});
+const PAID_SIGNUP_PLANS = Object.freeze({linecrew:'LineCrew Pro'});
 let requestedSignupPlan = String(new URLSearchParams(window.location.search).get('plan') || '').trim().toLowerCase();
 if(!requestedSignupPlan){
 try{ requestedSignupPlan = String(sessionStorage.getItem('linecrew_requested_plan') || '').trim().toLowerCase(); }catch{}
@@ -3800,7 +3800,7 @@ $('acceptInvitationCard').classList.add('hidden');
 const planNotice = $('selectedPlanNotice');
 planNotice.classList.toggle('hidden', !requestedSignupPlan || invited);
 if(requestedSignupPlan && !invited){
-planNotice.textContent = PAID_SIGNUP_PLANS[requestedSignupPlan] + ' selected. After creating your company, you will continue to secure Stripe Checkout.';
+planNotice.textContent = 'LineCrew Pro selected: $599/month includes 5 crews, then $85/month per additional crew. After creating your company, you will continue to secure Stripe Checkout.';
 }
 }
 function privilegedRoleRequiresMfa(profile){
