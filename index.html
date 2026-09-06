@@ -1076,6 +1076,19 @@ font-weight:800;
 .daily-authorization.pending_packet{ background:#fff3d6; color:#8a5800; }
 .daily-authorization.redline{ background:#fde5e5; color:#b42318; }
 .daily-authorization-note{ margin-top:5px; color:#b42318; font-size:12px; }
+.daily-redline-comment{
+grid-column:1 / -1;
+padding:10px;
+border:1px solid #efb4b4;
+border-radius:8px;
+background:#fff7f7;
+}
+.daily-redline-comment label{ color:#9b1c1c; }
+.daily-redline-comment textarea{
+min-height:76px;
+margin:6px 0;
+resize:vertical;
+}
 .checkbox-row{
 display:flex;
 align-items:center;
@@ -16988,7 +17001,7 @@ printWindow.document.write(
 '<p style="font-family:Arial;padding:24px">Preparing daily report...</p>'
 );
 const { data:units, error } = await sb.rpc(
-'get_daily_report_unit_locations_visible_v2',
+'get_daily_report_unit_locations_visible_v3',
 { p_report_id:report.id }
 );
 if(error){
@@ -17259,7 +17272,7 @@ const authorizedRowsRequest = canEditDraft && report.job_id
 : Promise.resolve({ data:[], error:null });
 const [catalogResult, savedResult, usageResult, authorizedResult] = await Promise.all([
 sb.rpc('get_daily_report_unit_catalog_visible', { p_report_id:report.id }),
-sb.rpc('get_daily_report_unit_locations_visible_v2', { p_report_id:report.id }),
+sb.rpc('get_daily_report_unit_locations_visible_v3', { p_report_id:report.id }),
 sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id }),
 authorizedRowsRequest
 ]);
@@ -17444,6 +17457,20 @@ const authorizationNote = item.authorization_note
 ? '<div class="daily-authorization-note">' +
 escapeHtml(item.authorization_note) + '</div>'
 : '';
+const redlineComment = authorizationStatus === 'redline'
+? `<div class="daily-redline-comment">
+<label>Foreman Redline Comment ${canEdit ? '(Required)' : ''}</label>
+<textarea class="daily-redline-comment-input" maxlength="1000"
+placeholder="Explain why this work differs from the authorized job packet."
+${canEdit ? '' : 'disabled'}>${escapeHtml(item.redline_comment || '')}</textarea>
+${canEdit
+? '<button type="button" class="secondary small daily-redline-comment-save">Save Redline Comment</button>' +
+  '<div class="muted">Required before this report can be submitted.</div>'
+: (!item.redline_comment
+? '<div class="daily-authorization-note">No Foreman redline comment was provided.</div>'
+: '')}
+</div>`
+: '';
 row.innerHTML = `
 <div>
 <div class="daily-unit-code">${escapeHtml(item.item_code)}</div>
@@ -17474,6 +17501,7 @@ value="${escapeHtml(item.transfer_quantity || 0)}" ${canEdit ? '' : 'disabled'}>
 value="${escapeHtml(item.retirement_quantity || 0)}" ${canEdit ? '' : 'disabled'}>
 </div>
 <div class="daily-unit-actions"></div>
+${redlineComment}
 `;
 if(canEdit){
 const saveButton = document.createElement('button');
@@ -17486,6 +17514,11 @@ removeButton.className = 'danger small';
 removeButton.textContent = 'Remove';
 removeButton.onclick = () => deleteDailyUnitRow(item, removeButton);
 row.querySelector('.daily-unit-actions').appendChild(removeButton);
+const commentButton = row.querySelector('.daily-redline-comment-save');
+if(commentButton){
+commentButton.onclick = () =>
+saveDailyRedlineComment(item, row, commentButton);
+}
 }
 poleBody.appendChild(row);
 });
@@ -18058,6 +18091,30 @@ return;
 await openDailyUnitEditor(currentDailyUnitReport);
 await loadProductionReports();
 }
+async function saveDailyRedlineComment(item, row, button){
+const input = row.querySelector('.daily-redline-comment-input');
+const comment = String(input?.value || '').trim();
+if(!comment){
+alert('Enter a comment explaining this redline.');
+input?.focus();
+return;
+}
+button.disabled = true;
+button.textContent = 'Saving...';
+const { error } = await sb.rpc('save_daily_report_unit_redline_comment', {
+p_location_line_id:item.location_line_id,
+p_comment:comment
+});
+if(error){
+button.disabled = false;
+button.textContent = 'Save Redline Comment';
+alert('Unable to save the redline comment: ' + error.message);
+return;
+}
+button.textContent = 'Saved';
+await openDailyUnitEditor(currentDailyUnitReport);
+await loadProductionReports();
+}
 $('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(5);
 $('dailyUnitPoleLocation').addEventListener(
 'input',
@@ -18188,7 +18245,7 @@ approveBtn.className = 'success small';
 approveBtn.textContent = 'Approve';
 approveBtn.onclick = async () => {
 const { data: authorizationRows, error: authorizationError } = await sb.rpc(
-'get_daily_report_unit_locations_visible_v2',
+'get_daily_report_unit_locations_visible_v3',
 { p_report_id: report.id }
 );
 if(authorizationError){
