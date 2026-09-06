@@ -16792,6 +16792,9 @@ document.createElement('button');
 submitBtn.className = 'success small';
 submitBtn.textContent = 'Submit Report';
 submitBtn.onclick = async () => {
+const redlineCommentsReady =
+await requireDailyReportRedlineComments(report);
+if(!redlineCommentsReady) return;
 const confirmed =
 confirm(
 'Submit this daily report for GF review?'
@@ -17431,13 +17434,19 @@ const poleCard = document.createElement('details');
 poleCard.className = 'daily-saved-pole';
 // Reviewers opened this screen specifically to inspect production.
 // Show the saved unit lines immediately instead of requiring another click.
-poleCard.open = !canEdit;
+const poleRedlineCount = poleItems.filter(item =>
+String(item.authorization_status || '').toLowerCase() === 'redline'
+).length;
+poleCard.open = !canEdit || poleRedlineCount > 0;
 const summary = document.createElement('summary');
 summary.innerHTML =
 '<span><strong>' + escapeHtml(location) + '</strong><br>' +
 '<span class="muted">' + poleItems.length + ' unit line' +
 (poleItems.length === 1 ? '' : 's') + '</span></span>' +
-'<span class="daily-saved-pole-review">Review / Edit</span>';
+'<span class="daily-saved-pole-review">' +
+(poleRedlineCount > 0
+? poleRedlineCount + ' REDLINE — COMMENT REQUIRED'
+: 'Review / Edit') + '</span>';
 poleCard.appendChild(summary);
 const poleBody = document.createElement('div');
 poleBody.className = 'daily-saved-pole-body';
@@ -18115,6 +18124,32 @@ button.textContent = 'Saved';
 await openDailyUnitEditor(currentDailyUnitReport);
 await loadProductionReports();
 }
+async function requireDailyReportRedlineComments(report){
+const { data:unitRows, error } = await sb.rpc(
+'get_daily_report_unit_locations_visible_v3',
+{ p_report_id:report.id }
+);
+if(error){
+alert('Unable to check redline comments: ' + error.message);
+return false;
+}
+const missingComments = (unitRows || []).filter(item =>
+String(item.authorization_status || '').toLowerCase() === 'redline' &&
+!String(item.redline_comment || '').trim()
+);
+if(missingComments.length === 0) return true;
+await openDailyUnitEditor(report);
+alert(
+'Add a Foreman comment to ' + missingComments.length + ' redline unit ' +
+(missingComments.length === 1 ? 'before submitting.' : 'entries before submitting.')
+);
+setTimeout(() => {
+const input = document.querySelector('.daily-redline-comment-input');
+input?.scrollIntoView({ behavior:'smooth', block:'center' });
+input?.focus();
+}, 100);
+return false;
+}
 $('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(5);
 $('dailyUnitPoleLocation').addEventListener(
 'input',
@@ -18141,6 +18176,12 @@ const keepDraftButton = document.createElement('button');
 keepDraftButton.className = 'secondary';
 keepDraftButton.textContent = 'Keep as Draft';
 submitButton.onclick = async () => {
+const redlineCommentsReady =
+await requireDailyReportRedlineComments(report);
+if(!redlineCommentsReady){
+backdrop.remove();
+return;
+}
 submitButton.disabled = true;
 keepDraftButton.disabled = true;
 submitButton.textContent = 'Submitting...';
