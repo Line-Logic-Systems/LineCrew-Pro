@@ -1,7 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getPublishableKey } from "../_shared/api-keys.ts";
 
-const allowedOrigins = new Set(["https://app.linecrewpro.com"]);
+const allowedOrigins = new Set([
+  "https://app.linecrewpro.com",
+  "http://localhost:3000",
+  "http://localhost:4173",
+  "http://localhost:8000",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:4173",
+  "http://127.0.0.1:8000",
+]);
 const corsHeaders = (request: Request) => ({
   "Access-Control-Allow-Origin": allowedOrigins.has(request.headers.get("Origin") || "")
     ? request.headers.get("Origin")! : "https://app.linecrewpro.com",
@@ -76,7 +84,10 @@ Deno.serve(async (request) => {
 
     const organizationName = String(organization.name || "your utility organization")
       .replace(/[\r\n]+/g, " ").slice(0, 160);
-    const invitationUrl = `https://app.linecrewpro.com/?utilityInvite=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(email)}`;
+    const applicationOrigin = origin && allowedOrigins.has(origin)
+      ? origin
+      : "https://app.linecrewpro.com";
+    const invitationUrl = `${applicationOrigin}/?utilityInvite=${encodeURIComponent(rawToken)}&email=${encodeURIComponent(email)}`;
     const text = `You have been invited to view shared LineCrew Pro contract progress for ${organizationName}.\n\nAccept your private invitation: ${invitationUrl}\n\nThis one-time invitation expires in 72 hours. Do not forward it.`;
     const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#15231b"><h1>LineCrew Pro Utility Portal invitation</h1><p>You have been invited to view shared contract progress for <strong>${escapeHtml(organizationName)}</strong>.</p><p><a href="${invitationUrl}">Accept Utility Portal Invitation</a></p><p>This private, one-time invitation expires in 72 hours. Do not forward it.</p></body></html>`;
     const emailResponse = await fetch("https://api.resend.com/emails", {

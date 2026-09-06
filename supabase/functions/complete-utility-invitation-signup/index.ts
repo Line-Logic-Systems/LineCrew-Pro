@@ -1,7 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getPublishableKey, getSecretKey } from "../_shared/api-keys.ts";
 
-const allowedOrigins = new Set(["https://app.linecrewpro.com"]);
+const allowedOrigins = new Set([
+  "https://app.linecrewpro.com",
+  "http://localhost:3000",
+  "http://localhost:4173",
+  "http://localhost:8000",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:4173",
+  "http://127.0.0.1:8000",
+]);
 const corsHeaders = (request: Request) => ({
   "Access-Control-Allow-Origin": allowedOrigins.has(request.headers.get("Origin") || "")
     ? request.headers.get("Origin")! : "https://app.linecrewpro.com",
