@@ -18040,18 +18040,15 @@ String(item.authorization_status || '').toLowerCase() === 'redline' &&
 const line = grouped.get(
 savedItem.price_book_item_id + '|' + dailyWorkPointKey(savedItem.pole_location)
 );
-let comment = String(line?.redlineComments?.join('\n') || '').trim();
-if(!comment){
-comment = String(prompt(
-'Foreman comment required for redline ' + savedItem.item_code + ':',
-''
-) || '').trim();
-}
+// Only attach comments entered in this batch. Existing redlines are handled
+// by their visible saved-unit comment box, never by a second browser prompt.
+if(!line) continue;
+const comment = String(line.redlineComments?.join('\n') || '').trim();
 if(!comment){
 button.disabled = false;
 button.textContent = 'Save Pole & Add Next';
 await openDailyUnitEditor(currentDailyUnitReport);
-alert('The units were saved, but this report cannot be submitted until every redline has a comment.');
+alert('Use the redline comment box in the daily report before submitting.');
 return false;
 }
 const { error:commentError } = await sb.rpc(
