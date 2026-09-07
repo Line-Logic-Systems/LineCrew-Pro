@@ -52,7 +52,7 @@ const extractNamedFunction = (source, name) => {
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
 assert(
-  html.includes('/responsive-role-shell.css?v=20260907c') &&
+  html.includes('/responsive-role-shell.css?v=20260907d') &&
     html.includes('responsive-role-shell.js?v=20260907c'),
   'Responsive role shell assets must be loaded by the application.'
 );
@@ -96,6 +96,11 @@ assert(
     responsiveShellStyles.includes('@media (max-width: 1099px), (pointer: coarse)') &&
     responsiveShellStyles.includes('.lc-role-sidebar {\n    display: none !important;'),
   'The permanent role sidebar must remain desktop-only and hidden on coarse/mobile pointers.'
+);
+assert(
+  responsiveShellStyles.includes('body.lc-shell-active > header .company-brand-badge img') &&
+    responsiveShellStyles.includes('display: block;'),
+  'The uploaded company logo must remain visible in the professional desktop header.'
 );
 assert(html.includes('/* LINECREW PRO SUPABASE */'), 'Missing main application script marker.');
 assert(html.includes('id="authPage"'), 'Missing authentication page.');
