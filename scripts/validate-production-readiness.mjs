@@ -744,9 +744,9 @@ assert(
   'Job history, billing exports and PDF records must share one revision label.'
 );
 assert(
-  index.includes('expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v79") &&
+  index.includes('expanded-jsa.js?v=20260907b') &&
+    serviceWorker.includes('/expanded-jsa.js?v=20260907b') &&
+    serviceWorker.includes("linecrew-pro-shell-v80") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1113,6 +1113,13 @@ for (const marker of [
   'productionReportingMetricsMarkup(contract.reports)',
   'productionReportingMetricsMarkup(job.reports)',
   'const canViewProductionReporting = userCanUseReporting();',
+  'id="teamWorkspaceTabs"',
+  'data-team-tab="members"',
+  'data-team-tab="invitations"',
+  'data-team-tab="crews"',
+  'data-team-tab="access"',
+  'function openTeamWorkspace(name)',
+  'class="team-access-code-details"',
   'id="productionAdvancedFilters"',
   'class="production-filter-basic-grid"',
   '<summary>Advanced Filters</summary>'
