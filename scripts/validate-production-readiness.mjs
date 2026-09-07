@@ -744,7 +744,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v68") &&
+    serviceWorker.includes("linecrew-pro-shell-v69") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1103,6 +1103,15 @@ for (const marker of [
   'productionReportingMetricsMarkup(job.reports)',
   'const canViewProductionReporting = userCanUseReporting();'
 ]) assert(index.includes(marker), `Contract production-reporting marker missing: ${marker}`);
+for (const marker of [
+  'id="productionUtilityDirectory"',
+  'id="productionUtilityDetailHeader"',
+  'id="productionContractFilter"',
+  'function renderProductionUtilityDirectory(reports)',
+  "view:'utilityProduction'",
+  "productionReportUtilityKey(report) === currentProductionUtilityId",
+  "$('backToProductionUtilities').onclick"
+]) assert(index.includes(marker), `Utility Production navigation marker missing: ${marker}`);
 assert(
   expandedJsa.includes("timekeeping.js?v=20260907a") &&
     serviceWorker.includes("/timekeeping.js?v=20260907a"),
@@ -1136,3 +1145,4 @@ console.log('- Timekeeping reports use a single-flight guard to prevent repeated
 console.log('- Crew selectors avoid observer feedback loops on the Foreman Production screen');
 console.log('- Company setup progress stays compact until its step list is opened');
 console.log('- Production Reporting groups filtered totals by contract and job for every reporting-authorized role');
+console.log('- Production Reporting opens from a scalable utility directory into a filtered utility workspace');
