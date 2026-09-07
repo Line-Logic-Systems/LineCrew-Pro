@@ -530,7 +530,7 @@ background:#fff;
 .production-reporting-contracts{ margin-top:10px; }
 .production-utility-grid{
 display:grid;
-grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+grid-template-columns:1fr;
 gap:12px;
 margin-top:12px;
 }
@@ -552,6 +552,14 @@ background:#f7fbff;
 .production-utility-card strong,
 .production-utility-card span{ display:block; }
 .production-utility-card .muted{ margin-top:5px; }
+.production-utility-card .daily-value-summary{
+display:flex;
+margin-top:12px;
+text-align:left;
+}
+.production-utility-card .daily-value-summary > span{
+display:block;
+}
 .billing-batch-card{
 border:1px solid var(--border);
 border-radius:9px;
@@ -16057,9 +16065,10 @@ if(String(report.status || '').toLowerCase() === 'approved') totals.approved += 
 });
 return totals;
 }
-function productionReportingMetricsMarkup(reports){
+function productionReportingMetricsMarkup(reports, wrapperTag = 'div'){
 const totals = productionReportingTotals(reports);
-return '<div class="daily-value-summary production-reporting-group-metrics">' +
+const tag = wrapperTag === 'span' ? 'span' : 'div';
+return '<' + tag + ' class="daily-value-summary production-reporting-group-metrics">' +
 '<span><strong>' + totals.reports + '</strong><br>Reports</span>' +
 '<span><strong>' + totals.approved + '</strong><br>Completed</span>' +
 (userCanSeeActualContractPrices()
@@ -16072,7 +16081,7 @@ return '<div class="daily-value-summary production-reporting-group-metrics">' +
 '<span><strong>' + totals.overtimeHours + '</strong><br>OT Hours</span>' +
 '<span><strong>' + totals.redlines + '</strong><br>Redlines</span>' +
 '<span><strong>' + totals.pending + '</strong><br>Pending Job Units</span>' +
-'</div>';
+'</' + tag + '>';
 }
 function productionReportUtilityKey(report){
 return String(report.jobs?.contracts?.customers?.id || 'unassigned');
@@ -16090,15 +16099,11 @@ if(!utilities.has(key)){
 utilities.set(key, {
 id:key,
 name:String(utility.name || 'No Utility / Cooperative Assigned'),
-reports:[],
-contracts:new Set(),
-jobs:new Set()
+reports:[]
 });
 }
 const group = utilities.get(key);
 group.reports.push(report);
-if(report.jobs?.contracts?.id) group.contracts.add(String(report.jobs.contracts.id));
-if(report.job_id) group.jobs.add(String(report.job_id));
 });
 if(utilities.size === 0){
 list.innerHTML = '<p class="muted">No utility or cooperative production has been reported yet.</p>';
@@ -16107,18 +16112,12 @@ return;
 [...utilities.values()]
 .sort((a, b) => a.name.localeCompare(b.name))
 .forEach(group => {
-const totals = productionReportingTotals(group.reports);
 const button = document.createElement('button');
 button.type = 'button';
 button.className = 'production-utility-card';
 button.innerHTML =
 '<strong>' + escapeHtml(group.name) + '</strong>' +
-'<span class="muted">' + group.contracts.size + ' contract' + (group.contracts.size === 1 ? '' : 's') +
-' · ' + group.jobs.size + ' job' + (group.jobs.size === 1 ? '' : 's') +
-' · ' + totals.reports + ' report' + (totals.reports === 1 ? '' : 's') +
-' · ' + (totals.reports - totals.approved) + ' awaiting completion' +
-(totals.redlines ? ' · ' + totals.redlines + ' redline' + (totals.redlines === 1 ? '' : 's') : '') +
-'</span>';
+productionReportingMetricsMarkup(group.reports, 'span');
 button.onclick = async () => {
 currentProductionPage = 1;
 setAppHistory({

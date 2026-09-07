@@ -744,7 +744,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v69") &&
+    serviceWorker.includes("linecrew-pro-shell-v70") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1108,6 +1108,7 @@ for (const marker of [
   'id="productionUtilityDetailHeader"',
   'id="productionContractFilter"',
   'function renderProductionUtilityDirectory(reports)',
+  "productionReportingMetricsMarkup(group.reports, 'span')",
   "view:'utilityProduction'",
   "productionReportUtilityKey(report) === currentProductionUtilityId",
   "$('backToProductionUtilities').onclick"
@@ -1146,3 +1147,4 @@ console.log('- Crew selectors avoid observer feedback loops on the Foreman Produ
 console.log('- Company setup progress stays compact until its step list is opened');
 console.log('- Production Reporting groups filtered totals by contract and job for every reporting-authorized role');
 console.log('- Production Reporting opens from a scalable utility directory into a filtered utility workspace');
+console.log('- Utility directory cards show overall production totals without listing contracts');
