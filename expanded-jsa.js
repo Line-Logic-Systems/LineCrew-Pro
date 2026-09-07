@@ -128,7 +128,7 @@
     load('foreman-field-tools.js?v=20260901a');
     load('timekeeping-roster.js?v=20260823f');
     load('timekeeping-report-v2.js?v=20260829h', () => {
-      load('leadership-my-time.js?v=20260829d');
+      load('leadership-my-time.js?v=20260907a');
       load('timekeeping-polish.js?v=20260826b');
       load('timekeeping-payroll.js?v=20260828c', () => load('timekeeping-pay-period-history.js?v=20260826b'));
     });
