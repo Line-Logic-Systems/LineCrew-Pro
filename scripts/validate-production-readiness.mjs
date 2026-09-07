@@ -744,7 +744,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v66") &&
+    serviceWorker.includes("linecrew-pro-shell-v67") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1089,6 +1089,12 @@ for (const marker of [
   'Assign Another Foreman / Leader'
 ]) assert(index.includes(marker), `Job-progress assignee marker missing: ${marker}`);
 
+for (const marker of [
+  '<details id="companyOnboarding" class="card collapsible-card hidden">',
+  "#companyOnboarding > summary::after{\ncontent:'+ View Steps';",
+  "#companyOnboarding[open] > summary::after{\ncontent:'− Hide Steps';"
+]) assert(index.includes(marker), `Compact company-onboarding marker missing: ${marker}`);
+
 if (failures.length) {
   console.error('Production readiness validation failed:');
   failures.forEach(failure => console.error(`- ${failure}`));
@@ -1114,3 +1120,4 @@ console.log('- Supervisor job-progress cards list every assigned Foreman / Job L
 console.log('- Field employees are leadership-assigned; Foremen can add extra active crew only on assigned jobs');
 console.log('- Timekeeping reports use a single-flight guard to prevent repeated Run Report loops');
 console.log('- Crew selectors avoid observer feedback loops on the Foreman Production screen');
+console.log('- Company setup progress stays compact until its step list is opened');

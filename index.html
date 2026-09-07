@@ -287,6 +287,15 @@ content:'+ Manage Existing';
 #manageExistingContracts[open] > summary::after{
 content:'− Hide Existing';
 }
+#companyOnboarding > summary::after{
+content:'+ View Steps';
+}
+#companyOnboarding[open] > summary::after{
+content:'− Hide Steps';
+}
+#companyOnboardingList{
+padding:0 22px 4px;
+}
 .contract-setup-card{
 border:2px solid rgba(16,92,63,.16);
 }
@@ -1936,15 +1945,15 @@ Share selected contracts with utility and cooperative representatives
 <button id="openProductionReview" class="small">Review Reports</button>
 </div>
 </div>
-<div id="companyOnboarding" class="card hidden">
-<div class="section-header">
-<div>
-<h3>Company Setup Progress</h3>
-<p id="companyOnboardingSummary" class="muted"></p>
-</div>
-</div>
+<details id="companyOnboarding" class="card collapsible-card hidden">
+<summary>
+<span>
+<strong>Company Setup Progress</strong><br>
+<span id="companyOnboardingSummary" class="muted"></span>
+</span>
+</summary>
 <div id="companyOnboardingList"></div>
-</div>
+</details>
 <details id="adminNotice" class="card collapsible-card hidden">
 <summary>
 <span>
