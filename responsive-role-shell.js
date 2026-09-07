@@ -112,16 +112,6 @@
     const dashboard = byId('dashboardPage');
     if (!dashboard) return;
     byId('companyName')?.closest('.card')?.classList.add('lc-dashboard-hero');
-    let workspace = byId('lcDashboardWorkspace');
-    if (!workspace) {
-      workspace = document.createElement('div');
-      workspace.id = 'lcDashboardWorkspace';
-      workspace.className = 'lc-dashboard-workspace';
-      workspace.innerHTML = '<div><h3></h3><p>Manage company setup, people, pricing, job setup, production oversight, safety and timekeeping.</p></div><span class="lc-dashboard-workspace__role"></span>';
-      byId('dashboardTileGrid')?.before(workspace);
-    }
-    workspace.querySelector('h3').textContent = `${role} Workspace`;
-    workspace.querySelector('.lc-dashboard-workspace__role').textContent = role;
 
     dashboardTiles().forEach(tile => {
       if (tile.querySelector('.lc-dashboard-tile__icon')) return;
