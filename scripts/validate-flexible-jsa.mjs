@@ -53,10 +53,10 @@ if(!timekeepingInput.includes('window.LineCrewOfflineColdStart||!navigator.onLin
 }
 
 for(const token of [
-  'linecrew-pro-shell-v79',
+  'linecrew-pro-shell-v80',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
-  '/expanded-jsa.js?v=20260901a',
+  '/expanded-jsa.js?v=20260907b',
   '/offline-jsa.js?v=20260827b',
   '/timekeeping-input-v2.js?v=20260907b',
   '/jsa-signatures.js?v=20260828a'
