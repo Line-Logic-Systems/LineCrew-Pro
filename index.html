@@ -17009,6 +17009,14 @@ const latestDate = group.reports.reduce((latest, report) =>
 String(report.work_date || '') > latest ? String(report.work_date || '') : latest,
 ''
 );
+const jobProgress = currentJobProgressSummaries.get(group.key) || {};
+const approvedPercent = Number(jobProgress.approved_percent || 0);
+const approvedAmount = Number(jobProgress.approved_value || 0);
+const jobTotals = productionReportingTotals(group.reports);
+const jobHours = jobTotals.regularHours + jobTotals.overtimeHours;
+const jobValue = userCanSeeActualContractPrices() ? jobTotals.actualValue : jobTotals.fieldValue;
+const jobRunRate = jobHours ? jobValue / jobHours : 0;
+const canShowJobMoney = userCanSeeActualContractPrices() || userCanSeeFieldMoney();
 const groupCard = document.createElement('details');
 groupCard.className = 'job-card production-job-group';
 groupCard.open = false;
@@ -17017,11 +17025,18 @@ groupSummary.innerHTML =
 '<div class="production-job-group-main"><strong>' +
 escapeHtml(group.jobNumber) + '</strong><span>' +
 escapeHtml(group.jobName || 'Unnamed job') + '</span></div>' +
-'<div class="production-job-group-meta"><strong>' +
-group.reports.length + ' Report' + (group.reports.length === 1 ? '' : 's') +
-'</strong> &nbsp;•&nbsp; Latest ' + escapeHtml(latestDate || 'No date') +
-'<br>' + submittedCount + ' Awaiting Review &nbsp;•&nbsp; ' +
-approvedCount + ' Approved &nbsp;•&nbsp; ' + redlineCount + ' Redline' +
+'<div class="production-job-group-meta">' +
+'<strong>' + approvedPercent.toFixed(1) + '% Complete</strong>' +
+' &nbsp;•&nbsp; ' +
+(canShowJobMoney ? '<strong>' + escapeHtml(formatCurrency(approvedAmount)) + '</strong> Approved' : 'Approved amount hidden') +
+' &nbsp;•&nbsp; <strong>' +
+(canShowJobMoney && jobHours ? escapeHtml(formatCurrency(jobRunRate)) : '—') +
+'</strong> ' + (userCanSeeActualContractPrices() ? 'Actual' : 'Field') + ' MH Run Rate' +
+'<br>' + group.reports.length + ' Report' + (group.reports.length === 1 ? '' : 's') +
+' &nbsp;•&nbsp; Latest ' + escapeHtml(latestDate || 'No date') +
+' &nbsp;•&nbsp; ' + submittedCount + ' Awaiting Review' +
+' &nbsp;•&nbsp; ' + approvedCount + ' Approved' +
+' &nbsp;•&nbsp; ' + redlineCount + ' Redline' +
 (redlineCount === 1 ? '' : 's') + '</div>';
 groupCard.appendChild(groupSummary);
 const groupReportList = document.createElement('div');
