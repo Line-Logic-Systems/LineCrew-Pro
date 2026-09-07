@@ -1,0 +1,81 @@
+{
+  "utility_me": [
+    "full_name",
+    "organization_name"
+  ],
+  "utility_list_jobs": [
+    "job_id",
+    "job_number",
+    "job_name",
+    "contractor_company_name",
+    "contract_name",
+    "job_status",
+    "overall_approved_percent",
+    "last_updated"
+  ],
+  "utility_get_job_progress": [
+    "work_point_code",
+    "work_point_description",
+    "unit_code",
+    "unit_description",
+    "percent_complete",
+    "authorized_install_quantity",
+    "approved_install_quantity",
+    "authorized_retirement_quantity",
+    "approved_retirement_quantity"
+  ],
+  "utility_accept_invitation": [],
+  "utility_log_view": [],
+  "utility_list_organizations": [
+    "organization_id",
+    "organization_name",
+    "active",
+    "active_grant_count",
+    "total_grant_count",
+    "invited_representative_count",
+    "active_representative_count",
+    "revoked_representative_count",
+    "earliest_granted_at",
+    "latest_granted_at"
+  ],
+  "utility_list_representatives": [
+    "representative_id",
+    "email",
+    "full_name",
+    "status",
+    "invite_expires_at",
+    "accepted_at",
+    "last_sign_in_at",
+    "created_at",
+    "invited_by_this_company"
+  ],
+  "utility_contract_visibility_state": [
+    "grant_id",
+    "utility_organization_id",
+    "contract_id",
+    "is_visible",
+    "hidden_reasons",
+    "show_quantities",
+    "expires_at"
+  ],
+  "utility_activity_feed": [
+    "activity_id",
+    "occurred_at",
+    "action",
+    "actor_name",
+    "organization_name",
+    "contract_name",
+    "job_number",
+    "detail"
+  ],
+  "utility_job_contract_warning": [
+    "job_id",
+    "contract_id",
+    "visible_org_count",
+    "visible_org_names",
+    "show_quantities_anywhere"
+  ],
+  "utility_unassigned_job_count": [
+    "unassigned_count"
+  ]
+}

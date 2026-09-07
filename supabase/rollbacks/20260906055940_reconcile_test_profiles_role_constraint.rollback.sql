@@ -1,0 +1,5 @@
+-- Reverse order: 182620, 134013, 071452, 070834, 064624, 064002, 060001, 055947, 055940.
+-- Irreversible parity repair: do not restore the obsolete test-only constraint.
+-- profiles_role_supported remains authoritative because owner and superintendent
+-- are valid production roles. Restoring profiles_role_check could either fail on
+-- existing rows or make the test schema diverge from production again.
