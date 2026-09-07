@@ -113,23 +113,23 @@
         (grid.dataset.userDashboardCustomOrder==='true' || grid.classList.contains('dashboard-arrange-active'));
       if(tilesNeedReordering&&!preservePersonalOrder) desiredTiles.forEach(el=>grid.appendChild(el));
       if(r==='foreman'){
-        setDescription('jobsTile','Open assigned jobs and work points');
-        setDescription('productionTile','Create and review your Daily Reports');
+        setDescription('jobsTile','Set up, assign and manage jobs and work points');
+        setDescription('productionTile','Track completed units, performance and Daily Reports');
         setDescription('safetyTile','Complete today’s JSA and safety records');
         setDescription('remainingUnitsTile','What is left by job and work point');
         setDescription('timekeepingTile','Review your crew hours and per diem');
         setDescription('trainingTile','How-to videos for Foreman tasks');
       }else if(r==='gf'){
-        setDescription('productionTile','Review and approve crew Daily Reports');
-        setDescription('jobsTile','Manage jobs, work points and crew progress');
+        setDescription('productionTile','Track completed units, performance and approve Daily Reports');
+        setDescription('jobsTile','Set up, assign and manage jobs and work points');
         setDescription('safetyTile','Review field safety and JSA records');
         setDescription('timekeepingTile','Review crew hours and reporting');
         setDescription('teamTile','View company crews and Foremen');
       }else{
         setDescription('teamTile','People, roles and company access');
         setDescription('priceBooksTile','Contracts, pricing and unit catalogs');
-        setDescription('jobsTile','Job setup, imports, assignments and progress');
-        setDescription('productionTile','Production oversight, review and reporting');
+        setDescription('jobsTile','Set up, assign and manage jobs and work points');
+        setDescription('productionTile','Track completed units, revenue, performance and Daily Reports');
         setDescription('safetyTile','JSA and safety reporting');
         setDescription('timekeepingTile','Crew hours, payroll and billing exports');
       }
