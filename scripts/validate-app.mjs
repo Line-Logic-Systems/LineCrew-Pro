@@ -57,7 +57,11 @@ assert(
   'Responsive role shell assets must be loaded by the application.'
 );
 assert(
-  html.includes('profile-photo.js?v=20260907a') &&
+  html.includes('profile-photo.js?v=20260907b') &&
+    html.includes('id="myProfileCamera"') &&
+    html.includes('capture="user"') &&
+    html.includes('id="takeMyProfilePhoto"') &&
+    html.includes('id="chooseMyProfilePhoto"') &&
     html.includes('id="myProfilePhoto"') &&
     html.includes('id="uploadMyProfilePhoto"') &&
     html.includes('id="removeMyProfilePhoto"'),
@@ -65,6 +69,7 @@ assert(
 );
 assert(
   profilePhoto.includes("const BUCKET = 'profile-photos'") &&
+    profilePhoto.includes("byId('myProfileCamera')?.click()") &&
     profilePhoto.includes('.upload(path, blob') &&
     profilePhoto.includes('.remove([path])') &&
     profilePhoto.includes("sb.rpc('update_my_profile_avatar'") &&

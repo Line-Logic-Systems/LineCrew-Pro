@@ -8,6 +8,7 @@
   let objectUrl = '';
   let signedPath = '';
   let signedUrl = '';
+  let selectedFile = null;
 
   const byId = id => document.getElementById(id);
 
@@ -98,12 +99,20 @@
     if (!preview) return;
     preview.src = objectUrl;
     preview.classList.toggle('hidden', !objectUrl);
+    const selection = byId('myProfilePhotoSelection');
+    if (selection) selection.textContent = file ? `Selected: ${file.name || 'camera photo'}` : 'No new photo selected.';
+    const upload = byId('uploadMyProfilePhoto');
+    if (upload) upload.disabled = !file;
+  }
+
+  function selectPhoto(file) {
+    selectedFile = file || null;
+    showPreview(selectedFile);
   }
 
   async function uploadPhoto() {
-    const input = byId('myProfilePhoto');
     const button = byId('uploadMyProfilePhoto');
-    const file = input?.files?.[0];
+    const file = selectedFile;
     const current = profile();
     if (!file || !current?.id || !current?.company_id) return;
     button.disabled = true;
@@ -118,15 +127,17 @@
       const { error: profileError } = await sb.rpc('update_my_profile_avatar', { p_avatar_path: path });
       if (profileError) throw profileError;
       current.avatar_path = path;
-      input.value = '';
-      showPreview();
+      byId('myProfilePhoto').value = '';
+      byId('myProfileCamera').value = '';
+      selectedFile = null;
+      showPreview(null);
       await refreshAvatar(true);
       alert('Your profile photo was updated.');
     } catch (error) {
       alert('Unable to update your profile photo: ' + (error?.message || error));
     } finally {
-      button.disabled = false;
-      button.textContent = 'Upload Photo';
+      button.disabled = !selectedFile;
+      button.textContent = 'Use This Photo';
     }
   }
 
@@ -153,7 +164,10 @@
   }
 
   function init() {
-    byId('myProfilePhoto')?.addEventListener('change', event => showPreview(event.target.files?.[0]));
+    byId('takeMyProfilePhoto')?.addEventListener('click', () => byId('myProfileCamera')?.click());
+    byId('chooseMyProfilePhoto')?.addEventListener('click', () => byId('myProfilePhoto')?.click());
+    byId('myProfileCamera')?.addEventListener('change', event => selectPhoto(event.target.files?.[0]));
+    byId('myProfilePhoto')?.addEventListener('change', event => selectPhoto(event.target.files?.[0]));
     byId('uploadMyProfilePhoto')?.addEventListener('click', uploadPhoto);
     byId('removeMyProfilePhoto')?.addEventListener('click', removePhoto);
     document.addEventListener('click', () => setTimeout(refreshAvatar, 0));
