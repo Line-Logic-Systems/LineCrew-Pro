@@ -20,6 +20,19 @@ function appendReviewNote(existing, note) {
   return current ? `${current} ${note}` : note;
 }
 
+function separateStationReference(row) {
+  const code = String(row.work_point_code || "").trim();
+  const description = String(row.work_point_description || "").trim();
+  const match = code.match(/^(\d{4})\s+(\d{7}-\d{4,8})$/);
+  if (!match || !/^station$/i.test(description)) return row;
+
+  return {
+    ...row,
+    work_point_code: match[1],
+    work_point_description: match[2],
+  };
+}
+
 /**
  * Converts recoverable model omissions into explicit, unchecked review rows.
  * Source facts are never invented: an unidentified location gets a visible
@@ -97,7 +110,7 @@ export function normalizePacketExtraction(parsed, options = {}) {
       continue;
     }
 
-    const row = {
+    let row = {
       ...originalRow,
       source_page: sourcePage,
       estimated_quantity: quantity,
@@ -107,6 +120,7 @@ export function normalizePacketExtraction(parsed, options = {}) {
       contractor_unit_code: String(originalRow.contractor_unit_code || "").trim(),
       review_note: String(originalRow.review_note || "").trim(),
     };
+    row = separateStationReference(row);
     if (!row.work_point_code) {
       row.work_point_code = `REVIEW-PAGE-${sourcePage}`;
       row.include_in_import = false;

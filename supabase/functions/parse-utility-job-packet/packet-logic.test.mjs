@@ -93,6 +93,29 @@ assert.equal(
   "An alphanumeric location must remain intact and must not be interpreted as a work action.",
 );
 
+const normalizedStationReference = normalizePacketExtraction(supported({
+  rows:[{
+    ...supported().rows[0],
+    work_point_code:"0001 3315564-9058",
+    work_point_description:"Station",
+  }],
+}), context);
+assert.equal(normalizedStationReference.rows[0].work_point_code, "0001");
+assert.equal(normalizedStationReference.rows[0].work_point_description, "3315564-9058");
+
+const normalizedSpacedPoint = normalizePacketExtraction(supported({
+  rows:[{
+    ...supported().rows[0],
+    work_point_code:"WP 4B",
+    work_point_description:"Station",
+  }],
+}), context);
+assert.equal(
+  normalizedSpacedPoint.rows[0].work_point_code,
+  "WP 4B",
+  "Legitimate work-point identifiers containing spaces must remain intact.",
+);
+
 const normalizedUncertainRows = normalizePacketExtraction(supported({
   status:"uncertain",
   batch_disposition:"needs_review",
