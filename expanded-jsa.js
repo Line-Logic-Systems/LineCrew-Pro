@@ -116,7 +116,7 @@
   load('app-polish.js?v=20260907a');
   load('number-input-polish.js?v=20260823a');
   load('role-workspace-polish.js?v=20260903b');
-  load('gf-crew-scope.js?v=20260826a');
+  load('gf-crew-scope.js?v=20260907b');
   load('expanded-jsa-core.js?v=20260820', () => {
     load('jsa-signatures.js?v=20260828a', () => {
       load('jsa-signature-layout-fix.js?v=20260820a', () => load('offline-jsa.js?v=20260827b'));
