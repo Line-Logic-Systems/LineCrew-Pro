@@ -4998,9 +4998,6 @@ if(page === 'productionPage'){
 currentProductionUtilityId = state.view === 'utilityProduction'
 ? String(state.utilityId || '')
 : '';
-Warning: truncated output (original token count: 58635)
-Total output lines: 5000
-
 currentProductionUtilityName = state.view === 'utilityProduction'
 ? String(state.utilityName || '')
 : '';
@@ -7381,7 +7378,847 @@ openButton.textContent = 'Open Package';
 openButton.onclick = ()=> openJobPackageDetails(jobPackage);
 row.appendChild(openButton);
 if(Number(jobPackage.revision_number || 1) > 1){
-const changesButton = document.createElement('bu…8635 tokens truncated…?.imported_rows || currentJobPackageImportRows.length} authorized unit rows imported. ` +
+const changesButton = document.createElement('button');
+changesButton.className = 'secondary small';
+changesButton.textContent = 'View Revision Changes';
+changesButton.onclick = ()=> toggleJobPackageRevisionChanges(jobPackage,row,changesButton);
+row.appendChild(changesButton);
+}
+if(
+userCanManageJobPackages() &&
+String(jobPackage.status || 'draft').toLowerCase() === 'draft'
+){
+const deleteButton = document.createElement('button');
+deleteButton.className = 'danger small';
+deleteButton.textContent = 'Delete Draft Package';
+deleteButton.onclick = ()=> deleteJobPackage(jobPackage);
+row.appendChild(deleteButton);
+}
+container.appendChild(row);
+});
+}
+async function toggleJobPackageRevisionChanges(jobPackage,row,button){
+const existing = row.querySelector('.packet-revision-delta');
+if(existing){ existing.remove(); button.textContent='View Revision Changes'; return; }
+button.disabled=true; button.textContent='Loading Changes...';
+const { data,error } = await sb.rpc('get_job_package_revision_delta_v2',{ p_package_id:jobPackage.id });
+button.disabled=false; button.textContent='Hide Revision Changes';
+if(error){ button.textContent='View Revision Changes'; return alert('Unable to compare packet revisions: '+error.message); }
+const panel=document.createElement('div'); panel.className='daily-report-history packet-revision-delta';
+if(!data?.length){
+panel.innerHTML='<strong>Revision Changes</strong><p class="muted">No authorized quantity changes were found.</p>';
+}else{
+panel.innerHTML='<strong>Revision Changes</strong>' + data.map(change =>
+'<div class="daily-history-event"><strong>WP '+escapeHtml(change.work_point)+' · '+escapeHtml(change.unit_code)+'</strong><br>'+
+'Install: '+escapeHtml(change.prior_install)+' → '+escapeHtml(change.new_install)+
+' ('+(Number(change.install_change)>=0?'+':'')+escapeHtml(change.install_change)+') · Transfer: '+
+escapeHtml(change.prior_transfer)+' → '+escapeHtml(change.new_transfer)+
+' ('+(Number(change.transfer_change)>=0?'+':'')+escapeHtml(change.transfer_change)+') · Remove: '+
+escapeHtml(change.prior_remove)+' → '+escapeHtml(change.new_remove)+
+' ('+(Number(change.remove_change)>=0?'+':'')+escapeHtml(change.remove_change)+')</div>'
+).join('');
+}
+row.appendChild(panel);
+}
+async function deleteJobPackage(jobPackage){
+if(!confirm(
+`Delete utility package "${jobPackage.package_name}"?\n\n` +
+'Its package work points and authorized units will be removed. ' +
+'Jobs, Price Books and daily reports will not be deleted.'
+)){
+return;
+}
+const { error } = await sb.rpc('delete_job_package', {
+p_package_id:jobPackage.id
+});
+if(error){
+return alert(error.message);
+}
+currentOpenJobPackage = null;
+$('jobPackageDetailCard').classList.add('hidden');
+await loadJobs();
+}
+async function openJobPackageDetails(jobPackage){
+$('jobPackageImportTools').appendChild($('jobPackageImportForm'));
+$('cancelJobPackageImportBtn').classList.remove('hidden');
+currentOpenJobPackage = jobPackage;
+$('jobPackageDetailTitle').textContent = jobPackage.package_name;
+refreshOpenJobPackageControls();
+resetJobPackageImport();
+const detailCard = $('jobPackageDetailCard');
+detailCard.classList.remove('hidden');
+// Scroll before loading, not after. This card sits near the top of the jobs
+// page while the job being read renders further down, so opening a package
+// used to unhide a card the reviewer could not see, wait on two round trips,
+// and only then scroll -- and if either threw, the scroll never ran and the
+// rejection was silent. Clicking Open Package did nothing at all.
+detailCard.scrollIntoView({ behavior:'smooth' });
+const progress = $('jobPackageProgress');
+progress.textContent = 'Loading package…';
+try{
+await loadPendingUtilityPacketReview(jobPackage);
+await loadJobPackageWorkPoints();
+}catch(error){
+// Show where it failed, not just what failed. Reading a stack trace out of
+// the browser console is not a reasonable thing to ask of the office admin
+// who hits this, so the first frame -- file, line and column -- is put on
+// screen next to the message where it can simply be read back to support.
+const firstFrame = firstStackFrame(error);
+progress.innerHTML = '<span class="import-error">This package could not be opened: ' +
+escapeHtml(error?.message || 'Unknown error.') + '</span>' +
+(firstFrame
+? '<div class="muted">Support detail: ' + escapeHtml(firstFrame.slice(0, 200)) + '</div>'
+: '');
+console.error('openJobPackageDetails failed', error);
+return;
+}
+// The work points change the card's height, so settle the scroll on the
+// finished layout rather than the empty one.
+detailCard.scrollIntoView({ behavior:'smooth' });
+}
+async function loadPendingUtilityPacketReview(jobPackage){
+const container = $('jobPackagePendingReview');
+container.innerHTML = '';
+const { data:pendingRows, error:pendingError } = await sb.rpc(
+'get_pending_utility_packet_import_for_package',
+{ p_package_id:jobPackage.id }
+);
+if(pendingError){
+container.innerHTML = '<p class="import-error">Unable to reopen packet review: ' +
+escapeHtml(pendingError.message) + '</p>';
+return;
+}
+const pending = pendingRows?.[0];
+if(!pending) return;
+let rows;
+try{
+rows = await fetchAllPacketReviewRows(pending.import_id);
+}catch(reviewError){
+container.innerHTML = '<p class="import-error">Unable to load packet review: ' +
+escapeHtml(reviewError.message) + '</p>';
+return;
+}
+const job = currentJobsCatalog.find(item => String(item.id) === String(jobPackage.job_id));
+if(!job){
+container.innerHTML = '<p class="import-error">The job for this packet was not found.</p>';
+return;
+}
+renderSmartPacketReview(container, job, jobPackage, pending.import_id, {
+work_order:pending.detected_work_order || jobPackage.package_number || '',
+confidence:pending.extraction_confidence,
+warnings:pending.extraction_summary?.warnings || []
+}, rows || []);
+}
+// PostgREST caps every response at its max-rows setting, so asking for a whole
+// packet review in one request silently truncated it: a 1203-row import
+// rendered 1000 rows, and the reviewer could neither see nor correct the other
+// 203. Nothing was ever imported unreviewed -- update_utility_packet_import_rows_bulk
+// requires the submitted rows to match the import's row count exactly -- but
+// that made the packet unimportable instead, failing with "The packet review
+// changed. Reopen it before saving." every time, because reopening truncated
+// again. An oversized packet was a dead end.
+//
+// Page instead, advancing by the rows actually received rather than the size
+// requested, so a server cap smaller than the page size cannot end the loop
+// early. Only an empty page stops it.
+const PACKET_REVIEW_PAGE_SIZE = 500;
+async function fetchAllPacketReviewRows(importId){
+const rows = [];
+const seen = new Set();
+let expectedTotal = null;
+while(true){
+const { data, error, count } = await sb
+.rpc('get_utility_packet_import_review',
+{ p_import_id:importId },
+expectedTotal === null ? { count:'exact' } : undefined)
+.range(rows.length, rows.length + PACKET_REVIEW_PAGE_SIZE - 1);
+if(error) throw new Error(error.message);
+if(expectedTotal === null && Number.isFinite(count)) expectedTotal = Number(count);
+const page = data || [];
+if(!page.length) break;
+page.forEach(row => {
+if(seen.has(row.row_id)) return;
+seen.add(row.row_id);
+rows.push(row);
+});
+if(rows.length > 20000){
+throw new Error(
+'This packet has more review rows than LineCrew Pro can show at once. ' +
+'Nothing was changed. Contact LineCrew Pro Support.'
+);
+}
+}
+// The reviewer must see every row before any of them import. If the server
+// reported a total we could not fully retrieve, refuse rather than render a
+// review that looks complete and is not.
+if(expectedTotal !== null && rows.length !== expectedTotal){
+throw new Error(
+'Only ' + rows.length + ' of ' + expectedTotal + ' packet rows could be loaded, ' +
+'so this review is incomplete. Nothing was changed. Reopen the packet to try again.'
+);
+}
+return rows;
+}
+// A utility writes units in its own vocabulary -- United calls #4 ACSR
+// "C4 7/1" and a 5 kVA transformer "DTran5Kva" -- so codes that are perfectly
+// valid on the packet are absent from the contract Price Book and block the
+// import. Mapping the code beats the two older workarounds: editing the box
+// overwrites what the utility authorized, and adding the code to the Price Book
+// fills a contract's book with units that are not in the contract. The mapping
+// is saved per contract, so it applies to every future packet from that utility
+// and never touches another utility's book.
+async function openPacketUnitMapper(container, job, packageRecord, importId, parsed, packetCode){
+const code = String(packetCode || '').trim();
+if(!code){
+alert('This row has no production unit to map.');
+return;
+}
+// Only one mapper at a time: the picker owns fixed element ids, so a second
+// open would leave duplicate ids and the datalist would attach to the wrong
+// input.
+container.querySelectorAll('.packet-unit-map-panel').forEach(open => open.remove());
+const panel = document.createElement('div');
+panel.className = 'job-card packet-unit-map-panel';
+panel.innerHTML = '<strong>Loading Price Book units…</strong>';
+container.prepend(panel);
+try{
+const { data:units, error } = await sb.rpc(
+'linecrew_price_book_units_for_import', { p_import_id:importId }
+);
+if(error) throw new Error(error.message);
+const options = (units || []).map(unit =>
+'<option value="' + escapeHtml(unit.item_code) + '">' +
+escapeHtml([unit.item_name, unit.description].filter(Boolean).join(' · ')) +
+'</option>'
+).join('');
+panel.innerHTML =
+'<div class="section-header"><div><strong>Map “' + escapeHtml(code) + '” to a Price Book unit</strong>' +
+'<div class="muted">Saved for this contract. Every row using “' + escapeHtml(code) +
+'” matches from now on, on this packet and future ones. The packet keeps its own code.</div>' +
+'</div></div>' +
+'<label for="packetUnitMapTarget">Price Book unit</label>' +
+'<input id="packetUnitMapTarget" list="packetUnitMapOptions" autocomplete="off" ' +
+'style="width:100%" placeholder="Start typing a unit code">' +
+'<datalist id="packetUnitMapOptions">' + options + '</datalist>' +
+'<div class="packet-unit-map-preview import-summary"></div>' +
+'<p class="muted">' + (units || []).length + ' units in this job’s Price Book.</p>' +
+'<div class="button-row">' +
+'<button type="button" class="success small packet-unit-map-save">Save Mapping</button>' +
+'<button type="button" class="secondary small packet-unit-map-clear">Remove Mapping</button>' +
+'<button type="button" class="secondary small packet-unit-map-cancel">Cancel</button>' +
+'</div><p class="packet-unit-map-error import-error"></p>';
+const input = panel.querySelector('#packetUnitMapTarget');
+const errorLine = panel.querySelector('.packet-unit-map-error');
+const preview = panel.querySelector('.packet-unit-map-preview');
+// The input holds the unit code, and a Price Book code can be far longer than
+// the box -- "10-15-25 kVA Conventional Transformer" shows as a fragment. A
+// mapping sets what the work bills at, so the chosen unit and its rates are
+// spelled out here before saving rather than inferred from a truncated field.
+const unitPrice = value =>
+value === null || value === undefined || value === '' ? '—' : '$' + Number(value).toFixed(2);
+const describeTarget = () => {
+const typed = String(input.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+if(!typed){
+preview.textContent = 'Choose the Price Book unit this code bills as.';
+return;
+}
+const unit = (units || []).find(item =>
+String(item.item_code || '').toUpperCase().replace(/[^A-Z0-9]/g, '') === typed
+);
+if(!unit){
+preview.textContent = 'No Price Book unit matches that yet — keep typing or pick from the list.';
+return;
+}
+preview.innerHTML = '<strong>' + escapeHtml(unit.item_code) + '</strong>' +
+(unit.description ? ' · ' + escapeHtml(unit.description) : '') +
+'<br>Install ' + unitPrice(unit.install_price) +
+' · Transfer ' + unitPrice(unit.transfer_price) +
+' · Remove ' + unitPrice(unit.retirement_price);
+};
+input.addEventListener('input', describeTarget);
+describeTarget();
+input.focus();
+const apply = async target => {
+errorLine.textContent = '';
+panel.querySelectorAll('button').forEach(button => { button.disabled = true; });
+try{
+const { error:saveError } = await sb.rpc(
+'linecrew_set_packet_unit_alias',
+{ p_import_id:importId, p_packet_code:code, p_target_item_code:target }
+);
+if(saveError) throw new Error(saveError.message);
+// Matching is recomputed server-side on read, so re-reading the review is
+// what proves the mapping took rather than assuming it did.
+const refreshed = await fetchAllPacketReviewRows(importId);
+panel.remove();
+renderSmartPacketReview(container, job, packageRecord, importId, parsed, refreshed);
+}catch(saveError){
+errorLine.textContent = saveError.message || 'The mapping could not be saved.';
+panel.querySelectorAll('button').forEach(button => { button.disabled = false; });
+}
+};
+panel.querySelector('.packet-unit-map-save').onclick = () => {
+const target = input.value.trim();
+if(!target){
+errorLine.textContent = 'Choose the Price Book unit this code means.';
+return;
+}
+apply(target);
+};
+panel.querySelector('.packet-unit-map-clear').onclick = () => apply('');
+panel.querySelector('.packet-unit-map-cancel').onclick = () => panel.remove();
+}catch(error){
+panel.innerHTML = '<strong>Unit mapping unavailable</strong><p class="import-error">' +
+escapeHtml(error.message || 'The Price Book units could not be loaded.') + '</p>' +
+'<button type="button" class="secondary small">Close</button>';
+panel.querySelector('button').onclick = () => panel.remove();
+}
+}
+function refreshOpenJobPackageControls(){
+if(!currentOpenJobPackage){
+return;
+}
+const status = String(currentOpenJobPackage.status || 'draft').toLowerCase();
+const source = currentOpenJobPackage.source_filename
+? ' · Source: ' + currentOpenJobPackage.source_filename
+: '';
+$('jobPackageDetailSubtitle').textContent =
+'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +
+' · Status: ' + status.toUpperCase() + source;
+const canManagePackage = userCanManageJobPackages();
+const isDraft = status === 'draft';
+$('jobPackageAdminTools').classList.toggle('hidden', !canManagePackage || !isDraft);
+$('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || !isDraft);
+const statusButton = $('jobPackageStatusActionBtn');
+statusButton.classList.toggle('hidden', !canManagePackage);
+if(!canManagePackage){
+return;
+}
+if(status === 'draft'){
+statusButton.textContent = 'Activate Package';
+statusButton.className = 'success small';
+}else if(status === 'active'){
+statusButton.textContent = 'Close Package';
+statusButton.className = 'warning small';
+}else{
+statusButton.textContent = 'Reopen Package';
+statusButton.className = 'success small';
+}
+}
+async function changeJobPackageStatus(){
+if(!currentOpenJobPackage || !userCanManageJobPackages()){
+return;
+}
+const currentStatus = String(currentOpenJobPackage.status || 'draft').toLowerCase();
+const nextStatus = currentStatus === 'active' ? 'closed' : 'active';
+const action = currentStatus === 'draft'
+? 'activate'
+: currentStatus === 'active'
+? 'close'
+: 'reopen';
+if(!confirm(
+`${action.charAt(0).toUpperCase() + action.slice(1)} utility package ` +
+`"${currentOpenJobPackage.package_name}"?`
+)){
+return;
+}
+const { data, error } = await sb.rpc('set_job_package_status', {
+p_package_id:currentOpenJobPackage.id,
+p_status:nextStatus
+});
+if(error){
+return alert(error.message);
+}
+currentOpenJobPackage.status = data || nextStatus;
+refreshOpenJobPackageControls();
+await loadJobPackageWorkPoints();
+await loadJobs();
+}
+$('jobPackageStatusActionBtn').onclick = changeJobPackageStatus;
+async function loadJobPackageWorkPoints(){
+if(!currentOpenJobPackage){
+return;
+}
+const { data:lines, error } = await sb.rpc(
+'get_job_package_work_points_v2',
+{ p_package_id:currentOpenJobPackage.id }
+);
+if(error){
+alert('Unable to load package work points: ' + error.message);
+return;
+}
+renderJobPackageWorkPoints(lines || []);
+}
+function renderJobPackageWorkPoints(lines){
+const pointGroups = new Map();
+const packageIsEditable = userCanManageJobPackages() &&
+String(currentOpenJobPackage?.status || 'draft').toLowerCase() === 'draft';
+lines.forEach(line => {
+if(!pointGroups.has(line.work_point_id)){
+pointGroups.set(line.work_point_id, {
+id:line.work_point_id,
+code:line.work_point_code,
+description:line.work_point_description,
+units:[]
+});
+}
+if(line.authorized_unit_id){
+pointGroups.get(line.work_point_id).units.push(line);
+}
+});
+const unitLines = lines.filter(line => line.authorized_unit_id);
+const authorizedValue = unitLines.reduce(
+(sum, line) => sum + Number(line.authorized_value || 0), 0
+);
+const reportedValue = unitLines.reduce(
+(sum, line) => sum + Number(line.reported_value || 0), 0
+);
+const approvedValue = unitLines.reduce(
+(sum, line) => sum + Number(line.approved_value || 0), 0
+);
+const reportedPercent = authorizedValue > 0
+? Math.min(100, reportedValue / authorizedValue * 100)
+: 0;
+const approvedPercent = authorizedValue > 0
+? Math.min(100, approvedValue / authorizedValue * 100)
+: 0;
+$('jobPackageProgress').innerHTML = `
+${userCanSeeFieldMoney() ? '<strong>Authorized Value: ' + escapeHtml(formatCurrency(authorizedValue)) + '</strong>' : ''}
+<strong>Reported: ${reportedPercent.toFixed(1)}%</strong>
+<strong>Approved: ${approvedPercent.toFixed(1)}%</strong>
+<strong>Work Points: ${pointGroups.size}</strong>
+`;
+const container = $('jobPackageWorkPoints');
+container.innerHTML = '';
+if(!pointGroups.size){
+container.innerHTML = '<p class="muted">No work points added yet.</p>';
+return;
+}
+pointGroups.forEach(point => {
+const card = document.createElement('div');
+card.className = 'job-card';
+card.innerHTML = `
+<strong>${escapeHtml(point.code)}</strong>
+${point.description
+? '<div class="muted">' + escapeHtml(point.description) + '</div>'
+: ''}
+<div class="authorized-units"></div>
+`;
+const unitContainer = card.querySelector('.authorized-units');
+if(!point.units.length){
+unitContainer.innerHTML = '<p class="muted">No authorized units added.</p>';
+}else{
+point.units.forEach(unit => {
+const row = document.createElement('div');
+row.className = 'unit-compact-card';
+const remainingInstall = Math.max(
+Number(unit.authorized_install_quantity || 0) -
+Number(unit.reported_install_quantity || 0),
+0
+);
+const remainingTransfer = Math.max(
+Number(unit.authorized_transfer_quantity || 0) -
+Number(unit.reported_transfer_quantity || 0),
+0
+);
+const remainingRetirement = Math.max(
+Number(unit.authorized_retirement_quantity || 0) -
+Number(unit.reported_retirement_quantity || 0),
+0
+);
+row.innerHTML = `
+<strong>${escapeHtml(unit.unit_code)}</strong> —
+${escapeHtml(unit.unit_name || unit.unit_description || '')}
+<div class="muted">
+Authorized I: ${unit.authorized_install_quantity} ·
+T: ${unit.authorized_transfer_quantity} ·
+R: ${unit.authorized_retirement_quantity} ·
+Reported I: ${unit.reported_install_quantity} ·
+T: ${unit.reported_transfer_quantity} ·
+R: ${unit.reported_retirement_quantity} ·
+Approved I: ${unit.approved_install_quantity} ·
+T: ${unit.approved_transfer_quantity} ·
+R: ${unit.approved_retirement_quantity}<br>
+<strong>Remaining I: ${dailyQuantityText(remainingInstall)} ·
+T: ${dailyQuantityText(remainingTransfer)} ·
+R: ${dailyQuantityText(remainingRetirement)}</strong>
+</div>
+`;
+if(packageIsEditable){
+const deleteButton = document.createElement('button');
+deleteButton.className = 'danger small';
+deleteButton.textContent = 'Delete Authorized Unit';
+deleteButton.onclick = ()=> deleteJobPackageAuthorizedUnit(unit);
+row.appendChild(deleteButton);
+}
+unitContainer.appendChild(row);
+});
+}
+if(packageIsEditable){
+const form = document.createElement('div');
+form.className = 'grid';
+form.innerHTML = `
+<div><label>Unit Code</label><input class="authorized-unit-code" placeholder="Contract unit code"></div>
+<div><label>Install Quantity</label><input class="authorized-install" type="number" min="0" step="0.01" value="0"></div>
+<div><label>Transfer Quantity</label><input class="authorized-transfer" type="number" min="0" step="0.01" value="0"></div>
+<div><label>Remove Quantity</label><input class="authorized-retirement" type="number" min="0" step="0.01" value="0"></div>
+<div><button class="success add-authorized-unit">Add Authorized Unit</button></div>
+`;
+form.querySelector('.add-authorized-unit').onclick = ()=>
+saveJobPackageAuthorizedUnit(point.id, form);
+card.appendChild(form);
+if(!point.units.length){
+const deletePointButton = document.createElement('button');
+deletePointButton.className = 'danger small';
+deletePointButton.textContent = 'Delete Empty Work Point';
+deletePointButton.onclick = ()=> deleteJobPackageWorkPoint(point);
+card.appendChild(deletePointButton);
+}
+}
+container.appendChild(card);
+});
+}
+async function deleteJobPackageAuthorizedUnit(unit){
+if(!confirm(`Delete authorized unit ${unit.unit_code} from this work point?`)){
+return;
+}
+const { error } = await sb.rpc('delete_job_package_authorized_unit', {
+p_authorized_unit_id:unit.authorized_unit_id
+});
+if(error){
+return alert(error.message);
+}
+await loadJobPackageWorkPoints();
+}
+async function deleteJobPackageWorkPoint(point){
+if(!confirm(`Delete empty work point "${point.code}"?`)){
+return;
+}
+const { error } = await sb.rpc('delete_job_package_work_point', {
+p_work_point_id:point.id
+});
+if(error){
+return alert(error.message);
+}
+await loadJobPackageWorkPoints();
+}
+async function saveJobPackageAuthorizedUnit(workPointId, form){
+const unitCode = form.querySelector('.authorized-unit-code').value.trim();
+const installQuantity = Number(form.querySelector('.authorized-install').value || 0);
+const transferQuantity = Number(form.querySelector('.authorized-transfer').value || 0);
+const retirementQuantity = Number(form.querySelector('.authorized-retirement').value || 0);
+if(!unitCode || installQuantity < 0 || transferQuantity < 0 ||
+retirementQuantity < 0 ||
+installQuantity + transferQuantity + retirementQuantity <= 0){
+return alert('Enter a unit code and an authorized quantity greater than zero.');
+}
+const { error } = await sb.rpc('save_job_package_authorized_unit_v2', {
+p_work_point_id:workPointId,
+p_unit_code:unitCode,
+p_install_quantity:installQuantity,
+p_transfer_quantity:transferQuantity,
+p_retirement_quantity:retirementQuantity
+});
+if(error){
+return alert(error.message);
+}
+await loadJobPackageWorkPoints();
+}
+$('addJobPackageWorkPointBtn').onclick = async()=>{
+const code = $('jobPackageWorkPointCode').value.trim();
+if(!currentOpenJobPackage || !code){
+return alert('Enter a pole or work-point number.');
+}
+const { error } = await sb.rpc('create_job_package_work_point', {
+p_package_id:currentOpenJobPackage.id,
+p_work_point_code:code,
+p_description:$('jobPackageWorkPointDescription').value.trim() || null
+});
+if(error){
+return alert(error.message);
+}
+$('jobPackageWorkPointCode').value = '';
+$('jobPackageWorkPointDescription').value = '';
+await loadJobPackageWorkPoints();
+};
+$('closeJobPackageDetailBtn').onclick = ()=>{
+currentOpenJobPackage = null;
+$('jobPackageDetailCard').classList.add('hidden');
+};
+const jobPacketMappingDefinitions = [
+{ id:'jobMapWorkPoint', aliases:['pole','polenumber','polelocation','workpoint','workpointnumber','location'] },
+{ id:'jobMapDescription', aliases:['description','workpointdescription','locationdescription','notes'] },
+{ id:'jobMapUnitCode', aliases:['unitcode','itemcode','code','workunit','unitnumber'] },
+{ id:'jobMapWorkType', aliases:['worktype','action','type','installremove'] },
+{ id:'jobMapQuantity', aliases:['quantity','qty','authorizedquantity'] },
+{ id:'jobMapInstallQuantity', aliases:['installquantity','installqty','installedquantity','install'] },
+{ id:'jobMapTransferQuantity', aliases:['transferquantity','transferqty','transferredquantity','transfer','xferquantity','xferqty','xfer'] },
+{ id:'jobMapRemoveQuantity', aliases:['removequantity','removeqty','retirementquantity','retireqty','remove','retirement'] }
+];
+function resetJobPackageImport(){
+currentJobPackageImportReadToken += 1;
+currentJobPackageImportWorkbook = null;
+currentJobPackageImportRows = [];
+currentJobPackageImportFilename = null;
+$('jobPackageImportFile').value = '';
+$('jobPackageImportForm').classList.add('hidden');
+$('jobPackageImportWorksheetWrap').classList.add('hidden');
+$('jobPackageImportMapping').classList.add('hidden');
+$('previewJobPackageImportBtn').classList.add('hidden');
+$('confirmJobPackageImportBtn').classList.add('hidden');
+$('jobPackageImportPreview').innerHTML = '';
+$('toggleJobPackageImportBtn').textContent = 'Import CSV / Excel';
+}
+function setJobPackageImportOpen(open){
+$('jobPackageImportForm').classList.toggle('hidden', !open);
+$('toggleJobPackageImportBtn').textContent = open
+? 'Hide Import'
+: 'Import CSV / Excel';
+if(open){
+$('jobPackageImportFile').focus();
+}
+}
+function configureJobPacketMappings(headers){
+jobPacketMappingDefinitions.forEach(definition => {
+const select = $(definition.id);
+select.innerHTML = '<option value="">Not provided</option>';
+headers.forEach(header => {
+const option = document.createElement('option');
+option.value = header;
+option.textContent = header;
+if(definition.aliases.includes(normalizeImportHeader(header))){
+option.selected = true;
+}
+select.appendChild(option);
+});
+});
+$('jobPackageImportMapping').classList.remove('hidden');
+$('previewJobPackageImportBtn').classList.remove('hidden');
+}
+function jobPacketMappedValue(row, selectId){
+const column = $(selectId).value;
+return column ? row[column] : '';
+}
+function normalizeJobPacketPoint(value){
+const key = String(value || '')
+.trim()
+.toLowerCase()
+.replace(/^(pole|wp|work[\s_-]*point)[\s#:_-]*/i, '')
+.replace(/[^a-z0-9]+/g, '');
+return /^\d+$/.test(key)
+? (key.replace(/^0+(?=\d)/, '') || '0')
+: key;
+}
+async function previewJobPackageImport(){
+if(!$('jobMapWorkPoint').value || !$('jobMapUnitCode').value){
+return alert('Select the Pole / Work Point and Unit Code columns.');
+}
+if(
+!$('jobMapQuantity').value &&
+!$('jobMapInstallQuantity').value &&
+!$('jobMapTransferQuantity').value &&
+!$('jobMapRemoveQuantity').value
+){
+return alert('Select a Quantity column or separate Install / Transfer / Remove quantity columns.');
+}
+const sheetName = $('jobPackageImportWorksheet').value;
+const sheet = currentJobPackageImportWorkbook?.Sheets?.[sheetName];
+if(!sheet){
+return alert('The selected worksheet could not be read.');
+}
+const sourceRows = XLSX.utils.sheet_to_json(sheet, {
+defval:'', raw:false, blankrows:false
+});
+const grouped = new Map();
+sourceRows.forEach((source, index) => {
+const workPoint = String(jobPacketMappedValue(source, 'jobMapWorkPoint') || '').trim();
+const unitCode = String(jobPacketMappedValue(source, 'jobMapUnitCode') || '').trim();
+const description = String(jobPacketMappedValue(source, 'jobMapDescription') || '').trim();
+let installQuantity = importPrice(jobPacketMappedValue(source, 'jobMapInstallQuantity'));
+let transferQuantity = importPrice(jobPacketMappedValue(source, 'jobMapTransferQuantity'));
+let retirementQuantity = importPrice(jobPacketMappedValue(source, 'jobMapRemoveQuantity'));
+const genericQuantity = importPrice(jobPacketMappedValue(source, 'jobMapQuantity'));
+const workType = String(jobPacketMappedValue(source, 'jobMapWorkType') || '').toLowerCase();
+if($('jobMapQuantity').value){
+if(/^(transfer|xfer|move|reframe|relocate)/.test(workType)){
+transferQuantity += genericQuantity;
+}else if(/^(remove|removal|retire|retirement|demo|salvage)/.test(workType)){
+retirementQuantity += genericQuantity;
+}else{
+installQuantity += genericQuantity;
+}
+}
+const key = normalizeJobPacketPoint(workPoint) + '|' + unitCode.toLowerCase();
+if(!grouped.has(key)){
+grouped.set(key, {
+row_number:index + 2,
+work_point_code:workPoint,
+work_point_description:description || null,
+unit_code:unitCode,
+install_quantity:0,
+transfer_quantity:0,
+retirement_quantity:0,
+errors:[]
+});
+}
+const row = grouped.get(key);
+row.install_quantity += Number.isFinite(installQuantity) ? installQuantity : 0;
+row.transfer_quantity += Number.isFinite(transferQuantity) ? transferQuantity : 0;
+row.retirement_quantity += Number.isFinite(retirementQuantity) ? retirementQuantity : 0;
+if(!workPoint) row.errors.push('Missing work point');
+if(!unitCode) row.errors.push('Missing unit code');
+if(!Number.isFinite(installQuantity) || !Number.isFinite(transferQuantity) ||
+!Number.isFinite(retirementQuantity)){
+row.errors.push('Invalid quantity');
+}
+});
+currentJobPackageImportRows = [...grouped.values()];
+if(!currentJobPackageImportRows.length){
+return alert('No completed packet rows were found.');
+}
+if(currentJobPackageImportRows.length > 2000){
+return alert('This release imports up to 2,000 consolidated work-point units at a time.');
+}
+const { data:validation, error } = await sb.rpc('validate_job_package_import', {
+p_package_id:currentOpenJobPackage.id,
+p_rows:currentJobPackageImportRows.map(({errors, ...row}) => row)
+});
+if(error){
+return alert('Unable to validate packet: ' + error.message);
+}
+const validationByRow = new Map((validation || []).map(result => [
+Number(result.row_number), result
+]));
+currentJobPackageImportRows.forEach(row => {
+const result = validationByRow.get(Number(row.row_number));
+if(result && !result.is_valid){
+row.errors.push(result.error_message || 'Unit could not be validated');
+}
+if(row.install_quantity + row.transfer_quantity + row.retirement_quantity <= 0){
+row.errors.push('Quantity must be greater than zero');
+}
+});
+renderJobPackageImportPreview();
+}
+function renderJobPackageImportPreview(){
+const invalid = currentJobPackageImportRows.filter(row => row.errors.length);
+let html = `<div class="import-summary"><strong>${currentJobPackageImportRows.length - invalid.length} ready</strong><br>` +
+`${invalid.length} need attention. Nothing has been saved.</div>`;
+html += '<div class="import-table-wrap"><table class="import-table"><thead><tr>' +
+'<th>Row</th><th>Work Point</th><th>Unit</th><th>Install</th><th>Transfer</th><th>Remove</th><th>Status</th>' +
+'</tr></thead><tbody>';
+currentJobPackageImportRows.slice(0, 100).forEach(row => {
+html += `<tr><td>${row.row_number}</td><td>${escapeHtml(row.work_point_code || '—')}</td>` +
+`<td>${escapeHtml(row.unit_code || '—')}</td><td>${row.install_quantity}</td>` +
+`<td>${row.transfer_quantity}</td><td>${row.retirement_quantity}</td><td class="${row.errors.length ? 'import-error' : ''}">` +
+`${escapeHtml(row.errors.length ? row.errors.join('; ') : 'Ready')}</td></tr>`;
+});
+html += '</tbody></table></div>';
+if(currentJobPackageImportRows.length > 100){
+html += '<p class="muted">Preview shows the first 100 consolidated rows.</p>';
+}
+$('jobPackageImportPreview').innerHTML = html;
+$('confirmJobPackageImportBtn').classList.toggle('hidden', invalid.length > 0);
+$('confirmJobPackageImportBtn').textContent =
+`Confirm Import of ${currentJobPackageImportRows.length} Units`;
+}
+$('toggleJobPackageImportBtn').onclick = ()=>{
+setJobPackageImportOpen(
+$('jobPackageImportForm').classList.contains('hidden')
+);
+};
+$('cancelJobPackageImportBtn').onclick = resetJobPackageImport;
+$('previewJobPackageImportBtn').onclick = previewJobPackageImport;
+$('jobPackageImportWorksheet').onchange = ()=>{
+const sheet = currentJobPackageImportWorkbook.Sheets[$('jobPackageImportWorksheet').value];
+const rows = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:false, blankrows:false });
+if(rows.length) configureJobPacketMappings(Object.keys(rows[0]));
+$('jobPackageImportPreview').innerHTML = '';
+$('confirmJobPackageImportBtn').classList.add('hidden');
+};
+async function handleJobPackageImportFile(file){
+if(!file) return;
+if(typeof XLSX === 'undefined'){
+return alert('The spreadsheet reader did not load. Refresh and try again.');
+}
+const readToken = ++currentJobPackageImportReadToken;
+currentJobPackageImportWorkbook = null;
+currentJobPackageImportRows = [];
+currentJobPackageImportFilename = null;
+$('jobPackageImportMapping').classList.add('hidden');
+$('previewJobPackageImportBtn').classList.add('hidden');
+$('confirmJobPackageImportBtn').classList.add('hidden');
+$('jobPackageImportPreview').innerHTML = '';
+try{
+const workbook = XLSX.read(await file.arrayBuffer());
+if(readToken !== currentJobPackageImportReadToken) return false;
+const names = workbook.SheetNames || [];
+if(!names.length) throw new Error('The file does not contain a worksheet.');
+const rows = XLSX.utils.sheet_to_json(workbook.Sheets[names[0]], {
+defval:'', raw:false, blankrows:false
+});
+if(!rows.length) throw new Error('No completed rows were found.');
+currentJobPackageImportFilename = file.name;
+currentJobPackageImportWorkbook = workbook;
+$('jobPackageImportWorksheet').innerHTML = '';
+names.forEach(name => {
+const option = document.createElement('option');
+option.value = name;
+option.textContent = name;
+$('jobPackageImportWorksheet').appendChild(option);
+});
+$('jobPackageImportWorksheetWrap').classList.toggle('hidden', names.length < 2);
+configureJobPacketMappings(Object.keys(rows[0]));
+if(
+$('jobPackageFormCard').contains($('jobPackageImportForm')) &&
+!$('jobPackageName').value.trim()
+){
+$('jobPackageName').value = String(file.name || '')
+.replace(/\.[^.]+$/, '')
+.trim();
+}
+return true;
+}catch(error){
+if(readToken !== currentJobPackageImportReadToken) return false;
+currentJobPackageImportWorkbook = null;
+currentJobPackageImportFilename = null;
+alert('Unable to read packet: ' + error.message);
+return false;
+}
+}
+$('jobPackageImportFile').onchange = async event => {
+await handleJobPackageImportFile(event.target.files?.[0]);
+};
+$('confirmJobPackageImportBtn').onclick = async()=>{
+if(!currentOpenJobPackage || !currentJobPackageImportRows.length) return;
+if(!confirm(
+`Import ${currentJobPackageImportRows.length} authorized unit rows into ` +
+`"${currentOpenJobPackage.package_name}"? Nothing is saved until you confirm OK.`
+)) return;
+const button = $('confirmJobPackageImportBtn');
+button.disabled = true;
+button.textContent = 'Importing...';
+const { data, error } = await sb.rpc('finalize_job_package_spreadsheet_import', {
+p_package_id:currentOpenJobPackage.id,
+p_rows:currentJobPackageImportRows.map(({errors, ...row}) => row),
+p_source_filename:currentJobPackageImportFilename
+});
+button.disabled = false;
+if(error){
+button.textContent = 'Confirm Import';
+return alert('Nothing was imported: ' + error.message);
+}
+const importedStatus = String(data?.status || data?.package_status || '').toLowerCase();
+if(importedStatus !== 'active'){
+button.textContent = 'Confirm Import';
+return alert(
+'The authorized rows were processed, but LineCrew Pro could not confirm that the ' +
+'job jacket became active. Reopen the existing job and package before retrying.'
+);
+}
+currentOpenJobPackage.status = importedStatus;
+alert(
+`${data?.imported_rows || currentJobPackageImportRows.length} authorized unit rows imported. ` +
 'The job jacket is active and available to assigned Foremen.'
 );
 const inlineCreation =
