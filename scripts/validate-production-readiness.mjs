@@ -746,7 +746,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v78") &&
+    serviceWorker.includes("linecrew-pro-shell-v79") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1112,7 +1112,10 @@ for (const marker of [
   "details.className = 'production-contract-summary'",
   'productionReportingMetricsMarkup(contract.reports)',
   'productionReportingMetricsMarkup(job.reports)',
-  'const canViewProductionReporting = userCanUseReporting();'
+  'const canViewProductionReporting = userCanUseReporting();',
+  'id="productionAdvancedFilters"',
+  'class="production-filter-basic-grid"',
+  '<summary>Advanced Filters</summary>'
 ]) assert(index.includes(marker), `Contract production-reporting marker missing: ${marker}`);
 for (const marker of [
   'id="productionUtilityDirectory"',
