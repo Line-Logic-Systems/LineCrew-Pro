@@ -477,6 +477,15 @@ button {
   box-shadow: 0 2px 10px rgba(11, 45, 77, .15);
 }
 
+.lc-profile-photo-picker {
+  display: flex;
+  gap: 8px;
+}
+
+#myProfilePhotoSelection {
+  margin: 0;
+}
+
 @media (max-width: 1099px), (pointer: coarse) {
   .lc-role-sidebar {
     display: none !important;
