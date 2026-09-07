@@ -507,7 +507,7 @@ assert(
 assert(packetParser.includes('event: "packet_parse_completed"') && packetParser.includes('reasoning_tokens:'), 'Job-packet parsing must log token usage for cost monitoring.');
 assert(packetParser.includes('Math.min(2, totalPages - pageOffset)'), 'Job-packet parsing must remain compatible with already-open two-page client sessions during rollout.');
 assert(appPolish.includes("tile.setAttribute('role','link')") && appPolish.includes("tile.addEventListener('keydown'"), 'Dashboard tiles must support keyboard and screen-reader navigation.');
-assert(index.includes('Create, review and report daily production'), 'The Production dashboard description must reflect the shipped workflow.');
+assert(index.includes('Track completed units, revenue, performance and Daily Reports'), 'The Production dashboard description must reflect the shipped workflow.');
 
 for (const marker of [
   'create table if not exists public.job_closeout_history',
@@ -746,7 +746,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v76") &&
+    serviceWorker.includes("linecrew-pro-shell-v77") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1119,8 +1119,8 @@ for (const marker of [
   'id="productionUtilityDetailHeader"',
   'productionUtilityPrimaryMetricsMarkup',
   'View All Metrics',
-  'completionPercent',
-  "Completion</span>",
+  'activeJobCount',
+  "Active Jobs</span>",
   'id="productionContractFilter"',
   'function renderProductionUtilityDirectory(reports)',
   'productionReportingMetricsMarkup(group.reports)',
