@@ -1179,6 +1179,19 @@ font-weight:800;
 .daily-authorization.pending_packet{ background:#fff3d6; color:#8a5800; }
 .daily-authorization.redline{ background:#fde5e5; color:#b42318; }
 .daily-authorization-note{ margin-top:5px; color:#b42318; font-size:12px; }
+.daily-redline-comment{
+grid-column:1 / -1;
+padding:10px;
+border:1px solid #efb4b4;
+border-radius:8px;
+background:#fff7f7;
+}
+.daily-redline-comment label{ color:#9b1c1c; }
+.daily-redline-comment textarea{
+min-height:76px;
+margin:6px 0;
+resize:vertical;
+}
 .checkbox-row{
 display:flex;
 align-items:center;
@@ -17176,6 +17189,9 @@ document.createElement('button');
 submitBtn.className = 'success small';
 submitBtn.textContent = 'Submit Report';
 submitBtn.onclick = async () => {
+const redlineCommentsReady =
+await requireDailyReportRedlineComments(report);
+if(!redlineCommentsReady) return;
 const confirmed =
 confirm(
 'Submit this daily report for GF review?'
@@ -17385,7 +17401,7 @@ printWindow.document.write(
 '<p style="font-family:Arial;padding:24px">Preparing daily report...</p>'
 );
 const { data:units, error } = await sb.rpc(
-'get_daily_report_unit_locations_visible_v2',
+'get_daily_report_unit_locations_visible_v3',
 { p_report_id:report.id }
 );
 if(error){
@@ -17656,7 +17672,7 @@ const authorizedRowsRequest = canEditDraft && report.job_id
 : Promise.resolve({ data:[], error:null });
 const [catalogResult, savedResult, usageResult, authorizedResult] = await Promise.all([
 sb.rpc('get_daily_report_unit_catalog_visible_v2', { p_report_id:report.id }),
-sb.rpc('get_daily_report_unit_locations_visible_v2', { p_report_id:report.id }),
+sb.rpc('get_daily_report_unit_locations_visible_v3', { p_report_id:report.id }),
 sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id }),
 authorizedRowsRequest
 ]);
@@ -17815,13 +17831,19 @@ const poleCard = document.createElement('details');
 poleCard.className = 'daily-saved-pole';
 // Reviewers opened this screen specifically to inspect production.
 // Show the saved unit lines immediately instead of requiring another click.
-poleCard.open = !canEdit;
+const poleRedlineCount = poleItems.filter(item =>
+String(item.authorization_status || '').toLowerCase() === 'redline'
+).length;
+poleCard.open = !canEdit || poleRedlineCount > 0;
 const summary = document.createElement('summary');
 summary.innerHTML =
 '<span><strong>' + escapeHtml(location) + '</strong><br>' +
 '<span class="muted">' + poleItems.length + ' unit line' +
 (poleItems.length === 1 ? '' : 's') + '</span></span>' +
-'<span class="daily-saved-pole-review">Review / Edit</span>';
+'<span class="daily-saved-pole-review">' +
+(poleRedlineCount > 0
+? poleRedlineCount + ' REDLINE — COMMENT REQUIRED'
+: 'Review / Edit') + '</span>';
 poleCard.appendChild(summary);
 const poleBody = document.createElement('div');
 poleBody.className = 'daily-saved-pole-body';
@@ -17840,6 +17862,20 @@ const authorizationLabel = authorizationStatus === 'authorized'
 const authorizationNote = item.authorization_note
 ? '<div class="daily-authorization-note">' +
 escapeHtml(item.authorization_note) + '</div>'
+: '';
+const redlineComment = authorizationStatus === 'redline'
+? `<div class="daily-redline-comment">
+<label>Foreman Redline Comment ${canEdit ? '(Required)' : ''}</label>
+<textarea class="daily-redline-comment-input" maxlength="1000"
+placeholder="Explain why this work differs from the authorized job packet."
+${canEdit ? '' : 'disabled'}>${escapeHtml(item.redline_comment || '')}</textarea>
+${canEdit
+? '<button type="button" class="secondary small daily-redline-comment-save">Save Redline Comment</button>' +
+  '<div class="muted">Required before this report can be submitted.</div>'
+: (!item.redline_comment
+? '<div class="daily-authorization-note">No Foreman redline comment was provided.</div>'
+: '')}
+</div>`
 : '';
 row.innerHTML = `
 <div>
@@ -17871,6 +17907,7 @@ value="${escapeHtml(item.transfer_quantity || 0)}" ${canEdit ? '' : 'disabled'}>
 value="${escapeHtml(item.retirement_quantity || 0)}" ${canEdit ? '' : 'disabled'}>
 </div>
 <div class="daily-unit-actions"></div>
+${redlineComment}
 `;
 if(canEdit){
 const saveButton = document.createElement('button');
@@ -17883,6 +17920,11 @@ removeButton.className = 'danger small';
 removeButton.textContent = 'Remove';
 removeButton.onclick = () => deleteDailyUnitRow(item, removeButton);
 row.querySelector('.daily-unit-actions').appendChild(removeButton);
+const commentButton = row.querySelector('.daily-redline-comment-save');
+if(commentButton){
+commentButton.onclick = () =>
+saveDailyRedlineComment(item, row, commentButton);
+}
 }
 poleBody.appendChild(row);
 });
@@ -18042,6 +18084,7 @@ await selectDailyBatchUnit(batchRow, catalogItem);
 button.disabled = false;
 batchRow.actionInput.value = authorizedDailyWorkType(authorized.work_type);
 renderDailyUnitTotals();
+refreshDailyBatchAuthorizationPreviews();
 batchRow.selection.insertAdjacentHTML(
 'beforeend',
 '<div class="muted">From job jacket: ' +
@@ -18072,6 +18115,13 @@ element.innerHTML = `
 placeholder="Start typing a unit or description">
 <div class="daily-unit-suggestions hidden"></div>
 <div class="daily-batch-selection"></div>
+<div class="daily-redline-comment daily-batch-redline-comment hidden">
+<span class="daily-authorization redline">REDLINE</span>
+<div class="daily-authorization-note">This unit or quantity is outside the remaining authorized job-jacket quantity.</div>
+<label>Foreman Redline Comment (Required)</label>
+<textarea class="daily-batch-redline-comment-input" maxlength="1000"
+placeholder="Explain why this work differs from the authorized job packet."></textarea>
+</div>
 </div>
 <div>
 <label>Work Type</label>
@@ -18098,8 +18148,17 @@ actionInput:element.querySelector('.daily-batch-action'),
 quantityInput:element.querySelector('.daily-batch-quantity')
 };
 row.searchInput.oninput = () => renderDailyBatchSuggestions(row);
-row.actionInput.onchange = renderDailyUnitTotals;
-row.quantityInput.oninput = renderDailyUnitTotals;
+row.actionInput.onchange = () => {
+renderDailyUnitTotals();
+refreshDailyBatchAuthorizationPreviews();
+};
+row.quantityInput.oninput = () => {
+renderDailyUnitTotals();
+refreshDailyBatchAuthorizationPreviews();
+};
+row.redlinePanel = element.querySelector('.daily-batch-redline-comment');
+row.redlineCommentInput = element.querySelector('.daily-batch-redline-comment-input');
+row.isRedline = false;
 currentDailyUnitBatchRows.push(row);
 $('dailyUnitBatchRows').appendChild(element);
 }
@@ -18108,6 +18167,7 @@ const search = row.searchInput.value.trim().toLowerCase();
 row.selectedItem = null;
 row.selection.innerHTML = '';
 renderDailyUnitTotals();
+refreshDailyBatchAuthorizationPreviews();
 if(search.length < 2){
 row.suggestions.classList.add('hidden');
 row.suggestions.innerHTML = '';
@@ -18230,6 +18290,33 @@ escapeHtml(item.description || item.item_name || 'No description') +
 escapeHtml(dailyUnitWorkTypeLabel(inferredWorkType)) + '</strong></div>';
 row.quantityInput.focus();
 renderDailyUnitTotals();
+refreshDailyBatchAuthorizationPreviews();
+}
+function refreshDailyBatchAuthorizationPreviews(){
+const locationKey = dailyWorkPointKey($('dailyUnitPoleLocation').value);
+const runningQuantity = new Map();
+currentDailyUnitBatchRows.forEach(row => {
+row.isRedline = false;
+row.redlinePanel?.classList.add('hidden');
+if(!locationKey || !row.selectedItem) return;
+const quantity = Number(row.quantityInput.value || 0);
+if(!Number.isFinite(quantity) || quantity <= 0) return;
+const unitCode = String(row.selectedItem.item_code || '').trim().toLowerCase();
+const workType = authorizedDailyWorkType(row.actionInput.value);
+const key = locationKey + '|' + unitCode + '|' + workType;
+const enteredQuantity = Number(runningQuantity.get(key) || 0) + quantity;
+runningQuantity.set(key, enteredQuantity);
+const availableQuantity = currentDailyAuthorizedRows
+.filter(item =>
+dailyWorkPointKey(item.work_point_code) === locationKey &&
+String(item.unit_code || '').trim().toLowerCase() === unitCode &&
+authorizedDailyWorkType(item.work_type) === workType
+)
+.reduce((total, item) => total + dailyAuthorizedQuantityAvailable(item), 0);
+row.isRedline = currentDailyAuthorizedRows.length > 0 &&
+enteredQuantity > availableQuantity;
+row.redlinePanel?.classList.toggle('hidden', !row.isRedline);
+});
 }
 function inferDailyUnitWorkType(item){
 if(Number(item?.transfer_quantity || 0) > 0) return 'transfer';
@@ -18269,6 +18356,7 @@ $('dailyUnitPoleLocation').focus();
 return false;
 }
 const grouped = new Map();
+refreshDailyBatchAuthorizationPreviews();
 for(const [index, row] of enteredRows.entries()){
 const quantity = Number(row.quantityInput.value || 0);
 if(!row.selectedItem){
@@ -18279,6 +18367,12 @@ return false;
 if(!Number.isFinite(quantity) || quantity <= 0){
 alert('Enter a quantity greater than zero on completed line ' + (index + 1) + '.');
 row.quantityInput.focus();
+return false;
+}
+const redlineComment = String(row.redlineCommentInput?.value || '').trim();
+if(row.isRedline && !redlineComment){
+alert('Enter a Foreman redline comment on completed line ' + (index + 1) + '.');
+row.redlineCommentInput?.focus();
 return false;
 }
 const existing = findDailySavedUnitAtLocation(
@@ -18294,10 +18388,14 @@ item:row.selectedItem,
 location:persistedLocation,
 install:Number(existing?.install_quantity || 0),
 transfer:Number(existing?.transfer_quantity || 0),
-retirement:Number(existing?.retirement_quantity || 0)
+retirement:Number(existing?.retirement_quantity || 0),
+redlineComments:[]
 });
 }
 const line = grouped.get(key);
+if(redlineComment && !line.redlineComments.includes(redlineComment)){
+line.redlineComments.push(redlineComment);
+}
 if(row.actionInput.value === 'retirement'){
 line.retirement += quantity;
 }else if(row.actionInput.value === 'transfer'){
@@ -18327,6 +18425,51 @@ line.item.item_code + ' at ' + line.location + '. ' + error.message
 );
 await openDailyUnitEditor(currentDailyUnitReport);
 await loadProductionReports();
+return false;
+}
+}
+const { data:savedAfterBatch, error:savedAfterBatchError } = await sb.rpc(
+'get_daily_report_unit_locations_visible_v3',
+{ p_report_id:currentDailyUnitReport.id }
+);
+if(savedAfterBatchError){
+button.disabled = false;
+button.textContent = 'Save Pole & Add Next';
+alert('Units saved, but their redline status could not be checked: ' +
+savedAfterBatchError.message);
+return false;
+}
+for(const savedItem of (savedAfterBatch || []).filter(item =>
+dailyWorkPointKey(item.pole_location) === dailyWorkPointKey(location) &&
+String(item.authorization_status || '').toLowerCase() === 'redline' &&
+!String(item.redline_comment || '').trim()
+)){
+const line = grouped.get(
+savedItem.price_book_item_id + '|' + dailyWorkPointKey(savedItem.pole_location)
+);
+// Only attach comments entered in this batch. Existing redlines are handled
+// by their visible saved-unit comment box, never by a second browser prompt.
+if(!line) continue;
+const comment = String(line.redlineComments?.join('\n') || '').trim();
+if(!comment){
+button.disabled = false;
+button.textContent = 'Save Pole & Add Next';
+await openDailyUnitEditor(currentDailyUnitReport);
+alert('Use the redline comment box in the daily report before submitting.');
+return false;
+}
+const { error:commentError } = await sb.rpc(
+'save_daily_report_unit_redline_comment',
+{
+p_location_line_id:savedItem.location_line_id,
+p_comment:comment
+}
+);
+if(commentError){
+button.disabled = false;
+button.textContent = 'Save Pole & Add Next';
+await openDailyUnitEditor(currentDailyUnitReport);
+alert('Units saved, but the redline comment failed: ' + commentError.message);
 return false;
 }
 }
@@ -18365,6 +18508,56 @@ return;
 }
 await openDailyUnitEditor(currentDailyUnitReport);
 await loadProductionReports();
+}
+async function saveDailyRedlineComment(item, row, button){
+const input = row.querySelector('.daily-redline-comment-input');
+const comment = String(input?.value || '').trim();
+if(!comment){
+alert('Enter a comment explaining this redline.');
+input?.focus();
+return;
+}
+button.disabled = true;
+button.textContent = 'Saving...';
+const { error } = await sb.rpc('save_daily_report_unit_redline_comment', {
+p_location_line_id:item.location_line_id,
+p_comment:comment
+});
+if(error){
+button.disabled = false;
+button.textContent = 'Save Redline Comment';
+alert('Unable to save the redline comment: ' + error.message);
+return;
+}
+button.textContent = 'Saved';
+await openDailyUnitEditor(currentDailyUnitReport);
+await loadProductionReports();
+}
+async function requireDailyReportRedlineComments(report){
+const { data:unitRows, error } = await sb.rpc(
+'get_daily_report_unit_locations_visible_v3',
+{ p_report_id:report.id }
+);
+if(error){
+alert('Unable to check redline comments: ' + error.message);
+return false;
+}
+const missingComments = (unitRows || []).filter(item =>
+String(item.authorization_status || '').toLowerCase() === 'redline' &&
+!String(item.redline_comment || '').trim()
+);
+if(missingComments.length === 0) return true;
+await openDailyUnitEditor(report);
+alert(
+'Add a Foreman comment to ' + missingComments.length + ' redline unit ' +
+(missingComments.length === 1 ? 'before submitting.' : 'entries before submitting.')
+);
+setTimeout(() => {
+const input = document.querySelector('.daily-redline-comment-input');
+input?.scrollIntoView({ behavior:'smooth', block:'center' });
+input?.focus();
+}, 100);
+return false;
 }
 function dailyUnitValueLabel(item){
 const canSeeActual = userCanSeeActualContractPrices();
@@ -18481,7 +18674,10 @@ await loadProductionReports();
 $('addDailyUnitRowsBtn').onclick = () => addDailyUnitBatchRows(5);
 $('dailyUnitPoleLocation').addEventListener(
 'input',
-renderDailyAuthorizedUnitsForLocation
+() => {
+renderDailyAuthorizedUnitsForLocation();
+refreshDailyBatchAuthorizationPreviews();
+}
 );
 $('saveDailyUnitBatchBtn').onclick = saveDailyUnitBatch;
 async function offerForemanSubmitAfterUnits(report){
@@ -18504,6 +18700,12 @@ const keepDraftButton = document.createElement('button');
 keepDraftButton.className = 'secondary';
 keepDraftButton.textContent = 'Keep as Draft';
 submitButton.onclick = async () => {
+const redlineCommentsReady =
+await requireDailyReportRedlineComments(report);
+if(!redlineCommentsReady){
+backdrop.remove();
+return;
+}
 submitButton.disabled = true;
 keepDraftButton.disabled = true;
 submitButton.textContent = 'Submitting...';
@@ -18608,7 +18810,7 @@ approveBtn.className = 'success small';
 approveBtn.textContent = 'Approve';
 approveBtn.onclick = async () => {
 const { data: authorizationRows, error: authorizationError } = await sb.rpc(
-'get_daily_report_unit_locations_visible_v2',
+'get_daily_report_unit_locations_visible_v3',
 { p_report_id: report.id }
 );
 if(authorizationError){

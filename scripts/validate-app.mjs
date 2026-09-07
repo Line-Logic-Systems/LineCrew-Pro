@@ -62,11 +62,20 @@ assert(html.includes('createSafetyJsaHistoryCard'), 'Missing reusable JSA histor
 assert(html.includes('Crew Name / Number'), 'Daily Report crew identifier must be clearly labeled.');
 assert(
   html.includes("sb.rpc('get_daily_report_unit_catalog_visible_v2'") &&
-    html.includes('row.quantityInput.oninput = renderDailyUnitTotals') &&
+    html.includes('row.quantityInput.oninput = () => {') &&
+    html.includes('renderDailyUnitTotals();\nrefreshDailyBatchAuthorizationPreviews();') &&
     html.includes("action === 'transfer'") &&
     html.includes('const actualTotal = savedActualTotal + draftTotals.actual') &&
     html.includes('const adjustedTotal = savedAdjustedTotal + draftTotals.adjusted'),
   'Daily Unit Production must preview unsaved install, transfer, and retirement value as quantities change.'
+);
+assert(
+  html.includes("sb.rpc('get_daily_report_unit_locations_visible_v3'") &&
+    html.includes("sb.rpc('save_daily_report_unit_redline_comment'") &&
+    html.includes('Foreman Redline Comment ${canEdit ? \'(Required)\' : \'\'}') &&
+    html.includes('refreshDailyBatchAuthorizationPreviews') &&
+    html.includes('await requireDailyReportRedlineComments(report)'),
+  'Foremen must see and save an inline comment for every redline before submitting the Daily Report.'
 );
 assert(
   html.includes('await sb.auth.getUser()') &&
