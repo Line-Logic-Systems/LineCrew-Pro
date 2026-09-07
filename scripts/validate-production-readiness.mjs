@@ -746,7 +746,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260907b') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260907b') &&
-    serviceWorker.includes("linecrew-pro-shell-v81") &&
+    serviceWorker.includes("linecrew-pro-shell-v82") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'

@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 
 const html = fs.readFileSync('index.html', 'utf8');
+const responsiveShell = fs.readFileSync('responsive-role-shell.js', 'utf8');
+const responsiveShellStyles = fs.readFileSync('responsive-role-shell.css', 'utf8');
 const failures = [];
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
@@ -47,6 +49,23 @@ const extractNamedFunction = (source, name) => {
 };
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
+assert(
+  html.includes('/responsive-role-shell.css?v=20260907a') &&
+    html.includes('responsive-role-shell.js?v=20260907a'),
+  'Responsive role shell assets must be loaded by the application.'
+);
+assert(
+  responsiveShell.includes("tile.click()") &&
+    responsiveShell.includes("!tile.classList.contains('hidden')") &&
+    !responsiveShell.includes("navigateToAppPage('"),
+  'Desktop navigation must mirror visible dashboard tiles and reuse their existing handlers.'
+);
+assert(
+  responsiveShellStyles.includes('@media (min-width: 1100px) and (pointer: fine)') &&
+    responsiveShellStyles.includes('@media (max-width: 1099px), (pointer: coarse)') &&
+    responsiveShellStyles.includes('.lc-role-sidebar {\n    display: none !important;'),
+  'The permanent role sidebar must remain desktop-only and hidden on coarse/mobile pointers.'
+);
 assert(html.includes('/* LINECREW PRO SUPABASE */'), 'Missing main application script marker.');
 assert(html.includes('id="authPage"'), 'Missing authentication page.');
 assert(html.includes('id="dashboardPage"'), 'Missing dashboard page.');

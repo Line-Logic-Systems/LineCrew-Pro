@@ -1,0 +1,397 @@
+:root {
+  --lc-shell-sidebar-width: 264px;
+  --lc-shell-header-height: 76px;
+  --lc-shell-radius: 14px;
+  --lc-shell-shadow: 0 8px 24px rgba(11, 45, 77, .07);
+}
+
+body {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.card,
+.job-card,
+.metric {
+  border: 1px solid #dbe6ef;
+  border-radius: var(--lc-shell-radius);
+  box-shadow: var(--lc-shell-shadow);
+}
+
+.job-card {
+  box-shadow: 0 3px 12px rgba(11, 45, 77, .05);
+}
+
+button,
+input,
+select,
+textarea {
+  border-radius: 9px;
+}
+
+button {
+  font-weight: 750;
+  letter-spacing: -.01em;
+}
+
+.toolbar {
+  gap: 10px;
+}
+
+.toolbar > button,
+.section-header button,
+.button-row button {
+  min-height: 42px;
+}
+
+#dashboardTileGrid {
+  gap: 12px;
+}
+
+#dashboardTileGrid .metric {
+  position: relative;
+  min-height: 84px;
+  padding: 18px 48px 18px 20px;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+#dashboardTileGrid .metric::after {
+  content: "\203A";
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  color: #47647f;
+  font-size: 28px;
+  line-height: 1;
+  transform: translateY(-54%);
+}
+
+#dashboardTileGrid .metric:hover {
+  border-color: #9fc7e8;
+  box-shadow: 0 10px 28px rgba(11, 45, 77, .11);
+}
+
+#dashboardTileGrid .metric:focus-visible {
+  outline: 3px solid rgba(22, 119, 210, .28);
+  outline-offset: 2px;
+}
+
+#dashboardTileGrid .metric strong {
+  letter-spacing: -.02em;
+}
+
+#dashboardPage > .card:first-of-type:not(.storm-mode-banner),
+#dashboardPage > .storm-mode-banner + .card {
+  border-top: 3px solid #1677d2;
+}
+
+.lc-role-sidebar {
+  display: none;
+}
+
+@media (min-width: 1100px) and (pointer: fine) {
+  body.lc-shell-active {
+    --app-content-width: none;
+  }
+
+  body.lc-shell-active > header {
+    min-height: var(--lc-shell-header-height);
+    margin-left: var(--lc-shell-sidebar-width);
+    padding: 13px 30px;
+    border-bottom: 1px solid rgba(255, 255, 255, .12);
+  }
+
+  body.lc-shell-active > header .app-brand {
+    max-width: none;
+    margin: 0;
+  }
+
+  body.lc-shell-active > header .app-brand-logo,
+  body.lc-shell-active > header .app-brand > div:nth-child(2) {
+    display: none;
+  }
+
+  body.lc-shell-active > header .company-brand-badge {
+    margin-left: auto;
+  }
+
+  body.lc-shell-active > main {
+    width: auto;
+    max-width: none;
+    margin: 0 0 0 var(--lc-shell-sidebar-width);
+    padding: 26px clamp(24px, 3vw, 48px) 100px;
+  }
+
+  body.lc-shell-active > main > section:not(.hidden) {
+    width: 100%;
+    max-width: 1480px;
+    margin-inline: auto;
+  }
+
+  .lc-role-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 10010;
+    display: flex;
+    width: var(--lc-shell-sidebar-width);
+    flex-direction: column;
+    overflow: hidden;
+    color: #fff;
+    background: linear-gradient(180deg, #0a3358 0%, #071f36 100%);
+    box-shadow: 10px 0 30px rgba(5, 28, 49, .12);
+  }
+
+  .lc-role-sidebar__brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: var(--lc-shell-header-height);
+    padding: 13px 18px;
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 0;
+    color: #fff;
+    background: #082946;
+    text-align: left;
+  }
+
+  .lc-role-sidebar__brand:hover {
+    background: #0b355a;
+  }
+
+  .lc-role-sidebar__brand img {
+    width: 45px;
+    height: 45px;
+    flex: 0 0 auto;
+    border-radius: 10px;
+  }
+
+  .lc-role-sidebar__brand strong,
+  .lc-role-sidebar__brand span {
+    display: block;
+  }
+
+  .lc-role-sidebar__brand strong {
+    font-size: 17px;
+  }
+
+  .lc-role-sidebar__brand span {
+    margin-top: 2px;
+    color: #b9cee0;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .lc-role-sidebar__identity {
+    padding: 14px 18px 10px;
+  }
+
+  .lc-role-sidebar__identity strong,
+  .lc-role-sidebar__identity span {
+    display: block;
+  }
+
+  .lc-role-sidebar__identity strong {
+    overflow: hidden;
+    color: #fff;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .lc-role-sidebar__identity span {
+    margin-top: 3px;
+    color: #9fb9cf;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+
+  .lc-role-sidebar__nav {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 6px 10px 14px;
+    scrollbar-color: rgba(255, 255, 255, .25) transparent;
+  }
+
+  .lc-role-sidebar__item {
+    display: grid;
+    width: 100%;
+    min-height: 46px;
+    margin: 2px 0;
+    padding: 10px 12px;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    border-left: 3px solid transparent;
+    border-radius: 8px;
+    color: #eaf3fa;
+    background: transparent;
+    text-align: left;
+  }
+
+  .lc-role-sidebar__item:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, .08);
+  }
+
+  .lc-role-sidebar__item[aria-current="page"] {
+    border-left-color: #24a0ff;
+    color: #fff;
+    background: rgba(35, 143, 230, .24);
+  }
+
+  .lc-role-sidebar__item svg {
+    width: 20px;
+    height: 20px;
+    stroke: currentColor;
+  }
+
+  .lc-role-sidebar__item span {
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+  }
+
+  .lc-role-sidebar__footer {
+    padding: 10px;
+    border-top: 1px solid rgba(255, 255, 255, .12);
+  }
+
+  .lc-role-sidebar__footer .lc-role-sidebar__item {
+    color: #bcd0e1;
+  }
+
+  #dashboardPage .lc-role-workspace {
+    padding: 16px 18px;
+    border-left: 4px solid #1677d2;
+    border-radius: 12px;
+    background: #f7fafc;
+  }
+
+  #dashboardPage .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #dashboardPage .card,
+  #dashboardPage .lc-role-workspace {
+    margin-bottom: 14px;
+  }
+
+  #jobsPage .job-card,
+  #productionPage .job-card,
+  #completedJobsPage .job-card,
+  #teamPage .job-card,
+  #safetyPage .job-card,
+  #priceBooksPage .job-card,
+  #utilityPortalPage .job-card,
+  #timekeepingPage .job-card {
+    padding: 16px 18px;
+  }
+}
+
+@media (max-width: 1099px), (pointer: coarse) {
+  .lc-role-sidebar {
+    display: none !important;
+  }
+
+  body.lc-shell-active > header,
+  body.lc-shell-active > main {
+    margin-left: 0;
+  }
+
+  header {
+    padding: 15px 16px;
+  }
+
+  header .app-brand {
+    gap: 10px;
+  }
+
+  header .app-brand-logo {
+    width: 48px;
+    height: 48px;
+  }
+
+  header h1 {
+    font-size: 22px;
+  }
+
+  header p {
+    margin-top: 3px;
+    font-size: 11px;
+  }
+
+  main {
+    width: 100%;
+    max-width: 920px;
+    padding: 16px 14px 92px;
+  }
+
+  .card {
+    padding: 17px;
+    margin-bottom: 13px;
+  }
+
+  #dashboardTileGrid .metric {
+    min-height: 76px;
+    padding: 16px 44px 16px 17px;
+  }
+}
+
+@media (max-width: 680px) {
+  .company-brand-badge {
+    width: auto;
+    max-width: 52%;
+    margin-left: auto;
+  }
+
+  .company-brand-badge span {
+    font-size: 11px;
+  }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar button,
+  .section-header button,
+  .button-row button {
+    width: 100%;
+    min-height: 46px;
+  }
+
+  #dashboardPage .grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  #dashboardPage .metric strong {
+    font-size: 17px;
+  }
+
+  #dashboardPage .metric .muted {
+    font-size: 12px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+html.lc-industrial-dark .lc-role-sidebar {
+  background: linear-gradient(180deg, #061d30 0%, #041321 100%);
+}
+
+html.lc-industrial-dark #dashboardTileGrid .metric::after {
+  color: #8eb5d3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #dashboardTileGrid .metric,
+  .lc-role-sidebar__item {
+    transition: none;
+  }
+}
