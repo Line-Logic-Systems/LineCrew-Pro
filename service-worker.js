@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v73';
+const CACHE_NAME = 'linecrew-pro-shell-v74';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
@@ -16,7 +16,7 @@ const APP_SHELL = [
   '/offline-jsa.js?v=20260827b',
   '/jsa-review.js?v=20260826a',
   '/foreman-field-tools.js?v=20260901a',
-  '/timekeeping.js?v=20260907b',
+  '/timekeeping.js?v=20260907c',
   '/timekeeping-input-v2.js?v=20260907b',
   '/timekeeping-roster.js?v=20260907a',
   '/timekeeping-report-v2.js?v=20260829h',
