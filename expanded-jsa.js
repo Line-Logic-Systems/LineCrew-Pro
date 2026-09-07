@@ -113,7 +113,7 @@
     document.head.appendChild(script);
   };
 
-  load('app-polish.js?v=20260823b');
+  load('app-polish.js?v=20260907a');
   load('number-input-polish.js?v=20260823a');
   load('role-workspace-polish.js?v=20260903b');
   load('gf-crew-scope.js?v=20260826a');
