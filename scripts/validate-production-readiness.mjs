@@ -744,7 +744,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v72") &&
+    serviceWorker.includes("linecrew-pro-shell-v73") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1123,9 +1123,26 @@ for (const marker of [
   "$('backToProductionUtilities').onclick"
 ]) assert(index.includes(marker), `Utility Production navigation marker missing: ${marker}`);
 assert(
-  expandedJsa.includes("timekeeping.js?v=20260907a") &&
-    serviceWorker.includes("/timekeeping.js?v=20260907a"),
+  expandedJsa.includes("timekeeping.js?v=20260907b") &&
+    serviceWorker.includes("/timekeeping.js?v=20260907b"),
   'Contract and job run-rate rendering must use the refreshed Timekeeping asset.'
+);
+for (const marker of [
+  "return 'Leadership'",
+  "['owner','admin','superintendent','gf'].includes(linkedRole)",
+  "c.from('profiles').select('id,full_name,role,active')",
+  'Assign Default Trucks & Equipment'
+]) assert(timekeepingInput.includes(marker), `Leadership equipment-assignment marker missing: ${marker}`);
+for (const marker of [
+  'Roster & Equipment Setup',
+  'id="tkPersonnelAssignments" class="tk-manager-section"',
+  'Open only the section you need.'
+]) assert(timekeeping.includes(marker), `Timekeeping cleanup marker missing: ${marker}`);
+assert(
+  expandedJsa.includes("timekeeping-input-v2.js?v=20260907b") &&
+  expandedJsa.includes("timekeeping-roster.js?v=20260907a") &&
+  serviceWorker.includes("/timekeeping-roster.js?v=20260907a"),
+  'Refreshed roster and leadership-equipment assets must be loaded and available offline.'
 );
 
 if (failures.length) {
