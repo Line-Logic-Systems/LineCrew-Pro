@@ -149,7 +149,7 @@
         <div class="section-header">
           <div>
             <h3>My Time</h3>
-            <p class="muted">Enter payroll time one person at a time. Admin roster members appear automatically.</p>
+            <p class="muted">Enter each person's hours, then save everyone at once. Admin roster members appear automatically.</p>
           </div>
           <button id="myTimeNewBtn" type="button" class="secondary small">New Entry</button>
         </div>
@@ -162,6 +162,10 @@
           </div>
           <div id="myTimePersonList" class="my-time-person-list"></div>
           <div id="myTimeAdminRosterRows" class="my-time-admin-roster hidden"></div>
+          <div id="myTimeBatchActions" class="my-time-actions hidden">
+            <button id="myTimeSaveAllBtn" type="button" class="success">Save All Time</button>
+            <span id="myTimeBatchStatus" class="my-time-status">Only rows with entered times will be saved.</span>
+          </div>
         </div>
         <div id="myTimeSingleEntry">
           <div id="myTimeActivePerson" class="my-time-active-person"></div>
@@ -200,9 +204,10 @@
     }
     card.classList.toggle('hidden', !canEnterMyTime());
     byId('myTimePeopleWrap')?.classList.toggle('hidden', !canAddOtherPeople());
-    byId('myTimeSingleEntry')?.classList.toggle('hidden', role() === 'admin');
-    byId('myTimePersonList')?.classList.toggle('hidden', role() === 'admin');
-    byId('myTimeAdminRosterRows')?.classList.toggle('hidden', role() !== 'admin');
+    byId('myTimeSingleEntry')?.classList.toggle('hidden', canAddOtherPeople());
+    byId('myTimePersonList')?.classList.toggle('hidden', canAddOtherPeople());
+    byId('myTimeAdminRosterRows')?.classList.toggle('hidden', !canAddOtherPeople());
+    byId('myTimeBatchActions')?.classList.toggle('hidden', !canAddOtherPeople());
     const peopleTitle = role() === 'admin' ? 'My Admin Time Roster' : 'People on this entry';
     const peopleHelp = role() === 'admin'
       ? 'Assigned Personnel appear automatically as individual time rows, just like a Foreman crew on a Daily Report.'
@@ -229,6 +234,7 @@
       if (input.disabled) input.value = '';
     };
     byId('myTimeSaveBtn').onclick = save;
+    byId('myTimeSaveAllBtn').onclick = saveAllRows;
     byId('myTimeAddPersonBtn').onclick = addSelectedPerson;
     byId('myTimeCancelBtn').onclick = resetForm;
     byId('myTimeNewBtn').onclick = () => {
@@ -401,9 +407,11 @@
 
   function renderAdminRows() {
     const box = byId('myTimeAdminRosterRows');
-    if (!box || role() !== 'admin') return;
+    if (!box || !canAddOtherPeople()) return;
     if (!selectedEmployeeIds.length) {
-      box.innerHTML = '<p class="muted">No Personnel are assigned to this Admin. Assign them in Manage Personnel Assignments, or add a temporary person above.</p>';
+      box.innerHTML = role() === 'admin'
+        ? '<p class="muted">No Personnel are assigned to this Admin. Assign them in Manage Personnel Assignments, or add a temporary person above.</p>'
+        : '<p class="muted">Add each person working with you to enter the group\'s time.</p>';
       return;
     }
     box.innerHTML = selectedEmployeeIds.map((id) => {
@@ -432,7 +440,7 @@
           <label class="my-time-admin-wide">Notes<input class="my-time-admin-notes" type="text" placeholder="Optional payroll note" value="${esc(draft.notes || '')}"></label>
         </div>
         <div class="my-time-admin-checks"><label><input class="my-time-admin-per-diem" type="checkbox" ${draft.perDiem ? 'checked' : ''}> Per diem</label><label><input class="my-time-admin-equipment-not-used" type="checkbox" ${draft.equipmentNotUsed ? 'checked' : ''}> Equipment not used</label></div>
-        <div class="my-time-admin-actions"><button type="button" class="success my-time-admin-save">${editing ? 'Update' : 'Save'} ${esc(item.full_name || 'Employee')} Time</button>${editing ? '<button type="button" class="secondary my-time-admin-cancel">Cancel Edit</button>' : ''}<span class="my-time-admin-worked"><strong>—</strong>Worked hours</span><span class="my-time-admin-status">Regular and overtime calculate automatically.</span></div>
+        <div class="my-time-admin-actions">${editing ? '<button type="button" class="secondary my-time-admin-cancel">Cancel Edit</button>' : ''}<span class="my-time-admin-worked"><strong>—</strong>Worked hours</span><span class="my-time-admin-status">This row will save with the group.</span></div>
       </div>`;
     }).join('');
 
@@ -449,7 +457,6 @@
         equipmentInput.disabled = event.target.checked;
         if (equipmentInput.disabled) equipmentInput.value = '';
       });
-      row.querySelector('.my-time-admin-save')?.addEventListener('click', () => saveAdminRow(row));
       row.querySelector('.my-time-admin-cancel')?.addEventListener('click', resetForm);
       row.querySelector('.my-time-admin-remove')?.addEventListener('click', () => removeAdminPerson(row.dataset.myTimeRow));
       adminWorked(row);
@@ -510,13 +517,11 @@
     if (!canAddOtherPeople() || editId) return;
     const id = byId('myTimePersonSelect')?.value || '';
     if (!id) return toast('Choose an employee to add.', 'warning');
-    if (role() === 'admin') captureAdminRows();
-    else captureCurrentDraft();
+    captureAdminRows();
     if (!selectedEmployeeIds.includes(id)) selectedEmployeeIds.push(id);
     temporaryEmployeeIds.add(id);
     activeEmployeeId = id;
     if (!personDrafts.has(id)) personDrafts.set(id, emptyDraft());
-    if (role() !== 'admin') showDraft(id);
     renderPeople();
     renderPersonOptions();
   }
@@ -555,7 +560,7 @@
     const client = getSb();
     const current = profile();
     if (!client || !current?.company_id || !canEnterMyTime()) return;
-    if (role() === 'admin') captureAdminRows();
+    if (canAddOtherPeople()) captureAdminRows();
     const [employeeResult, jobsResult, employeesResult] = await Promise.all([
       client.from('timekeeping_employees')
         .select('id,full_name,classification,linked_profile_id,assigned_admin_id,active')
@@ -711,6 +716,67 @@
     renderPeople();
     renderPersonOptions();
     byId('leadershipMyTimeCard')?.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  async function saveAllRows() {
+    if (!canAddOtherPeople()) return toast('This role cannot save group time.', 'error');
+    captureAdminRows();
+    const payload = [];
+    for (const targetEmployeeId of selectedEmployeeIds) {
+      const row = byId('myTimeAdminRosterRows')?.querySelector(`[data-my-time-row="${CSS.escape(targetEmployeeId)}"]`);
+      if (!row) continue;
+      const draft = adminRowDraft(row);
+      const hasAnyTime = !!String(draft.start || '').trim() || !!String(draft.stop || '').trim();
+      if (!hasAnyTime) continue;
+      const startInput = row.querySelector('.my-time-admin-start');
+      const stopInput = row.querySelector('.my-time-admin-stop');
+      const startTime = normalizeMilitaryInput(startInput);
+      const stopTime = normalizeMilitaryInput(stopInput);
+      if (adminWorked(row) === null) {
+        return toast(`Enter a valid Start, Stop, and Lunch for ${employeeName(targetEmployeeId)}.`, 'warning');
+      }
+      const jobId = draft.chargeType === 'job' ? (draft.jobId || null) : null;
+      const laborCode = draft.chargeType === 'overhead' ? (draft.laborCode || null) : null;
+      if (draft.chargeType === 'job' && !jobId) {
+        return toast(`Choose the active job for ${employeeName(targetEmployeeId)}.`, 'warning');
+      }
+      const editingEntry = editId ? entries.find((entry) => entry.id === editId && entry.employee_id === targetEmployeeId) : null;
+      payload.push({
+        employee_id: targetEmployeeId,
+        entry_id: editingEntry?.id || null,
+        work_date: draft.workDate || null,
+        start_time: startTime || null,
+        stop_time: stopTime || null,
+        lunch_minutes: Math.round(num(draft.lunch)),
+        job_id: jobId,
+        labor_code: laborCode,
+        per_diem: !!draft.perDiem,
+        equipment_used: String(draft.equipment || '').trim() || null,
+        equipment_not_used: !!draft.equipmentNotUsed,
+        notes: String(draft.notes || '').trim() || null
+      });
+    }
+    if (!payload.length) return toast('Enter Start and Stop times for at least one person.', 'warning');
+
+    const button = byId('myTimeSaveAllBtn');
+    const status = byId('myTimeBatchStatus');
+    const done = window.LineCrewUI?.loadingButton?.(button, `Saving ${payload.length}…`) || (() => {});
+    if (status) status.textContent = `Saving ${payload.length} ${payload.length === 1 ? 'person' : 'people'} together…`;
+    try {
+      const {data, error} = await getSb().rpc('upsert_leadership_time_batch', {p_entries: payload});
+      if (error) throw error;
+      if (!Array.isArray(data) || data.length !== payload.length) throw new Error('The server did not confirm every time row.');
+      toast(`${payload.length} ${payload.length === 1 ? 'person was' : 'people were'} saved to the Time Report.`, 'success');
+      if (status) status.textContent = `Saved ${payload.length} of ${payload.length}. Every row was confirmed.`;
+      resetForm();
+      await loadEntries();
+      await window.LineCrewTimekeepingReport?.run?.();
+    } catch (error) {
+      if (status) status.textContent = 'Nothing was saved. Correct the highlighted information and try again.';
+      toast('Could not save group time: ' + error.message, 'error');
+    } finally {
+      done();
+    }
   }
 
   async function saveAdminRow(row) {
