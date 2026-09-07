@@ -744,7 +744,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v67") &&
+    serviceWorker.includes("linecrew-pro-shell-v68") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1095,6 +1095,20 @@ for (const marker of [
   "#companyOnboarding[open] > summary::after{\ncontent:'− Hide Steps';"
 ]) assert(index.includes(marker), `Compact company-onboarding marker missing: ${marker}`);
 
+for (const marker of [
+  'Production totals by contract. Open a contract to see each job.',
+  'function productionReportingTotals(reports)',
+  "details.className = 'production-contract-summary'",
+  'productionReportingMetricsMarkup(contract.reports)',
+  'productionReportingMetricsMarkup(job.reports)',
+  'const canViewProductionReporting = userCanUseReporting();'
+]) assert(index.includes(marker), `Contract production-reporting marker missing: ${marker}`);
+assert(
+  expandedJsa.includes("timekeeping.js?v=20260907a") &&
+    serviceWorker.includes("/timekeeping.js?v=20260907a"),
+  'Contract and job run-rate rendering must use the refreshed Timekeeping asset.'
+);
+
 if (failures.length) {
   console.error('Production readiness validation failed:');
   failures.forEach(failure => console.error(`- ${failure}`));
@@ -1121,3 +1135,4 @@ console.log('- Field employees are leadership-assigned; Foremen can add extra ac
 console.log('- Timekeeping reports use a single-flight guard to prevent repeated Run Report loops');
 console.log('- Crew selectors avoid observer feedback loops on the Foreman Production screen');
 console.log('- Company setup progress stays compact until its step list is opened');
+console.log('- Production Reporting groups filtered totals by contract and job for every reporting-authorized role');
