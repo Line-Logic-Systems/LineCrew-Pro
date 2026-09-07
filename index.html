@@ -1441,6 +1441,17 @@ gap:10px 12px;
 #productionFiltersCard label{
 margin-bottom:4px;
 }
+.team-workspace-tabs{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0;padding:5px;background:#edf3f8;border:1px solid #d7e1ea;border-radius:12px}
+.team-workspace-tab{width:auto!important;margin:0!important;padding:9px 13px!important;border:0!important;border-radius:9px!important;background:transparent!important;color:#355168!important;box-shadow:none!important;font-weight:800}
+.team-workspace-tab:hover{background:#fff!important}
+.team-workspace-tab.active{background:#1677c8!important;color:#fff!important}
+.team-workspace-tab.hidden{display:none!important}
+.team-workspace-panel{border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:12px;background:#fff}
+.team-workspace-panel>h3:first-child{margin-top:0}
+.team-access-code-details{border:1px solid var(--border);border-radius:10px;background:#f7fafc;overflow:hidden}
+.team-access-code-details>summary{cursor:pointer;padding:12px 13px;font-weight:800}
+.team-access-code-details>.button-row{padding:0 12px 12px}
+@media(max-width:650px){.team-workspace-tabs{display:grid;grid-template-columns:1fr 1fr}.team-workspace-tab{width:100%!important}.team-workspace-panel{padding:12px}}
 @media(max-width:760px){
 .production-filter-basic-grid,
 #productionFiltersCard .price-book-filter-grid{
@@ -2320,11 +2331,23 @@ People who belong to this contractor company.
 </p>
 </div>
 </div>
-<div id="teamAdminTools" class="card hidden">
+<nav id="teamWorkspaceTabs" class="team-workspace-tabs" aria-label="Team sections">
+<button type="button" class="team-workspace-tab active" data-team-tab="members">Team Members</button>
+<button type="button" class="team-workspace-tab team-admin-tab hidden" data-team-tab="invitations">Invitations</button>
+<button type="button" class="team-workspace-tab team-admin-tab hidden" data-team-tab="crews">Crews</button>
+<button type="button" class="team-workspace-tab team-admin-tab hidden" data-team-tab="access">Company Access Code</button>
+</nav>
+<div id="teamMembersPanel" class="team-workspace-panel">
+<div id="teamLoading" class="center muted hidden">
+Loading team members...
+</div>
+<div id="teamList"></div>
+</div>
+<div id="teamAdminTools" class="hidden">
+<div id="teamInvitationsPanel" class="team-workspace-panel hidden" data-team-panel="invitations">
 <h3>Invite Team Members</h3>
 <p class="muted">
-Email a secure company invitation or copy the code manually.
-New members create their own password and start as Foreman; an Owner
+Email a secure company invitation. New members create their own password and start as Foreman; an Owner
 or Admin can promote them after they join.
 </p>
 <label for="teamInviteEmail">Team Member Email</label>
@@ -2332,9 +2355,19 @@ or Admin can promote them after they join.
 <button id="emailTeamInviteBtn" class="success">
 Send Team Invitation
 </button>
+</div>
+<div id="teamCrewsPanel" class="team-workspace-panel hidden" data-team-panel="crews">
+<h3>Crews</h3>
+<p class="muted">Manage Foreman rosters and assign each Foreman crew to its normal General Foreman.</p>
 <button id="manageFieldEmployeesBtn" class="secondary">
 Manage Foreman Crews
 </button>
+</div>
+<div id="teamAccessCodePanel" class="team-workspace-panel hidden" data-team-panel="access">
+<h3>Company Access Code</h3>
+<p class="muted">Manual fallback for joining this company when an email invitation is not used.</p>
+<details class="team-access-code-details">
+<summary>View Company Access Code</summary>
 <div class="button-row">
 <strong id="teamJoinCode" class="role"></strong>
 <button id="copyJoinCodeBtn" class="secondary small">
@@ -2344,11 +2377,9 @@ Copy Company Code
 Generate New Code
 </button>
 </div>
+</details>
 </div>
-<div id="teamLoading" class="center muted hidden">
-Loading team members...
 </div>
-<div id="teamList"></div>
 </div>
 </section>
 <!-- JOBS PAGE -->
@@ -5949,6 +5980,25 @@ returnToDashboard();
 $('refreshTeamBtn').onclick = async () => {
 await loadTeamMembers();
 };
+let activeTeamWorkspace = 'members';
+function openTeamWorkspace(name){
+const canManage = userCanManageTeam();
+if(name !== 'members' && !canManage) name = 'members';
+activeTeamWorkspace = name;
+document.querySelectorAll('[data-team-tab]').forEach(button => {
+const active = button.dataset.teamTab === name;
+button.classList.toggle('active', active);
+button.setAttribute('aria-selected', active ? 'true' : 'false');
+});
+$('teamMembersPanel').classList.toggle('hidden', name !== 'members');
+$('teamInvitationsPanel').classList.toggle('hidden', name !== 'invitations');
+$('teamCrewsPanel').classList.toggle('hidden', name !== 'crews');
+$('teamAccessCodePanel').classList.toggle('hidden', name !== 'access');
+}
+$('teamWorkspaceTabs').addEventListener('click', event => {
+const button = event.target.closest('[data-team-tab]');
+if(button) openTeamWorkspace(button.dataset.teamTab);
+});
 $('copyJoinCodeBtn').onclick = async () => {
 if(!userCanManageTeam() || !currentCompany?.join_code){
 return;
@@ -6281,6 +6331,9 @@ $('teamLoading').classList.remove('hidden');
 $('teamList').replaceChildren();
 const canManageTeam = userCanManageTeam();
 $('teamAdminTools').classList.toggle('hidden', !canManageTeam);
+document.querySelectorAll('.team-admin-tab').forEach(button => button.classList.toggle('hidden', !canManageTeam));
+if(!canManageTeam && activeTeamWorkspace !== 'members') activeTeamWorkspace = 'members';
+openTeamWorkspace(activeTeamWorkspace);
 $('teamJoinCode').textContent = canManageTeam ? (currentCompany?.join_code || 'No code available') : '';
 const { data:members, error } = await sb.from('profiles')
 .select('id, full_name, role, role_permissions, company_id, active')
@@ -19636,7 +19689,7 @@ alert('LineCrew Pro could not start: ' + (error?.message || 'Unknown error'));
 }
 startApp();
 </script>
-<script src="expanded-jsa.js?v=20260901a"></script>
+<script src="expanded-jsa.js?v=20260907b"></script>
 <script src="utility-portal-management.js?v=20260907a"></script>
 <script>
 (function () {
