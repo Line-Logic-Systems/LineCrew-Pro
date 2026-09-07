@@ -1,15 +1,14 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getPublishableKey } from "../_shared/api-keys.ts";
 
-const allowedOrigins = new Set([
-  "https://app.linecrewpro.com",
-  "http://localhost:3000",
-  "http://localhost:4173",
-  "http://localhost:8000",
-  "http://127.0.0.1:3000",
-  "http://127.0.0.1:4173",
-  "http://127.0.0.1:8000",
-]);
+const testProjectRef = "yvuxrqrdprquxypiffpa";
+const isTestProject = (Deno.env.get("SUPABASE_URL") || "").includes(testProjectRef);
+const allowedOrigins = new Set(["https://app.linecrewpro.com"]);
+if (isTestProject) {
+  ["http://localhost:3000", "http://localhost:4173", "http://localhost:8000",
+   "http://127.0.0.1:3000", "http://127.0.0.1:4173", "http://127.0.0.1:8000"]
+    .forEach((origin) => allowedOrigins.add(origin));
+}
 const corsHeaders = (request: Request) => ({
   "Access-Control-Allow-Origin": allowedOrigins.has(request.headers.get("Origin") || "")
     ? request.headers.get("Origin")! : "https://app.linecrewpro.com",

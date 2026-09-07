@@ -69,11 +69,10 @@
     const { data, error } = await sb.from('contracts')
       .select('id,contract_name,contract_number,active,customers(name)')
       .eq('company_id', currentProfile.company_id)
-      .eq('active', true)
       .order('contract_name');
     if (error) throw error;
     state.contracts = data || [];
-    contractChoices(byId('utilityCreateContractChoices'), state.contracts, 'create');
+    contractChoices(byId('utilityCreateContractChoices'), state.contracts.filter(contract => contract.active), 'create');
   }
 
   function renderOrganizations() {
@@ -251,7 +250,9 @@
   function renderGrants() {
     const host = byId('utilityGrantList');
     host.replaceChildren();
-    const activeContractIds = new Set(state.grants.filter(g => !g.hidden_reasons?.includes('grant_revoked')).map(g => g.contract_id));
+    const currentGrantContractIds = new Set(state.grants
+      .filter(grant => !grant.hidden_reasons?.includes('grant_revoked'))
+      .map(grant => grant.contract_id));
     state.grants.forEach(grant => {
       const contract = state.contracts.find(item => item.id === grant.contract_id);
       const card = document.createElement('div');
@@ -260,18 +261,26 @@
       card.innerHTML = '<strong>' + html(contract ? contractLabel(contract) : 'Contract') +
         '</strong><br><span class="muted">' + (grant.is_visible ? 'Visible now' : html(reasons || 'Not visible')) +
         ' · Quantities ' + (grant.show_quantities ? 'shown' : 'hidden') + '</span>';
-      if (!(grant.hidden_reasons || []).includes('grant_revoked')) {
+      const grantExpired = (grant.hidden_reasons || []).includes('grant_expired');
+      const grantRevoked = (grant.hidden_reasons || []).includes('grant_revoked');
+      if (!grantRevoked) {
         const actions = document.createElement('div'); actions.className = 'button-row';
-        const toggle = document.createElement('button'); toggle.className = 'secondary small';
-        toggle.textContent = grant.show_quantities ? 'Hide Quantities' : 'Show Quantities';
-        toggle.onclick = () => updateQuantities(grant, !grant.show_quantities);
         const revoke = document.createElement('button'); revoke.className = 'danger small'; revoke.textContent = 'Stop Sharing';
         revoke.onclick = () => revokeGrant(grant);
-        actions.append(toggle, revoke); card.appendChild(actions);
+        if (grantExpired) {
+          revoke.textContent = 'Close Expired Grant';
+          actions.append(revoke);
+        } else {
+          const toggle = document.createElement('button'); toggle.className = 'secondary small';
+          toggle.textContent = grant.show_quantities ? 'Hide Quantities' : 'Show Quantities';
+          toggle.onclick = () => updateQuantities(grant, !grant.show_quantities);
+          actions.append(toggle, revoke);
+        }
+        card.appendChild(actions);
       }
       host.appendChild(card);
     });
-    const eligible = state.contracts.filter(contract => !activeContractIds.has(contract.id));
+    const eligible = state.contracts.filter(contract => contract.active && !currentGrantContractIds.has(contract.id));
     contractChoices(byId('utilityAddContractChoices'), eligible, 'add');
   }
 
@@ -283,7 +292,11 @@
   }
 
   async function revokeGrant(grant) {
-    if (!confirm('Stop sharing this contract? The utility will immediately lose access to its jobs.')) return;
+    const expired = (grant.hidden_reasons || []).includes('grant_expired');
+    const prompt = expired
+      ? 'Close this expired grant? You can create a replacement afterward.'
+      : 'Stop sharing this contract? The utility will immediately lose access to its jobs.';
+    if (!confirm(prompt)) return;
     try {
       await rpc('utility_revoke_contract_grant', { p_grant_id: grant.grant_id });
       await loadManagement();
@@ -313,7 +326,7 @@
       const row = document.createElement('div'); row.className = 'job-info';
       row.innerHTML = '<strong>' + html(clean(item.action).replaceAll('_', ' ')) + '</strong> · ' +
         html(dateText(item.occurred_at)) + '<br><span class="muted">' +
-        html([item.actor_name, item.contract_name, item.job_number].filter(Boolean).join(' · ')) + '</span>';
+        html([item.organization_name, item.actor_name, item.contract_name, item.job_number].filter(Boolean).join(' · ')) + '</span>';
       host.appendChild(row);
     });
   }
@@ -332,7 +345,7 @@
 
   async function completeInvitation(values) {
     const fullName = clean(byId('utilitySignupName')?.value);
-    if (!pendingInviteEmail || values.email.toLowerCase() !== pendingInviteEmail.toLowerCase()) return alert('Use the email address that received this invitation.');
+    if (pendingInviteEmail && values.email.toLowerCase() !== pendingInviteEmail.toLowerCase()) return alert('Use the email address that received this invitation.');
     if (fullName.length < 2) return alert('Enter your full name.');
     if (values.password.length < 8) return alert('Use a password with at least 8 characters.');
     if (values.password !== values.passwordConfirmation) return alert('The passwords do not match.');
@@ -395,11 +408,13 @@
       const body = (rows || []).map(row => '<tr><td>' + html(row.work_point_code) + '</td><td>' +
         html(row.unit_code) + '</td><td>' + Number(row.percent_complete || 0).toFixed(1) + '%</td><td>' +
         (row.authorized_install_quantity == null ? 'Hidden' : html(row.approved_install_quantity) + ' / ' + html(row.authorized_install_quantity)) +
+        '</td><td>' +
+        (row.authorized_retirement_quantity == null ? 'Hidden' : html(row.approved_retirement_quantity) + ' / ' + html(row.authorized_retirement_quantity)) +
         '</td></tr>').join('');
       host.innerHTML = '<div class="section-header"><div><h3>' + html(job.job_number) + ' — ' + html(job.job_name) +
         '</h3><p class="muted">Approved production only</p></div><button id="closeUtilityViewerJob" class="secondary small">Close</button></div>' +
-        '<div style="overflow-x:auto"><table><thead><tr><th>Work Point</th><th>Unit</th><th>Complete</th><th>Installed Qty</th></tr></thead><tbody>' +
-        (body || '<tr><td colspan="4">No approved production yet.</td></tr>') + '</tbody></table></div>';
+        '<div style="overflow-x:auto"><table><thead><tr><th>Work Point</th><th>Unit</th><th>Complete</th><th>Installed Qty</th><th>Retired Qty</th></tr></thead><tbody>' +
+        (body || '<tr><td colspan="5">No approved production yet.</td></tr>') + '</tbody></table></div>';
       byId('closeUtilityViewerJob').onclick = () => host.classList.add('hidden');
       host.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (error) { host.innerHTML = '<p class="muted">' + html(neutralMessage(error)) + '</p>'; }

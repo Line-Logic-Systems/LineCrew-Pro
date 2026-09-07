@@ -21,15 +21,6 @@ begin
   from public.utility_users utility_user
   where utility_user.id = v_utility_user_id;
 
-  if not exists (
-    select 1
-    from public.utility_contract_access access
-    where access.utility_organization_id = v_organization_id
-      and public.utility_has_contract_access(access.contract_id)
-  ) then
-    raise exception using errcode = '42501', message = 'Access denied.';
-  end if;
-
   insert into public.utility_activity_log (
     utility_organization_id, utility_user_id, actor_user_id, action
   ) values (

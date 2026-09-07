@@ -16,9 +16,9 @@ for (const id of [
   assert(app.includes(`id="${id}"`), `Missing Utility Portal element: ${id}`);
 }
 
-assert(app.includes('utility-portal-management.js?v=20260906a'), 'Utility Portal script is not loaded by the app.');
-assert(shell.includes("'linecrew-pro-shell-v62'"), 'Utility Portal requires the v62 offline shell.');
-assert(shell.includes("'/utility-portal-management.js?v=20260906a'"), 'Utility Portal script is missing from the offline shell.');
+assert(app.includes('utility-portal-management.js?v=20260907a'), 'Utility Portal script is not loaded by the app.');
+assert(shell.includes("'linecrew-pro-shell-v63'"), 'Utility Portal requires the v63 offline shell.');
+assert(shell.includes("'/utility-portal-management.js?v=20260907a'"), 'Utility Portal script is missing from the offline shell.');
 assert(app.includes('pendingInviteToken || pendingUtilityInviteToken'), 'Utility invitations are not integrated into startup routing.');
 assert(app.includes('LineCrewUtilityPortal.completeInvitation'), 'Utility invitation signup is not wired.');
 assert(app.includes('LineCrewUtilityPortal?.tryLoadViewer'), 'Utility representative routing is not wired.');
@@ -41,6 +41,11 @@ assert(portal.includes(".eq('company_id', currentProfile.company_id)"), 'Contrac
 assert(sendInvitation.includes('crypto.getRandomValues(new Uint8Array(32))'), 'Invitation tokens must be cryptographically random.');
 assert(sendInvitation.includes('crypto.subtle.digest("SHA-256"'), 'Invitation tokens must be hashed before database storage.');
 assert(sendInvitation.includes('const applicationOrigin = origin && allowedOrigins.has(origin)'), 'Invitation URLs must use only an allowlisted application origin.');
+assert(sendInvitation.includes('if (isTestProject)'), 'Local invitation origins must be limited to the test project.');
+assert(completeInvitation.includes('if (isTestProject)'), 'Local signup origins must be limited to the test project.');
+assert(shell.includes("url.searchParams.has('invite')") && shell.includes("url.searchParams.has('utilityInvite')"), 'Invitation URLs must never be cached.');
+assert(portal.includes('item.organization_name'), 'Company-wide activity must identify its utility organization.');
+assert(portal.includes('approved_retirement_quantity'), 'Shared retirement quantities must be rendered.');
 assert(!completeInvitation.includes('invite_token_hash: rawToken'), 'Raw invitation tokens must not be stored.');
 
 try { new Function(portal); } catch (error) { failures.push(`Utility Portal JavaScript syntax error: ${error.message}`); }

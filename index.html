@@ -3856,7 +3856,7 @@ $('signupBtn').textContent = utilityInvited
 : (invited ? 'Create Account & Join Company' : 'Create Account');
 $('loginCard').classList.toggle('hidden', invited);
 if(invited) $('pwaInstallCard').classList.add('hidden');
-$('signupEmail').readOnly = invited;
+$('signupEmail').readOnly = invited && (!utilityInvited || Boolean(pendingInviteEmail));
 if(invited && pendingInviteEmail){
 $('signupEmail').value = pendingInviteEmail;
 }
@@ -19023,7 +19023,7 @@ alert('LineCrew Pro could not start: ' + (error?.message || 'Unknown error'));
 startApp();
 </script>
 <script src="expanded-jsa.js?v=20260901a"></script>
-<script src="utility-portal-management.js?v=20260906a"></script>
+<script src="utility-portal-management.js?v=20260907a"></script>
 <script>
 (function () {
 var installPrompt = null;

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v62';
+const CACHE_NAME = 'linecrew-pro-shell-v63';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
@@ -8,7 +8,7 @@ const APP_SHELL = [
   '/icons/linecrew-pro-192.png',
   '/icons/linecrew-pro-512.png',
   '/expanded-jsa.js?v=20260901a',
-  '/utility-portal-management.js?v=20260906a',
+  '/utility-portal-management.js?v=20260907a',
   '/role-workspace-polish.js?v=20260903b',
   '/expanded-jsa-core.js?v=20260820',
   '/jsa-signatures.js?v=20260828a',
@@ -40,13 +40,14 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
+  const containsInvitation = url.searchParams.has('invite') || url.searchParams.has('utilityInvite');
   const isSupabaseRuntime = request.url === SUPABASE_RUNTIME;
   if (url.origin !== self.location.origin && !isSupabaseRuntime) return;
 
   event.respondWith((async () => {
     try {
       const response = await fetch(request);
-      if (response.ok) {
+      if (response.ok && !containsInvitation) {
         const copy = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
       }

@@ -219,7 +219,7 @@ begin
   perform public.utility_require_portal_enabled(v_company_id);
   select * into v_grant from public.utility_contract_access access
   where access.id = p_grant_id and access.company_id = v_company_id
-    and access.status = 'active'
+    and access.status in ('active', 'expired')
   for update;
   if v_grant.id is null then
     raise exception using errcode = '42501', message = 'Access denied.';
