@@ -860,18 +860,23 @@
   };
 
   function addRunRates(){
-    const box=byId('productionReportingMetrics');if(!box)return;
+    const boxes=[...document.querySelectorAll('.production-reporting-group-metrics')];
+    boxes.forEach(box=>{
     const spans=[...box.querySelectorAll(':scope > span')];
     if(!spans.length)return;
     const find=(label)=>spans.find(s=>s.textContent.includes(label));
     const parseMoney=(span)=>number((span?.querySelector('strong')?.textContent||'').replace(/[^0-9.-]/g,''));
     const parseHours=(span)=>number(span?.querySelector('strong')?.textContent);
-    const actual=parseMoney(find('Actual Unit Value'));
-    const field=parseMoney(find('Field Unit Value'));
+    const actualValueSpan=find('Actual Unit Value');
+    const fieldValueSpan=find('Field Unit Value');
+    const actual=parseMoney(actualValueSpan);
+    const field=parseMoney(fieldValueSpan);
     const reg=parseHours(find('Regular Hours'));
     const ot=parseHours(find('OT Hours'));
     const denominator=reg+ot;
-    const desired=[['Actual MH Run Rate',denominator?actual/denominator:0],['Field MH Run Rate',denominator?field/denominator:0]];
+    const desired=[];
+    if(actualValueSpan) desired.push(['Actual MH Run Rate',denominator?actual/denominator:0]);
+    if(fieldValueSpan) desired.push(['Field MH Run Rate',denominator?field/denominator:0]);
     desired.forEach(([label,value])=>{
       let span=spans.find(s=>s.textContent.includes(label));
       const isField=label==='Field MH Run Rate';
@@ -882,6 +887,7 @@
       const html=valueHtml+'<br>'+label;
       if(!span){span=document.createElement('span');box.appendChild(span);}
       if(span.innerHTML!==html)span.innerHTML=html;
+    });
     });
   }
 

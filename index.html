@@ -481,6 +481,53 @@ background:#f7fafc;
 margin:6px 0;
 background:#fff;
 }
+.production-contract-summary{
+border:1px solid var(--border);
+border-radius:14px;
+margin-top:12px;
+overflow:hidden;
+background:#fff;
+}
+.production-contract-summary > summary{
+display:grid;
+grid-template-columns:minmax(0, 1fr) auto;
+align-items:center;
+justify-content:space-between;
+gap:12px;
+padding:14px 16px;
+cursor:pointer;
+list-style:none;
+}
+.production-contract-summary > summary::-webkit-details-marker{ display:none; }
+.production-contract-summary > summary::after{
+content:'View Jobs';
+color:var(--navy);
+background:#e9f0f6;
+border-radius:10px;
+padding:7px 10px;
+font-size:12px;
+font-weight:800;
+white-space:nowrap;
+}
+.production-contract-summary > summary .production-reporting-group-metrics{
+grid-column:1 / -1;
+width:100%;
+}
+.production-contract-summary[open] > summary::after{ content:'Hide Jobs'; }
+.production-contract-body{
+border-top:1px solid var(--border);
+padding:12px;
+background:#f7fafc;
+}
+.production-job-totals{
+border:1px solid var(--border);
+border-radius:12px;
+padding:12px;
+margin-top:10px;
+background:#fff;
+}
+.production-job-totals h4{ margin:0 0 4px; }
+.production-reporting-contracts{ margin-top:10px; }
 .billing-batch-card{
 border:1px solid var(--border);
 border-radius:9px;
@@ -2893,11 +2940,11 @@ Loading production...
 <div class="section-header">
 <div>
 <h3>Production Reporting</h3>
-<p class="muted">Summary of the reports matching the filters above.</p>
+<p class="muted">Production totals by contract. Open a contract to see each job.</p>
 </div>
 <button id="exportProductionCsvBtn" class="secondary small">Export Filtered CSV</button>
 </div>
-<div id="productionReportingMetrics" class="daily-value-summary"></div>
+<div id="productionReportingMetrics" class="production-reporting-contracts"></div>
 </div>
 <div id="stormEventDashboard" class="card hidden">
 <div class="section-header">
@@ -15899,41 +15946,101 @@ if(stormEvents.has(selectedStormEvent)){
 $('productionStormEventFilter').value = selectedStormEvent;
 }
 }
-function renderProductionReportingSummary(reports, canReviewProduction){
-$('productionReportingSummary').classList.toggle('hidden', !canReviewProduction);
-currentProductionExportRows = canReviewProduction ? reports : [];
-if(!canReviewProduction) return;
-let actualValue = 0;
-let fieldValue = 0;
-let regularHours = 0;
-let overtimeHours = 0;
-let redlines = 0;
-let pending = 0;
-let approved = 0;
+function productionReportingTotals(reports){
+const totals = {
+reports:reports.length,
+approved:0,
+actualValue:0,
+fieldValue:0,
+regularHours:0,
+overtimeHours:0,
+redlines:0,
+pending:0
+};
 reports.forEach(report => {
 const value = currentDailyReportValueSummaries.get(report.id) || {};
 const authorization = currentDailyAuthorizationSummaries.get(report.id) || {};
-actualValue += Number(value.actual_total || 0);
-fieldValue += Number(value.adjusted_total || 0);
-regularHours += Number(report.regular_hours || 0);
-overtimeHours += Number(report.overtime_hours || 0);
-redlines += Number(authorization.redline_count || 0);
-pending += Number(authorization.pending_packet_count || 0);
-if(String(report.status || '').toLowerCase() === 'approved') approved += 1;
+totals.actualValue += Number(value.actual_total || 0);
+totals.fieldValue += Number(value.adjusted_total || 0);
+totals.regularHours += Number(report.regular_hours || 0);
+totals.overtimeHours += Number(report.overtime_hours || 0);
+totals.redlines += Number(authorization.redline_count || 0);
+totals.pending += Number(authorization.pending_packet_count || 0);
+if(String(report.status || '').toLowerCase() === 'approved') totals.approved += 1;
 });
-$('productionReportingMetrics').innerHTML =
-'<span><strong>' + reports.length + '</strong><br>Reports</span>' +
-'<span><strong>' + approved + '</strong><br>Completed</span>' +
+return totals;
+}
+function productionReportingMetricsMarkup(reports){
+const totals = productionReportingTotals(reports);
+return '<div class="daily-value-summary production-reporting-group-metrics">' +
+'<span><strong>' + totals.reports + '</strong><br>Reports</span>' +
+'<span><strong>' + totals.approved + '</strong><br>Completed</span>' +
 (userCanSeeActualContractPrices()
-? '<span><strong>' + escapeHtml(formatCurrency(actualValue)) + '</strong><br>Actual Unit Value</span>'
+? '<span><strong>' + escapeHtml(formatCurrency(totals.actualValue)) + '</strong><br>Actual Unit Value</span>'
 : '') +
 (userCanSeeFieldMoney()
-? '<span><strong>' + escapeHtml(formatCurrency(fieldValue)) + '</strong><br>Field Unit Value</span>'
+? '<span><strong>' + escapeHtml(formatCurrency(totals.fieldValue)) + '</strong><br>Field Unit Value</span>'
 : '') +
-'<span><strong>' + regularHours + '</strong><br>Regular Hours</span>' +
-'<span><strong>' + overtimeHours + '</strong><br>OT Hours</span>' +
-'<span><strong>' + redlines + '</strong><br>Redlines</span>' +
-'<span><strong>' + pending + '</strong><br>Pending Job Units</span>';
+'<span><strong>' + totals.regularHours + '</strong><br>Regular Hours</span>' +
+'<span><strong>' + totals.overtimeHours + '</strong><br>OT Hours</span>' +
+'<span><strong>' + totals.redlines + '</strong><br>Redlines</span>' +
+'<span><strong>' + totals.pending + '</strong><br>Pending Job Units</span>' +
+'</div>';
+}
+function renderProductionReportingSummary(reports, canViewProductionReporting){
+const panel = $('productionReportingSummary');
+const list = $('productionReportingMetrics');
+panel.classList.toggle('hidden', !canViewProductionReporting);
+currentProductionExportRows = canViewProductionReporting ? reports : [];
+list.replaceChildren();
+if(!canViewProductionReporting) return;
+if(reports.length === 0){
+list.innerHTML = '<p class="muted">No production reports match the current filters.</p>';
+return;
+}
+const contracts = new Map();
+reports.forEach(report => {
+const contract = report.jobs?.contracts || {};
+const contractKey = String(contract.id || 'no-contract');
+if(!contracts.has(contractKey)){
+contracts.set(contractKey, {
+label:[contract.contract_number, contract.contract_name].filter(Boolean).join(' — ') || 'No Contract Assigned',
+reports:[],
+jobs:new Map()
+});
+}
+const contractGroup = contracts.get(contractKey);
+contractGroup.reports.push(report);
+const jobKey = String(report.job_id || 'no-job');
+if(!contractGroup.jobs.has(jobKey)){
+contractGroup.jobs.set(jobKey, {
+label:[report.jobs?.job_number, report.jobs?.job_name].filter(Boolean).join(' — ') || 'No Job Assigned',
+reports:[]
+});
+}
+contractGroup.jobs.get(jobKey).reports.push(report);
+});
+[...contracts.values()]
+.sort((a, b) => a.label.localeCompare(b.label))
+.forEach(contract => {
+const details = document.createElement('details');
+details.className = 'production-contract-summary';
+details.innerHTML =
+'<summary><span><strong>' + escapeHtml(contract.label) + '</strong><br>' +
+'<span class="muted">' + contract.jobs.size + ' job' + (contract.jobs.size === 1 ? '' : 's') +
+' · ' + contract.reports.length + ' report' + (contract.reports.length === 1 ? '' : 's') + '</span></span>' +
+productionReportingMetricsMarkup(contract.reports) + '</summary>' +
+'<div class="production-contract-body">' +
+'<strong>Jobs</strong>' +
+[...contract.jobs.values()]
+.sort((a, b) => a.label.localeCompare(b.label))
+.map(job =>
+'<div class="production-job-totals"><h4>' + escapeHtml(job.label) + '</h4>' +
+productionReportingMetricsMarkup(job.reports) + '</div>'
+).join('') +
+'</div>';
+list.appendChild(details);
+});
 }
 function renderStormEventDashboard(reports, canReviewProduction){
 const dashboard = $('stormEventDashboard');
@@ -16430,6 +16537,9 @@ jobs (
 job_number,
 job_name,
 contracts (
+id,
+contract_name,
+contract_number,
 customers (
 id,
 name
