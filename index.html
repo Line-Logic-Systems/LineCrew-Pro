@@ -1422,6 +1422,21 @@ background:transparent;
 margin:0 0 10px;
 font-weight:700;
 }
+.job-other-actions{position:relative;display:inline-block}
+.job-other-actions>summary{cursor:pointer;list-style:none;padding:8px 11px;border:1px solid #cbd9e5;border-radius:8px;background:#eef3f7;color:var(--navy);font-size:12px;font-weight:800}
+.job-other-actions>summary::-webkit-details-marker{display:none}
+.job-other-actions>summary::after{content:' ▾'}
+.job-other-actions[open]>summary::after{content:' ▴'}
+.job-other-actions-menu{position:absolute;z-index:8;top:calc(100% + 5px);right:0;min-width:190px;padding:7px;border:1px solid var(--border);border-radius:10px;background:#fff;box-shadow:0 8px 24px rgba(11,45,77,.18)}
+.job-other-actions-menu button{display:block;width:100%;margin:0 0 6px;text-align:left}
+.job-other-actions-menu button:last-child{margin-bottom:0}
+.job-danger-zone{margin-top:12px;border:1px solid #efb1b1;border-radius:10px;background:#fff8f8}
+.job-danger-zone>summary{cursor:pointer;padding:10px 12px;color:#9f2424;font-weight:800}
+.job-danger-zone>p{margin:0;padding:0 12px 8px;color:#6f3b3b;font-size:12px}
+.job-danger-zone>button{margin:0 12px 12px!important;width:auto!important}
+.job-package-header{margin-top:16px}
+.job-package-header h3{margin:0}
+@media(max-width:600px){.job-other-actions{width:100%}.job-other-actions>summary{width:100%}.job-other-actions-menu{position:static;margin-top:5px;box-shadow:none}}
 #productionFiltersCard .price-book-filter-grid{
 display:grid;
 grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
@@ -7222,51 +7237,67 @@ card.querySelector(`#job-leaders-${job.id}`)
 );
 }
 if(canManage && job.active){
-const editButton =
-document.createElement('button');
-editButton.className =
-'small secondary';
-editButton.textContent =
-'Edit';
-editButton.onclick =
-()=> editJob(job);
-actions.appendChild(
-editButton
+const editButton = document.createElement('button');
+editButton.className = 'small secondary';
+editButton.textContent = 'Edit Job';
+editButton.onclick = ()=> editJob(job);
+actions.appendChild(editButton);
+}
+const jobPackages = currentJobPackageCatalog.filter(
+jobPackage => String(jobPackage.job_id) === String(job.id)
 );
-const statusButton =
-document.createElement('button');
-statusButton.className =
-job.active
-? 'small warning'
-: 'small success';
-statusButton.textContent =
-job.active
-? 'Close Job'
-: 'Reopen Job';
-statusButton.onclick =
-()=> changeJobStatus(job);
-actions.appendChild(statusButton);
+if(job.active && jobPackages.length > 0 && (userCanUseReporting() || userCanManageJobPackages())){
+const openPackageButton = document.createElement('button');
+openPackageButton.className = 'small success';
+openPackageButton.textContent = jobPackages.length === 1 ? 'Open Package' : 'View Packages';
+openPackageButton.onclick = () => {
+if(jobPackages.length === 1) openJobPackageDetails(jobPackages[0]);
+else card.querySelector(`#job-packages-${job.id}`)?.scrollIntoView({ behavior:'smooth', block:'start' });
+};
+actions.appendChild(openPackageButton);
 }
-if(canManage && !job.active){
-const statusButton = document.createElement('button');
-statusButton.className = 'small success';
-statusButton.textContent = 'Reopen Job';
-statusButton.onclick = ()=> changeJobStatus(job);
-actions.appendChild(statusButton);
+if(canManage){
+const otherActions = document.createElement('details');
+otherActions.className = 'job-other-actions';
+const otherSummary = document.createElement('summary');
+otherSummary.textContent = 'Other Actions';
+const otherMenu = document.createElement('div');
+otherMenu.className = 'job-other-actions-menu';
+if(job.active){
+const historyButton = document.createElement('button');
+historyButton.className = 'small secondary';
+historyButton.textContent = 'View Assignment History';
+historyButton.onclick = () => toggleJobAssignmentHistory(
+job,
+card.querySelector(`#job-leaders-${job.id}`),
+historyButton
+);
+otherMenu.appendChild(historyButton);
+const closeButton = document.createElement('button');
+closeButton.className = 'small warning';
+closeButton.textContent = 'Close Job';
+closeButton.onclick = ()=> changeJobStatus(job);
+otherMenu.appendChild(closeButton);
+}else{
+const reopenButton = document.createElement('button');
+reopenButton.className = 'small success';
+reopenButton.textContent = 'Reopen Job';
+reopenButton.onclick = ()=> changeJobStatus(job);
+otherMenu.appendChild(reopenButton);
 }
-if(userCanManageJobPackages() && job.active){
-const packageButton = document.createElement('button');
-packageButton.className = 'small success';
-packageButton.textContent = '+ Add Job Packet';
-packageButton.onclick = ()=> chooseJobPacketFileForJob(job);
-actions.appendChild(packageButton);
+otherActions.append(otherSummary,otherMenu);
+actions.appendChild(otherActions);
 }
 if(userCanManageJobs() && job.active){
+const dangerZone = document.createElement('details');
+dangerZone.className = 'job-danger-zone';
+dangerZone.innerHTML = '<summary>Danger Zone</summary><p>Permanently delete this job only when it was created by mistake.</p>';
 const deleteButton = document.createElement('button');
 deleteButton.className = 'small danger';
 deleteButton.textContent = 'Delete Job';
 deleteButton.onclick = ()=> deleteJob(job);
-actions.appendChild(deleteButton);
+dangerZone.appendChild(deleteButton);
+card.insertBefore(dangerZone, card.querySelector(`#job-packages-${job.id}`));
 }
 if(job.active && (userCanUseReporting() || userCanManageJobPackages())){
 renderJobPackages(job, card.querySelector(`#job-packages-${job.id}`));
@@ -7344,15 +7375,6 @@ controls.appendChild(select);
 controls.appendChild(assign);
 container.appendChild(controls);
 }
-const historyButton = document.createElement('button');
-historyButton.className = 'small secondary';
-historyButton.textContent = 'View Assignment History';
-historyButton.onclick = () => toggleJobAssignmentHistory(
-job,
-container,
-historyButton
-);
-container.appendChild(historyButton);
 }
 async function toggleJobAssignmentHistory(job, container, button){
 const existing = container.querySelector('.job-assignment-history');
@@ -7424,15 +7446,27 @@ function renderJobPackages(job, container){
 const packages = currentJobPackageCatalog.filter(
 jobPackage => String(jobPackage.job_id) === String(job.id)
 );
+container.replaceChildren();
+const packageHeader = document.createElement('div');
+packageHeader.className = 'section-header job-package-header';
+const packageTitle = document.createElement('h3');
+packageTitle.textContent = 'Utility Job Packages';
+packageHeader.appendChild(packageTitle);
+if(userCanManageJobPackages() && job.active){
+const addPackageButton = document.createElement('button');
+addPackageButton.className = 'small success';
+addPackageButton.textContent = '+ Add Job Packet';
+addPackageButton.onclick = ()=> chooseJobPacketFileForJob(job);
+packageHeader.appendChild(addPackageButton);
+}
+container.appendChild(packageHeader);
 if(!packages.length){
-container.innerHTML = `
-<div class="muted" style="margin-top:14px">
-No utility job packages added yet.
-</div>
-`;
+const empty = document.createElement('div');
+empty.className = 'muted';
+empty.textContent = 'No utility job packages added yet.';
+container.appendChild(empty);
 return;
 }
-container.innerHTML = '<h3 style="margin-top:16px">Utility Job Packages</h3>';
 packages.forEach(jobPackage => {
 const row = document.createElement('div');
 row.className = 'unit-compact-card';
