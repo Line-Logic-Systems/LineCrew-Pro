@@ -24,6 +24,7 @@
     style.id = 'tkRosterEnhancementStyles';
     style.textContent = `
       .tk-import-box{border:1px dashed #9eb6ca;border-radius:14px;padding:14px;margin:14px 0;background:#f8fbfe}
+      .tk-import-box>summary{cursor:pointer;font-weight:800}.tk-import-box>div{padding-top:10px}
       .tk-import-box input{margin-top:6px}
       .tk-import-preview{margin-top:10px;font-size:13px;color:#5e6f80}
       .tk-my-crew-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
@@ -121,13 +122,14 @@
 
   function installAdminImport(){
     const card = byId('timekeepingRosterCard');
-    if(!card || !['admin','owner'].includes(role()) || byId('tkRosterImportBox')) return;
-    const box = document.createElement('div');
+    const body = byId('tkPersonnelAssignmentsBody');
+    if(!card || !body || !['admin','owner'].includes(role()) || byId('tkRosterImportBox')) return;
+    const box = document.createElement('details');
     box.id='tkRosterImportBox';
     box.className='tk-import-box';
-    box.innerHTML=`<strong>Upload Employee Roster</strong><p class="tk-help">Upload Excel or CSV. The file needs an employee name column; Employee #, Classification and Crew are optional.</p><input id="tkRosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><div id="tkRosterImportPreview" class="tk-import-preview"></div><button id="tkImportRosterBtn" type="button" class="secondary" disabled>Import Roster</button>`;
+    box.innerHTML=`<summary><strong>Import Employees from File</strong></summary><div><p class="tk-help">Upload Excel or CSV. The file needs an employee name column; Employee #, Classification and Crew are optional.</p><input id="tkRosterFile" type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><div id="tkRosterImportPreview" class="tk-import-preview"></div><button id="tkImportRosterBtn" type="button" class="secondary" disabled>Import Roster</button></div>`;
     const addButton = byId('tkAddEmployeeBtn');
-    card.insertBefore(box, addButton || card.children[2] || null);
+    body.insertBefore(box, addButton || body.firstChild || null);
     byId('tkRosterFile').addEventListener('change', e => parseRosterFile(e.target.files?.[0]));
     byId('tkImportRosterBtn').onclick = importRoster;
   }

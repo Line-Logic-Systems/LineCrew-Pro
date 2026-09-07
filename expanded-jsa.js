@@ -123,10 +123,10 @@
     });
     load('jsa-review.js?v=20260826a');
   });
-  load('timekeeping.js?v=20260907a', () => {
-    load('timekeeping-input-v2.js?v=20260901a', null, 'linecrew-timekeeping-input-v2');
+  load('timekeeping.js?v=20260907b', () => {
+    load('timekeeping-input-v2.js?v=20260907b', null, 'linecrew-timekeeping-input-v2');
     load('foreman-field-tools.js?v=20260901a');
-    load('timekeeping-roster.js?v=20260823f');
+    load('timekeeping-roster.js?v=20260907a');
     load('timekeeping-report-v2.js?v=20260829h', () => {
       load('leadership-my-time.js?v=20260907a');
       load('timekeeping-polish.js?v=20260826b');
