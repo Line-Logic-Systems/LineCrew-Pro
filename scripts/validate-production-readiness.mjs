@@ -744,7 +744,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v70") &&
+    serviceWorker.includes("linecrew-pro-shell-v71") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -804,6 +804,15 @@ for (const marker of [
 for (const marker of ['Money Visibility','Actual Money','Field Money']) {
   assert(index.includes(marker), `Team money visibility UI marker missing: ${marker}`);
 }
+for (const marker of [
+  '@media(min-width:900px)',
+  '#teamList{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:8px}',
+  '#teamList > :not(.lc-team-member-row){grid-column:1 / -1}'
+]) assert(appPolish.includes(marker), `Responsive two-column Team roster marker missing: ${marker}`);
+assert(
+  expandedJsa.includes("app-polish.js?v=20260907a"),
+  'Two-column Team roster must load through the refreshed app-polish asset.'
+);
 assert(/\.daily-review-counts\s+\.authorized,\s*\.daily-review-counts\s+\.pending,\s*\.daily-review-counts\s+\.redline\s*\{[^}]*color\s*:\s*inherit\s*;/m.test(index), 'Authorization, Pending Packet and Redline summary counts must remain neutral.');
 assert(!index.includes('mh-rate-target'), 'Man-hour target status must not render as a separate colored badge.');
 assert(timekeeping.includes('window.manHourRateNumberMarkup(value)'), 'Production totals must color only the Field MH Run Rate value.');
@@ -1148,3 +1157,4 @@ console.log('- Company setup progress stays compact until its step list is opene
 console.log('- Production Reporting groups filtered totals by contract and job for every reporting-authorized role');
 console.log('- Production Reporting opens from a scalable utility directory into a filtered utility workspace');
 console.log('- Utility directory cards show overall production totals without listing contracts');
+console.log('- Team member cards use two columns on desktop and one column on mobile');
