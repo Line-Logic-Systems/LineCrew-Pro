@@ -528,6 +528,30 @@ background:#fff;
 }
 .production-job-totals h4{ margin:0 0 4px; }
 .production-reporting-contracts{ margin-top:10px; }
+.production-utility-grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+gap:12px;
+margin-top:12px;
+}
+.production-utility-card{
+width:100%;
+margin:0;
+padding:16px;
+text-align:left;
+color:var(--text);
+background:#fff;
+border:1px solid var(--border);
+border-radius:14px;
+box-shadow:none;
+}
+.production-utility-card:hover{
+border-color:var(--blue);
+background:#f7fbff;
+}
+.production-utility-card strong,
+.production-utility-card span{ display:block; }
+.production-utility-card .muted{ margin-top:5px; }
 .billing-batch-card{
 border:1px solid var(--border);
 border-radius:9px;
@@ -2847,6 +2871,24 @@ class="success"
 </div>
 </div>
 </div>
+<div id="productionUtilityDirectory" class="card hidden">
+<div class="section-header">
+<div>
+<h3>Utilities / Cooperatives</h3>
+<p class="muted">Select a utility or cooperative to find its contracts, jobs and Daily Reports.</p>
+</div>
+</div>
+<div id="productionUtilityDirectoryList" class="production-utility-grid"></div>
+</div>
+<div id="productionUtilityDetailHeader" class="card hidden">
+<div class="section-header">
+<div>
+<h3 id="productionUtilityDetailTitle">Utility Production</h3>
+<p class="muted">Filter contracts and jobs, then open a job to review its Daily Reports.</p>
+</div>
+<button id="backToProductionUtilities" class="secondary small">← Back to Utilities</button>
+</div>
+</div>
 <details class="card collapsible-card" id="productionFiltersCard">
 <summary>
 <span>Find Daily Reports</span>
@@ -2857,9 +2899,9 @@ class="success"
 <div>
 <label for="productionSearch">Search</label>
 <input id="productionSearch" type="search"
-placeholder="Job number, job name or Foreman">
+placeholder="Contract, job number, job name or Foreman">
 </div>
-<div class="production-reporting-control hidden">
+<div id="productionCustomerFilterControl" class="production-reporting-control hidden">
 <label for="productionCustomerFilter">Company / Utility</label>
 <select id="productionCustomerFilter">
 <option value="">All companies / utilities</option>
@@ -2886,6 +2928,10 @@ placeholder="Job number, job name or Foreman">
 <div class="production-reporting-control hidden">
 <label for="productionJobFilter">Job</label>
 <select id="productionJobFilter"><option value="">All jobs</option></select>
+</div>
+<div class="production-reporting-control hidden">
+<label for="productionContractFilter">Contract</label>
+<select id="productionContractFilter"><option value="">All contracts</option></select>
 </div>
 <div class="production-reporting-control hidden">
 <label for="productionForemanFilter">Foreman</label>
@@ -4173,6 +4219,8 @@ let currentProductionPage = 1;
 let currentProductionPageSize = 10;
 let currentProductionServerLimit = 250;
 let currentProductionServerTotal = 0;
+let currentProductionUtilityId = '';
+let currentProductionUtilityName = '';
 let productionSearchTimer = null;
 let customerLoadSequence = 0;
 let contractLoadSequence = 0;
@@ -4926,6 +4974,12 @@ return;
 await loadCompletedJobs(state.jobId || null);
 }
 if(page === 'productionPage'){
+currentProductionUtilityId = state.view === 'utilityProduction'
+? String(state.utilityId || '')
+: '';
+currentProductionUtilityName = state.view === 'utilityProduction'
+? String(state.utilityName || '')
+: '';
 await loadProductionReports();
 }
 if(page === 'safetyPage'){
@@ -9815,7 +9869,7 @@ answer:'Open the Daily Report and use Attachments to add supporting files. Use P
 },
 {
 terms:['export','csv','reporting','filter reports','production report'],
-answer:'Open Production and choose Show Filters. Filter by status, dates, job, Foreman, exception/completion state, crew or storm context when available. Production Reporting recalculates for those results. Choose Export Filtered CSV to download the matching report summary. Price Books and setup lists have their own CSV exports.'
+answer:'Open Production and select a utility or cooperative. Its Utility Production workspace shows contract totals and lets you filter by contract, job, status, dates, Foreman, crew, exception/completion state or storm context. Open a job to review its Daily Reports. Production Reporting recalculates for those results, and Export Filtered CSV downloads the matching report summary.'
 },
 {
 terms:['company settings','logo','brand color','time zone','company name'],
@@ -11174,6 +11228,11 @@ returnToDashboard();
 $('refreshProductionBtn').onclick = async () => {
 await loadProductionReports();
 };
+$('backToProductionUtilities').onclick = async () => {
+currentProductionPage = 1;
+setAppHistory({ lineCrewPage:'productionPage' });
+await displayAppPage('productionPage');
+};
 $('loadOlderProductionReports').onclick = async () => {
 currentProductionServerLimit += 250;
 currentProductionPage = 1;
@@ -11192,6 +11251,7 @@ $('productionStatusFilter').onchange = resetProductionPageAndLoad;
 $('productionDateFrom').onchange = resetProductionPageAndLoad;
 $('productionDateTo').onchange = resetProductionPageAndLoad;
 $('productionCustomerFilter').onchange = resetProductionPageAndLoad;
+$('productionContractFilter').onchange = resetProductionPageAndLoad;
 $('productionJobFilter').onchange = resetProductionPageAndLoad;
 $('productionForemanFilter').onchange = resetProductionPageAndLoad;
 $('productionCrewFilter').onchange = resetProductionPageAndLoad;
@@ -11209,6 +11269,7 @@ $('productionStatusFilter').value = '';
 $('productionDateFrom').value = '';
 $('productionDateTo').value = '';
 $('productionCustomerFilter').value = '';
+$('productionContractFilter').value = '';
 $('productionJobFilter').value = '';
 $('productionForemanFilter').value = '';
 $('productionCrewFilter').value = '';
@@ -15869,11 +15930,13 @@ alert('Unit item deleted.');
 function populateProductionReportingFilters(reports, canReviewProduction){
 if(!canReviewProduction) return;
 const selectedCustomer = $('productionCustomerFilter').value;
+const selectedContract = $('productionContractFilter').value;
 const selectedJob = $('productionJobFilter').value;
 const selectedForeman = $('productionForemanFilter').value;
 const selectedCrew = $('productionCrewFilter').value;
 const selectedStormEvent = $('productionStormEventFilter').value;
 const customers = new Map();
+const contracts = new Map();
 const jobs = new Map();
 const foremen = new Set();
 const crews = new Set();
@@ -15882,6 +15945,17 @@ reports.forEach(report => {
 const customer = report.jobs?.contracts?.customers;
 if(customer?.id){
 customers.set(String(customer.id), String(customer.name || 'Unnamed company / utility'));
+}
+if(
+currentProductionUtilityId &&
+String(customer?.id || '') !== currentProductionUtilityId
+) return;
+const contract = report.jobs?.contracts;
+if(contract?.id){
+contracts.set(
+String(contract.id),
+[contract.contract_number, contract.contract_name].filter(Boolean).join(' — ') || 'Unnamed contract'
+);
 }
 if(report.job_id){
 jobs.set(
@@ -15914,6 +15988,15 @@ option.value = id;
 option.textContent = label;
 $('productionJobFilter').appendChild(option);
 });
+$('productionContractFilter').innerHTML = '<option value="">All contracts</option>';
+[...contracts.entries()]
+.sort((a, b) => a[1].localeCompare(b[1]))
+.forEach(([id, label]) => {
+const option = document.createElement('option');
+option.value = id;
+option.textContent = label;
+$('productionContractFilter').appendChild(option);
+});
 $('productionForemanFilter').innerHTML = '<option value="">All foremen</option>';
 [...foremen].sort((a, b) => a.localeCompare(b)).forEach(name => {
 const option = document.createElement('option');
@@ -15939,6 +16022,10 @@ $('productionStormEventFilter').appendChild(option);
 if(customers.has(selectedCustomer)){
 $('productionCustomerFilter').value = selectedCustomer;
 }
+if(currentProductionUtilityId && customers.has(currentProductionUtilityId)){
+$('productionCustomerFilter').value = currentProductionUtilityId;
+}
+if(contracts.has(selectedContract)) $('productionContractFilter').value = selectedContract;
 if(jobs.has(selectedJob)) $('productionJobFilter').value = selectedJob;
 if(foremen.has(selectedForeman)) $('productionForemanFilter').value = selectedForeman;
 if(crews.has(selectedCrew)) $('productionCrewFilter').value = selectedCrew;
@@ -15986,6 +16073,68 @@ return '<div class="daily-value-summary production-reporting-group-metrics">' +
 '<span><strong>' + totals.redlines + '</strong><br>Redlines</span>' +
 '<span><strong>' + totals.pending + '</strong><br>Pending Job Units</span>' +
 '</div>';
+}
+function productionReportUtilityKey(report){
+return String(report.jobs?.contracts?.customers?.id || 'unassigned');
+}
+function renderProductionUtilityDirectory(reports){
+const list = $('productionUtilityDirectoryList');
+list.replaceChildren();
+const utilities = new Map();
+(reports || [])
+.filter(report => report.archived !== true)
+.forEach(report => {
+const utility = report.jobs?.contracts?.customers || {};
+const key = productionReportUtilityKey(report);
+if(!utilities.has(key)){
+utilities.set(key, {
+id:key,
+name:String(utility.name || 'No Utility / Cooperative Assigned'),
+reports:[],
+contracts:new Set(),
+jobs:new Set()
+});
+}
+const group = utilities.get(key);
+group.reports.push(report);
+if(report.jobs?.contracts?.id) group.contracts.add(String(report.jobs.contracts.id));
+if(report.job_id) group.jobs.add(String(report.job_id));
+});
+if(utilities.size === 0){
+list.innerHTML = '<p class="muted">No utility or cooperative production has been reported yet.</p>';
+return;
+}
+[...utilities.values()]
+.sort((a, b) => a.name.localeCompare(b.name))
+.forEach(group => {
+const totals = productionReportingTotals(group.reports);
+const button = document.createElement('button');
+button.type = 'button';
+button.className = 'production-utility-card';
+button.innerHTML =
+'<strong>' + escapeHtml(group.name) + '</strong>' +
+'<span class="muted">' + group.contracts.size + ' contract' + (group.contracts.size === 1 ? '' : 's') +
+' · ' + group.jobs.size + ' job' + (group.jobs.size === 1 ? '' : 's') +
+' · ' + totals.reports + ' report' + (totals.reports === 1 ? '' : 's') +
+' · ' + (totals.reports - totals.approved) + ' awaiting completion' +
+(totals.redlines ? ' · ' + totals.redlines + ' redline' + (totals.redlines === 1 ? '' : 's') : '') +
+'</span>';
+button.onclick = async () => {
+currentProductionPage = 1;
+setAppHistory({
+lineCrewPage:'productionPage',
+view:'utilityProduction',
+utilityId:group.id,
+utilityName:group.name
+});
+await displayAppPage('productionPage', {
+view:'utilityProduction',
+utilityId:group.id,
+utilityName:group.name
+});
+};
+list.appendChild(button);
+});
 }
 function renderProductionReportingSummary(reports, canViewProductionReporting){
 const panel = $('productionReportingSummary');
@@ -16618,17 +16767,46 @@ currentDailyAuthorizationSummaries = new Map(
 (authorizationSummaries || []).map(summary => [summary.report_id, summary])
 );
 }
+const utilityDirectoryMode = canViewProductionReporting && !currentProductionUtilityId;
+$('productionUtilityDirectory').classList.toggle('hidden', !utilityDirectoryMode);
+$('productionUtilityDetailHeader').classList.toggle(
+'hidden', !canViewProductionReporting || utilityDirectoryMode
+);
+$('productionFiltersCard').classList.toggle('hidden', utilityDirectoryMode);
+$('productionCustomerFilterControl').classList.toggle('hidden', canViewProductionReporting);
+if(utilityDirectoryMode){
+renderProductionUtilityDirectory(reports || []);
+$('productionReviewQueueSummary').classList.add('hidden');
+$('productionReportingSummary').classList.add('hidden');
+$('stormEventDashboard').classList.add('hidden');
+$('productionEmpty').classList.add('hidden');
+$('productionList').replaceChildren();
+$('productionPaginationTop').classList.add('hidden');
+$('productionPaginationBottom').classList.add('hidden');
+currentProductionExportRows = [];
+return;
+}
+if(canViewProductionReporting && currentProductionUtilityId){
+const selectedUtilityReport = (reports || []).find(
+report => productionReportUtilityKey(report) === currentProductionUtilityId
+);
+currentProductionUtilityName = currentProductionUtilityName ||
+String(selectedUtilityReport?.jobs?.contracts?.customers?.name || 'Utility Production');
+$('productionUtilityDetailTitle').textContent = currentProductionUtilityName;
+}
 document.querySelectorAll('.production-reporting-control').forEach(control =>
 control.classList.toggle('hidden', !canViewProductionReporting)
 );
+$('productionCustomerFilterControl').classList.toggle('hidden', canViewProductionReporting);
 populateProductionReportingFilters(reports || [], canViewProductionReporting);
 const search = $('productionSearch').value.trim().toLowerCase();
 const statusFilter = $('productionStatusFilter').value;
 const dateFrom = $('productionDateFrom').value;
 const dateTo = $('productionDateTo').value;
 const customerFilter = canViewProductionReporting
-? $('productionCustomerFilter').value
+? (currentProductionUtilityId || $('productionCustomerFilter').value)
 : '';
+const contractFilter = canViewProductionReporting ? $('productionContractFilter').value : '';
 const jobFilter = canViewProductionReporting ? $('productionJobFilter').value : '';
 const foremanFilter = canViewProductionReporting ? $('productionForemanFilter').value : '';
 const crewFilter = canViewProductionReporting ? $('productionCrewFilter').value : '';
@@ -16650,8 +16828,9 @@ if(dateFrom && String(report.work_date || '') < dateFrom) return false;
 if(dateTo && String(report.work_date || '') > dateTo) return false;
 if(
 customerFilter &&
-String(report.jobs?.contracts?.customers?.id || '') !== customerFilter
+productionReportUtilityKey(report) !== customerFilter
 ) return false;
+if(contractFilter && String(report.jobs?.contracts?.id || '') !== contractFilter) return false;
 if(jobFilter && String(report.job_id || '') !== jobFilter) return false;
 if(foremanFilter && String(report.foreman_name || '') !== foremanFilter) return false;
 if(crewFilter && String(report.crew_name || '') !== crewFilter) return false;
@@ -16674,6 +16853,8 @@ const haystack = [
 report.jobs?.job_number,
 report.jobs?.job_name,
 report.jobs?.contracts?.customers?.name,
+report.jobs?.contracts?.contract_number,
+report.jobs?.contracts?.contract_name,
 report.foreman_name,
 report.crew_name,
 report.storm_event_name
@@ -16687,7 +16868,11 @@ const bSubmitted = String(b.status || '').toLowerCase() === 'submitted' ? 0 : 1;
 if(aSubmitted !== bSubmitted) return aSubmitted - bSubmitted;
 return String(b.work_date || '').localeCompare(String(a.work_date || ''));
 });
-const submittedReports = (reports || []).filter(report =>
+const utilityScopedReports = (reports || []).filter(report =>
+!currentProductionUtilityId ||
+productionReportUtilityKey(report) === currentProductionUtilityId
+);
+const submittedReports = utilityScopedReports.filter(report =>
 report.archived !== true &&
 String(report.status || '').toLowerCase() === 'submitted'
 );
