@@ -545,18 +545,7 @@ border:1px solid var(--border);
 border-radius:14px;
 box-shadow:none;
 }
-.production-utility-open{
-width:100%;
-margin:0;
-padding:0;
-text-align:left;
-color:var(--text);
-background:transparent;
-border:0;
-box-shadow:none;
-}
-.production-utility-card:hover,
-.production-utility-card:focus-within{
+.production-utility-card:hover{
 border-color:var(--blue);
 background:#f7fbff;
 }
@@ -571,13 +560,6 @@ text-align:left;
 .production-utility-card .daily-value-summary > span{
 display:block;
 }
-.production-utility-primary-metrics{display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:8px;margin-top:12px}
-.production-utility-primary-metrics span{padding:9px 10px;border-radius:9px;background:#edf3f8;font-size:12px}
-.production-utility-primary-metrics strong{font-size:16px;color:var(--navy)}
-.production-utility-more{margin-top:9px;border-top:1px solid var(--border);padding-top:8px}
-.production-utility-more>summary{cursor:pointer;color:var(--navy);font-size:12px;font-weight:800}
-.production-utility-more[open]>summary{margin-bottom:4px}
-@media(max-width:720px){.production-utility-primary-metrics{grid-template-columns:1fr 1fr}}
 .billing-batch-card{
 border:1px solid var(--border);
 border-radius:9px;
@@ -16114,25 +16096,6 @@ return '<' + tag + ' class="daily-value-summary production-reporting-group-metri
 '<span><strong>' + totals.pending + '</strong><br>Pending Job Units</span>' +
 '</' + tag + '>';
 }
-function productionUtilityPrimaryMetricsMarkup(reports){
-const totals = productionReportingTotals(reports);
-const approvedReports = reports.filter(report => String(report.status || '').toLowerCase() === 'approved');
-const approvedTotals = productionReportingTotals(approvedReports);
-const awaitingReview = Math.max(0, totals.reports - totals.approved);
-const showActual = userCanSeeActualContractPrices();
-const showField = userCanSeeFieldMoney();
-const showMoney = showActual || showField;
-const approvedValue = showActual ? approvedTotals.actualValue : approvedTotals.fieldValue;
-const totalValue = showActual ? totals.actualValue : totals.fieldValue;
-const hours = totals.regularHours + totals.overtimeHours;
-const runRate = hours ? totalValue / hours : 0;
-return '<div class="production-utility-primary-metrics">' +
-'<span><strong>' + awaitingReview + '</strong>Awaiting Review</span>' +
-'<span><strong>' + (showMoney ? escapeHtml(formatCurrency(approvedValue)) : totals.approved) + '</strong>' + (showMoney ? 'Approved Production' : 'Approved Reports') + '</span>' +
-'<span><strong>' + totals.redlines + '</strong>Redlines</span>' +
-'<span><strong>' + (showMoney ? escapeHtml(formatCurrency(runRate)) : '—') + '</strong>' + (showActual ? 'Actual' : 'Field') + ' MH Rate</span>' +
-'</div>';
-}
 function productionReportUtilityKey(report){
 return String(report.jobs?.contracts?.customers?.id || 'unassigned');
 }
@@ -16162,15 +16125,12 @@ return;
 [...utilities.values()]
 .sort((a, b) => a.name.localeCompare(b.name))
 .forEach(group => {
-const card = document.createElement('div');
-card.className = 'production-utility-card';
 const button = document.createElement('button');
 button.type = 'button';
-button.className = 'production-utility-open';
-button.innerHTML = '<strong>' + escapeHtml(group.name) + '</strong>' + productionUtilityPrimaryMetricsMarkup(group.reports);
-const more = document.createElement('details');
-more.className = 'production-utility-more';
-more.innerHTML = '<summary>View All Metrics</summary>' + productionReportingMetricsMarkup(group.reports);
+button.className = 'production-utility-card';
+button.innerHTML =
+'<strong>' + escapeHtml(group.name) + '</strong>' +
+productionReportingMetricsMarkup(group.reports, 'span');
 button.onclick = async () => {
 currentProductionPage = 1;
 setAppHistory({
@@ -16185,8 +16145,7 @@ utilityId:group.id,
 utilityName:group.name
 });
 };
-card.append(button, more);
-list.appendChild(card);
+list.appendChild(button);
 });
 }
 function renderProductionReportingSummary(reports, canViewProductionReporting){

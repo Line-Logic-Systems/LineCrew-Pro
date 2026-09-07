@@ -78,11 +78,6 @@
       .tk-manager-section{border:1px solid #cbd9e5;border-radius:12px;background:#fff;overflow:hidden;margin-top:12px}
       .tk-manager-section>summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;font-weight:800;background:#f5f8fb;color:#0b2d4d}
       .tk-manager-section>summary span{font-size:12px;font-weight:400;color:#617284}.tk-manager-section-body{padding:12px 14px 14px}
-      .tk-workspace-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px;padding:5px;background:#edf3f8;border:1px solid #d7e1ea;border-radius:12px}
-      .tk-workspace-tab{width:auto!important;margin:0!important;padding:9px 13px!important;border:0!important;border-radius:9px!important;background:transparent!important;color:#355168!important;box-shadow:none!important;font-weight:800}
-      .tk-workspace-tab:hover{background:#fff!important}
-      .tk-workspace-tab.active{background:#1677c8!important;color:#fff!important}
-      .tk-workspace-tab.hidden{display:none!important}
       @media(max-width:720px){.tk-grid,.tk-summary,.tk-roster-summary,.tk-complete-tools{grid-template-columns:1fr 1fr}.tk-complete-tools input{grid-column:1/-1}.tk-crew-row{grid-template-columns:1fr 1fr}.tk-crew-row .tk-person{grid-column:1/-1}.tk-detail-row{grid-template-columns:1fr 1fr}.tk-detail-row>label:nth-child(4){grid-column:1/-1}}
     `;
     document.head.appendChild(style);
@@ -101,17 +96,10 @@
           <div><h2>Timekeeping / Roster</h2><p class="muted">Crew time, personnel, equipment, payroll and production reporting.</p></div>
           <button id="timekeepingBackBtn" class="secondary small">Back to Dashboard</button>
         </div>
-        <nav id="tkWorkspaceTabs" class="tk-workspace-tabs" aria-label="Timekeeping sections">
-          <button type="button" class="tk-workspace-tab" data-tk-tab="roster">Roster</button>
-          <button type="button" class="tk-workspace-tab" data-tk-tab="equipment">Equipment</button>
-          <button type="button" class="tk-workspace-tab" data-tk-tab="entry">Enter Time</button>
-          <button type="button" class="tk-workspace-tab" data-tk-tab="reports">Time Reports</button>
-          <button type="button" class="tk-workspace-tab" data-tk-tab="payroll">Payroll</button>
-        </nav>
       </div>
       <div id="timekeepingRosterCard" class="card hidden">
-        <h3 id="tkWorkspaceSectionTitle">Roster</h3>
-        <p id="tkWorkspaceSectionHelp" class="muted">Review employees and organize Foreman or Admin rosters.</p>
+        <h3>Roster & Equipment Setup</h3>
+        <p class="muted">Open only the section you need. Personnel changes save together; equipment assignments save automatically.</p>
         <details id="tkCompleteRoster" class="tk-complete-roster hidden">
           <summary id="tkCompleteRosterSummary">Complete Company Roster</summary>
           <div id="tkCompleteRosterBody" class="tk-complete-roster-body"></div>
@@ -163,62 +151,7 @@
     byId('tkExportCsvBtn').onclick = exportCsv;
     byId('tkAddEmployeeBtn').onclick = addEmployee;
     byId('tkSaveAssignmentsBtn').onclick = saveRosterAssignments;
-    byId('tkWorkspaceTabs').addEventListener('click', event => {
-      const button = event.target.closest('[data-tk-tab]');
-      if(button) openTimekeepingTab(button.dataset.tkTab);
-    });
   }
-
-  let activeTimekeepingTab = 'roster';
-  const timekeepingTabRoles = {
-    roster:()=>canManageRoster(),
-    equipment:()=>canManageRoster(),
-    entry:()=>['gf','superintendent','admin','owner'].includes(role()),
-    reports:()=>true,
-    payroll:()=>true
-  };
-
-  function timekeepingTabAvailable(name){
-    return Boolean(timekeepingTabRoles[name]?.());
-  }
-
-  function openTimekeepingTab(name){
-    if(!timekeepingTabAvailable(name)) name = timekeepingTabAvailable('entry') ? 'entry' : 'reports';
-    activeTimekeepingTab = name;
-    refreshTimekeepingTabs();
-  }
-
-  function refreshTimekeepingTabs(){
-    const page = byId('timekeepingPage');
-    if(!page) return;
-    const buttons = [...page.querySelectorAll('[data-tk-tab]')];
-    buttons.forEach(button => {
-      const available = timekeepingTabAvailable(button.dataset.tkTab);
-      button.classList.toggle('hidden', !available);
-      button.classList.toggle('active', available && button.dataset.tkTab === activeTimekeepingTab);
-      button.setAttribute('aria-selected', available && button.dataset.tkTab === activeTimekeepingTab ? 'true' : 'false');
-    });
-    if(!timekeepingTabAvailable(activeTimekeepingTab)){
-      activeTimekeepingTab = timekeepingTabAvailable('entry') ? 'entry' : 'reports';
-      return refreshTimekeepingTabs();
-    }
-    const rosterCard = byId('timekeepingRosterCard');
-    rosterCard?.classList.toggle('hidden', !['roster','equipment'].includes(activeTimekeepingTab));
-    byId('tkCompleteRoster')?.classList.toggle('hidden', activeTimekeepingTab !== 'roster');
-    byId('tkPersonnelAssignments')?.classList.toggle('hidden', activeTimekeepingTab !== 'roster');
-    byId('tkDefaultEquipmentCard')?.classList.toggle('hidden', activeTimekeepingTab !== 'equipment');
-    const title = byId('tkWorkspaceSectionTitle');
-    const help = byId('tkWorkspaceSectionHelp');
-    if(title) title.textContent = activeTimekeepingTab === 'equipment' ? 'Trucks & Equipment' : 'Company Roster';
-    if(help) help.textContent = activeTimekeepingTab === 'equipment'
-      ? 'Upload company units and assign each employee or leader\'s default equipment.'
-      : 'Review employees and organize Foreman or Admin rosters.';
-    byId('leadershipMyTimeCard')?.classList.toggle('hidden', activeTimekeepingTab !== 'entry');
-    byId('timekeepingReportCard')?.classList.toggle('hidden', activeTimekeepingTab !== 'reports');
-    byId('tkPayrollCard')?.classList.toggle('hidden', activeTimekeepingTab !== 'payroll');
-    byId('tkPayPeriodHistoryCard')?.classList.toggle('hidden', activeTimekeepingTab !== 'payroll');
-  }
-  window.LineCrewTimekeepingTabs = {open:openTimekeepingTab, refresh:refreshTimekeepingTabs, active:()=>activeTimekeepingTab};
 
   function addTile(){
     const dashboard = byId('dashboardPage');
@@ -237,7 +170,6 @@
       byId('timekeepingPage')?.classList.remove('hidden');
       await refreshTimekeeping();
       if(options?.focusRoster){
-        openTimekeepingTab('roster');
         byId('timekeepingRosterCard')?.scrollIntoView({behavior:'smooth',block:'start'});
       }
     };
@@ -251,12 +183,12 @@
 
   async function refreshTimekeeping(){
     if(!companyId() || !getSb()) return;
+    byId('timekeepingRosterCard')?.classList.toggle('hidden', !canManageRoster());
     await Promise.all([loadEmployees(), loadJobs(), loadForemen(), loadAdmins(), loadTeamProfiles()]);
     renderRoster();
     renderCompleteRoster();
     fillFilters();
     await loadEntries();
-    refreshTimekeepingTabs();
   }
 
   async function loadEmployees(){
@@ -974,7 +906,6 @@
       addTile();
       injectCrewTime();
       addRunRates();
-      refreshTimekeepingTabs();
       if(byId('dailyReportForm') && !byId('dailyReportForm').classList.contains('hidden')) loadCrewRowsForReport();
       else crewRowsLoadedForReport=null;
     });
