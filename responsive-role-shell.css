@@ -3,6 +3,7 @@
   --lc-shell-header-height: 76px;
   --lc-shell-radius: 14px;
   --lc-shell-shadow: 0 8px 24px rgba(11, 45, 77, .07);
+  --lc-shell-ink: #09244a;
 }
 
 body {
@@ -97,7 +98,10 @@ button {
     min-height: var(--lc-shell-header-height);
     margin-left: var(--lc-shell-sidebar-width);
     padding: 13px 30px;
-    border-bottom: 1px solid rgba(255, 255, 255, .12);
+    color: var(--lc-shell-ink);
+    border-bottom: 1px solid #dbe6ef;
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(11, 45, 77, .06);
   }
 
   body.lc-shell-active > header .app-brand {
@@ -111,7 +115,86 @@ button {
   }
 
   body.lc-shell-active > header .company-brand-badge {
+    margin: 0;
+    padding: 7px 10px;
+    color: var(--lc-shell-ink);
+    border: 0;
+    background: transparent;
+  }
+
+  body.lc-shell-active > header .company-brand-badge img {
+    display: none;
+  }
+
+  body.lc-shell-active > header .company-brand-badge::after {
+    content: "\2304";
+    margin-left: 3px;
+    color: #55718f;
+    font-size: 15px;
+  }
+
+  .lc-shell-account {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     margin-left: auto;
+  }
+
+  .lc-shell-account__avatar {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 8px;
+    color: #244566;
+    background: #eaf1f7;
+    font-size: 11px;
+    font-weight: 850;
+  }
+
+  .lc-shell-account__copy {
+    display: grid;
+    min-width: 96px;
+    line-height: 1.1;
+  }
+
+  .lc-shell-account__copy strong {
+    color: var(--lc-shell-ink);
+    font-size: 12px;
+  }
+
+  .lc-shell-account__copy small {
+    margin-top: 3px;
+    color: #55718f;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .lc-shell-account__signout {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    margin-left: 8px;
+    padding: 0 0 0 18px;
+    color: var(--lc-shell-ink);
+    border: 0;
+    border-left: 1px solid #dbe6ef;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .lc-shell-account__signout:hover {
+    color: #096fcb;
+    background: transparent;
+  }
+
+  .lc-shell-account__signout svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
   }
 
   body.lc-shell-active > main {
@@ -119,6 +202,8 @@ button {
     max-width: none;
     margin: 0 0 0 var(--lc-shell-sidebar-width);
     padding: 26px clamp(24px, 3vw, 48px) 100px;
+    min-height: calc(100vh - var(--lc-shell-header-height));
+    background: radial-gradient(circle at 65% 12%, rgba(214, 238, 255, .6), transparent 42%), #f7fafc;
   }
 
   body.lc-shell-active > main > section:not(.hidden) {
@@ -182,7 +267,7 @@ button {
   }
 
   .lc-role-sidebar__identity {
-    padding: 14px 18px 10px;
+    display: none;
   }
 
   .lc-role-sidebar__identity strong,
@@ -271,6 +356,113 @@ button {
     background: #f7fafc;
   }
 
+  #dashboardPage > .lc-dashboard-hero {
+    padding: 0 0 10px;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  #dashboardPage > .lc-dashboard-hero > h2 {
+    margin: 0;
+    color: var(--lc-shell-ink);
+    font-size: clamp(25px, 2.1vw, 34px);
+    letter-spacing: -.035em;
+  }
+
+  #dashboardPage > .lc-dashboard-hero > h2::before {
+    content: "Welcome to ";
+  }
+
+  #dashboardPage > .lc-dashboard-hero > p {
+    display: none;
+  }
+
+  #dashboardPage > .lc-dashboard-hero > .button-row {
+    margin-top: 12px;
+  }
+
+  .lc-dashboard-workspace {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 6px 0 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #d7e2ec;
+  }
+
+  .lc-dashboard-workspace h3,
+  .lc-dashboard-workspace p {
+    margin: 0;
+  }
+
+  .lc-dashboard-workspace h3 {
+    color: var(--lc-shell-ink);
+    font-size: 17px;
+  }
+
+  .lc-dashboard-workspace p {
+    margin-top: 6px;
+    color: #55718f;
+    font-size: 12px;
+  }
+
+  .lc-dashboard-workspace__role {
+    padding: 6px 10px;
+    color: #1268bf;
+    border-radius: 7px;
+    background: #e3f1ff;
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  #dashboardTileGrid .metric {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    align-content: center;
+    column-gap: 12px;
+    min-height: 76px;
+    padding: 13px 46px 13px 14px;
+    border-radius: 6px;
+    box-shadow: 0 2px 7px rgba(11, 45, 77, .035);
+  }
+
+  #dashboardTileGrid .metric strong,
+  #dashboardTileGrid .metric .muted {
+    grid-column: 2;
+  }
+
+  #dashboardTileGrid .metric strong {
+    align-self: end;
+    color: var(--lc-shell-ink);
+    font-size: 14px;
+  }
+
+  #dashboardTileGrid .metric .muted {
+    align-self: start;
+    margin-top: 4px;
+    color: #55718f;
+    font-size: 11px;
+  }
+
+  .lc-dashboard-tile__icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    grid-row: 1 / span 2;
+    place-items: center;
+    color: var(--lc-shell-ink);
+  }
+
+  .lc-dashboard-tile__icon svg {
+    width: 25px;
+    height: 25px;
+    stroke: currentColor;
+  }
+
   #dashboardPage .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -294,6 +486,12 @@ button {
 
 @media (max-width: 1099px), (pointer: coarse) {
   .lc-role-sidebar {
+    display: none !important;
+  }
+
+  .lc-shell-account,
+  .lc-dashboard-workspace,
+  .lc-dashboard-tile__icon {
     display: none !important;
   }
 
