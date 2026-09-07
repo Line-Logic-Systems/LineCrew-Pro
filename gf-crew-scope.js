@@ -205,9 +205,13 @@
       `<div class="gf-assignment-help">Assign each Foreman crew to its normal General Foreman. That GF will see those crews first for Daily Report approvals and JSAs, with a temporary Show All Crews coverage option when needed.</div>`+
       `<input id="gfAssignmentSearch" class="gf-assignment-search" type="search" placeholder="Search Foreman or General Foreman">`+
       `<div id="gfAssignmentList" class="gf-assignment-list"></div>`;
-    const toolbar=teamPage.querySelector('.toolbar');
-    if(toolbar?.nextSibling) toolbar.parentNode.insertBefore(card,toolbar.nextSibling);
-    else teamPage.prepend(card);
+    const crewsPanel=byId('teamCrewsPanel');
+    if(crewsPanel) crewsPanel.appendChild(card);
+    else{
+      const toolbar=teamPage.querySelector('.toolbar');
+      if(toolbar?.nextSibling) toolbar.parentNode.insertBefore(card,toolbar.nextSibling);
+      else teamPage.prepend(card);
+    }
     renderAssignmentRows();
     byId('gfAssignmentSearch').addEventListener('input',e=>renderAssignmentRows(e.target.value));
     byId('gfAssignmentList').addEventListener('change',e=>{
