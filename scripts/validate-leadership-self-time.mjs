@@ -20,6 +20,7 @@ const foremanTools = read('foreman-field-tools.js');
 const migration = read('supabase/migrations/archive/20260828172839_leadership_self_time.sql');
 const managedMigration = read('supabase/migrations/archive/20260828203148_leadership_add_other_people.sql');
 const adminRosterMigration = read('supabase/migrations/archive/20260829084727_admin_time_roster_assignments.sql');
+const batchMigration = read('supabase/migrations/20260907194500_upsert_leadership_time_batch.sql');
 
 if (module.includes('if (elapsed <= 0) elapsed += 1440;')) {
   throw new Error('Equal start and stop times must not be converted into a 24-hour shift.');
@@ -49,9 +50,9 @@ requireText(module, "rpc('upsert_my_leadership_time'", 'My Time must save throug
 requireText(module, "rpc('upsert_leadership_employee_time'", 'Admin/GF added employees must save through the guarded employee RPC.');
 requireText(module, "['gf','admin']", 'Only Admin and General Foreman may add other employees.');
 requireText(module, 'assigned_admin_id === profile().id', 'Admin My Time must auto-load only the signed-in Admin roster.');
-requireText(module, 'const targetEmployeeId = activeEmployeeId', 'Admin roster time must save one selected person at a time.');
-requireText(module, 'These fields and hours belong only to this person.', 'My Time must explain that each person has independent hours.');
-requireText(module, 'saveAdminRow(row)', 'Each Admin roster row must save independently.');
+requireText(module, "rpc('upsert_leadership_time_batch'", 'GF/Admin group time must save through one transactional batch RPC.');
+requireText(module, 'Save All Time', 'GF/Admin group time needs one clear batch-save action.');
+requireText(module, 'data.length !== payload.length', 'The client must confirm that every submitted row saved.');
 requireText(module, 'captureAdminRows()', 'Admin roster drafts must survive adding or editing another person.');
 requireText(module, 'Start (24 hr)', 'My Time Start must use the Foreman-style 24-hour entry.');
 requireText(module, 'Stop (24 hr)', 'My Time Stop must use the Foreman-style 24-hour entry.');
@@ -91,8 +92,14 @@ requireText(timekeeping, "updateRosterDraft(select.dataset.tkAdmin,'assigned_adm
 requireText(timekeeping, 'id="tkChargeFilter"', 'Time Report needs a Job/Overhead charge filter.');
 requireText(timekeeping, 'id="tkLaborCodeFilter"', 'Time Report needs an overhead labor-code filter.');
 
-requireText(loader, 'leadership-my-time.js?v=20260829d', 'The My Time module is not loaded.');
-requireText(shell, '/leadership-my-time.js?v=20260829d', 'The My Time module is not in the offline app shell.');
+requireText(batchMigration, 'jsonb_array_length(p_entries) > 100', 'Group time batches need a bounded row count.');
+requireText(batchMigration, "v_role not in ('gf', 'admin')", 'Only GF and Admin may save group time.');
+requireText(batchMigration, 'employee.company_id = v_company_id', 'The batch must bind the caller and employee to one company.');
+requireText(batchMigration, 'from public.upsert_my_leadership_time(', 'The batch must reuse the guarded self-time calculation.');
+requireText(batchMigration, 'from public.upsert_leadership_employee_time(', 'The batch must reuse the guarded employee-time calculation.');
+requireText(batchMigration, 'revoke all on function public.upsert_leadership_time_batch(jsonb) from public, anon', 'The batch RPC must not be executable by Public or anon.');
+requireText(loader, 'leadership-my-time.js?v=20260907a', 'The My Time module is not loaded.');
+requireText(shell, '/leadership-my-time.js?v=20260907a', 'The My Time module is not in the offline app shell.');
 requireText(report, "rpc('timekeeping_report_rows_v3'", 'The Time Report must include leadership self-time.');
 requireText(customExport, "rpc('timekeeping_report_rows_v3'", 'Custom exports must include leadership self-time.');
 requireText(report, 'r.labor_code', 'The Time Report must show overhead labor codes.');
