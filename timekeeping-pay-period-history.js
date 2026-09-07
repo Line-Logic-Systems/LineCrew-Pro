@@ -52,6 +52,7 @@
     const payroll=byId('tkPayrollCard');
     if(!payroll||byId('tkPayPeriodHistoryCard'))return;
     const card=document.createElement('div');card.id='tkPayPeriodHistoryCard';card.className='card tk-history-card';
+    card.classList.toggle('hidden',(window.LineCrewTimekeepingTabs?.active?.()||'reports')!=='payroll');
     card.innerHTML=`<div class="tk-history-head"><div><h3 style="margin-bottom:3px">Pay Period History / Archived Timesheets</h3><p class="muted" style="margin:0">Search the full payroll archive by year, date range or status. Older records stay available here without loading years of data at once.</p></div><button id="tkRefreshHistoryBtn" type="button" class="secondary" style="width:auto;margin:0">Refresh History</button></div>
       <div class="tk-history-search">
         <label>Year<select id="tkHistoryYear"><option value="">All years</option></select></label>
