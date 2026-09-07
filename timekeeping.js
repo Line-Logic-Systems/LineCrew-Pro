@@ -60,6 +60,7 @@
       .tk-roster-summary strong{display:block;font-size:20px;color:#0b2d4d}
       .tk-complete-section{margin-top:16px}.tk-complete-section h4{margin:0 0 8px}
       .tk-roster-unassigned td{background:#fff8df}.tk-roster-inactive{opacity:.6}
+      .tk-roster-legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:8px 0 12px;font-size:12px;color:#4f6273}.tk-roster-legend span{display:inline-flex;align-items:center;gap:6px}.tk-roster-swatch{width:18px;height:14px;border:1px solid #cbd9e5;border-radius:4px;background:#fff}.tk-roster-swatch.unassigned{background:#fff8df}
       .tk-complete-tools{display:grid;grid-template-columns:minmax(180px,1.5fr) repeat(4,minmax(130px,.7fr));gap:8px;margin:12px 0}
       .tk-complete-tools input,.tk-complete-tools select{margin:0}
       .tk-complete-actions{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}.tk-complete-actions button{width:auto;margin:0}
@@ -481,6 +482,7 @@
     const foremanOptions=foremen.map(foreman=>`<option value="${esc(foreman.id)}" ${completeRosterFilters.foreman===foreman.id?'selected':''}>${esc(foreman.full_name||'Foreman')} Crew</option>`).join('');
     body.innerHTML=`
       <p class="tk-help">Read-only company overview. Unassigned active people and equipment are highlighted.</p>
+      <div class="tk-roster-legend" aria-label="Roster color legend"><span><i class="tk-roster-swatch unassigned" aria-hidden="true"></i><strong>Yellow:</strong> Unassigned</span><span><i class="tk-roster-swatch" aria-hidden="true"></i><strong>White:</strong> Assigned</span></div>
       <div class="tk-complete-tools">
         <input id="tkCompleteRosterSearch" type="search" placeholder="Search people, crews, equipment…" value="${esc(completeRosterFilters.query)}">
         <select id="tkCompleteRosterKind"><option value="all" ${completeRosterFilters.kind==='all'?'selected':''}>People & Equipment</option><option value="people" ${completeRosterFilters.kind==='people'?'selected':''}>People only</option><option value="equipment" ${completeRosterFilters.kind==='equipment'?'selected':''}>Equipment only</option></select>

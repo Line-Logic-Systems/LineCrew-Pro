@@ -744,7 +744,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v73") &&
+    serviceWorker.includes("linecrew-pro-shell-v74") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1123,8 +1123,8 @@ for (const marker of [
   "$('backToProductionUtilities').onclick"
 ]) assert(index.includes(marker), `Utility Production navigation marker missing: ${marker}`);
 assert(
-  expandedJsa.includes("timekeeping.js?v=20260907b") &&
-    serviceWorker.includes("/timekeeping.js?v=20260907b"),
+  expandedJsa.includes("timekeeping.js?v=20260907c") &&
+    serviceWorker.includes("/timekeeping.js?v=20260907c"),
   'Contract and job run-rate rendering must use the refreshed Timekeeping asset.'
 );
 for (const marker of [
@@ -1136,7 +1136,10 @@ for (const marker of [
 for (const marker of [
   'Roster & Equipment Setup',
   'id="tkPersonnelAssignments" class="tk-manager-section"',
-  'Open only the section you need.'
+  'Open only the section you need.',
+  'Roster color legend',
+  '<strong>Yellow:</strong> Unassigned',
+  '<strong>White:</strong> Assigned'
 ]) assert(timekeeping.includes(marker), `Timekeeping cleanup marker missing: ${marker}`);
 assert(
   expandedJsa.includes("timekeeping-input-v2.js?v=20260907b") &&
