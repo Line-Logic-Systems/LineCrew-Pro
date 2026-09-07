@@ -50,8 +50,8 @@ const extractNamedFunction = (source, name) => {
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
 assert(
-  html.includes('/responsive-role-shell.css?v=20260907b') &&
-    html.includes('responsive-role-shell.js?v=20260907b'),
+  html.includes('/responsive-role-shell.css?v=20260907c') &&
+    html.includes('responsive-role-shell.js?v=20260907c'),
   'Responsive role shell assets must be loaded by the application.'
 );
 assert(
