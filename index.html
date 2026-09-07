@@ -1427,16 +1427,26 @@ display:grid;
 grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
 gap:10px 12px;
 }
-#productionFiltersCard .collapsible-card-content{
-padding-top:10px;
-}
+.production-filters-card{padding:0;overflow:hidden}
+.production-filters-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.production-filter-basic-grid{display:grid;grid-template-columns:minmax(230px,1.5fr) repeat(3,minmax(150px,1fr));gap:10px 12px;padding:14px 18px 10px}
+.production-advanced-filters{margin:0 18px 10px;border:1px solid var(--border);border-radius:10px;background:#f7fafc;overflow:hidden}
+.production-advanced-filters>summary{cursor:pointer;padding:11px 13px;font-weight:800;color:var(--navy);list-style:none}
+.production-advanced-filters>summary::-webkit-details-marker{display:none}
+.production-advanced-filters>summary::before{content:'+ ';color:var(--blue)}
+.production-advanced-filters[open]>summary::before{content:'− '}
+.production-advanced-filters[open]>summary{border-bottom:1px solid var(--border)}
+.production-advanced-filters .price-book-filter-grid{padding:12px}
+.production-clear-filters{margin:0 18px 14px!important;width:auto!important}
 #productionFiltersCard label{
 margin-bottom:4px;
 }
-@media(max-width:600px){
+@media(max-width:760px){
+.production-filter-basic-grid,
 #productionFiltersCard .price-book-filter-grid{
 grid-template-columns:1fr;
 }
+.production-filters-heading{align-items:flex-start;flex-direction:column}
 }
 .daily-unit-picker{
 display:grid;
@@ -2928,23 +2938,24 @@ class="success"
 <button id="backToProductionUtilities" class="secondary small">← Back to Utilities</button>
 </div>
 </div>
-<details class="card collapsible-card" id="productionFiltersCard">
-<summary>
-<span>Find Daily Reports</span>
-<span id="productionFilterCount" class="collapsible-summary-count"></span>
-</summary>
-<div class="collapsible-card-content">
-<div class="price-book-filter-grid">
+<div class="card production-filters-card" id="productionFiltersCard">
+<div class="production-filters-heading">
+<strong>Find Daily Reports</strong>
+<span id="productionFilterCount" class="muted"></span>
+</div>
+<div class="production-filter-basic-grid">
 <div>
 <label for="productionSearch">Search</label>
 <input id="productionSearch" type="search"
 placeholder="Contract, job number, job name or Foreman">
 </div>
-<div id="productionCustomerFilterControl" class="production-reporting-control hidden">
-<label for="productionCustomerFilter">Company / Utility</label>
-<select id="productionCustomerFilter">
-<option value="">All companies / utilities</option>
-</select>
+<div>
+<label for="productionDateFrom">From Date</label>
+<input id="productionDateFrom" type="date">
+</div>
+<div>
+<label for="productionDateTo">Through Date</label>
+<input id="productionDateTo" type="date">
 </div>
 <div>
 <label for="productionStatusFilter">Status</label>
@@ -2956,13 +2967,15 @@ placeholder="Contract, job number, job name or Foreman">
 <option value="archived">Archived</option>
 </select>
 </div>
-<div>
-<label for="productionDateFrom">From Date</label>
-<input id="productionDateFrom" type="date">
 </div>
-<div>
-<label for="productionDateTo">Through Date</label>
-<input id="productionDateTo" type="date">
+<details id="productionAdvancedFilters" class="production-advanced-filters">
+<summary>Advanced Filters</summary>
+<div class="price-book-filter-grid">
+<div id="productionCustomerFilterControl" class="production-reporting-control hidden">
+<label for="productionCustomerFilter">Company / Utility</label>
+<select id="productionCustomerFilter">
+<option value="">All companies / utilities</option>
+</select>
 </div>
 <div class="production-reporting-control hidden">
 <label for="productionJobFilter">Job</label>
@@ -3012,11 +3025,11 @@ placeholder="Contract, job number, job name or Foreman">
 </select>
 </div>
 </div>
-<button id="clearProductionFilters" class="secondary small">
+</details>
+<button id="clearProductionFilters" class="secondary small production-clear-filters">
 Clear Filters
 </button>
 </div>
-</details>
 <div id="productionLoading" class="card center hidden">
 Loading production...
 </div>
