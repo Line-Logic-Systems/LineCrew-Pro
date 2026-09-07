@@ -74,6 +74,9 @@
       .tk-help{font-size:13px;color:#6c7a89}
       .tk-inline-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
       .tk-inline-actions button{width:auto}
+      .tk-manager-section{border:1px solid #cbd9e5;border-radius:12px;background:#fff;overflow:hidden;margin-top:12px}
+      .tk-manager-section>summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;font-weight:800;background:#f5f8fb;color:#0b2d4d}
+      .tk-manager-section>summary span{font-size:12px;font-weight:400;color:#617284}.tk-manager-section-body{padding:12px 14px 14px}
       @media(max-width:720px){.tk-grid,.tk-summary,.tk-roster-summary,.tk-complete-tools{grid-template-columns:1fr 1fr}.tk-complete-tools input{grid-column:1/-1}.tk-crew-row{grid-template-columns:1fr 1fr}.tk-crew-row .tk-person{grid-column:1/-1}.tk-detail-row{grid-template-columns:1fr 1fr}.tk-detail-row>label:nth-child(4){grid-column:1/-1}}
     `;
     document.head.appendChild(style);
@@ -94,23 +97,28 @@
         </div>
       </div>
       <div id="timekeepingRosterCard" class="card hidden">
-        <h3>Manage Personnel Assignments</h3>
-        <p class="muted">Assign field employees to their Foreman crew and, independently, to an Admin time roster. Foreman crew members automatically appear on Daily Reports; Admin roster members automatically appear in that Admin's My Time workspace.</p>
+        <h3>Roster & Equipment Setup</h3>
+        <p class="muted">Open only the section you need. Personnel changes save together; equipment assignments save automatically.</p>
         <details id="tkCompleteRoster" class="tk-complete-roster hidden">
           <summary id="tkCompleteRosterSummary">Complete Company Roster</summary>
           <div id="tkCompleteRosterBody" class="tk-complete-roster-body"></div>
         </details>
-        <div class="tk-grid">
-          <label>Employee #<input id="tkEmployeeNumber" type="text" placeholder="Optional"></label>
-          <label>Employee Name<input id="tkEmployeeName" type="text" placeholder="Full name"></label>
-          <label>Classification<input id="tkEmployeeClass" type="text" placeholder="Lineman, Operator, Groundman..."></label>
-          <label>Default Crew<input id="tkEmployeeCrew" type="text" placeholder="Crew name / number"></label>
-          <label>Assigned Foreman<select id="tkEmployeeForeman"><option value="">Unassigned</option></select></label>
-          <label>Assigned Admin<select id="tkEmployeeAdmin"><option value="">Unassigned</option></select></label>
-        </div>
-        <button id="tkAddEmployeeBtn" class="success">Add Employee</button>
-        <div class="tk-roster-savebar"><button id="tkSaveAssignmentsBtn" type="button" class="success" disabled>Save Crew Assignments</button><span id="tkRosterSaveStatus" class="muted">Choose assignments, then save them together.</span></div>
-        <div id="tkRosterList" style="margin-top:12px"></div>
+        <details id="tkPersonnelAssignments" class="tk-manager-section">
+          <summary><strong>Personnel & Crew Assignments</strong><span>Add employees and organize Foreman/Admin rosters</span></summary>
+          <div id="tkPersonnelAssignmentsBody" class="tk-manager-section-body">
+            <div class="tk-grid">
+              <label>Employee #<input id="tkEmployeeNumber" type="text" placeholder="Optional"></label>
+              <label>Employee Name<input id="tkEmployeeName" type="text" placeholder="Full name"></label>
+              <label>Classification<input id="tkEmployeeClass" type="text" placeholder="Lineman, Operator, Groundman..."></label>
+              <label>Default Crew<input id="tkEmployeeCrew" type="text" placeholder="Crew name / number"></label>
+              <label>Assigned Foreman<select id="tkEmployeeForeman"><option value="">Unassigned</option></select></label>
+              <label>Assigned Admin<select id="tkEmployeeAdmin"><option value="">Unassigned</option></select></label>
+            </div>
+            <button id="tkAddEmployeeBtn" class="success">Add Employee</button>
+            <div class="tk-roster-savebar"><button id="tkSaveAssignmentsBtn" type="button" class="success" disabled>Save Crew Assignments</button><span id="tkRosterSaveStatus" class="muted">Choose assignments, then save them together.</span></div>
+            <div id="tkRosterList" style="margin-top:12px"></div>
+          </div>
+        </details>
       </div>
       <div id="timekeepingReportCard" class="card">
         <h3>Time Report</h3>
