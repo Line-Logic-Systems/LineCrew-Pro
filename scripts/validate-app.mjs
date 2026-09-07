@@ -4,6 +4,8 @@ import vm from 'node:vm';
 const html = fs.readFileSync('index.html', 'utf8');
 const responsiveShell = fs.readFileSync('responsive-role-shell.js', 'utf8');
 const responsiveShellStyles = fs.readFileSync('responsive-role-shell.css', 'utf8');
+const profilePhoto = fs.readFileSync('profile-photo.js', 'utf8');
+const profilePhotoMigration = fs.readFileSync('supabase/migrations/20260907230000_add_private_profile_photos.sql', 'utf8');
 const failures = [];
 const assert = (condition, message) => {
   if (!condition) failures.push(message);
@@ -53,6 +55,30 @@ assert(
   html.includes('/responsive-role-shell.css?v=20260907c') &&
     html.includes('responsive-role-shell.js?v=20260907c'),
   'Responsive role shell assets must be loaded by the application.'
+);
+assert(
+  html.includes('profile-photo.js?v=20260907a') &&
+    html.includes('id="myProfilePhoto"') &&
+    html.includes('id="uploadMyProfilePhoto"') &&
+    html.includes('id="removeMyProfilePhoto"'),
+  'The self-service profile photo controls must be loaded by the app.'
+);
+assert(
+  profilePhoto.includes("const BUCKET = 'profile-photos'") &&
+    profilePhoto.includes('.upload(path, blob') &&
+    profilePhoto.includes('.remove([path])') &&
+    profilePhoto.includes("sb.rpc('update_my_profile_avatar'") &&
+    profilePhoto.includes('createSignedUrl(path, 3600)'),
+  'Profile photos must use private signed reads and self-service upload/remove wiring.'
+);
+assert(
+  profilePhotoMigration.includes("'profile-photos'") &&
+    profilePhotoMigration.includes('profile_photos_company_read') &&
+    profilePhotoMigration.includes('profile_photos_self_insert') &&
+    profilePhotoMigration.includes('profile_photos_self_update') &&
+    profilePhotoMigration.includes('profile_photos_self_delete') &&
+    profilePhotoMigration.includes('update_my_profile_avatar'),
+  'Profile photo storage must remain private, company-readable and self-managed.'
 );
 assert(
   responsiveShell.includes("tile.click()") &&
