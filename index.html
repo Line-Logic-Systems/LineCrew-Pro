@@ -2023,6 +2023,18 @@ Cancel
 <div id="myProfileEditor" class="job-card hidden">
 <label for="myProfileName">Display Name</label>
 <input id="myProfileName" maxlength="120">
+<div class="lc-profile-photo-editor">
+<div>
+<strong>Profile Photo</strong>
+<p class="muted">JPG, PNG or WebP. The photo will be cropped to a square.</p>
+</div>
+<img id="myProfilePhotoPreview" class="hidden" alt="Selected profile photo preview">
+<input id="myProfilePhoto" type="file" accept="image/jpeg,image/png,image/webp">
+<div class="button-row">
+<button id="uploadMyProfilePhoto" type="button" class="secondary small">Upload Photo</button>
+<button id="removeMyProfilePhoto" type="button" class="secondary small">Remove Photo</button>
+</div>
+</div>
 <button id="saveMyProfile" class="success small">Save My Profile</button>
 <button id="cancelMyProfile" class="secondary small">Cancel</button>
 </div>
@@ -19767,5 +19779,6 @@ console.warn('LineCrew Pro service worker registration failed:', error);
 </script>
 <script src="custom-time-export.js?v=20260829c"></script>
 <script src="responsive-role-shell.js?v=20260907c"></script>
+<script src="profile-photo.js?v=20260907a"></script>
 </body>
 </html>
