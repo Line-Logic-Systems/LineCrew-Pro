@@ -123,7 +123,13 @@ button {
   }
 
   body.lc-shell-active > header .company-brand-badge img {
-    display: none;
+    display: block;
+    width: 32px;
+    height: 32px;
+    padding: 2px;
+    border: 1px solid #dbe6ef;
+    border-radius: 7px;
+    background: #fff;
   }
 
   body.lc-shell-active > header .company-brand-badge::after {
