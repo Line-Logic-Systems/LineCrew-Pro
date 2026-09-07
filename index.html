@@ -1992,9 +1992,9 @@ Cancel
 </div>
 <div class="grid" id="dashboardTileGrid">
 <div class="metric" id="jobsTile">
-<strong>Jobs</strong>
+<strong>Jobs &amp; Work Points</strong>
 <span class="muted">
-Create, manage and close jobs
+Set up, assign and manage jobs
 </span>
 </div>
 <div class="metric hidden" id="completedJobsTile">
@@ -2004,9 +2004,9 @@ Read-only job records and exports
 </span>
 </div>
 <div class="metric" id="productionTile">
-<strong>Production</strong>
+<strong>Production &amp; Reports</strong>
 <span class="muted">
-Create, review and report daily production
+Track completed units, revenue, performance and Daily Reports
 </span>
 </div>
 <div class="metric" id="priceBooksTile">
@@ -16126,11 +16126,11 @@ const approvedValue = showActual ? approvedTotals.actualValue : approvedTotals.f
 const totalValue = showActual ? totals.actualValue : totals.fieldValue;
 const hours = totals.regularHours + totals.overtimeHours;
 const runRate = hours ? totalValue / hours : 0;
-const completionPercent = totals.reports ? Math.round((totals.approved / totals.reports) * 100) : 0;
+const activeJobCount = new Set(reports.filter(report => report.jobs?.active === true).map(report => String(report.job_id)).filter(Boolean)).size;
 return '<div class="production-utility-primary-metrics">' +
 '<span><strong>' + awaitingReview + '</strong>Awaiting Review</span>' +
 '<span><strong>' + (showMoney ? escapeHtml(formatCurrency(approvedValue)) : totals.approved) + '</strong>' + (showMoney ? 'Approved Production' : 'Approved Reports') + '</span>' +
-'<span><strong>' + completionPercent + '%</strong>Completion</span>' +
+'<span><strong>' + activeJobCount + '</strong>Active Jobs</span>' +
 '<span><strong>' + (showMoney ? escapeHtml(formatCurrency(runRate)) : '—') + '</strong>' + (showActual ? 'Actual' : 'Field') + ' MH Rate</span>' +
 '</div>';
 }
@@ -16739,6 +16739,7 @@ storm_event_name,
 jobs (
 job_number,
 job_name,
+active,
 contracts (
 id,
 contract_name,
