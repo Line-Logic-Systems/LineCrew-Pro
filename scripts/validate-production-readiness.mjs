@@ -1128,7 +1128,7 @@ for (const marker of [
   "productionReportUtilityKey(report) === currentProductionUtilityId",
   "$('backToProductionUtilities').onclick",
   'const jobProgress = currentJobProgressSummaries.get(group.key) || {};',
-  "approvedPercent.toFixed(1) + '% Complete'",
+  "approvedPercent.toFixed(1) + '% Complete</strong>'",
   "formatCurrency(approvedAmount)",
   "formatCurrency(jobRunRate)"
 ]) assert(index.includes(marker), `Utility Production navigation marker missing: ${marker}`);
