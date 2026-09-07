@@ -16126,10 +16126,11 @@ const approvedValue = showActual ? approvedTotals.actualValue : approvedTotals.f
 const totalValue = showActual ? totals.actualValue : totals.fieldValue;
 const hours = totals.regularHours + totals.overtimeHours;
 const runRate = hours ? totalValue / hours : 0;
+const completionPercent = totals.reports ? Math.round((totals.approved / totals.reports) * 100) : 0;
 return '<div class="production-utility-primary-metrics">' +
 '<span><strong>' + awaitingReview + '</strong>Awaiting Review</span>' +
 '<span><strong>' + (showMoney ? escapeHtml(formatCurrency(approvedValue)) : totals.approved) + '</strong>' + (showMoney ? 'Approved Production' : 'Approved Reports') + '</span>' +
-'<span><strong>' + totals.redlines + '</strong>Redlines</span>' +
+'<span><strong>' + completionPercent + '%</strong>Completion</span>' +
 '<span><strong>' + (showMoney ? escapeHtml(formatCurrency(runRate)) : '—') + '</strong>' + (showActual ? 'Actual' : 'Field') + ' MH Rate</span>' +
 '</div>';
 }
