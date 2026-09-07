@@ -91,6 +91,47 @@
     return button;
   }
 
+  function enhanceDesktopChrome() {
+    let account = byId('lcShellAccount');
+    if (!account) {
+      account = document.createElement('div');
+      account.id = 'lcShellAccount';
+      account.className = 'lc-shell-account';
+      account.innerHTML = '<span class="lc-shell-account__avatar" aria-hidden="true"></span><span class="lc-shell-account__copy"><strong></strong><small></small></span><button type="button" class="lc-shell-account__signout">' + svgFor('signOut') + '<span>Sign Out</span></button>';
+      account.querySelector('button').addEventListener('click', () => byId('signOutBtn')?.click());
+      document.querySelector('header .app-brand')?.appendChild(account);
+    }
+
+    const profile = signedInProfile();
+    const name = byId('userName')?.textContent?.trim() || profile?.full_name || profile?.name || 'Team Member';
+    const role = roleLabel(String(profile?.role || currentRole()).toLowerCase());
+    account.querySelector('.lc-shell-account__avatar').textContent = String(name).split(/\s+/).filter(Boolean).map(part => part[0]).slice(0, 2).join('').toUpperCase() || 'LC';
+    account.querySelector('strong').textContent = name;
+    account.querySelector('small').textContent = role;
+
+    const dashboard = byId('dashboardPage');
+    if (!dashboard) return;
+    byId('companyName')?.closest('.card')?.classList.add('lc-dashboard-hero');
+    let workspace = byId('lcDashboardWorkspace');
+    if (!workspace) {
+      workspace = document.createElement('div');
+      workspace.id = 'lcDashboardWorkspace';
+      workspace.className = 'lc-dashboard-workspace';
+      workspace.innerHTML = '<div><h3></h3><p>Manage company setup, people, pricing, job setup, production oversight, safety and timekeeping.</p></div><span class="lc-dashboard-workspace__role"></span>';
+      byId('dashboardTileGrid')?.before(workspace);
+    }
+    workspace.querySelector('h3').textContent = `${role} Workspace`;
+    workspace.querySelector('.lc-dashboard-workspace__role').textContent = role;
+
+    dashboardTiles().forEach(tile => {
+      if (tile.querySelector('.lc-dashboard-tile__icon')) return;
+      const icon = document.createElement('span');
+      icon.className = 'lc-dashboard-tile__icon';
+      icon.innerHTML = svgFor(tile.id);
+      tile.prepend(icon);
+    });
+  }
+
   function createShell() {
     if (sidebar) return;
     sidebar = document.createElement('aside');
@@ -179,6 +220,7 @@
     sidebar.setAttribute('aria-hidden', active ? 'false' : 'true');
     if (!active) return;
     syncNavigation();
+    enhanceDesktopChrome();
     syncActiveItem();
   }
 
