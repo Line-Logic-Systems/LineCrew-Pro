@@ -70,6 +70,7 @@
     const reportCard=byId('tkRunReportBtn')?.closest('.card');
     if(!reportCard||byId('tkPayrollCard'))return;
     const card=document.createElement('div');card.id='tkPayrollCard';card.className='card tk-payroll-card';
+    card.classList.toggle('hidden',(window.LineCrewTimekeepingTabs?.active?.()||'reports')!=='payroll');
     card.innerHTML=`
       <div class="tk-payroll-top"><div><h3>Payroll & Timesheet Export</h3><p class="muted">Review exceptions, approve weekly time, then export payroll-ready Excel, PDF or CSV.</p></div><span id="tkPeriodBadge" class="tk-period-badge">Open</span></div>
       <div id="tkPeriodStatus" class="tk-help"></div>

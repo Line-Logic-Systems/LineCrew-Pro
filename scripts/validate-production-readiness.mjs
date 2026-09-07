@@ -122,6 +122,8 @@ const timekeepingReport = fs.readFileSync('timekeeping-report-v2.js', 'utf8');
 const timekeeping = fs.readFileSync('timekeeping.js', 'utf8');
 const timekeepingInput = fs.readFileSync('timekeeping-input-v2.js', 'utf8');
 const timekeepingRoster = fs.readFileSync('timekeeping-roster.js', 'utf8');
+const timekeepingPayroll = fs.readFileSync('timekeeping-payroll.js', 'utf8');
+const timekeepingHistory = fs.readFileSync('timekeeping-pay-period-history.js', 'utf8');
 const foremanFieldTools = fs.readFileSync('foreman-field-tools.js', 'utf8');
 const remainingUnitsMigration = fs.readFileSync('supabase/migrations/archive/20260827120000_fix_remaining_units_job_scope.sql', 'utf8');
 const jobJacketIntegrity = fs.readFileSync('supabase/migrations/archive/20260901030000_job_jacket_end_to_end_integrity.sql', 'utf8');
@@ -744,7 +746,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260901a') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260901a') &&
-    serviceWorker.includes("linecrew-pro-shell-v74") &&
+    serviceWorker.includes("linecrew-pro-shell-v75") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260903b") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260903b"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1115,16 +1117,18 @@ for (const marker of [
 for (const marker of [
   'id="productionUtilityDirectory"',
   'id="productionUtilityDetailHeader"',
+  'productionUtilityPrimaryMetricsMarkup',
+  'View All Metrics',
   'id="productionContractFilter"',
   'function renderProductionUtilityDirectory(reports)',
-  "productionReportingMetricsMarkup(group.reports, 'span')",
+  'productionReportingMetricsMarkup(group.reports)',
   "view:'utilityProduction'",
   "productionReportUtilityKey(report) === currentProductionUtilityId",
   "$('backToProductionUtilities').onclick"
 ]) assert(index.includes(marker), `Utility Production navigation marker missing: ${marker}`);
 assert(
-  expandedJsa.includes("timekeeping.js?v=20260907c") &&
-    serviceWorker.includes("/timekeeping.js?v=20260907c"),
+  expandedJsa.includes("timekeeping.js?v=20260907d") &&
+    serviceWorker.includes("/timekeeping.js?v=20260907d"),
   'Contract and job run-rate rendering must use the refreshed Timekeeping asset.'
 );
 for (const marker of [
@@ -1134,13 +1138,28 @@ for (const marker of [
   'Assign Default Trucks & Equipment'
 ]) assert(timekeepingInput.includes(marker), `Leadership equipment-assignment marker missing: ${marker}`);
 for (const marker of [
-  'Roster & Equipment Setup',
+  'id="tkWorkspaceTabs"',
+  'data-tk-tab="roster"',
+  'data-tk-tab="equipment"',
+  'data-tk-tab="entry"',
+  'data-tk-tab="reports"',
+  'data-tk-tab="payroll"',
+  'function refreshTimekeepingTabs()',
   'id="tkPersonnelAssignments" class="tk-manager-section"',
-  'Open only the section you need.',
   'Roster color legend',
   '<strong>Yellow:</strong> Unassigned',
   '<strong>White:</strong> Assigned'
 ]) assert(timekeeping.includes(marker), `Timekeeping cleanup marker missing: ${marker}`);
+const timekeepingWatch = timekeeping.match(/function watchApp\(\)\{[\s\S]*?\n  \}/)?.[0] || '';
+assert(
+  !timekeepingWatch.includes('refreshTimekeepingTabs'),
+  'Timekeeping tabs must not run from the page-wide MutationObserver.'
+);
+for (const [source,label] of [
+  [timekeepingInput,'Equipment'],
+  [timekeepingPayroll,'Payroll'],
+  [timekeepingHistory,'Pay-period history']
+]) assert(source.includes("LineCrewTimekeepingTabs?.active?.()"), `${label} must honor the active Timekeeping tab when it mounts.`);
 assert(
   expandedJsa.includes("timekeeping-input-v2.js?v=20260907b") &&
   expandedJsa.includes("timekeeping-roster.js?v=20260907a") &&

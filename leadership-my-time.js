@@ -202,7 +202,7 @@
       bindEvents();
       resetForm();
     }
-    card.classList.toggle('hidden', !canEnterMyTime());
+    card.classList.toggle('hidden', !canEnterMyTime() || (window.LineCrewTimekeepingTabs?.active?.() || 'entry') !== 'entry');
     byId('myTimePeopleWrap')?.classList.toggle('hidden', !canAddOtherPeople());
     byId('myTimeSingleEntry')?.classList.toggle('hidden', canAddOtherPeople());
     byId('myTimePersonList')?.classList.toggle('hidden', canAddOtherPeople());
