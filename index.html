@@ -42,6 +42,7 @@ document.documentElement.classList.add('desktop-view');
 --green:#198754;
 --red:#b83232;
 --orange:#d97706;
+--app-content-width:850px;
 }
 *{
 box-sizing:border-box;
@@ -58,7 +59,7 @@ color:white;
 padding:28px 22px;
 }
 header .app-brand{
-max-width:850px;
+max-width:var(--app-content-width);
 margin:auto;
 display:flex;
 align-items:center;
@@ -120,9 +121,18 @@ padding:7px 9px;
 .company-brand-badge img{width:38px;height:38px;}
 }
 main{
-max-width:850px;
+max-width:var(--app-content-width);
 margin:auto;
 padding:24px 16px 100px;
+}
+@media(min-width:1000px){
+:root{
+--app-content-width:1440px;
+}
+main{
+padding-left:28px;
+padding-right:28px;
+}
 }
 .storm-mode-banner{
 border:2px solid var(--orange);
