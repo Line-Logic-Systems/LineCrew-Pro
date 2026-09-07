@@ -61,6 +61,14 @@ assert(html.includes("'Reset to Today'"), 'Foreman JSA filters must reset to the
 assert(html.includes('createSafetyJsaHistoryCard'), 'Missing reusable JSA history renderer.');
 assert(html.includes('Crew Name / Number'), 'Daily Report crew identifier must be clearly labeled.');
 assert(
+  html.includes("sb.rpc('get_daily_report_unit_catalog_visible_v2'") &&
+    html.includes('row.quantityInput.oninput = renderDailyUnitTotals') &&
+    html.includes("action === 'transfer'") &&
+    html.includes('const actualTotal = savedActualTotal + draftTotals.actual') &&
+    html.includes('const adjustedTotal = savedAdjustedTotal + draftTotals.adjusted'),
+  'Daily Unit Production must preview unsaved install, transfer, and retirement value as quantities change.'
+);
+assert(
   html.includes('await sb.auth.getUser()') &&
     html.includes('await sb.auth.refreshSession()') &&
     html.includes("await sb.auth.signOut({scope:'local'})") &&

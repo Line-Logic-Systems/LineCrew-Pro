@@ -17655,7 +17655,7 @@ const authorizedRowsRequest = canEditDraft && report.job_id
 ? sb.rpc('get_remaining_job_units_for_field', { p_job_id:report.job_id })
 : Promise.resolve({ data:[], error:null });
 const [catalogResult, savedResult, usageResult, authorizedResult] = await Promise.all([
-sb.rpc('get_daily_report_unit_catalog_visible', { p_report_id:report.id }),
+sb.rpc('get_daily_report_unit_catalog_visible_v2', { p_report_id:report.id }),
 sb.rpc('get_daily_report_unit_locations_visible_v2', { p_report_id:report.id }),
 sb.rpc('get_daily_unit_usage_memory', { p_report_id:report.id }),
 authorizedRowsRequest
@@ -18041,6 +18041,7 @@ button.disabled = true;
 await selectDailyBatchUnit(batchRow, catalogItem);
 button.disabled = false;
 batchRow.actionInput.value = authorizedDailyWorkType(authorized.work_type);
+renderDailyUnitTotals();
 batchRow.selection.insertAdjacentHTML(
 'beforeend',
 '<div class="muted">From job jacket: ' +
@@ -18097,6 +18098,8 @@ actionInput:element.querySelector('.daily-batch-action'),
 quantityInput:element.querySelector('.daily-batch-quantity')
 };
 row.searchInput.oninput = () => renderDailyBatchSuggestions(row);
+row.actionInput.onchange = renderDailyUnitTotals;
+row.quantityInput.oninput = renderDailyUnitTotals;
 currentDailyUnitBatchRows.push(row);
 $('dailyUnitBatchRows').appendChild(element);
 }
@@ -18104,6 +18107,7 @@ function renderDailyBatchSuggestions(row){
 const search = row.searchInput.value.trim().toLowerCase();
 row.selectedItem = null;
 row.selection.innerHTML = '';
+renderDailyUnitTotals();
 if(search.length < 2){
 row.suggestions.classList.add('hidden');
 row.suggestions.innerHTML = '';
@@ -18225,6 +18229,7 @@ escapeHtml(item.description || item.item_name || 'No description') +
 '</div></details><div class="muted">Work type set to <strong>' +
 escapeHtml(dailyUnitWorkTypeLabel(inferredWorkType)) + '</strong></div>';
 row.quantityInput.focus();
+renderDailyUnitTotals();
 }
 function inferDailyUnitWorkType(item){
 if(Number(item?.transfer_quantity || 0) > 0) return 'transfer';
@@ -18377,19 +18382,37 @@ return lines.join('<br>') || '<span class="muted">Money hidden by company permis
 }
 function renderDailyUnitTotals(){
 const savedItems = currentDailySavedUnits;
-const actualTotal = savedItems.reduce(
+const savedActualTotal = savedItems.reduce(
 (total, item) => total + Number(item.actual_line_value || 0),
 0
 );
-const adjustedTotal = savedItems.reduce(
+const savedAdjustedTotal = savedItems.reduce(
 (total, item) => total + Number(item.adjusted_line_value || 0),
 0
 );
-const visibleTotal = savedItems.reduce(
-(total, item) => total + Number(item.visible_line_value || 0),
-0
-);
-const hasAdjustment = savedItems.some(item => item.has_adjustment);
+const draftTotals = currentDailyUnitBatchRows.reduce((totals, row) => {
+const item = row.selectedItem;
+const quantity = Number(row.quantityInput.value || 0);
+if(!item || !Number.isFinite(quantity) || quantity <= 0) return totals;
+const action = row.actionInput.value;
+const actualPrice = action === 'retirement'
+? item.actual_retirement_price
+: action === 'transfer'
+? item.actual_transfer_price
+: item.actual_install_price;
+const adjustedPrice = action === 'retirement'
+? item.adjusted_retirement_price
+: action === 'transfer'
+? item.adjusted_transfer_price
+: item.adjusted_install_price;
+totals.actual += quantity * Number(actualPrice || 0);
+totals.adjusted += quantity * Number(adjustedPrice || 0);
+return totals;
+}, { actual:0, adjusted:0 });
+const actualTotal = savedActualTotal + draftTotals.actual;
+const adjustedTotal = savedAdjustedTotal + draftTotals.adjusted;
+const hasAdjustment = savedItems.some(item => item.has_adjustment) ||
+currentDailyUnitBatchRows.some(row => row.selectedItem?.has_adjustment);
 if(userCanSeeActualContractPrices() && userCanSeeFieldMoney() && hasAdjustment){
 $('dailyUnitValueSummary').innerHTML =
 '<strong>Actual Daily Unit Value: ' +
