@@ -9,7 +9,7 @@
   const companyId=()=>profile()?.company_id||null;
   const role=()=>String(profile()?.role||'').toLowerCase();
   const canManageEquipment=()=>['owner','admin'].includes(role());
-  let employeeEquipment=new Map(),equipment=[],foremenById=new Map(),wrappedSave=null,loadedReport='';
+  let employeeEquipment=new Map(),equipment=[],foremenById=new Map(),profilesById=new Map(),wrappedSave=null,loadedReport='';
   let assignmentSearch='',assignmentFilter='all',loadedCompanyId='',refreshingData=false;
 
   function toast(message,type='info'){if(window.LineCrewUI?.toast)window.LineCrewUI.toast(message,type);else if(type==='error')console.error(message);}
@@ -20,8 +20,10 @@
     .tk-detail-row{grid-column:1/-1;display:grid;grid-template-columns:110px 110px 100px minmax(150px,1fr) auto auto;gap:10px;padding:8px 0 2px;border-top:1px solid #c2cdd7;align-items:end}
     .tk-detail-row label{font-size:11px;margin:0}.tk-detail-row input,.tk-detail-row select{margin:0;padding:8px}.tk-clock24{font-variant-numeric:tabular-nums;letter-spacing:.4px}
     .tk-detail-check{display:flex;gap:6px;align-items:center;padding-bottom:10px}.tk-detail-check input{width:auto;min-width:0}.tk-hours-worked{font-size:12px;color:#5f7080;grid-column:1/-1}
-    .tk-equipment-card{margin-top:14px;border-top:1px solid #dce5ed;padding-top:12px}
-    .tk-equipment-grid{display:grid;gap:8px}.tk-equipment-line{display:grid;grid-template-columns:minmax(170px,1fr) minmax(220px,1fr) 70px;gap:8px;align-items:center}.tk-equipment-line select{margin:0}.tk-equipment-save-state{font-size:12px;color:#617284}.tk-equipment-save-state.saved{color:#198754;font-weight:700}
+    .tk-equipment-card{margin-top:12px;border:1px solid #cbd9e5;border-radius:12px;background:#fff;overflow:hidden}
+    .tk-equipment-card>summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;font-weight:800;background:#f5f8fb;color:#0b2d4d}
+    .tk-equipment-card>summary span{font-size:12px;font-weight:400;color:#617284}.tk-equipment-card-body{padding:12px 14px 14px}
+    .tk-equipment-grid{display:grid;gap:8px}.tk-equipment-line{display:grid;grid-template-columns:minmax(170px,1fr) minmax(220px,1fr) 70px;gap:8px;align-items:center}.tk-equipment-line select{margin:0}.tk-equipment-person{display:flex;flex-direction:column}.tk-equipment-person small{font-weight:400;color:#617284}.tk-equipment-save-state{font-size:12px;color:#617284}.tk-equipment-save-state.saved{color:#198754;font-weight:700}
     .tk-equipment-upload{display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin:10px 0 14px}.tk-equipment-upload label{margin:0;min-width:220px}.tk-equipment-upload button{width:auto;margin:0}.tk-equipment-roster{font-size:12px;color:#5f7080;margin:6px 0 12px}
     .tk-saved-roster{border:1px solid #dce5ed;border-radius:12px;margin:10px 0 16px;background:#f8fafc;overflow:hidden}.tk-saved-roster summary{cursor:pointer;padding:11px 12px;font-weight:800}.tk-saved-roster-body{padding:0 12px 12px}.tk-saved-equipment-table{width:100%;border-collapse:collapse;font-size:12px}.tk-saved-equipment-table th,.tk-saved-equipment-table td{padding:8px 6px;border-bottom:1px solid #dce5ed;text-align:left}.tk-saved-equipment-table th{color:#617284}.tk-saved-equipment-table button{width:auto;margin:0;padding:6px 8px}.tk-unit-inactive{opacity:.55}.tk-assignment-heading{margin:14px 0 6px}
     .tk-assignment-tools{display:grid;grid-template-columns:minmax(200px,1fr) 180px;gap:8px;margin:10px 0}.tk-assignment-tools input,.tk-assignment-tools select{margin:0}
@@ -44,12 +46,12 @@
         c.from('timekeeping_employees').select('id,full_name,employee_number,classification,active,default_equipment,linked_profile_id,assigned_foreman_id,default_crew_name').eq('company_id',cid).order('full_name'),
         c.from('timekeeping_equipment').select('id,unit_number,description,active').eq('company_id',cid).order('unit_number')
       ];
-      if(canManageEquipment())requests.push(c.from('profiles').select('id,full_name,role,active').eq('company_id',cid).eq('role','foreman').eq('active',true).order('full_name'));
+      if(canManageEquipment())requests.push(c.from('profiles').select('id,full_name,role,active').eq('company_id',cid).eq('active',true).order('full_name'));
       const [er,qr,fr]=await Promise.all(requests);
       if(er.error||qr.error){console.warn('Unable to load timekeeping equipment data:',er.error?.message||qr.error?.message);return false;}
       employeeEquipment=new Map((er.data||[]).map(e=>[e.id,e]));
       equipment=qr.data||[];
-      if(fr&&!fr.error)foremenById=new Map((fr.data||[]).map(f=>[f.id,f]));
+      if(fr&&!fr.error){profilesById=new Map((fr.data||[]).map(p=>[p.id,p]));foremenById=new Map((fr.data||[]).filter(p=>String(p.role||'').toLowerCase()==='foreman').map(f=>[f.id,f]));}
       loadedCompanyId=cid;
       renderEquipmentManager();
       await window.LineCrewRefreshCompleteRoster?.();
@@ -65,8 +67,8 @@
   function equipmentOptions(selected='',employeeId='',showAssignments=false){return '<option value="">Select truck / equipment</option>'+equipment.filter(e=>e.active!==false).map(e=>{const assigned=showAssignments?assignedEmployeeForUnit(e.unit_number,employeeId):null;const label=`${e.unit_number}${e.description?' — '+e.description:''}${assigned?' — Assigned: '+(assigned.full_name||assigned.employee_number||'Employee'):''}`;return `<option value="${esc(e.unit_number)}" ${e.unit_number===selected?'selected':''} ${assigned?'style="color:#9aa6b2"':''}>${esc(label)}</option>`;}).join('');}
   function installEquipmentManager(){
     const roster=byId('timekeepingRosterCard');if(!roster||byId('tkDefaultEquipmentCard')||!canManageEquipment())return;
-    const box=document.createElement('div');box.id='tkDefaultEquipmentCard';box.className='tk-equipment-card';
-    box.innerHTML=`<h4>Truck / Equipment Roster</h4><p class="tk-help">The saved company roster stays in LineCrew Pro even when no equipment is assigned. Upload another file any time to add new units or update matching unit numbers.</p><details id="tkSavedEquipmentRoster" class="tk-saved-roster"><summary id="tkSavedEquipmentSummary">Saved Company Equipment Roster</summary><div class="tk-saved-roster-body" id="tkSavedEquipmentList"></div></details><div class="tk-equipment-upload"><label>Add / Update Equipment Roster<input id="tkEquipmentCsv" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values,text/plain"></label><button id="tkUploadEquipment" type="button" class="secondary small">Save / Update Roster</button></div><h4 class="tk-assignment-heading">Employee Equipment Assignments</h4><p class="tk-help">Assignments save automatically. Search by employee or unit, or open only the Foreman/crew you need. Units assigned to someone else stay selectable but are faded and labeled.</p><div class="tk-assignment-tools"><input id="tkEquipmentEmployeeSearch" type="search" placeholder="Search employee, #, class, or unit"><select id="tkEquipmentAssignmentFilter"><option value="all">All employees</option><option value="assigned">Assigned only</option><option value="unassigned">Unassigned only</option></select></div><div id="tkDefaultEquipmentList" class="tk-equipment-grid"></div>`;
+    const box=document.createElement('details');box.id='tkDefaultEquipmentCard';box.className='tk-equipment-card';
+    box.innerHTML=`<summary><strong>Trucks & Equipment</strong><span>Upload units and assign each employee's default truck</span></summary><div class="tk-equipment-card-body"><details id="tkSavedEquipmentRoster" class="tk-saved-roster"><summary id="tkSavedEquipmentSummary">Saved Company Equipment Roster</summary><div class="tk-saved-roster-body" id="tkSavedEquipmentList"></div></details><div class="tk-equipment-upload"><label>Add or Update Equipment File<input id="tkEquipmentCsv" type="file" accept=".xlsx,.xls,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values,text/plain"></label><button id="tkUploadEquipment" type="button" class="secondary small">Save Equipment File</button></div><h4 class="tk-assignment-heading">Assign Default Trucks & Equipment</h4><p class="tk-help">Open Leadership, a Foreman crew, or Unassigned Employees. Choosing a unit saves automatically.</p><div class="tk-assignment-tools"><input id="tkEquipmentEmployeeSearch" type="search" placeholder="Find employee or unit"><select id="tkEquipmentAssignmentFilter"><option value="all">All employees</option><option value="assigned">Assigned equipment</option><option value="unassigned">No equipment assigned</option></select></div><div id="tkDefaultEquipmentList" class="tk-equipment-grid"></div></div>`;
     roster.appendChild(box);
     byId('tkUploadEquipment').onclick=uploadEquipmentRoster;
     byId('tkEquipmentEmployeeSearch').addEventListener('input',e=>{assignmentSearch=e.target.value||'';renderEquipmentAssignments();});
@@ -88,13 +90,15 @@
     return [e.full_name,e.employee_number,e.classification,e.default_crew_name,e.default_equipment,eq?.description].some(v=>String(v||'').toLowerCase().includes(q));
   }
   function assignmentGroupName(e){
+    const linkedRole=String(profilesById.get(e.linked_profile_id)?.role||'').toLowerCase();
+    if(['owner','admin','superintendent','gf'].includes(linkedRole))return 'Leadership';
     if(e.assigned_foreman_id){
       const f=foremenById.get(e.assigned_foreman_id);
       return f?.full_name?`${f.full_name} Crew`:'Assigned Crew';
     }
     return 'Unassigned Employees';
   }
-  function renderAssignmentEmployee(e){return `<div class="tk-equipment-line"><strong>${esc(e.full_name||e.employee_number||'Employee')}</strong><select data-tk-default-equipment="${esc(e.id)}">${equipmentOptions(e.default_equipment||'',e.id,true)}</select><span class="tk-equipment-save-state ${e.default_equipment?'saved':''}" data-tk-save-state="${esc(e.id)}">${e.default_equipment?'Saved':''}</span></div>`;}
+  function renderAssignmentEmployee(e){const linkedRole=String(profilesById.get(e.linked_profile_id)?.role||'').toLowerCase();const label=linkedRole==='gf'?'General Foreman':linkedRole?linkedRole.replace(/^./,c=>c.toUpperCase()):(e.classification||'Employee');return `<div class="tk-equipment-line"><span class="tk-equipment-person"><strong>${esc(e.full_name||e.employee_number||'Employee')}</strong><small>${esc(label)}</small></span><select data-tk-default-equipment="${esc(e.id)}">${equipmentOptions(e.default_equipment||'',e.id,true)}</select><span class="tk-equipment-save-state ${e.default_equipment?'saved':''}" data-tk-save-state="${esc(e.id)}">${e.default_equipment?'Saved':''}</span></div>`;}
   function renderEquipmentAssignments(){
     const box=byId('tkDefaultEquipmentList');if(!box)return;
     const search=byId('tkEquipmentEmployeeSearch');if(search&&search.value!==assignmentSearch)search.value=assignmentSearch;
@@ -104,7 +108,8 @@
     const groups=new Map();
     rows.forEach(e=>{const name=assignmentGroupName(e);if(!groups.has(name))groups.set(name,[]);groups.get(name).push(e);});
     const searching=!!assignmentSearch.trim()||assignmentFilter!=='all';
-    box.innerHTML=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0])).map(([name,members])=>`<details class="tk-assignment-group" ${searching?'open':''}><summary>${esc(name)} <span class="tk-assignment-count">— ${members.length} employee${members.length===1?'':'s'}</span></summary><div class="tk-assignment-group-body">${members.map(renderAssignmentEmployee).join('')}</div></details>`).join('');
+    const groupRank=name=>name==='Leadership'?0:name==='Unassigned Employees'?2:1;
+    box.innerHTML=[...groups.entries()].sort((a,b)=>groupRank(a[0])-groupRank(b[0])||a[0].localeCompare(b[0])).map(([name,members])=>`<details class="tk-assignment-group" ${searching?'open':''}><summary>${esc(name)} <span class="tk-assignment-count">— ${members.length} employee${members.length===1?'':'s'}</span></summary><div class="tk-assignment-group-body">${members.map(renderAssignmentEmployee).join('')}</div></details>`).join('');
     box.querySelectorAll('[data-tk-default-equipment]').forEach(s=>s.onchange=()=>saveDefaultEquipment(s.dataset.tkDefaultEquipment));
   }
   function renderEquipmentManager(){renderSavedEquipmentRoster();renderEquipmentAssignments();}
