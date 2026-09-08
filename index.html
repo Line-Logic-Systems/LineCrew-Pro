@@ -5230,6 +5230,11 @@ alert('Your secure session expired after an account security update. Sign in aga
 return;
 }
 }
+// Utility Portal identities do not have contractor profiles and are deliberately
+// denied access to contractor-only startup RPCs. Route them before MFA,
+// subscription, and profile checks; contractor users receive a neutral denial
+// from utility_me and continue through the normal startup path.
+if(await window.LineCrewUtilityPortal?.tryLoadViewer?.(session.user)) return;
 const {
 data:mfaBootstrapRows,
 error:mfaBootstrapError
