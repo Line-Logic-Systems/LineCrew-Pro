@@ -35,7 +35,22 @@
 
   let sidebar;
   let nav;
+  let observer;
   let syncQueued = false;
+
+  function setText(element, value) {
+    if (element && element.textContent !== value) element.textContent = value;
+  }
+
+  function observe() {
+    observer?.observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
+  }
 
   function svgFor(key) {
     const paths = iconPaths[key] || iconPaths.jobsTile;
@@ -105,9 +120,13 @@
     const profile = signedInProfile();
     const name = byId('userName')?.textContent?.trim() || profile?.full_name || profile?.name || 'Team Member';
     const role = roleLabel(String(profile?.role || currentRole()).toLowerCase());
-    account.querySelector('.lc-shell-account__avatar').textContent = String(name).split(/\s+/).filter(Boolean).map(part => part[0]).slice(0, 2).join('').toUpperCase() || 'LC';
-    account.querySelector('strong').textContent = name;
-    account.querySelector('small').textContent = role;
+    const avatar = account.querySelector('.lc-shell-account__avatar');
+    const avatarText = String(name).split(/\s+/).filter(Boolean).map(part => part[0]).slice(0, 2).join('').toUpperCase() || 'LC';
+    const avatarFallback = avatar.querySelector('span');
+    if (avatarFallback) setText(avatarFallback, avatarText);
+    else setText(avatar, avatarText);
+    setText(account.querySelector('strong'), name);
+    setText(account.querySelector('small'), role);
 
     const dashboard = byId('dashboardPage');
     if (!dashboard) return;
@@ -190,8 +209,8 @@
 
     const profile = signedInProfile();
     const companyName = byId('companyName')?.textContent?.trim() || byId('companyBrandNameHeader')?.textContent?.trim() || 'LineCrew Pro';
-    byId('lcSidebarCompany').textContent = companyName;
-    byId('lcSidebarRole').textContent = roleLabel(String(profile?.role || currentRole()).toLowerCase());
+    setText(byId('lcSidebarCompany'), companyName);
+    setText(byId('lcSidebarRole'), roleLabel(String(profile?.role || currentRole()).toLowerCase()));
   }
 
   function syncActiveItem() {
@@ -205,13 +224,18 @@
   function sync() {
     syncQueued = false;
     createShell();
-    const active = eligibleForShell();
-    document.body.classList.toggle('lc-shell-active', active);
-    sidebar.setAttribute('aria-hidden', active ? 'false' : 'true');
-    if (!active) return;
-    syncNavigation();
-    enhanceDesktopChrome();
-    syncActiveItem();
+    observer?.disconnect();
+    try {
+      const active = eligibleForShell();
+      document.body.classList.toggle('lc-shell-active', active);
+      sidebar.setAttribute('aria-hidden', active ? 'false' : 'true');
+      if (!active) return;
+      syncNavigation();
+      enhanceDesktopChrome();
+      syncActiveItem();
+    } finally {
+      observe();
+    }
   }
 
   function scheduleSync() {
@@ -222,18 +246,12 @@
 
   function init() {
     createShell();
-    const observer = new MutationObserver(scheduleSync);
-    observer.observe(document.body, {
-      subtree: true,
-      childList: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ['class']
-    });
+    observer = new MutationObserver(scheduleSync);
+    observe();
     desktopQuery.addEventListener?.('change', scheduleSync);
     window.addEventListener('popstate', scheduleSync);
     window.addEventListener('focus', scheduleSync);
-    document.addEventListener('click', () => setTimeout(scheduleSync, 0));
+    document.addEventListener('linecrew:profile-updated', scheduleSync);
     [0, 150, 600, 1500, 3000].forEach(delay => setTimeout(scheduleSync, delay));
   }
 

@@ -8,6 +8,9 @@
   let objectUrl = '';
   let signedPath = '';
   let signedUrl = '';
+  let signedAt = 0;
+  let refreshPromise = null;
+  let retryAfter = 0;
   let selectedFile = null;
 
   const byId = id => document.getElementById(id);
@@ -22,9 +25,17 @@
       .map(part => part[0]).slice(0, 2).join('').toUpperCase() || 'LC';
   }
 
-  function setAvatar(url = '') {
-    const avatar = document.querySelector('.lc-shell-account__avatar');
-    if (!avatar) return;
+  function ensureMobileAvatar() {
+    const name = byId('userName');
+    if (!name || byId('lcMobileProfileAvatar')) return;
+    const avatar = document.createElement('span');
+    avatar.id = 'lcMobileProfileAvatar';
+    avatar.className = 'lc-mobile-profile-avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    name.before(avatar);
+  }
+
+  function setOneAvatar(avatar, url = '') {
     let image = avatar.querySelector('img');
     let fallback = avatar.querySelector('span');
     if (!image) {
@@ -36,10 +47,22 @@
       fallback.textContent = existing || initials(profile()?.full_name);
       avatar.append(image, fallback);
     }
-    fallback.textContent = initials(byId('userName')?.textContent || profile()?.full_name);
-    image.src = url;
+    const fallbackText = initials(byId('userName')?.textContent || profile()?.full_name);
+    if (fallback.textContent !== fallbackText) fallback.textContent = fallbackText;
+    image.onerror = () => {
+      image.classList.add('hidden');
+      fallback.classList.remove('hidden');
+    };
+    if (url && image.src !== url) image.src = url;
+    if (!url) image.removeAttribute('src');
     image.classList.toggle('hidden', !url);
     fallback.classList.toggle('hidden', Boolean(url));
+  }
+
+  function setAvatar(url = '') {
+    ensureMobileAvatar();
+    document.querySelectorAll('.lc-shell-account__avatar, .lc-mobile-profile-avatar')
+      .forEach(avatar => setOneAvatar(avatar, url));
   }
 
   async function refreshAvatar(force = false) {
@@ -47,22 +70,36 @@
     if (!path) {
       signedPath = '';
       signedUrl = '';
+      signedAt = 0;
+      retryAfter = 0;
       setAvatar();
       return;
     }
-    if (!force && path === signedPath && signedUrl) {
+    const now = Date.now();
+    if (!force && path === signedPath && signedUrl && now - signedAt < 50 * 60 * 1000) {
       setAvatar(signedUrl);
       return;
     }
-    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 3600);
-    if (error) {
-      console.warn('Unable to load profile photo.', error);
-      setAvatar();
-      return;
-    }
-    signedPath = path;
-    signedUrl = data?.signedUrl || '';
-    setAvatar(signedUrl);
+    if (!force && now < retryAfter) return;
+    if (refreshPromise) return refreshPromise;
+    refreshPromise = (async () => {
+      const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 3600);
+      if (error) {
+        console.warn('Unable to load profile photo.', error);
+        signedPath = path;
+        signedUrl = '';
+        signedAt = 0;
+        retryAfter = Date.now() + 60 * 1000;
+        setAvatar();
+        return;
+      }
+      signedPath = path;
+      signedUrl = data?.signedUrl || '';
+      signedAt = Date.now();
+      retryAfter = 0;
+      setAvatar(signedUrl);
+    })().finally(() => { refreshPromise = null; });
+    return refreshPromise;
   }
 
   function loadImage(file) {
@@ -115,6 +152,7 @@
     const file = selectedFile;
     const current = profile();
     if (!file || !current?.id || !current?.company_id) return;
+    const previousPath = String(current.avatar_path || '').trim();
     button.disabled = true;
     button.textContent = 'Uploading...';
     try {
@@ -125,8 +163,12 @@
       });
       if (uploadError) throw uploadError;
       const { error: profileError } = await sb.rpc('update_my_profile_avatar', { p_avatar_path: path });
-      if (profileError) throw profileError;
+      if (profileError) {
+        if (previousPath !== path) await sb.storage.from(BUCKET).remove([path]);
+        throw profileError;
+      }
       current.avatar_path = path;
+      document.dispatchEvent(new CustomEvent('linecrew:profile-updated'));
       byId('myProfilePhoto').value = '';
       byId('myProfileCamera').value = '';
       selectedFile = null;
@@ -155,6 +197,8 @@
       current.avatar_path = null;
       signedPath = '';
       signedUrl = '';
+      signedAt = 0;
+      document.dispatchEvent(new CustomEvent('linecrew:profile-updated'));
       setAvatar();
     } catch (error) {
       alert('Unable to remove your profile photo: ' + (error?.message || error));
@@ -170,8 +214,11 @@
     byId('myProfilePhoto')?.addEventListener('change', event => selectPhoto(event.target.files?.[0]));
     byId('uploadMyProfilePhoto')?.addEventListener('click', uploadPhoto);
     byId('removeMyProfilePhoto')?.addEventListener('click', removePhoto);
-    document.addEventListener('click', () => setTimeout(refreshAvatar, 0));
+    window.addEventListener('focus', () => refreshAvatar());
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshAvatar(); });
+    document.addEventListener('linecrew:profile-updated', () => refreshAvatar(true));
     [300, 900, 1800].forEach(delay => setTimeout(refreshAvatar, delay));
+    setInterval(refreshAvatar, 10 * 60 * 1000);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

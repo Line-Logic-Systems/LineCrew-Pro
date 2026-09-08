@@ -25,7 +25,7 @@ document.documentElement.classList.add('desktop-view');
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/linecrew-pro-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/linecrew-pro-180.png">
-<link rel="stylesheet" href="/responsive-role-shell.css?v=20260907d">
+<link rel="stylesheet" href="/responsive-role-shell.css?v=20260908a">
 <title>LineCrew Pro</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
@@ -4473,7 +4473,7 @@ window.LineCrewOfflineColdStart = true;
 applyCompanyBranding(currentCompany);
 $('companyName').textContent = currentCompany.name || 'LineCrew Pro';
 $('userName').textContent = currentProfile.full_name || 'Foreman';
-$('userRole').textContent = currentProfile.role === 'gf' ? 'General Foreman' : 'Foreman';
+$('userRole').textContent = formatTeamRole(currentProfile.role);
 $('safetyJsaForeman').value = currentProfile.full_name || '';
 $('companyJsaUploadForeman').value = currentProfile.full_name || '';
 ['createJsaBtn','uploadCompanyJsaBtn'].forEach(id => {
@@ -5052,7 +5052,7 @@ if(page === 'safetyPage') return userCanSeeSafetyRecords();
 if(page === 'priceBooksPage') return userCanManagePriceBooks();
 if(page === 'remainingUnitsPage') return currentUserRole() === 'foreman';
 if(page === 'utilityPortalPage') return userIsCompanyAdmin();
-if(page === 'utilityViewerPage') return true;
+if(page === 'utilityViewerPage') return !currentProfile;
 return false;
 }
 async function displayAppPage(page, state = {}){
@@ -5384,8 +5384,8 @@ profile.full_name || 'User';
 $('myProfileName').value = profile.full_name || '';
 $('userRole').textContent =
 String(profile.role || 'foreman').toLowerCase() === 'employee'
-? 'foreman'
-: profile.role;
+? 'Foreman'
+: formatTeamRole(profile.role);
 $('completedJobsTile').classList.toggle('hidden', !userCanViewCompletedJobs());
 $('billingTile').classList.toggle('hidden', !userIsCompanyAdmin());
 $('assistantLauncher').classList.toggle('hidden', !userCanUseAssistant());
@@ -13932,9 +13932,6 @@ return sb.rpc(
 { p_price_book_id:priceBookId }
 );
 }
-function userCanManagePriceBooks(){
-return userHasCapability('price_books');
-}
 function resetPriceBookImport(){
 $('priceBookImportCard')
 .classList
@@ -19796,7 +19793,7 @@ console.warn('LineCrew Pro service worker registration failed:', error);
 })();
 </script>
 <script src="custom-time-export.js?v=20260829c"></script>
-<script src="responsive-role-shell.js?v=20260907c"></script>
-<script src="profile-photo.js?v=20260907b"></script>
+<script src="responsive-role-shell.js?v=20260908a"></script>
+<script src="profile-photo.js?v=20260908a"></script>
 </body>
 </html>
