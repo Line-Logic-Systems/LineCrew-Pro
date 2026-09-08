@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 import { getSecretKey } from "../_shared/api-keys.ts";
+import { sendBetaSalesNotification } from "../_shared/beta-sales-notification.ts";
 
 const ALLOWED_ORIGINS = new Set([
   "https://linecrewpro.com",
@@ -33,79 +34,9 @@ function validEmail(email: string) {
   return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
 async function sha256Hex(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function sendSalesNotification(application: {
-  id: string;
-  submitted_at: string;
-  companyName: string;
-  contactName: string;
-  email: string;
-  phone: string;
-  crews: number;
-  notes: string;
-}) {
-  const resendApiKey = Deno.env.get("RESEND_API_KEY");
-  if (!resendApiKey) {
-    console.error("Beta sales notification is missing RESEND_API_KEY.");
-    return false;
-  }
-
-  const subject = `[Beta Application] ${application.companyName} — ${application.crews} crew${application.crews === 1 ? "" : "s"}`;
-  const text = [
-    "New LineCrew Pro Beta/Pilot application",
-    "",
-    `Company: ${application.companyName}`,
-    `Contact: ${application.contactName}`,
-    `Email: ${application.email}`,
-    `Phone: ${application.phone || "Not provided"}`,
-    `Active crews: ${application.crews}`,
-    `Submitted: ${application.submitted_at}`,
-    `Application ID: ${application.id}`,
-    "",
-    "What they want to test:",
-    application.notes || "Not provided",
-    "",
-    "Review this application in the LineCrew Pro Platform Support Console.",
-    "https://app.linecrewpro.com/support.html",
-  ].join("\n");
-
-  const html = `<!doctype html><html><body style="margin:0;background:#f4f7f5;font-family:Arial,sans-serif;color:#15231b"><div style="max-width:680px;margin:0 auto;padding:32px 20px"><div style="background:#fff;border:1px solid #dce6df;border-radius:12px;padding:28px"><h1 style="margin:0 0 18px;font-size:22px">New Beta/Pilot application</h1><table style="border-collapse:collapse;width:100%;font-size:14px"><tr><td style="padding:5px 12px 5px 0;color:#526158">Company</td><td><strong>${escapeHtml(application.companyName)}</strong></td></tr><tr><td style="padding:5px 12px 5px 0;color:#526158">Contact</td><td>${escapeHtml(application.contactName)}</td></tr><tr><td style="padding:5px 12px 5px 0;color:#526158">Email</td><td>${escapeHtml(application.email)}</td></tr><tr><td style="padding:5px 12px 5px 0;color:#526158">Phone</td><td>${escapeHtml(application.phone || "Not provided")}</td></tr><tr><td style="padding:5px 12px 5px 0;color:#526158">Active crews</td><td>${application.crews}</td></tr><tr><td style="padding:5px 12px 5px 0;color:#526158">Submitted</td><td>${escapeHtml(application.submitted_at)}</td></tr></table><div style="margin-top:20px;padding:16px;background:#f4f7f5;border-radius:8px;white-space:pre-wrap;line-height:1.45"><strong>What they want to test</strong><br>${escapeHtml(application.notes || "Not provided")}</div><p style="margin:22px 0 0"><a href="https://app.linecrewpro.com/support.html" style="display:inline-block;padding:10px 16px;background:#15231b;color:#fff;text-decoration:none;border-radius:7px">Review application</a></p><p style="font-size:12px;color:#6a746e;margin:18px 0 0">Application ID: ${escapeHtml(application.id)}</p></div></div></body></html>`;
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
-      "Idempotency-Key": `beta-application-${application.id}`,
-    },
-    body: JSON.stringify({
-      from: "LineCrew Pro <invites@auth.linecrewpro.com>",
-      to: ["sales@linecrewpro.com"],
-      reply_to: application.email,
-      subject,
-      text,
-      html,
-    }),
-  });
-
-  if (!response.ok) {
-    console.error("Resend rejected a Beta application notification.", response.status);
-    return false;
-  }
-  return true;
 }
 
 Deno.serve(async request => {
@@ -217,8 +148,7 @@ Deno.serve(async request => {
     return jsonResponse(request, { error: "Unable to submit the application right now." }, 500);
   }
 
-  try {
-    await sendSalesNotification({
+  const notification = await sendBetaSalesNotification({
       id: String(inserted.id),
       submitted_at: String(inserted.submitted_at),
       companyName,
@@ -227,10 +157,18 @@ Deno.serve(async request => {
       phone,
       crews,
       notes,
-    });
-  } catch (notificationError) {
-    console.error("Beta sales notification failed.", notificationError instanceof Error ? notificationError.message : "Unknown error");
-  }
+    }, 1);
+  const attemptedAt = new Date().toISOString();
+  const { error: trackingError } = await admin.from("beta_applications").update({
+    sales_notification_status: notification.sent ? "sent" : "failed",
+    sales_notification_attempts: 1,
+    sales_notification_last_attempt_at: attemptedAt,
+    sales_notification_sent_at: notification.sent ? attemptedAt : null,
+    sales_notification_provider_id: notification.providerId,
+    sales_notification_error: notification.error,
+  }).eq("id", inserted.id);
+  if (trackingError) console.error("Beta notification tracking update failed.", trackingError.code || "TRACKING_FAILED");
+  if (!notification.sent) console.error("Beta sales notification failed.", notification.error || "Unknown error");
 
   return jsonResponse(request, { received: true });
 });
