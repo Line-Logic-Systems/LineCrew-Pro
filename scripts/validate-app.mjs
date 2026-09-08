@@ -104,10 +104,38 @@ assert(
 );
 assert(html.includes('/* LINECREW PRO SUPABASE */'), 'Missing main application script marker.');
 const showFunction = extractNamedFunction(html, 'show');
+const pageAccessFunction = extractNamedFunction(html, 'userCanOpenAppPage');
 assert(
   showFunction.includes("document.querySelectorAll('main > section')") &&
     showFunction.includes("section.classList.add('hidden')"),
   'The central page switcher must hide static and dynamically-created pages before showing the destination.'
+);
+assert(
+  html.includes("'timekeepingPage',") &&
+    html.includes("'remainingUnitsPage',") &&
+    html.includes("window.openLineCrewTimekeeping({updateHistory:false})") &&
+    html.includes("window.openLineCrewRemainingUnits({updateHistory:false})"),
+  'Dynamic Timekeeping and Remaining Units pages must participate in central history navigation.'
+);
+assert(
+  pageAccessFunction.includes("page === 'completedJobsPage'") &&
+    pageAccessFunction.includes("page === 'teamPage'") &&
+    pageAccessFunction.includes("page === 'safetyPage'") &&
+    pageAccessFunction.includes("page === 'priceBooksPage'") &&
+    pageAccessFunction.includes("page === 'remainingUnitsPage'") &&
+    pageAccessFunction.includes("page === 'utilityPortalPage'") &&
+    html.includes('!userCanOpenAppPage(page)'),
+  'Central navigation must enforce the same role and capability rules as dashboard visibility.'
+);
+const timekeepingSource = fs.readFileSync('timekeeping.js', 'utf8');
+const remainingUnitsSource = fs.readFileSync('foreman-field-tools.js', 'utf8');
+assert(
+    timekeepingSource.includes("show('timekeepingPage')") &&
+    timekeepingSource.includes("setAppHistory({lineCrewPage:'timekeepingPage'})") &&
+    remainingUnitsSource.includes("setAppHistory({ lineCrewPage:'remainingUnitsPage' })") &&
+    remainingUnitsSource.includes("show('remainingUnitsPage')") &&
+    remainingUnitsSource.includes('window.openLineCrewRemainingUnits = open'),
+  'Dynamic page openers must use the shared page switcher and preserve browser history.'
 );
 assert(html.includes('id="authPage"'), 'Missing authentication page.');
 assert(html.includes('id="dashboardPage"'), 'Missing dashboard page.');
