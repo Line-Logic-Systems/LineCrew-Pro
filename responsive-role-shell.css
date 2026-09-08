@@ -89,6 +89,34 @@ button {
   display: none;
 }
 
+.lc-mobile-profile-avatar {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  margin-right: 9px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  vertical-align: middle;
+  border-radius: 50%;
+  color: #0b2d4d;
+  background: #e7f1fa;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.lc-mobile-profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 1100px) and (pointer: fine) {
+  .lc-mobile-profile-avatar {
+    display: none;
+  }
+}
+
 @media (min-width: 1100px) and (pointer: fine) {
   body.lc-shell-active {
     --app-content-width: none;
@@ -547,6 +575,10 @@ button {
 }
 
 @media (max-width: 680px) {
+  #lcDashboardTopSignOut,
+  #lcThemeToggle {
+    min-height: 44px !important;
+  }
   .company-brand-badge {
     width: auto;
     max-width: 52%;

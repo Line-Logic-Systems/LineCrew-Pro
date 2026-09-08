@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v89';
+const CACHE_NAME = 'linecrew-pro-shell-v90';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
@@ -7,12 +7,18 @@ const APP_SHELL = [
   '/icons/linecrew-pro-180.png',
   '/icons/linecrew-pro-192.png',
   '/icons/linecrew-pro-512.png',
-  '/responsive-role-shell.css?v=20260907d',
-  '/responsive-role-shell.js?v=20260907c',
-  '/profile-photo.js?v=20260907b',
+  '/responsive-role-shell.css?v=20260908a',
+  '/responsive-role-shell.js?v=20260908a',
+  '/profile-photo.js?v=20260908a',
+  '/app-polish.js?v=20260907a',
+  '/custom-time-export.js?v=20260829c',
+  '/dark-contrast-draft-edit-fix.js',
+  '/gf-crew-scope.js?v=20260907b',
+  '/gf-review-theme-enhancements.js?v=20260908a',
+  '/number-input-polish.js?v=20260823a',
   '/expanded-jsa.js?v=20260907b',
   '/utility-portal-management.js?v=20260907a',
-  '/role-workspace-polish.js?v=20260903b',
+  '/role-workspace-polish.js?v=20260908a',
   '/expanded-jsa-core.js?v=20260820',
   '/jsa-signatures.js?v=20260828a',
   '/jsa-signature-layout-fix.js?v=20260820a',
@@ -22,7 +28,9 @@ const APP_SHELL = [
   '/timekeeping.js?v=20260907d',
   '/timekeeping-input-v2.js?v=20260907b',
   '/timekeeping-roster.js?v=20260907a',
-  '/timekeeping-report-v2.js?v=20260829h',
+  '/timekeeping-report-v2.js?v=20260908a',
+  '/timekeeping-pay-period-history.js?v=20260826b',
+  '/timekeeping-polish.js?v=20260826b',
   '/timekeeping-payroll.js?v=20260828c',
   '/leadership-my-time.js?v=20260907a',
   SUPABASE_RUNTIME

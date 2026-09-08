@@ -115,7 +115,7 @@
 
   load('app-polish.js?v=20260907a');
   load('number-input-polish.js?v=20260823a');
-  load('role-workspace-polish.js?v=20260903b');
+  load('role-workspace-polish.js?v=20260908a');
   load('gf-crew-scope.js?v=20260907b');
   load('expanded-jsa-core.js?v=20260820', () => {
     load('jsa-signatures.js?v=20260828a', () => {
@@ -127,7 +127,7 @@
     load('timekeeping-input-v2.js?v=20260907b', null, 'linecrew-timekeeping-input-v2');
     load('foreman-field-tools.js?v=20260901a');
     load('timekeeping-roster.js?v=20260907a');
-    load('timekeeping-report-v2.js?v=20260829h', () => {
+    load('timekeeping-report-v2.js?v=20260908a', () => {
       load('leadership-my-time.js?v=20260907a');
       load('timekeeping-polish.js?v=20260826b');
       load('timekeeping-payroll.js?v=20260828c', () => load('timekeeping-pay-period-history.js?v=20260826b'));

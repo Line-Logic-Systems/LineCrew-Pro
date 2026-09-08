@@ -52,12 +52,12 @@ const extractNamedFunction = (source, name) => {
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
 assert(
-  html.includes('/responsive-role-shell.css?v=20260907d') &&
-    html.includes('responsive-role-shell.js?v=20260907c'),
+  html.includes('/responsive-role-shell.css?v=20260908a') &&
+    html.includes('responsive-role-shell.js?v=20260908a'),
   'Responsive role shell assets must be loaded by the application.'
 );
 assert(
-  html.includes('profile-photo.js?v=20260907b') &&
+  html.includes('profile-photo.js?v=20260908a') &&
     html.includes('id="myProfileCamera"') &&
     html.includes('capture="user"') &&
     html.includes('id="takeMyProfilePhoto"') &&
@@ -77,6 +77,14 @@ assert(
   'Profile photos must use private signed reads and self-service upload/remove wiring.'
 );
 assert(
+  profilePhoto.includes('image.onerror =') &&
+    profilePhoto.includes('50 * 60 * 1000') &&
+    profilePhoto.includes('retryAfter') &&
+    profilePhoto.includes("querySelectorAll('.lc-shell-account__avatar, .lc-mobile-profile-avatar')") &&
+    !profilePhoto.includes("document.addEventListener('click', () => setTimeout(refreshAvatar"),
+  'Profile photos must refresh before signed URLs expire, fall back safely, display on mobile and avoid global-click requests.'
+);
+assert(
   profilePhotoMigration.includes("'profile-photos'") &&
     profilePhotoMigration.includes('profile_photos_company_read') &&
     profilePhotoMigration.includes('profile_photos_self_insert') &&
@@ -90,6 +98,19 @@ assert(
     responsiveShell.includes("!tile.classList.contains('hidden')") &&
     !responsiveShell.includes("navigateToAppPage('"),
   'Desktop navigation must mirror visible dashboard tiles and reuse their existing handlers.'
+);
+assert(
+  responsiveShell.includes('observer?.disconnect()') &&
+    responsiveShell.includes('finally {\n      observe();\n    }') &&
+    responsiveShell.includes('function setText(element, value)') &&
+    !responsiveShell.includes("document.addEventListener('click', () => setTimeout(scheduleSync"),
+  'The desktop shell must not sustain a MutationObserver/requestAnimationFrame loop or resync after every app click.'
+);
+assert(
+  html.includes("if(page === 'utilityViewerPage') return !currentProfile;") &&
+    html.includes("$('userRole').textContent = formatTeamRole(currentProfile.role);") &&
+    html.match(/function userCanManagePriceBooks\(\)/g)?.length === 1,
+  'Central navigation, friendly role labels and permission helpers must remain consistent.'
 );
 assert(
   responsiveShellStyles.includes('@media (min-width: 1100px) and (pointer: fine)') &&
@@ -2047,6 +2068,11 @@ if (fs.existsSync('role-workspace-polish.js')) {
       roleWorkspaceCode.includes('finally{') &&
       roleWorkspaceCode.includes('observe();'),
     'Role workspace must not observe its own dashboard mutations.'
+  );
+  assert(
+    roleWorkspaceCode.includes("safetyTile:'safetyPage'") &&
+      roleWorkspaceCode.includes('window.userCanOpenAppPage(pageId)'),
+    'Dashboard cards and desktop navigation must use the central page-permission gate.'
   );
   assert(
     roleWorkspaceCode.includes('preservePersonalOrder') &&

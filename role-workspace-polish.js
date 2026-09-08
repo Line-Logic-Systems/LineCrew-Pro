@@ -133,8 +133,15 @@
         setDescription('safetyTile','JSA and safety reporting');
         setDescription('timekeepingTile','Crew hours, payroll and billing exports');
       }
-      if(typeof window.userHasCapability==='function' && r==='superintendent'){
-        const pb=byId('priceBooksTile');if(pb) pb.classList.toggle('hidden',!window.userHasCapability('price_books'));
+      if(typeof window.userCanOpenAppPage==='function'){
+        const gatedTiles={
+          completedJobsTile:'completedJobsPage',teamTile:'teamPage',priceBooksTile:'priceBooksPage',
+          jobsTile:'jobsPage',productionTile:'productionPage',safetyTile:'safetyPage',
+          timekeepingTile:'timekeepingPage',remainingUnitsTile:'remainingUnitsPage',utilityPortalTile:'utilityPortalPage'
+        };
+        Object.entries(gatedTiles).forEach(([tileId,pageId])=>{
+          const tile=byId(tileId);if(tile) tile.classList.toggle('hidden',!window.userCanOpenAppPage(pageId));
+        });
       }
       syncAssistantVisibility();
       bindDailyReportHourUi();
@@ -159,7 +166,7 @@
 (() => {
   if(document.querySelector('script[data-lc-gf-theme-enhancements]')) return;
   const script=document.createElement('script');
-  script.src='/gf-review-theme-enhancements.js';
+  script.src='/gf-review-theme-enhancements.js?v=20260908a';
   script.defer=true;
   script.dataset.lcGfThemeEnhancements='1';
   document.head.appendChild(script);

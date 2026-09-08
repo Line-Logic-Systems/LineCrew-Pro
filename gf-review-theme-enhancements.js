@@ -130,7 +130,7 @@
         html.lc-industrial-dark .billing-redline-row { background:#3b2026!important; }
         html.lc-industrial-dark .storm-mode-banner { background:#3a2916!important;color:#ffd59b!important; }
         .lc-theme-toggle-wrap{display:flex;justify-content:flex-end;align-items:center;margin:8px 0 12px}
-        .lc-theme-toggle{width:auto!important;margin:0!important;padding:7px 11px!important;font-size:12px!important;border-radius:999px!important}
+        .lc-theme-toggle{width:auto!important;margin:0!important;padding:7px 11px!important;font-size:12px!important;border-radius:999px!important;min-height:44px!important}
         .lc-production-review-badge{position:absolute;top:9px;right:10px;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#d73939;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;box-shadow:0 0 0 2px var(--card)}
         #productionTile{position:relative}
         .gf-crew-time-review{margin:10px 0 8px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--card)}
