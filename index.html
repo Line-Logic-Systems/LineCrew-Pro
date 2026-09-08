@@ -4651,6 +4651,8 @@ const APP_PAGE_IDS = new Set([
 'productionPage',
 'safetyPage',
 'priceBooksPage',
+'timekeepingPage',
+'remainingUnitsPage',
 'utilityPortalPage',
 'utilityViewerPage'
 ]);
@@ -5042,9 +5044,28 @@ window.history.replaceState(nextState, '', window.location.href);
 window.history.pushState(nextState, '', window.location.href);
 }
 }
+function userCanOpenAppPage(page){
+if(['dashboardPage','jobsPage','productionPage','timekeepingPage'].includes(page)) return true;
+if(page === 'completedJobsPage') return userCanViewCompletedJobs();
+if(page === 'teamPage') return currentUserRole() !== 'foreman';
+if(page === 'safetyPage') return userCanSeeSafetyRecords();
+if(page === 'priceBooksPage') return userCanManagePriceBooks();
+if(page === 'remainingUnitsPage') return currentUserRole() === 'foreman';
+if(page === 'utilityPortalPage') return userIsCompanyAdmin();
+if(page === 'utilityViewerPage') return true;
+return false;
+}
 async function displayAppPage(page, state = {}){
-if(!APP_PAGE_IDS.has(page)){
+if(!APP_PAGE_IDS.has(page) || !userCanOpenAppPage(page)){
 page = 'dashboardPage';
+}
+if(page === 'timekeepingPage' && typeof window.openLineCrewTimekeeping === 'function'){
+await window.openLineCrewTimekeeping({updateHistory:false});
+return;
+}
+if(page === 'remainingUnitsPage' && typeof window.openLineCrewRemainingUnits === 'function'){
+await window.openLineCrewRemainingUnits({updateHistory:false});
+return;
 }
 show(page);
 if(page === 'teamPage'){

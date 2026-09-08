@@ -232,11 +232,17 @@
     tile.setAttribute('tabindex','0');
     tile.innerHTML = '<strong>Timekeeping / Roster</strong><span class="muted">Crew hours, personnel, equipment and payroll</span>';
     const open = async (options={}) => {
-      if(typeof show === 'function') show('dashboardPage');
-      ['dashboardPage','teamPage','jobsPage','productionPage','safetyPage','priceBooksPage','setupPage','authPage'].forEach(id => byId(id)?.classList.add('hidden'));
-      byId('timekeepingPage')?.classList.remove('hidden');
+      const settings = options instanceof Event ? {} : options;
+      if(settings?.updateHistory !== false && typeof setAppHistory === 'function'){
+        setAppHistory({lineCrewPage:'timekeepingPage'});
+      }
+      if(typeof show === 'function') show('timekeepingPage');
+      else {
+        document.querySelectorAll('main > section').forEach(section => section.classList.add('hidden'));
+        byId('timekeepingPage')?.classList.remove('hidden');
+      }
       await refreshTimekeeping();
-      if(options?.focusRoster){
+      if(settings?.focusRoster){
         openTimekeepingTab('roster');
         byId('timekeepingRosterCard')?.scrollIntoView({behavior:'smooth',block:'start'});
       }

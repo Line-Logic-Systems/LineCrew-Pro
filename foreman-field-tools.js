@@ -169,12 +169,21 @@
     else byId('dashboardPage')?.classList.remove('hidden');
   }
 
-  async function open() {
+  async function open(options = {}) {
     if (role() !== 'foreman') return;
-    hideAppPages();
-    byId('remainingUnitsPage')?.classList.remove('hidden');
+    const settings = options instanceof Event ? {} : options;
+    if (settings?.updateHistory !== false && typeof setAppHistory === 'function') {
+      setAppHistory({ lineCrewPage:'remainingUnitsPage' });
+    }
+    if (typeof show === 'function') show('remainingUnitsPage');
+    else {
+      hideAppPages();
+      byId('remainingUnitsPage')?.classList.remove('hidden');
+    }
     await refresh();
   }
+
+  window.openLineCrewRemainingUnits = open;
 
   async function loadJobs() {
     const activeProfile = profile();
