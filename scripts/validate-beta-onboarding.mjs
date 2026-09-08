@@ -9,9 +9,12 @@ function rejectText(text,needle,message){if(text.includes(needle))throw new Erro
 
 const migration=read('supabase/migrations/archive/20260830073000_beta_application_onboarding.sql');
 const submit=read('supabase/functions/submit-beta-application/index.ts');
+const retrySales=read('supabase/functions/retry-beta-sales-notification/index.ts');
+const salesMailer=read('supabase/functions/_shared/beta-sales-notification.ts');
 const review=read('supabase/functions/review-beta-application/index.ts');
 const accept=read('beta-accept.html');
 const owner=read('owner.html');
+const support=read('support.html');
 const polish=read('app-polish.js');
 const convert=read('pilot-convert.html');
 const vercel=read('vercel.json');
@@ -47,6 +50,15 @@ for(const marker of ['ALLOWED_ORIGINS','content-length','website','request_finge
   requireText(submit,marker,`Public Beta submission protection missing: ${marker}`);
 }
 rejectText(submit,'SUPABASE_SERVICE_ROLE_KEY','Public submission function must use the shared server secret helper, not a legacy hard-coded service-role variable.');
+for(const marker of ['sales_notification_status','sales_notification_provider_id','sales_notification_error']){
+  requireText(submit,marker,`Beta sales email delivery tracking is missing: ${marker}`);
+}
+for(const marker of ['admin.auth.getUser','platform_owners','sendBetaSalesNotification','sales_notification_attempts']){
+  requireText(retrySales,marker,`Protected Beta sales email retry is missing: ${marker}`);
+}
+for(const marker of ['Idempotency-Key','providerError','sales@linecrewpro.com']){
+  requireText(salesMailer,marker,`Beta sales mailer requirement is missing: ${marker}`);
+}
 
 for(const marker of ['Authorization','admin.auth.getUser','platform_owners','platform_owner_prepare_beta_company','RESEND_API_KEY','base64Url','sha256Hex','beta-accept.html?invite=']){
   requireText(review,marker,`Owner review protection missing: ${marker}`);
@@ -59,6 +71,7 @@ requireText(owner,"rpc('platform_owner_beta_applications')",'Platform Owner cons
 requireText(owner,"functions.invoke('review-beta-application'",'Platform Owner console must review Beta applications through the secured Edge Function.');
 requireText(owner,'Approve','Platform Owner console is missing Approve.');
 requireText(owner,'Decline','Platform Owner console is missing Decline.');
+requireText(support,'Resend Sales Email','Platform Owner console must provide a protected sales-notification retry.');
 
 requireText(polish,"rpc('my_company_subscription_access')",'Pilot checklist must determine Pilot status from server-controlled subscription access.');
 requireText(polish,"String(subscription?.plan_code||'').toLowerCase()!=='pilot'",'Pilot checklist must remain limited to Pilot companies.');
