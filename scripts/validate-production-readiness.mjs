@@ -1149,8 +1149,8 @@ for (const marker of [
   "formatCurrency(jobRunRate)"
 ]) assert(index.includes(marker), `Utility Production navigation marker missing: ${marker}`);
 assert(
-  expandedJsa.includes("timekeeping.js?v=20260907d") &&
-    serviceWorker.includes("/timekeeping.js?v=20260907d"),
+  expandedJsa.includes("timekeeping.js?v=20260908a") &&
+    serviceWorker.includes("/timekeeping.js?v=20260908a"),
   'Contract and job run-rate rendering must use the refreshed Timekeeping asset.'
 );
 for (const marker of [
