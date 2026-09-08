@@ -253,6 +253,11 @@ body:not(.lc-shell-active) .lc-shell-account {
     background: radial-gradient(circle at 65% 12%, rgba(214, 238, 255, .6), transparent 42%), #f7fafc;
   }
 
+  /* Keep the pilot feedback control visible beside the fixed desktop sidebar. */
+  body.lc-shell-active .pilot-feedback-launcher {
+    left: calc(var(--lc-shell-sidebar-width) + 20px);
+  }
+
   body.lc-shell-active > main > section:not(.hidden) {
     width: 100%;
     max-width: 1480px;
