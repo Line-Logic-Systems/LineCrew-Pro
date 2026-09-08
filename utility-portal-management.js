@@ -109,7 +109,7 @@
     byId('utilityPortalWorkspace').classList.add('hidden');
     try {
       const [organizations, unassigned] = await Promise.all([
-        rpc('utility_list_organizations', { p_include_inactive: true }),
+        rpc('utility_list_organizations', { p_include_inactive: false }),
         rpc('utility_unassigned_job_count')
       ]);
       state.organizations = organizations || [];
