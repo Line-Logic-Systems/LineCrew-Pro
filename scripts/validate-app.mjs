@@ -52,7 +52,7 @@ const extractNamedFunction = (source, name) => {
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
 assert(
-  html.includes('/responsive-role-shell.css?v=20260908a') &&
+  html.includes('/responsive-role-shell.css?v=20260908b') &&
     html.includes('responsive-role-shell.js?v=20260908a'),
   'Responsive role shell assets must be loaded by the application.'
 );
@@ -123,6 +123,15 @@ assert(
   responsiveShellStyles.includes('body.lc-shell-active > header .company-brand-badge img') &&
     responsiveShellStyles.includes('display: block;'),
   'The uploaded company logo must remain visible in the professional desktop header.'
+);
+assert(
+  responsiveShellStyles.includes('html.lc-industrial-dark body.lc-shell-active > main') &&
+    responsiveShellStyles.includes('background: radial-gradient(circle at 68% 8%') &&
+    responsiveShellStyles.includes('html.lc-industrial-dark #lcRoleSidebar .lc-role-sidebar__item[aria-current="page"]') &&
+    responsiveShellStyles.includes('html.lc-industrial-dark #lcRoleSidebar .lc-role-sidebar__item,') &&
+    responsiveShellStyles.includes('body.lc-shell-active .lc-dashboard-topbar') &&
+    responsiveShellStyles.includes('display: none !important;'),
+  'Desktop dark mode must darken the full shell, emphasize only active navigation and hide the duplicate dashboard Sign Out.'
 );
 assert(html.includes('/* LINECREW PRO SUPABASE */'), 'Missing main application script marker.');
 const showFunction = extractNamedFunction(html, 'show');

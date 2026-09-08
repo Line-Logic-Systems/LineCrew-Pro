@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v91';
+const CACHE_NAME = 'linecrew-pro-shell-v92';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
@@ -7,7 +7,7 @@ const APP_SHELL = [
   '/icons/linecrew-pro-180.png',
   '/icons/linecrew-pro-192.png',
   '/icons/linecrew-pro-512.png',
-  '/responsive-role-shell.css?v=20260908a',
+  '/responsive-role-shell.css?v=20260908b',
   '/responsive-role-shell.js?v=20260908a',
   '/profile-photo.js?v=20260908a',
   '/app-polish.js?v=20260907a',

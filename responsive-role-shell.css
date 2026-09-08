@@ -253,6 +253,11 @@ button {
     margin-inline: auto;
   }
 
+  body.lc-shell-active #lcDashboardTopSignOut,
+  body.lc-shell-active .lc-dashboard-topbar {
+    display: none !important;
+  }
+
   .lc-role-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -624,6 +629,123 @@ html.lc-industrial-dark .lc-role-sidebar {
 
 html.lc-industrial-dark #dashboardTileGrid .metric::after {
   color: #8eb5d3;
+}
+
+@media (min-width: 1100px) and (pointer: fine) {
+  html.lc-industrial-dark body.lc-shell-active {
+    --lc-shell-ink: #f4f8fc;
+    background: #07111d !important;
+  }
+
+  html.lc-industrial-dark body.lc-shell-active > header {
+    color: #eaf2f8 !important;
+    border-bottom-color: #20394d !important;
+    background: #0b1925 !important;
+    box-shadow: 0 2px 14px rgba(0, 0, 0, .3) !important;
+  }
+
+  html.lc-industrial-dark body.lc-shell-active > main {
+    background: radial-gradient(circle at 68% 8%, rgba(23, 84, 126, .18), transparent 38%), #07111d !important;
+  }
+
+  html.lc-industrial-dark body.lc-shell-active > header .company-brand-badge {
+    color: #eaf2f8 !important;
+    background: transparent !important;
+  }
+
+  html.lc-industrial-dark body.lc-shell-active > header .company-brand-badge img {
+    border-color: #31536d !important;
+    background: #fff !important;
+  }
+
+  html.lc-industrial-dark body.lc-shell-active > header .company-brand-badge::after,
+  html.lc-industrial-dark .lc-shell-account__copy small {
+    color: #8faabd !important;
+  }
+
+  html.lc-industrial-dark .lc-shell-account__avatar {
+    color: #dceaf5 !important;
+    background: #183247 !important;
+  }
+
+  html.lc-industrial-dark .lc-shell-account__copy strong,
+  html.lc-industrial-dark #lcShellAccount .lc-shell-account__signout {
+    color: #f4f8fc !important;
+  }
+
+  html.lc-industrial-dark .lc-shell-account__signout {
+    border-left-color: #2b4559 !important;
+    background: transparent !important;
+  }
+
+  html.lc-industrial-dark #lcShellAccount .lc-shell-account__signout:hover {
+    color: #71bfff !important;
+    background: transparent !important;
+  }
+
+  html.lc-industrial-dark .lc-role-sidebar {
+    background: linear-gradient(180deg, #0a2236 0%, #061522 100%) !important;
+    box-shadow: 10px 0 32px rgba(0, 0, 0, .24) !important;
+  }
+
+  html.lc-industrial-dark #lcRoleSidebar .lc-role-sidebar__brand {
+    color: #fff !important;
+    border-bottom-color: rgba(151, 190, 217, .15) !important;
+    background: #0a1d2d !important;
+  }
+
+  html.lc-industrial-dark #lcRoleSidebar .lc-role-sidebar__brand:hover {
+    background: #102b41 !important;
+  }
+
+  html.lc-industrial-dark #lcRoleSidebar .lc-role-sidebar__item,
+  html.lc-industrial-dark #lcRoleSidebar .lc-role-sidebar__footer .lc-role-sidebar__item {
+    color: #c7d7e4 !important;
+    border-color: transparent !important;
+    background: transparent !important;
+  }
+
+  html.lc-industrial-dark #lcRoleSidebar .lc-role-sidebar__item:hover {
+    color: #fff !important;
+    background: rgba(113, 191, 255, .09) !important;
+  }
+
+  html.lc-industrial-dark #lcRoleSidebar .lc-role-sidebar__item[aria-current="page"] {
+    color: #fff !important;
+    border-left-color: #3da9ff !important;
+    background: rgba(35, 143, 230, .22) !important;
+  }
+
+  html.lc-industrial-dark #dashboardPage > .lc-dashboard-hero > h2,
+  html.lc-industrial-dark #dashboardTileGrid .metric strong,
+  html.lc-industrial-dark .lc-dashboard-tile__icon {
+    color: #f4f8fc !important;
+  }
+
+  html.lc-industrial-dark #dashboardTileGrid .metric {
+    border-color: #28485e !important;
+    background: #102536 !important;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .25) !important;
+  }
+
+  html.lc-industrial-dark #dashboardTileGrid .metric:hover {
+    border-color: #3f7397 !important;
+    background: #142c3f !important;
+  }
+
+  html.lc-industrial-dark #dashboardTileGrid .metric .muted {
+    color: #9db3c4 !important;
+  }
+
+  html.lc-industrial-dark .lc-dashboard-tile__icon,
+  html.lc-industrial-dark #dashboardTileGrid .metric::after {
+    color: #68b8f4 !important;
+  }
+
+  html.lc-industrial-dark #dashboardPage .lc-role-workspace {
+    border-left-color: #3da9ff !important;
+    background: #0d2232 !important;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
