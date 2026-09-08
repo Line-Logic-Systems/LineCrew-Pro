@@ -323,7 +323,7 @@
   async function loadTeamProfiles(){
     if(!companyId()||!canViewCompleteRoster()){teamProfiles=[];return;}
     const {data,error}=await getSb().from('profiles')
-      .select('id,full_name,email,role,active')
+      .select('id,full_name,role,active')
       .eq('company_id',companyId())
       .order('full_name');
     if(error){console.error('Complete roster Team load failed',error);return;}
@@ -485,8 +485,8 @@
       const profileRole=String(profile.role||'member').toLowerCase();
       return {
         id:`profile-${profile.id}`,
-        full_name:profile.full_name||profile.email||'Team Member',
-        employee_number:profile.email||'',
+        full_name:profile.full_name||'Team Member',
+        employee_number:'',
         classification:`Team Login — ${teamRoleLabel(profileRole)}`,
         active:profile.active!==false,
         assigned_foreman_id:null,
