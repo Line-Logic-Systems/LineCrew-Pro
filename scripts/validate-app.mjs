@@ -80,6 +80,7 @@ assert(
   profilePhoto.includes('image.onerror =') &&
     profilePhoto.includes('50 * 60 * 1000') &&
     profilePhoto.includes('retryAfter') &&
+    profilePhoto.includes('if (previousPath !== path)') &&
     profilePhoto.includes("querySelectorAll('.lc-shell-account__avatar, .lc-mobile-profile-avatar')") &&
     !profilePhoto.includes("document.addEventListener('click', () => setTimeout(refreshAvatar"),
   'Profile photos must refresh before signed URLs expire, fall back safely, display on mobile and avoid global-click requests.'

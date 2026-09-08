@@ -152,6 +152,7 @@
     const file = selectedFile;
     const current = profile();
     if (!file || !current?.id || !current?.company_id) return;
+    const previousPath = String(current.avatar_path || '').trim();
     button.disabled = true;
     button.textContent = 'Uploading...';
     try {
@@ -162,7 +163,10 @@
       });
       if (uploadError) throw uploadError;
       const { error: profileError } = await sb.rpc('update_my_profile_avatar', { p_avatar_path: path });
-      if (profileError) throw profileError;
+      if (profileError) {
+        if (previousPath !== path) await sb.storage.from(BUCKET).remove([path]);
+        throw profileError;
+      }
       current.avatar_path = path;
       document.dispatchEvent(new CustomEvent('linecrew:profile-updated'));
       byId('myProfilePhoto').value = '';
