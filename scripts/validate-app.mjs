@@ -52,9 +52,15 @@ const extractNamedFunction = (source, name) => {
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
 assert(
-  html.includes('/responsive-role-shell.css?v=20260908c') &&
+  html.includes('/responsive-role-shell.css?v=20260908d') &&
     html.includes('responsive-role-shell.js?v=20260908a'),
   'Responsive role shell assets must be loaded by the application.'
+);
+
+assert(
+  responsiveShellStyles.includes('body.lc-shell-active .pilot-feedback-launcher') &&
+    responsiveShellStyles.includes('left: calc(var(--lc-shell-sidebar-width) + 20px);'),
+  'Desktop Pilot Feedback launcher must remain visible beside the fixed role sidebar.'
 );
 assert(
   responsiveShellStyles.includes('body:not(.lc-shell-active) .lc-role-sidebar') &&
