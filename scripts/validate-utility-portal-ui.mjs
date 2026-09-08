@@ -17,8 +17,9 @@ for (const id of [
 }
 
 assert(app.includes('utility-portal-management.js?v=20260908a'), 'Utility Portal script is not loaded by the app.');
-assert(shell.includes("'linecrew-pro-shell-v94'"), 'Utility Portal requires the current offline shell.');
-assert(shell.includes("'/utility-portal-management.js?v=20260908a'"), 'Utility Portal script is missing from the offline shell.');\nassert(portal.includes("p_include_inactive: false"), 'Utility Portal management must hide inactive historical organizations.');
+assert(shell.includes("'linecrew-pro-shell-v95'"), 'Utility Portal requires the current offline shell.');
+assert(shell.includes("'/utility-portal-management.js?v=20260908a'"), 'Utility Portal script is missing from the offline shell.');
+assert(portal.includes("p_include_inactive: false"), 'Utility Portal management must hide inactive historical organizations.');
 assert(app.includes('pendingInviteToken || pendingUtilityInviteToken'), 'Utility invitations are not integrated into startup routing.');
 assert(app.includes('LineCrewUtilityPortal.completeInvitation'), 'Utility invitation signup is not wired.');
 assert(app.includes('LineCrewUtilityPortal?.tryLoadViewer'), 'Utility representative routing is not wired.');

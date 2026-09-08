@@ -52,9 +52,16 @@ const extractNamedFunction = (source, name) => {
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
 assert(
-  html.includes('/responsive-role-shell.css?v=20260908b') &&
+  html.includes('/responsive-role-shell.css?v=20260908c') &&
     html.includes('responsive-role-shell.js?v=20260908a'),
   'Responsive role shell assets must be loaded by the application.'
+);
+assert(
+  responsiveShellStyles.includes('body:not(.lc-shell-active) .lc-role-sidebar') &&
+    responsiveShellStyles.includes('body:not(.lc-shell-active) .lc-shell-account') &&
+    responsiveShellStyles.includes('body.lc-shell-active .lc-role-sidebar') &&
+    responsiveShellStyles.includes('body.lc-shell-active .lc-shell-account'),
+  'Desktop navigation and account chrome must remain hidden on sign-in, MFA and setup screens.'
 );
 assert(
   html.includes('profile-photo.js?v=20260908a') &&
