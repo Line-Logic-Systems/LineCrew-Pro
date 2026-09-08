@@ -747,7 +747,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260907b') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260907b') &&
-    serviceWorker.includes("linecrew-pro-shell-v92") &&
+    serviceWorker.includes("linecrew-pro-shell-v93") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260908a") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260908a"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -1149,8 +1149,8 @@ for (const marker of [
   "formatCurrency(jobRunRate)"
 ]) assert(index.includes(marker), `Utility Production navigation marker missing: ${marker}`);
 assert(
-  expandedJsa.includes("timekeeping.js?v=20260907d") &&
-    serviceWorker.includes("/timekeeping.js?v=20260907d"),
+  expandedJsa.includes("timekeeping.js?v=20260908a") &&
+    serviceWorker.includes("/timekeeping.js?v=20260908a"),
   'Contract and job run-rate rendering must use the refreshed Timekeeping asset.'
 );
 for (const marker of [
