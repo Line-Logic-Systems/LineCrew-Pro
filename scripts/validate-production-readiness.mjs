@@ -574,7 +574,7 @@ assert(!timekeeping.includes(".select('id,full_name,email,role,active')"), 'Comp
 assert(timekeeping.includes('Complete Company Roster — ${activePeople.length} people / ${activeEquipment.length} equipment'), 'The consolidated roster must summarize active people and equipment.');
 assert(timekeeping.includes('Unassigned Crew Members')&&timekeeping.includes('Unassigned Equipment'), 'The consolidated roster must make unassigned personnel and equipment obvious.');
 assert(timekeeping.includes("const canViewCompleteRoster = () => ['admin','owner'].includes(role())"), 'The complete company roster must remain Owner/Admin-only.');
-assert(timekeeping.includes(".select('id,full_name,email,role,active')")&&timekeeping.includes('profileOnlyPeople'), 'The complete company roster must include Team login accounts without duplicating linked employees.');
+assert(timekeeping.includes(".select('id,full_name,role,active')")&&timekeeping.includes('profileOnlyPeople'), 'The complete company roster must include Team login accounts without duplicating linked employees.');
 assert(timekeepingInput.includes('await window.LineCrewRefreshCompleteRoster?.();'), 'Equipment changes must refresh the consolidated company roster.');
 assert(timekeeping.includes('id="tkCompleteRosterSearch"')&&timekeeping.includes('id="tkCompleteRosterAssignment"')&&timekeeping.includes('id="tkCompleteRosterForeman"'), 'The complete company roster must support search, assignment, and Foreman/crew filters.');
 assert(timekeeping.includes('Export Filtered Excel')&&timekeeping.includes('filteredCompleteRosterRecords()'), 'Complete roster export must honor the active filters.');
