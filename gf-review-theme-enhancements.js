@@ -80,6 +80,8 @@
         }
         html.lc-industrial-dark .production-job-group-reports,
         html.lc-industrial-dark .report-card-details,
+        html.lc-industrial-dark .job-contract-group,
+        html.lc-industrial-dark .job-progress-row,
         html.lc-industrial-dark .tk-employee-detail,
         html.lc-industrial-dark .gf-scope-bar,
         html.lc-industrial-dark #tkSummary,
@@ -89,6 +91,8 @@
           border-color:#27506d!important;
           color:#f5f9fd!important;
         }
+        html.lc-industrial-dark .job-contract-group>summary{background:#143149!important;color:#f5f9fd!important}
+        html.lc-industrial-dark .job-utility-group>h3{color:#f5f9fd!important}
         html.lc-industrial-dark .muted,
         html.lc-industrial-dark .tk-help,
         html.lc-industrial-dark .tk-employee-meta,

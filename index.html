@@ -1259,6 +1259,47 @@ cursor:pointer;
 border-color:#7aa9ca;
 background:#f8fbfd;
 }
+.job-utility-group{
+display:grid;
+gap:10px;
+}
+.job-utility-group>h3{
+margin:8px 2px 0;
+font-size:18px;
+color:var(--navy);
+}
+.job-contract-group{
+overflow:hidden;
+border:1px solid #cfdde8;
+border-radius:12px;
+background:#f7fafc;
+}
+.job-contract-group>summary{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:12px;
+padding:12px 14px;
+cursor:pointer;
+font-weight:800;
+background:#edf4f9;
+}
+.job-contract-list{
+display:grid;
+gap:9px;
+padding:10px;
+}
+.job-setup-counts{
+margin-top:7px;
+color:var(--muted);
+font-size:12px;
+}
+.job-open-details{
+margin-top:9px;
+color:var(--blue);
+font-size:12px;
+font-weight:800;
+}
 .job-card.job-highlight{
 outline:3px solid #1f7ed0;
 outline-offset:2px;
@@ -2453,12 +2494,12 @@ class="success hidden"
 <div id="jobProgressDashboard" class="card hidden">
 <div class="section-header">
 <div>
-<h3>Active Job Progress</h3>
-<p class="muted">Authorized, reported and approved production across active jobs.</p>
+<h3>Jobs by Contract</h3>
+<p class="muted">Find jobs by utility and contract, review assignments, and open the complete job details and units.</p>
 </div>
 <div class="button-row">
 <button id="openBillingExportCenterBtn" class="success small hidden">Billing Exports</button>
-<button id="exportJobProgressCsvBtn" class="secondary small">Export Job Progress</button>
+<button id="exportJobProgressCsvBtn" class="secondary small hidden">Export Job Progress</button>
 </div>
 </div>
 <div class="job-progress-filters">
@@ -2467,28 +2508,23 @@ class="success hidden"
 <input id="jobProgressSearch" placeholder="Job number or job name">
 </div>
 <div>
-<label for="jobProgressAttention">Show</label>
+<label for="jobProgressAttention">Status</label>
 <select id="jobProgressAttention">
 <option value="">All active jobs</option>
-<option value="redline">Jobs with redlines</option>
-<option value="pending">Jobs pending a utility packet</option>
-<option value="incomplete">Incomplete jobs</option>
-<option value="complete">100% reported jobs</option>
+<option value="closed">Closed jobs</option>
+<option value="all">All jobs</option>
 </select>
 </div>
 <div>
 <label for="jobProgressSort">Sort</label>
 <select id="jobProgressSort">
+<option value="contract">Utility and contract A–Z</option>
 <option value="job_number">Job number A–Z</option>
-<option value="progress_low">Lowest progress first</option>
-<option value="progress_high">Highest progress first</option>
-<option value="redlines">Most redlines first</option>
-<option value="pending">Most pending packets first</option>
 </select>
 </div>
 <button id="clearJobProgressFilters" class="secondary small">Clear</button>
 </div>
-<div id="jobProgressTotals" class="daily-value-summary"></div>
+<div id="jobProgressTotals" class="daily-value-summary hidden"></div>
 <p id="jobProgressCount" class="muted"></p>
 <div id="jobProgressList" class="job-progress-list"></div>
 <button id="jobProgressShowMore" class="secondary hidden">Show 25 More Jobs</button>
@@ -5078,10 +5114,10 @@ $('jobsPageTitle').textContent = ['owner','admin'].includes(role)
 ? 'Job Setup & Management'
 : (role === 'foreman' ? 'Assigned Jobs' : 'Jobs & Crew Progress');
 $('jobsPageDescription').textContent = ['owner','admin'].includes(role)
-? 'Create and import jobs, assign Foremen, manage packets and monitor progress'
+? 'Create and import jobs, organize them by contract, assign Foremen and manage job jackets'
 : (role === 'foreman'
-? 'Review the jobs, work points and assignments available to your crew'
-: 'Manage field assignments, work points and job progress');
+? 'Review your assigned jobs, work points and complete job units'
+: 'Review jobs by contract, crew assignments, work points and complete job units');
 $('showCreateJobBtn')
 .classList
 .toggle('hidden', !canManageJobs);
@@ -6933,8 +6969,7 @@ currentJobLeaderAssignments.set(assignment.job_id, list);
 }else{
 currentJobLeaderAssignments = new Map();
 }
-renderJobProgressDashboard(jobs, canViewJobPackages);
-if(canViewJobPackages){
+renderJobProgressDashboard(jobs, true);
 const selectedJob = currentOpenJobId
 ? currentJobsCatalog.find(job => job.id === currentOpenJobId)
 : null;
@@ -6944,9 +6979,6 @@ showJobDetail(selectedJob, false);
 currentOpenJobId = null;
 $('jobsList').innerHTML = '';
 $('jobProgressDashboard').classList.remove('hidden');
-}
-}else{
-renderSimpleJobBrowser();
 }
 }
 function renderSimpleJobBrowser(){
@@ -6980,120 +7012,81 @@ if(!matching.length){
 $('jobsList').innerHTML = '<div class="card center muted">No jobs match these filters.</div>';
 }
 }
-function renderJobProgressDashboard(jobs, canView){
+function renderJobProgressDashboard(jobs, canView = true){
 $('jobProgressDashboard').classList.toggle('hidden', !canView);
 $('openBillingExportCenterBtn').classList.toggle('hidden', !userCanUseBillingExports());
 if(!canView) return;
-const activeJobs = jobs.filter(job => job.active === true);
 const search = String($('jobProgressSearch').value || '').trim().toLowerCase();
 const attention = $('jobProgressAttention').value;
 const sort = $('jobProgressSort').value;
-const matchesSearch = job =>
-!search ||
-String(job.job_number || '').toLowerCase().includes(search) ||
-String(job.job_name || '').toLowerCase().includes(search);
-const matchingActiveJobs = activeJobs.filter(job => {
-if(!matchesSearch(job)) return false;
-const summary = currentJobProgressSummaries.get(job.id) || {};
-if(attention === 'redline') return Number(summary.redline_count || 0) > 0;
-if(attention === 'pending') return Number(summary.pending_packet_count || 0) > 0;
-if(attention === 'incomplete') return Number(summary.reported_percent || 0) < 100;
-if(attention === 'complete') return Number(summary.reported_percent || 0) >= 100;
-return true;
+const utilityLabel = job => job.contracts?.customers?.name || job.utility_name || job.customer_name || 'No Utility Assigned';
+const contractLabel = job => {
+const contract = job.contracts;
+if(!contract) return 'No Contract Assigned';
+return contract.contract_name + (contract.contract_number ? ' (' + contract.contract_number + ')' : '');
+};
+const matchingJobs = jobs.filter(job => {
+if(attention === '' && job.active !== true) return false;
+if(attention === 'closed' && job.active === true) return false;
+const searchable = [job.job_number,job.job_name,utilityLabel(job),contractLabel(job)]
+.map(value => String(value || '').toLowerCase()).join(' ');
+return !search || searchable.includes(search);
 });
-const sortedActiveJobs = [...matchingActiveJobs].sort((first, second) => {
-const firstSummary = currentJobProgressSummaries.get(first.id) || {};
-const secondSummary = currentJobProgressSummaries.get(second.id) || {};
-if(sort === 'progress_low'){
-return Number(firstSummary.reported_percent || 0) -
-Number(secondSummary.reported_percent || 0);
+const sortedJobs = [...matchingJobs].sort((first, second) => {
+if(sort === 'job_number'){
+return String(first.job_number || '').localeCompare(String(second.job_number || ''),undefined,{numeric:true,sensitivity:'base'});
 }
-if(sort === 'progress_high'){
-return Number(secondSummary.reported_percent || 0) -
-Number(firstSummary.reported_percent || 0);
-}
-if(sort === 'redlines'){
-return Number(secondSummary.redline_count || 0) -
-Number(firstSummary.redline_count || 0);
-}
-if(sort === 'pending'){
-return Number(secondSummary.pending_packet_count || 0) -
-Number(firstSummary.pending_packet_count || 0);
-}
-return String(first.job_number || '').localeCompare(
-String(second.job_number || ''),
-undefined,
-{ numeric:true, sensitivity:'base' }
-);
+return utilityLabel(first).localeCompare(utilityLabel(second),undefined,{numeric:true,sensitivity:'base'}) ||
+contractLabel(first).localeCompare(contractLabel(second),undefined,{numeric:true,sensitivity:'base'}) ||
+String(first.job_number || '').localeCompare(String(second.job_number || ''),undefined,{numeric:true,sensitivity:'base'});
 });
-const visibleActiveJobs =
-sortedActiveJobs.slice(0, currentJobProgressVisibleCount);
-let authorized = 0;
-let reported = 0;
-let approved = 0;
-let remaining = 0;
-let redlines = 0;
-let pending = 0;
-activeJobs.forEach(job => {
-const summary = currentJobProgressSummaries.get(job.id) || {};
-authorized += Number(summary.authorized_value || 0);
-reported += Number(summary.reported_value || 0);
-approved += Number(summary.approved_value || 0);
-remaining += Number(summary.remaining_value || 0);
-redlines += Number(summary.redline_count || 0);
-pending += Number(summary.pending_packet_count || 0);
-});
-$('jobProgressTotals').innerHTML =
-'<span><strong>' + activeJobs.length + '</strong><br>Active Jobs</span>' +
-(userCanSeeFieldMoney()
-? '<span><strong>' + escapeHtml(formatCurrency(authorized)) + '</strong><br>Authorized</span>' +
-  '<span><strong>' + escapeHtml(formatCurrency(reported)) + '</strong><br>Reported</span>' +
-  '<span><strong>' + escapeHtml(formatCurrency(approved)) + '</strong><br>Approved</span>' +
-  '<span><strong>' + escapeHtml(formatCurrency(remaining)) + '</strong><br>Remaining</span>'
-: '') +
-'<span><strong>' + redlines + '</strong><br>Redlines</span>' +
-'<span><strong>' + pending + '</strong><br>Pending Job Units</span>';
-$('jobProgressCount').textContent =
-'Showing ' + visibleActiveJobs.length + ' of ' +
-matchingActiveJobs.length + ' matching jobs (' +
-activeJobs.length + ' active total)';
+const visibleJobs = sortedJobs.slice(0, currentJobProgressVisibleCount);
+$('jobProgressTotals').classList.add('hidden');
+$('jobProgressCount').textContent = 'Showing ' + visibleJobs.length + ' of ' + matchingJobs.length + ' matching jobs.';
 $('jobProgressList').innerHTML = '';
-if(matchingActiveJobs.length === 0){
-$('jobProgressList').innerHTML =
-'<p class="muted">' +
-(activeJobs.length === 0 ? 'No active jobs.' : 'No active jobs match these filters.') +
-'</p>';
+if(matchingJobs.length === 0){
+$('jobProgressList').innerHTML = '<p class="muted">No jobs match these filters.</p>';
 }
-visibleActiveJobs.forEach(job => {
+const grouped = new Map();
+visibleJobs.forEach(job => {
+const utility = utilityLabel(job);
+const contract = contractLabel(job);
+if(!grouped.has(utility)) grouped.set(utility,new Map());
+const contracts = grouped.get(utility);
+if(!contracts.has(contract)) contracts.set(contract,[]);
+contracts.get(contract).push(job);
+});
+grouped.forEach((contracts,utility) => {
+const utilityGroup = document.createElement('section');
+utilityGroup.className = 'job-utility-group';
+const utilityHeading = document.createElement('h3');
+utilityHeading.textContent = utility;
+utilityGroup.appendChild(utilityHeading);
+contracts.forEach((contractJobs,contract) => {
+const contractGroup = document.createElement('details');
+contractGroup.className = 'job-contract-group';
+contractGroup.open = true;
+const contractSummary = document.createElement('summary');
+contractSummary.innerHTML = '<span>' + escapeHtml(contract) + '</span><span class="muted">' + contractJobs.length + ' job' + (contractJobs.length === 1 ? '' : 's') + '</span>';
+const jobList = document.createElement('div');
+jobList.className = 'job-contract-list';
+contractJobs.forEach(job => {
 const summary = currentJobProgressSummaries.get(job.id) || {};
 const assignments = currentJobLeaderAssignments.get(job.id) || [];
 const assignedNames = assignments.map(assignment => assignment.full_name);
 const assignmentLabel = assignedNames.length
 ? assignedNames.join(', ')
-: 'Unassigned';
-const reportedPercent = Number(summary.reported_percent || 0);
-const approvedPercent = Number(summary.approved_percent || 0);
+: (currentUserRole() === 'foreman' ? (currentProfile?.full_name || 'Assigned to you') : 'Unassigned');
 const row = document.createElement('div');
 row.className = 'job-progress-row';
 row.innerHTML =
 '<div class="section-header"><div><strong>' + escapeHtml(job.job_number) + '</strong>' +
 '<div>' + escapeHtml(job.job_name) + '</div></div>' +
-'<strong>' + reportedPercent.toFixed(1) + '% Reported</strong></div>' +
-'<div class="progress-track"><div class="progress-fill" style="width:' +
-Math.min(Math.max(reportedPercent, 0), 100) + '%"></div></div>' +
-'<div class="muted">Approved: ' + approvedPercent.toFixed(1) + '% · ' +
-Number(summary.package_count || 0) + ' package(s) · ' +
-Number(summary.work_point_count || 0) + ' work point(s) · ' +
-Number(summary.report_count || 0) + ' daily report(s)</div>' +
+'<span class="status ' + (job.active === true ? 'active' : 'closed') + '">' + (job.active === true ? 'ACTIVE' : 'CLOSED') + '</span></div>' +
 '<div class="job-progress-assignees"><strong>Assigned Foremen / Job Leaders:</strong> ' +
 escapeHtml(assignmentLabel) + '</div>' +
-'<div class="daily-review-counts">' +
-(userCanSeeFieldMoney()
-? '<span class="authorized">' + escapeHtml(formatCurrency(summary.authorized_value || 0)) + ' Authorized</span>' +
-  ' &nbsp;•&nbsp; ' + escapeHtml(formatCurrency(summary.remaining_value || 0)) + ' Remaining &nbsp;•&nbsp; '
-: '') +
-'<span class="redline">' + Number(summary.redline_count || 0) + ' Redline</span>' +
-' &nbsp;•&nbsp; <span class="pending">' + Number(summary.pending_packet_count || 0) + ' Pending</span></div>';
+'<div class="job-setup-counts">' + Number(summary.package_count || 0) + ' job jacket' + (Number(summary.package_count || 0) === 1 ? '' : 's') + ' · ' + Number(summary.work_point_count || 0) + ' work point' + (Number(summary.work_point_count || 0) === 1 ? '' : 's') + '</div>' +
+'<div class="job-open-details">View Job Details &amp; Units →</div>';
 row.title = 'Open ' + job.job_number + ' job details';
 row.setAttribute('role', 'button');
 row.tabIndex = 0;
@@ -7104,28 +7097,17 @@ event.preventDefault();
 openJobFromProgress(job.id);
 }
 };
-$('jobProgressList').appendChild(row);
+jobList.appendChild(row);
+});
+contractGroup.append(contractSummary,jobList);
+utilityGroup.appendChild(contractGroup);
+});
+$('jobProgressList').appendChild(utilityGroup);
 });
 $('jobProgressShowMore').classList.toggle(
 'hidden',
-visibleActiveJobs.length >= matchingActiveJobs.length
+visibleJobs.length >= matchingJobs.length
 );
-const closedJobs = jobs.filter(job => job.active !== true && matchesSearch(job));
-if(closedJobs.length > 0){
-const closedSection = document.createElement('details');
-closedSection.className = 'closed-jobs-list';
-const summary = document.createElement('summary');
-summary.textContent = 'Closed Jobs (' + closedJobs.length + ')';
-closedSection.appendChild(summary);
-closedJobs.forEach(job => {
-const button = document.createElement('button');
-button.className = 'secondary';
-button.textContent = job.job_number + ' — ' + job.job_name;
-button.onclick = () => openJobFromProgress(job.id);
-closedSection.appendChild(button);
-});
-$('jobProgressList').appendChild(closedSection);
-}
 }
 function openJobFromProgress(jobId){
 const job = currentJobsCatalog.find(item => item.id === jobId);
@@ -7170,11 +7152,7 @@ return;
 currentOpenJobId = null;
 setAppHistory({ lineCrewPage:'jobsPage' });
 $('jobsList').innerHTML = '';
-if(userCanUseReporting() || userCanManageJobPackages()){
 $('jobProgressDashboard').classList.remove('hidden');
-}else{
-renderSimpleJobBrowser();
-}
 $('showCreateJobBtn').classList.toggle(
 'hidden',
 !userCanManageJobs()
@@ -9140,7 +9118,7 @@ renderJobProgressDashboard(currentJobsCatalog, true);
 $('clearJobProgressFilters').onclick = () => {
 $('jobProgressSearch').value = '';
 $('jobProgressAttention').value = '';
-$('jobProgressSort').value = 'job_number';
+$('jobProgressSort').value = 'contract';
 currentJobProgressVisibleCount = 25;
 renderJobProgressDashboard(currentJobsCatalog, true);
 };

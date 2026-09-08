@@ -126,11 +126,24 @@ assert(
 );
 assert(html.includes('/* LINECREW PRO SUPABASE */'), 'Missing main application script marker.');
 const showFunction = extractNamedFunction(html, 'show');
+const jobDirectoryFunction = extractNamedFunction(html, 'renderJobProgressDashboard');
 const pageAccessFunction = extractNamedFunction(html, 'userCanOpenAppPage');
 assert(
   showFunction.includes("document.querySelectorAll('main > section')") &&
     showFunction.includes("section.classList.add('hidden')"),
   'The central page switcher must hide static and dynamically-created pages before showing the destination.'
+);
+assert(
+  html.includes('<h3>Jobs by Contract</h3>') &&
+    html.includes('<option value="contract">Utility and contract A–Z</option>') &&
+    html.includes('View Job Details &amp; Units →') &&
+    jobDirectoryFunction.includes("utilityGroup.className = 'job-utility-group'") &&
+    jobDirectoryFunction.includes("contractGroup.className = 'job-contract-group'") &&
+    jobDirectoryFunction.includes('currentJobLeaderAssignments.get(job.id)') &&
+    !jobDirectoryFunction.includes('reportedPercent') &&
+    !jobDirectoryFunction.includes('authorized_value') &&
+    !jobDirectoryFunction.includes('redline_count'),
+  'The Jobs directory must group by utility and contract and show setup/assignment details without production metrics.'
 );
 assert(
   html.includes("'timekeepingPage',") &&

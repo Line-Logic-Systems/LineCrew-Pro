@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v90';
+const CACHE_NAME = 'linecrew-pro-shell-v91';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
@@ -14,7 +14,7 @@ const APP_SHELL = [
   '/custom-time-export.js?v=20260829c',
   '/dark-contrast-draft-edit-fix.js',
   '/gf-crew-scope.js?v=20260907b',
-  '/gf-review-theme-enhancements.js?v=20260908a',
+  '/gf-review-theme-enhancements.js?v=20260908b',
   '/number-input-polish.js?v=20260823a',
   '/expanded-jsa.js?v=20260907b',
   '/utility-portal-management.js?v=20260907a',
