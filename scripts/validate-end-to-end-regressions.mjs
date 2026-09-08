@@ -61,6 +61,12 @@ if(observerMatch && observerMatch[1].includes('installTeamToolsOnce')){
 }
 requireText(polish, 'hookTeamLoader', 'Team filters must reapply from the Team loader hook.');
 
+// Utility directory review counts must match the detailed submitted-only queue.
+requireText(index, "String(report.status || '').toLowerCase() === 'submitted'", 'Production awaiting-review totals must count submitted reports.');
+if(index.includes('const awaitingReview = Math.max(0, totals.reports - totals.approved)')){
+  throw new Error('Production utility cards must not classify every non-approved report as awaiting review.');
+}
+
 // Database hardening added after the live end-to-end test.
 requireText(hardeningMigration, 'current_user_has_active_profile', 'Pay-period reads must require an active profile.');
 requireText(hardeningMigration, 'revoke all on table public.timekeeping_pay_periods from anon', 'Anonymous pay-period table access must remain revoked.');
