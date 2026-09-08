@@ -570,6 +570,7 @@ assert(timekeeping.includes('const rosterAssignmentDrafts = new Map();'), 'Perso
 assert(timekeeping.includes("select.onchange = () => updateRosterDraft"), 'Personnel assignment changes must not immediately reload and collapse the roster.');
 assert(timekeeping.includes('renderRoster(openGroups);'), 'Personnel assignment save must restore the groups that the manager had open.');
 assert(timekeeping.includes('id="tkCompleteRoster"'), 'Owner/Admin Timekeeping must provide a consolidated company roster.');
+assert(!timekeeping.includes(".select('id,full_name,email,role,active')"), 'Complete roster must not request the nonexistent profiles.email column.');
 assert(timekeeping.includes('Complete Company Roster — ${activePeople.length} people / ${activeEquipment.length} equipment'), 'The consolidated roster must summarize active people and equipment.');
 assert(timekeeping.includes('Unassigned Crew Members')&&timekeeping.includes('Unassigned Equipment'), 'The consolidated roster must make unassigned personnel and equipment obvious.');
 assert(timekeeping.includes("const canViewCompleteRoster = () => ['admin','owner'].includes(role())"), 'The complete company roster must remain Owner/Admin-only.');
