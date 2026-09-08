@@ -103,6 +103,12 @@ assert(
   'The uploaded company logo must remain visible in the professional desktop header.'
 );
 assert(html.includes('/* LINECREW PRO SUPABASE */'), 'Missing main application script marker.');
+const showFunction = extractNamedFunction(html, 'show');
+assert(
+  showFunction.includes("document.querySelectorAll('main > section')") &&
+    showFunction.includes("section.classList.add('hidden')"),
+  'The central page switcher must hide static and dynamically-created pages before showing the destination.'
+);
 assert(html.includes('id="authPage"'), 'Missing authentication page.');
 assert(html.includes('id="dashboardPage"'), 'Missing dashboard page.');
 assert(html.includes('id="productionPage"'), 'Missing production page.');
