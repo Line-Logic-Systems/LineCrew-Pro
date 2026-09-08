@@ -5025,19 +5025,10 @@ document.querySelectorAll('.storm-crew-assignment:checked')
 }
 /* PAGE NAVIGATION */
 function show(page){
-$('authPage').classList.add('hidden');
-$('mfaPage').classList.add('hidden');
-$('setupPage').classList.add('hidden');
-$('dashboardPage').classList.add('hidden');
-$('teamPage').classList.add('hidden');
-$('jobsPage').classList.add('hidden');
-$('completedJobsPage').classList.add('hidden');
-$('productionPage').classList.add('hidden');
-$('safetyPage').classList.add('hidden');
-$('priceBooksPage').classList.add('hidden');
-$('utilityPortalPage').classList.add('hidden');
-$('utilityViewerPage').classList.add('hidden');
-$(page).classList.remove('hidden');
+document.querySelectorAll('main > section').forEach(section => {
+section.classList.add('hidden');
+});
+$(page)?.classList.remove('hidden');
 setTimeout(()=>renderAssistantReminderBanner(),0);
 }
 function setAppHistory(state, replace = false){
