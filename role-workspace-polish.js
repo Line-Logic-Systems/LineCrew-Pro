@@ -166,7 +166,7 @@
 (() => {
   if(document.querySelector('script[data-lc-gf-theme-enhancements]')) return;
   const script=document.createElement('script');
-  script.src='/gf-review-theme-enhancements.js?v=20260908a';
+  script.src='/gf-review-theme-enhancements.js?v=20260908b';
   script.defer=true;
   script.dataset.lcGfThemeEnhancements='1';
   document.head.appendChild(script);
