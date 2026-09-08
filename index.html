@@ -16229,7 +16229,10 @@ function productionUtilityPrimaryMetricsMarkup(reports){
 const totals = productionReportingTotals(reports);
 const approvedReports = reports.filter(report => String(report.status || '').toLowerCase() === 'approved');
 const approvedTotals = productionReportingTotals(approvedReports);
-const awaitingReview = Math.max(0, totals.reports - totals.approved);
+const awaitingReview = reports.filter(report =>
+report.archived !== true &&
+String(report.status || '').toLowerCase() === 'submitted'
+).length;
 const showActual = userCanSeeActualContractPrices();
 const showField = userCanSeeFieldMoney();
 const showMoney = showActual || showField;
