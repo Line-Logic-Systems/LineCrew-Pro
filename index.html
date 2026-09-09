@@ -18776,20 +18776,37 @@ return totals;
 }, { actual:0, adjusted:0 });
 const actualTotal = savedActualTotal + draftTotals.actual;
 const adjustedTotal = savedAdjustedTotal + draftTotals.adjusted;
+const totalHours =
+Number(currentDailyUnitReport?.regular_hours || 0) +
+Number(currentDailyUnitReport?.overtime_hours || 0);
+const actualRunRate = totalHours > 0 ? actualTotal / totalHours : 0;
+const fieldRunRate = totalHours > 0 ? adjustedTotal / totalHours : 0;
+const actualRateMarkup = totalHours > 0
+? '<strong>Actual MH Run Rate: ' +
+escapeHtml(formatCurrency(actualRunRate)) + ' / hr</strong>'
+: '<span class="muted">Enter crew hours to calculate the man-hour rate.</span>';
+const fieldRateMarkup = totalHours > 0
+? '<strong>Field MH Run Rate: ' +
+manHourRateNumberMarkup(fieldRunRate) + ' / hr</strong>'
+: '<span class="muted">Enter crew hours to calculate the man-hour rate.</span>';
 const hasAdjustment = savedItems.some(item => item.has_adjustment) ||
 currentDailyUnitBatchRows.some(row => row.selectedItem?.has_adjustment);
 if(userCanSeeActualContractPrices() && userCanSeeFieldMoney() && hasAdjustment){
 $('dailyUnitValueSummary').innerHTML =
 '<strong>Actual Daily Unit Value: ' +
 escapeHtml(formatCurrency(actualTotal)) + '</strong>' +
+actualRateMarkup +
 '<strong>Field Daily Unit Value: ' +
-escapeHtml(formatCurrency(adjustedTotal)) + '</strong>';
+escapeHtml(formatCurrency(adjustedTotal)) + '</strong>' +
+fieldRateMarkup;
 }else if(userCanSeeActualContractPrices()){
 $('dailyUnitValueSummary').innerHTML =
-'<strong>Actual Daily Unit Value: ' + escapeHtml(formatCurrency(actualTotal)) + '</strong>';
+'<strong>Actual Daily Unit Value: ' + escapeHtml(formatCurrency(actualTotal)) + '</strong>' +
+actualRateMarkup;
 }else if(userCanSeeFieldMoney()){
 $('dailyUnitValueSummary').innerHTML =
-'<strong>Field Daily Unit Value: ' + escapeHtml(formatCurrency(adjustedTotal)) + '</strong>';
+'<strong>Field Daily Unit Value: ' + escapeHtml(formatCurrency(adjustedTotal)) + '</strong>' +
+fieldRateMarkup;
 }else{
 $('dailyUnitValueSummary').innerHTML =
 '<span class="muted">Unit values hidden by company permissions.</span>';
