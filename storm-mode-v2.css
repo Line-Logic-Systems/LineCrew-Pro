@@ -1,0 +1,20 @@
+.storm-event-details{margin:14px 0;padding:14px;border:1px solid var(--border);border-radius:10px;background:color-mix(in srgb,var(--card) 92%,var(--blue) 8%)}
+.storm-detail-grid,.storm-checkin-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.storm-policy-note{margin:10px 0 0}
+.storm-command-center{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.storm-command-center h4{margin:0 0 12px}
+.storm-alert{margin:10px 0;padding:10px 12px;border-radius:8px;background:#fff4dd;border-left:4px solid var(--orange)}
+.storm-alert.storm-clear{background:#eaf7ef;border-left-color:var(--green)}
+.storm-crew-readiness{display:grid;gap:10px;margin:12px 0}
+.storm-readiness-card{padding:12px;border:1px solid var(--border);border-radius:9px;background:var(--card)}
+.storm-readiness-card .section-header{align-items:flex-start}
+.storm-readiness-meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px}
+.storm-readiness-meta span{font-size:12px;padding:3px 7px;border-radius:999px;background:var(--bg)}
+.storm-status-onsite{background:#dff4e7!important;color:#126437}
+.storm-status-mobilizing{background:#e4f0ff!important;color:#145da0}
+.storm-status-standby{background:#fff1d6!important;color:#805200}
+.storm-status-released{background:#edf0f2!important;color:#53616c}
+.storm-history-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border)}
+.storm-workspace{border-left:5px solid var(--orange)}
+.storm-workspace textarea{resize:vertical}
+@media(max-width:700px){.storm-detail-grid,.storm-checkin-grid{grid-template-columns:1fr}.storm-history-row{display:block}}

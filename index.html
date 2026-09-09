@@ -26,6 +26,7 @@ document.documentElement.classList.add('desktop-view');
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/linecrew-pro-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/linecrew-pro-180.png">
 <link rel="stylesheet" href="/responsive-role-shell.css?v=20260908d">
+<link rel="stylesheet" href="/storm-mode-v2.css?v=20260909a">
 <title>LineCrew Pro</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
@@ -2040,6 +2041,23 @@ Sign Out
 <strong>Storm Mode Active</strong>
 <div class="storm-mode-banner-text"></div>
 </div>
+<div id="stormFieldWorkspace" class="card storm-workspace hidden" aria-live="polite">
+<div class="section-header">
+<div><h3>Storm Crew Check-In</h3><p id="stormFieldEventSummary" class="muted"></p></div>
+<span id="stormFieldStatusBadge" class="status">Assigned</span>
+</div>
+<div class="storm-checkin-grid">
+<label>Status<select id="stormFieldDeploymentStatus">
+<option value="assigned">Assigned</option><option value="mobilizing">Mobilizing</option>
+<option value="onsite">On Site</option><option value="standby">Standby</option>
+<option value="released">Released</option>
+</select></label>
+<label>Current Location<input id="stormFieldLocation" maxlength="160" placeholder="City, staging area, or job"></label>
+<label>Lodging<input id="stormFieldLodging" maxlength="160" placeholder="Hotel or camp (optional)"></label>
+</div>
+<label>Readiness / Operations Note<textarea id="stormFieldNotes" maxlength="1000" rows="2" placeholder="Travel delay, crew need, equipment issue, or readiness update"></textarea></label>
+<button id="saveStormFieldCheckIn" class="success small" type="button">Save Check-In</button>
+</div>
 <div class="card">
 <h2 id="companyName">Company</h2>
 <p>
@@ -2300,6 +2318,26 @@ Enable Storm Mode for this company
 </label>
 <label for="stormEventName">Storm / Event Name</label>
 <input id="stormEventName" maxlength="120" placeholder="Example: Hurricane Recovery 2026">
+<div id="stormEventDetails" class="storm-event-details">
+<div class="storm-detail-grid">
+<label>Utility / Customer<select id="stormEventCustomer"><option value="">Not selected</option></select></label>
+<label>Contract<select id="stormEventContract"><option value="">Not selected</option></select></label>
+<label>Location<input id="stormEventLocation" maxlength="160" placeholder="City, county, staging area, or territory"></label>
+<label>Start Date<input id="stormEventStartDate" type="date"></label>
+<label>Expected End<input id="stormEventExpectedEndDate" type="date"></label>
+<label>Time Policy<select id="stormEventTimePolicy">
+<option value="record_only">Record hours only</option>
+<option value="weekly_ot">Weekly OT after 40</option>
+<option value="straight_ot">Straight OT reference</option>
+</select></label>
+<label>Per Diem Policy<select id="stormEventPerDiemPolicy">
+<option value="manual">Set per worker</option><option value="daily">Daily event amount</option><option value="none">No storm per diem</option>
+</select></label>
+<label>Default Per Diem<input id="stormEventPerDiemAmount" type="number" min="0" max="10000" step="0.01" placeholder="Optional"></label>
+</div>
+<label>Operations Notes<textarea id="stormEventOperationsNotes" maxlength="2000" rows="3" placeholder="Reporting instructions, contacts, staging details, or special requirements"></textarea></label>
+<p class="muted storm-policy-note">Storm pay and per diem policies are recorded for reference. They do not automatically alter payroll hours or regular production.</p>
+</div>
 <p class="muted">
 Choose the Foremen or General Foremen whose crews are working the event. Only their new daily reports will be tagged. Everyone else remains in normal production.
 </p>
@@ -2311,6 +2349,13 @@ Choose the Foremen or General Foremen whose crews are working the event. Only th
 <button id="saveStormModeSetting" class="success small">
 Save Storm Mode & Crews
 </button>
+<div id="stormCommandCenter" class="storm-command-center hidden">
+<h4>Storm Command Center</h4>
+<div id="stormTodayMetrics" class="daily-value-summary"></div>
+<div id="stormReadinessAlerts"></div>
+<div id="stormCrewReadinessList"></div>
+<details><summary>Past Storm Events</summary><div id="stormEventHistory"></div></details>
+</div>
 </div>
 </div>
 </details>
@@ -5021,6 +5066,9 @@ status.textContent =
 }
 renderStormCrewAssignments();
 applyStormModeUi();
+if(window.LineCrewLoadStormWorkspace){
+await window.LineCrewLoadStormWorkspace();
+}
 }
 function renderStormCrewAssignments(){
 const list = $('stormCrewAssignmentsList');
@@ -11360,6 +11408,12 @@ button.textContent = 'Save Storm Mode & Crews';
 if(error){
 alert('Unable to save Storm Mode: ' + error.message);
 return;
+}
+if(window.LineCrewSaveStormWorkspace){
+const workspaceResult = await window.LineCrewSaveStormWorkspace(enabled,eventName);
+if(workspaceResult?.error){
+console.warn('Storm Event workspace was not saved:',workspaceResult.error.message);
+}
 }
 const saved = Array.isArray(data) ? data[0] : data;
 currentCompany = {
@@ -19739,6 +19793,7 @@ startApp();
 </script>
 <script src="expanded-jsa.js?v=20260907b"></script>
 <script src="utility-portal-management.js?v=20260908a"></script>
+<script src="storm-mode-v2.js?v=20260909a"></script>
 <script>
 (function () {
 var installPrompt = null;
