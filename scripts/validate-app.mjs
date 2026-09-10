@@ -4,6 +4,9 @@ import vm from 'node:vm';
 const html = fs.readFileSync('index.html', 'utf8');
 const responsiveShell = fs.readFileSync('responsive-role-shell.js', 'utf8');
 const responsiveShellStyles = fs.readFileSync('responsive-role-shell.css', 'utf8');
+const appPolish = fs.readFileSync('app-polish.js', 'utf8');
+const gfCrewScope = fs.readFileSync('gf-crew-scope.js', 'utf8');
+const gfSelfAssignmentMigration = fs.readFileSync('supabase/migrations/20260910003000_allow_gf_claim_unassigned_foreman_crews.sql', 'utf8');
 const profilePhoto = fs.readFileSync('profile-photo.js', 'utf8');
 const profilePhotoMigration = fs.readFileSync('supabase/migrations/20260907230000_add_private_profile_photos.sql', 'utf8');
 const failures = [];
@@ -52,7 +55,7 @@ const extractNamedFunction = (source, name) => {
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
 assert(
-  html.includes('/responsive-role-shell.css?v=20260908d') &&
+  html.includes('/responsive-role-shell.css?v=20260910a') &&
     html.includes('responsive-role-shell.js?v=20260908a'),
   'Responsive role shell assets must be loaded by the application.'
 );
@@ -61,6 +64,25 @@ assert(
   responsiveShellStyles.includes('body.lc-shell-active .pilot-feedback-launcher') &&
     responsiveShellStyles.includes('left: calc(var(--lc-shell-sidebar-width) + 20px);'),
   'Desktop Pilot Feedback launcher must remain visible beside the fixed role sidebar.'
+);
+assert(
+  html.includes("['gf','foreman'].includes(currentUserRole())") &&
+    html.includes("'pilot-feedback-right'") &&
+    responsiveShellStyles.includes('.pilot-feedback-launcher.pilot-feedback-right'),
+  'GF and Foreman Pilot Feedback launchers must stay on the bottom-right.'
+);
+assert(
+  appPolish.includes('installFullDisclosureClickTargets') &&
+    appPolish.includes("details.open=!details.open"),
+  'Disclosure headers must toggle across their full non-interactive summary area.'
+);
+assert(
+  gfCrewScope.includes("'Assign to me'") &&
+    gfCrewScope.includes("p_gf_id:userId()") &&
+    gfCrewScope.includes("role() !== 'gf' || !row.gf_id || row.gf_id === userId()") &&
+    gfSelfAssignmentMigration.includes("p_gf_id is distinct from auth.uid()") &&
+    gfSelfAssignmentMigration.includes('on conflict (company_id,foreman_id) do nothing'),
+  'General Foremen may claim only unassigned Foreman crews for themselves.'
 );
 assert(
   responsiveShellStyles.includes('body:not(.lc-shell-active) .lc-role-sidebar') &&
