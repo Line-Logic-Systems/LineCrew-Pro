@@ -258,3 +258,12 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else init();
 })();
+
+(() => {
+  if (document.querySelector('script[data-linecrew-job-maps]')) return;
+  const script = document.createElement('script');
+  script.src = '/job-map-documents.js?v=20260910a';
+  script.async = false;
+  script.dataset.linecrewJobMaps = '1';
+  document.head.appendChild(script);
+})();
