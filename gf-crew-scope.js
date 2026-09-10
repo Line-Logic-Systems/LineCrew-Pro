@@ -150,16 +150,37 @@
     ).join('');
   }
 
+  function visibleAssignmentRows(query=''){
+    const needle=String(query||'').trim().toLowerCase();
+    return assignmentRows.filter(row => {
+      const matchesSearch=!needle || [row.foreman_name,row.gf_name]
+        .some(value=>String(value||'').toLowerCase().includes(needle));
+      if(!matchesSearch) return false;
+      return role() !== 'gf' || !row.gf_id || row.gf_id === userId();
+    });
+  }
+
   function renderAssignmentRows(query=''){
     const list=byId('gfAssignmentList');
     if(!list) return;
-    const needle=String(query||'').trim().toLowerCase();
-    const rows=assignmentRows.filter(row => !needle || [row.foreman_name,row.gf_name].some(v=>String(v||'').toLowerCase().includes(needle)));
+    const rows=visibleAssignmentRows(query);
+    if(role() === 'gf'){
+      list.innerHTML=rows.length ? rows.map(row=>{
+        const mine=row.gf_id === userId();
+        return `<div class="gf-assignment-row" data-foreman-id="${esc(row.foreman_id)}">`+
+          `<strong>${esc(row.foreman_name || 'Foreman')} Crew</strong>`+
+          (mine
+            ? '<span class="gf-assignment-owned">Assigned to you</span>'
+            : '<button type="button" class="success small gf-claim-crew">Assign to me</button>')+
+          '<span class="gf-assignment-status"></span></div>';
+      }).join('') : '<div class="gf-assignment-row"><span>No unassigned or assigned-to-you Foreman crews match this search.</span></div>';
+      return;
+    }
     list.innerHTML=rows.length ? rows.map(row=>
       `<div class="gf-assignment-row" data-foreman-id="${esc(row.foreman_id)}">`+
       `<strong>${esc(row.foreman_name || 'Foreman')} Crew</strong>`+
       `<select aria-label="General Foreman for ${esc(row.foreman_name || 'Foreman')}">${gfOptions(row.gf_id || '')}</select>`+
-      `<span class="gf-assignment-status"></span></div>`
+      '<span class="gf-assignment-status"></span></div>'
     ).join('') : '<div class="gf-assignment-row"><span>No Foreman crews match this search.</span></div>';
   }
 
@@ -178,12 +199,33 @@
     }
     status.textContent='Saved';
     await ensureLoaded(true);
+    renderAssignmentRows(byId('gfAssignmentSearch')?.value || '');
     updateScopeBars();
-    setTimeout(()=>{if(status) status.textContent='';},1400);
+  }
+
+  async function claimAssignment(rowEl,button){
+    const foremanId=rowEl.dataset.foremanId;
+    const status=rowEl.querySelector('.gf-assignment-status');
+    button.disabled=true;
+    status.textContent='Assigning…';
+    const {error}=await getSb().rpc('set_gf_crew_assignment',{
+      p_foreman_id:foremanId,
+      p_gf_id:userId()
+    });
+    if(error){
+      button.disabled=false;
+      status.textContent='Not assigned';
+      alert('Unable to assign this Foreman crew to you: '+error.message);
+      return;
+    }
+    status.textContent='Assigned';
+    await ensureLoaded(true);
+    renderAssignmentRows(byId('gfAssignmentSearch')?.value || '');
+    updateScopeBars();
   }
 
   async function installAdminAssignments(){
-    if(!['admin','owner'].includes(role())){
+    if(!['admin','owner','gf'].includes(role())){
       document.querySelectorAll('#gfAssignmentCard').forEach(el=>el.remove());
       return;
     }
@@ -192,33 +234,42 @@
     const existingCards=teamPage.querySelectorAll('#gfAssignmentCard');
     if(existingCards.length){
       existingCards.forEach((el,index)=>{ if(index>0) el.remove(); });
+      renderAssignmentRows(byId('gfAssignmentSearch')?.value || '');
       return;
     }
     if(adminAssignmentInstallPromise) return adminAssignmentInstallPromise;
     adminAssignmentInstallPromise=(async()=>{
       await ensureLoaded(true);
       if(teamPage.querySelector('#gfAssignmentCard')) return;
+      const isGf=role() === 'gf';
       const card=document.createElement('details');
-    card.id='gfAssignmentCard';
-    card.className='card gf-assignment-card';
-    card.innerHTML=`<summary>General Foreman Crew Assignments</summary>`+
-      `<div class="gf-assignment-help">Assign each Foreman crew to its normal General Foreman. That GF will see those crews first for Daily Report approvals and JSAs, with a temporary Show All Crews coverage option when needed.</div>`+
-      `<input id="gfAssignmentSearch" class="gf-assignment-search" type="search" placeholder="Search Foreman or General Foreman">`+
-      `<div id="gfAssignmentList" class="gf-assignment-list"></div>`;
-    const crewsPanel=byId('teamCrewsPanel');
-    if(crewsPanel) crewsPanel.appendChild(card);
-    else{
-      const toolbar=teamPage.querySelector('.toolbar');
-      if(toolbar?.nextSibling) toolbar.parentNode.insertBefore(card,toolbar.nextSibling);
-      else teamPage.prepend(card);
-    }
-    renderAssignmentRows();
-    byId('gfAssignmentSearch').addEventListener('input',e=>renderAssignmentRows(e.target.value));
-    byId('gfAssignmentList').addEventListener('change',e=>{
-      const select=e.target.closest('select');
-      const row=select?.closest('.gf-assignment-row');
-      if(select&&row) saveAssignment(row,select);
-    });
+      card.id='gfAssignmentCard';
+      card.className='card gf-assignment-card';
+      card.innerHTML=`<summary>${isGf?'My Foreman Crews':'General Foreman Crew Assignments'}</summary>`+
+        `<div class="gf-assignment-help">${isGf
+          ? 'Assign an unassigned Foreman crew to yourself. A crew already assigned to another General Foreman can only be moved by an Owner or Admin.'
+          : 'Assign each Foreman crew to its normal General Foreman. That GF will see those crews first for Daily Report approvals and JSAs, with a temporary Show All Crews coverage option when needed.'}</div>`+
+        `<input id="gfAssignmentSearch" class="gf-assignment-search" type="search" placeholder="Search Foreman or General Foreman">`+
+        `<div id="gfAssignmentList" class="gf-assignment-list"></div>`;
+      const crewsPanel=byId('teamCrewsPanel');
+      if(crewsPanel) crewsPanel.appendChild(card);
+      else{
+        const toolbar=teamPage.querySelector('.toolbar');
+        if(toolbar?.nextSibling) toolbar.parentNode.insertBefore(card,toolbar.nextSibling);
+        else teamPage.prepend(card);
+      }
+      renderAssignmentRows();
+      byId('gfAssignmentSearch').addEventListener('input',event=>renderAssignmentRows(event.target.value));
+      byId('gfAssignmentList').addEventListener('change',event=>{
+        const select=event.target.closest('select');
+        const row=select?.closest('.gf-assignment-row');
+        if(select&&row) saveAssignment(row,select);
+      });
+      byId('gfAssignmentList').addEventListener('click',event=>{
+        const button=event.target.closest('.gf-claim-crew');
+        const row=button?.closest('.gf-assignment-row');
+        if(button&&row) claimAssignment(row,button);
+      });
     })();
     try{ await adminAssignmentInstallPromise; }
     finally{ adminAssignmentInstallPromise=null; }

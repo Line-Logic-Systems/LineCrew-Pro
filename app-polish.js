@@ -234,7 +234,20 @@
   document.addEventListener('click',e=>{const id=e.target?.id||'';if(['saveDailyReportBtn','saveSafetyJsaBtn','saveDailyUnitBatchBtn'].includes(id)){setTimeout(()=>{dirty=false;dirtyScope=null;tracked.forEach(x=>{const f=byId(x);if(f)delete f.dataset.lcDirty;});},1700);}},true);
   window.addEventListener('beforeunload',e=>{if(!dirty)return;e.preventDefault();e.returnValue='';});
 
-  function harden(){ensureTopSignOut();hardenProductionLoader();makeDashboardTilesAccessible();compactTeamRoster();hookTeamLoader();maybeInstallPilotOnboarding();}
+  function installFullDisclosureClickTargets(){
+    if(window.__lcFullDisclosureClickTargets) return;
+    window.__lcFullDisclosureClickTargets=true;
+    document.addEventListener('click',event=>{
+      const summary=event.target?.closest?.('summary');
+      const details=summary?.parentElement;
+      if(!summary || details?.tagName !== 'DETAILS') return;
+      if(event.target?.closest?.('button,a,input,select,textarea,label')) return;
+      event.preventDefault();
+      details.open=!details.open;
+    },true);
+  }
+
+  function harden(){ensureTopSignOut();hardenProductionLoader();makeDashboardTilesAccessible();compactTeamRoster();hookTeamLoader();maybeInstallPilotOnboarding();installFullDisclosureClickTargets();}
 
   function init(){
     addStyles();

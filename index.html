@@ -25,7 +25,7 @@ document.documentElement.classList.add('desktop-view');
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/linecrew-pro-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/linecrew-pro-180.png">
-<link rel="stylesheet" href="/responsive-role-shell.css?v=20260908d">
+<link rel="stylesheet" href="/responsive-role-shell.css?v=20260910a">
 <title>LineCrew Pro</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
@@ -789,6 +789,10 @@ z-index:30;
 background:var(--green);
 box-shadow:0 8px 24px rgba(11,45,77,.22);
 }
+.pilot-feedback-launcher.pilot-feedback-right{
+left:auto;
+right:20px;
+}
 .pilot-feedback-backdrop{
 position:fixed;
 inset:0;
@@ -927,6 +931,7 @@ box-shadow:0 10px 30px rgba(11,45,77,.18);
 .assistant-resize-handle{display:none;}
 .assistant-reminder-banner{right:8px;bottom:66px;width:calc(100vw - 16px);}
 .pilot-feedback-launcher{left:12px;bottom:12px;}
+.pilot-feedback-launcher.pilot-feedback-right{left:auto;right:12px;}
 }
 button{
 width:100%;
@@ -4576,7 +4581,12 @@ console.warn('Unable to record application error:',error?.message || error);
 }
 function updatePilotFeedbackUi(){
 const isPilot = String(currentCompany?.subscription_status || '').toLowerCase() === 'trial';
-$('pilotFeedbackLauncher').classList.toggle('hidden', !currentProfile || !isPilot);
+const launcher = $('pilotFeedbackLauncher');
+launcher.classList.toggle('hidden', !currentProfile || !isPilot);
+launcher.classList.toggle(
+'pilot-feedback-right',
+['gf','foreman'].includes(currentUserRole())
+);
 if(!isPilot) closePilotFeedback();
 }
 function openPilotFeedback(){
