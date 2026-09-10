@@ -7,7 +7,7 @@
   const number = (value) => Number(value || 0) || 0;
   const role = () => String(typeof currentProfile !== 'undefined' ? currentProfile?.role || '' : '').toLowerCase();
   const companyId = () => typeof currentProfile !== 'undefined' ? currentProfile?.company_id || null : null;
-  const isLeader = () => ['gf','admin','owner'].includes(role());
+  const isLeader = () => ['gf','admin','manager','owner'].includes(role());
   const canManageRoster = () => isLeader();
   const canViewCompleteRoster = () => ['admin','manager','owner'].includes(role());
   const getSb = () => typeof sb !== 'undefined' ? sb : window.sb;
@@ -173,7 +173,7 @@
   const timekeepingTabRoles = {
     roster:()=>canManageRoster(),
     equipment:()=>canManageRoster(),
-    entry:()=>['gf','superintendent','admin','owner'].includes(role()),
+    entry:()=>['gf','superintendent','admin','manager','owner'].includes(role()),
     reports:()=>true,
     payroll:()=>true
   };
@@ -477,8 +477,8 @@
     const foremanMap=new Map(foremen.map(person=>[person.id,person]));
     const adminMap=new Map(admins.map(person=>[person.id,person]));
     const profileById=new Map(teamProfiles.map(profile=>[profile.id,profile]));
-    const teamRoleLabel=value=>({gf:'GF',admin:'Admin',owner:'Owner',foreman:'Foreman',superintendent:'Superintendent'}[String(value||'').toLowerCase()]||String(value||'Team Member'));
-    const leadershipRoles=new Set(['foreman','gf','superintendent','admin','owner']);
+    const teamRoleLabel=value=>({gf:'GF',admin:'Admin',manager:'Manager',owner:'Owner',foreman:'Foreman',superintendent:'Superintendent',safety:'Safety'}[String(value||'').toLowerCase()]||String(value||'Team Member'));
+    const leadershipRoles=new Set(['foreman','gf','superintendent','admin','manager','owner']);
     const leadershipEmployee=employee=>leadershipRoles.has(String(profileById.get(employee.linked_profile_id)?.role||'').toLowerCase());
     const linkedProfileIds=new Set(employees.map(employee=>employee.linked_profile_id).filter(Boolean));
     const profileOnlyPeople=teamProfiles.filter(profile=>!linkedProfileIds.has(profile.id)).map(profile=>{

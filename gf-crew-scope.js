@@ -225,7 +225,7 @@
   }
 
   async function installAdminAssignments(){
-    if(!['admin','owner','gf'].includes(role())){
+    if(!['admin','manager','owner','gf'].includes(role())){
       document.querySelectorAll('#gfAssignmentCard').forEach(el=>el.remove());
       return;
     }
@@ -298,7 +298,7 @@
   }
 
   function installJsaHistoryControls(){
-    if(!['gf','admin','owner','superintendent'].includes(role())) return;
+    if(!['gf','admin','manager','owner','superintendent'].includes(role())) return;
     const filters=byId('safetyJsaFiltersCard');
     if(!filters || byId('jsaQuickHistory')) return;
     const bar=document.createElement('div');
