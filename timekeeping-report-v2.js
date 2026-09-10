@@ -7,7 +7,7 @@
   const getSb=()=>{try{return typeof sb!=='undefined'?sb:(window.sb||window.supabaseClient||null);}catch(_){return window.sb||window.supabaseClient||null;}};
   const profile=()=>typeof currentProfile!=='undefined'?currentProfile:window.currentProfile;
   const role=()=>String(profile()?.role||'').toLowerCase();
-  const canEditTime=()=>['owner','admin'].includes(role());
+  const canEditTime=()=>['owner','manager','admin'].includes(role());
   let rows=[];
   let employees=new Map();
   let jobs=new Map();

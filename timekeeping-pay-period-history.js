@@ -7,7 +7,7 @@
   const num=v=>Number(v||0)||0;
   const profile=()=>typeof currentProfile!=='undefined'?currentProfile:window.currentProfile;
   const role=()=>String(profile()?.role||'').toLowerCase();
-  const allowed=()=>['admin','owner'].includes(role());
+  const allowed=()=>['admin','manager','owner'].includes(role());
   const getSb=()=>{try{return typeof sb!=='undefined'?sb:(window.sb||window.supabaseClient||null);}catch(_){return window.sb||window.supabaseClient||null;}};
   const toast=(m,t='info')=>window.LineCrewUI?.toast?.(m,t)||console.log(m);
   let periods=[],audits=[],entries=[],names=new Map(),page=0,totalCount=0,loading=false;

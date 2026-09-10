@@ -6,8 +6,10 @@
   const plans={
     foreman:{title:'Foreman Workspace',text:'Start the day with Safety/JSA, then use Jobs, Production, Remaining Units and Crew Time.',order:['safetyTile','jobsTile','productionTile','remainingUnitsTile','timekeepingTile','trainingTile'],hidden:['teamTile','priceBooksTile']},
     gf:{title:'General Foreman Workspace',text:'Review crews, jobs, production, safety and timekeeping from one place.',order:['productionTile','jobsTile','safetyTile','timekeepingTile','teamTile','trainingTile'],hidden:['priceBooksTile','remainingUnitsTile']},
+    safety:{title:'Safety Workspace',text:'Search, review, print and export company JSA records.',order:['safetyTile'],hidden:['teamTile','priceBooksTile','jobsTile','productionTile','remainingUnitsTile','timekeepingTile','trainingTile']},
     superintendent:{title:'Superintendent Workspace',text:'Manage field operations, crews, jobs, production, safety and company tools available to your permissions.',order:['productionTile','jobsTile','teamTile','safetyTile','timekeepingTile','priceBooksTile','trainingTile'],hidden:['remainingUnitsTile']},
     admin:{title:'Admin Workspace',text:'Manage company setup, people, pricing, job setup, production oversight, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:['remainingUnitsTile']},
+    manager:{title:'Manager Workspace',text:'Company-wide operational control for people, pricing, jobs, production, safety and timekeeping. Ownership remains protected.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:['remainingUnitsTile']},
     owner:{title:'Owner Workspace',text:'Company-wide access for people, pricing, job setup, production oversight, safety and timekeeping.',order:['teamTile','priceBooksTile','jobsTile','productionTile','safetyTile','timekeepingTile','trainingTile'],hidden:['remainingUnitsTile']}
   };
   let observer=null;
@@ -40,7 +42,7 @@
   function assistantAllowed(){
     return typeof window.userCanUseAssistant==='function'
       ? window.userCanUseAssistant()
-      : ['admin','owner'].includes(role());
+      : ['admin','manager','owner'].includes(role());
   }
 
   function syncAssistantVisibility(){
@@ -109,7 +111,7 @@
       const desiredIds=desiredTiles.map(el=>el.id);
       const currentIds=Array.from(grid.children).filter(el=>desiredIds.includes(el.id)).map(el=>el.id);
       const tilesNeedReordering=desiredIds.length!==currentIds.length || desiredIds.some((id,index)=>id!==currentIds[index]);
-      const preservePersonalOrder=['admin','owner'].includes(r) &&
+      const preservePersonalOrder=['admin','manager','owner'].includes(r) &&
         (grid.dataset.userDashboardCustomOrder==='true' || grid.classList.contains('dashboard-arrange-active'));
       if(tilesNeedReordering&&!preservePersonalOrder) desiredTiles.forEach(el=>grid.appendChild(el));
       if(r==='foreman'){

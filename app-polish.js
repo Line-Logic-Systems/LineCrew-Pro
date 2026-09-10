@@ -204,7 +204,7 @@
     try{
       const {data:{session}}=await sb.auth.getSession();if(!session)return;
       const {data:profile,error:profileError}=await sb.from('profiles').select('company_id,role,active').eq('id',session.user.id).single();
-      if(profileError||!profile||profile.active===false||!['admin','owner'].includes(String(profile.role||'').toLowerCase())){pilotCheckDone=true;return;}
+      if(profileError||!profile||profile.active===false||!['admin','manager','owner'].includes(String(profile.role||'').toLowerCase())){pilotCheckDone=true;return;}
       const {data:access,error:accessError}=await sb.rpc('my_company_subscription_access');if(accessError)return;
       const subscription=Array.isArray(access)?access[0]:access;
       if(String(subscription?.plan_code||'').toLowerCase()!=='pilot'){pilotCheckDone=true;return;}

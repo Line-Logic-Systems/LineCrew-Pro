@@ -241,7 +241,7 @@ assert(
 
 assert(assistant.includes('client.auth.getUser()'), 'AI assistant must authenticate the caller.');
 assert(assistant.includes('.select("company_id, role, active")'), 'AI assistant must load role and active status server-side.');
-assert(assistant.includes('!["admin", "owner"].includes(role)'), 'AI assistant must reject every role except active Owner/Admin server-side.');
+assert(assistant.includes('!["admin", "manager", "owner"].includes(role)'), 'AI assistant must reject every role except active Owner/Manager/Admin server-side.');
 assert(assistant.includes('profile.active !== true'), 'AI assistant must reject suspended Admin profiles.');
 assert(assistant.includes('.eq("company_id", companyId)'), 'AI assistant company data queries must be tenant-scoped.');
 assert(!assistant.includes('Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")'), 'AI assistant should not use a service-role key for user-scoped reads.');
@@ -295,7 +295,7 @@ for (const marker of [
   'Truck / Equipment Roster',
   'New training videos are being added'
 ]) assert(assistant.includes(marker), `AI assistant workflow knowledge is missing: ${marker}`);
-assert(index.includes("function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }"), 'AI assistant launcher must be Owner/Admin-only.');
+assert(index.includes("function userCanUseAssistant(){ return ['owner','manager','admin'].includes(currentUserRole()); }"), 'AI assistant launcher must be Owner/Manager/Admin-only.');
 assert(!index.includes("['ai_assistant','AI Assistant']"), 'AI assistant must not be configurable as a Superintendent capability.');
 for (const marker of [
   'Create Job & Review Jacket',
@@ -573,7 +573,7 @@ assert(timekeeping.includes('id="tkCompleteRoster"'), 'Owner/Admin Timekeeping m
 assert(!timekeeping.includes(".select('id,full_name,email,role,active')"), 'Complete roster must not request the nonexistent profiles.email column.');
 assert(timekeeping.includes('Complete Company Roster — ${activePeople.length} people / ${activeEquipment.length} equipment'), 'The consolidated roster must summarize active people and equipment.');
 assert(timekeeping.includes('Unassigned Crew Members')&&timekeeping.includes('Unassigned Equipment'), 'The consolidated roster must make unassigned personnel and equipment obvious.');
-assert(timekeeping.includes("const canViewCompleteRoster = () => ['admin','owner'].includes(role())"), 'The complete company roster must remain Owner/Admin-only.');
+assert(timekeeping.includes("const canViewCompleteRoster = () => ['admin','manager','owner'].includes(role())"), 'The complete company roster must remain leadership-only.');
 assert(timekeeping.includes(".select('id,full_name,role,active')")&&timekeeping.includes('profileOnlyPeople'), 'The complete company roster must include Team login accounts without duplicating linked employees.');
 assert(timekeepingInput.includes('await window.LineCrewRefreshCompleteRoster?.();'), 'Equipment changes must refresh the consolidated company roster.');
 assert(timekeeping.includes('id="tkCompleteRosterSearch"')&&timekeeping.includes('id="tkCompleteRosterAssignment"')&&timekeeping.includes('id="tkCompleteRosterForeman"'), 'The complete company roster must support search, assignment, and Foreman/crew filters.');
@@ -747,9 +747,9 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260907b') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260907b') &&
-    serviceWorker.includes("linecrew-pro-shell-v96") &&
-    expandedJsa.includes("role-workspace-polish.js?v=20260908a") &&
-    serviceWorker.includes("/role-workspace-polish.js?v=20260908a"),
+    serviceWorker.includes("linecrew-pro-shell-v97") &&
+    expandedJsa.includes("role-workspace-polish.js?v=20260910a") &&
+    serviceWorker.includes("/role-workspace-polish.js?v=20260910a"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
 );
 
@@ -929,8 +929,8 @@ assert(
   'Team role controls must reject suspended members before evaluating Admin options.'
 );
 assert(
-  adminRoleOptions.includes("if(['owner','admin'].includes(target)) return [];") &&
-    adminRoleOptions.includes("return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];") &&
+  adminRoleOptions.includes("if(['owner','manager','admin'].includes(target)) return [];") &&
+    adminRoleOptions.includes("return [['safety','Safety'],['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];") &&
     !adminRoleOptions.includes("['owner','Owner']"),
   'The Admin branch must manage active lower roles through Admin without exposing Owner or peer-Admin controls.'
 );
@@ -1038,7 +1038,7 @@ for (const marker of [
 ]) assert(superintendentContractsPolicies.includes(marker), `Superintendent Customers & Contracts policies are missing: ${marker}`);
 
 for (const marker of [
-  "['owner','admin'].includes(currentUserRole())",
+  "['owner','manager','admin'].includes(currentUserRole())",
   "role === 'superintendent'",
   "linecrew_set_member_role",
   "linecrew_set_superintendent_permissions",
@@ -1149,8 +1149,8 @@ for (const marker of [
   "formatCurrency(jobRunRate)"
 ]) assert(index.includes(marker), `Utility Production navigation marker missing: ${marker}`);
 assert(
-  expandedJsa.includes("timekeeping.js?v=20260908a") &&
-    serviceWorker.includes("/timekeeping.js?v=20260908a"),
+  expandedJsa.includes("timekeeping.js?v=20260910a") &&
+    serviceWorker.includes("/timekeeping.js?v=20260910a"),
   'Contract and job run-rate rendering must use the refreshed Timekeeping asset.'
 );
 for (const marker of [
@@ -1183,9 +1183,9 @@ for (const [source,label] of [
   [timekeepingHistory,'Pay-period history']
 ]) assert(source.includes("LineCrewTimekeepingTabs?.active?.()"), `${label} must honor the active Timekeeping tab when it mounts.`);
 assert(
-  expandedJsa.includes("timekeeping-input-v2.js?v=20260907b") &&
-  expandedJsa.includes("timekeeping-roster.js?v=20260907a") &&
-  serviceWorker.includes("/timekeeping-roster.js?v=20260907a"),
+  expandedJsa.includes("timekeeping-input-v2.js?v=20260910a") &&
+    expandedJsa.includes("timekeeping-roster.js?v=20260910a") &&
+    serviceWorker.includes("/timekeeping-roster.js?v=20260910a"),
   'Refreshed roster and leadership-equipment assets must be loaded and available offline.'
 );
 

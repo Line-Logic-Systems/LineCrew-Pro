@@ -90,7 +90,7 @@ Deno.serve(async (request) => {
     const permissions = profile.role_permissions && typeof profile.role_permissions === "object"
       ? profile.role_permissions as Record<string, unknown>
       : {};
-    const canManageTeam = ["owner", "admin"].includes(role) ||
+    const canManageTeam = ["owner", "manager", "admin"].includes(role) ||
       (role === "superintendent" && permissions.team_management !== false);
     if (!canManageTeam) {
       return jsonResponse(request, { error: "Your role cannot invite team members." }, 403);

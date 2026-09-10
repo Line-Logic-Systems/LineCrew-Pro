@@ -53,12 +53,12 @@ if(!timekeepingInput.includes('window.LineCrewOfflineColdStart||!navigator.onLin
 }
 
 for(const token of [
-  'linecrew-pro-shell-v96',
+  'linecrew-pro-shell-v97',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
   '/expanded-jsa.js?v=20260907b',
   '/offline-jsa.js?v=20260827b',
-  '/timekeeping-input-v2.js?v=20260907b',
+  '/timekeeping-input-v2.js?v=20260910a',
   '/jsa-signatures.js?v=20260828a'
 ]){
   if(!serviceWorker.includes(token)) throw new Error('Missing Offline JSA app-shell token: ' + token);

@@ -4147,7 +4147,7 @@ planNotice.textContent = 'LineCrew Pro selected: $599/month includes 5 crews, th
 }
 function privilegedRoleRequiresMfa(profile){
 return profile?.requires_mfa === true ||
-['owner','admin'].includes(String(profile?.role || profile?.user_role || '').toLowerCase());
+['owner','manager','admin'].includes(String(profile?.role || profile?.user_role || '').toLowerCase());
 }
 async function verifiedTotpFactors(){
 const { data, error } = await sb.auth.mfa.listFactors();
@@ -4724,7 +4724,8 @@ function currentUserRole(){
 return String(currentProfile?.role || 'foreman').toLowerCase();
 }
 function userIsOwner(){ return currentUserRole() === 'owner'; }
-function userIsCompanyAdmin(){ return ['owner','admin'].includes(currentUserRole()); }
+function userIsCompanyAdmin(){ return ['owner','manager','admin'].includes(currentUserRole()); }
+function userIsSafety(){ return currentUserRole() === 'safety'; }
 let dashboardTileOrder = [];
 let dashboardArrangementSnapshot = [];
 let dashboardArrangeMode = false;
@@ -4935,7 +4936,7 @@ dashboardDraggedTile = null;
 });
 function userHasCapability(capability){
 const role = currentUserRole();
-if(role === 'owner' || role === 'admin') return true;
+if(['owner','manager','admin'].includes(role)) return true;
 if(capability === 'actual_pricing'){
 const defaultValue = role !== 'foreman';
 return currentProfile?.role_permissions?.actual_pricing ?? defaultValue;
@@ -4964,7 +4965,7 @@ return [report?.created_by, report?.foreman_id]
 .some(id => String(id || '').trim() === profileId);
 }
 function userCanUseReporting(){ return userHasCapability('reporting') || currentUserRole() === 'gf'; }
-function userCanUseAssistant(){ return ['owner','admin'].includes(currentUserRole()); }
+function userCanUseAssistant(){ return ['owner','manager','admin'].includes(currentUserRole()); }
 function userCanManageCompanySettings(){ return userHasCapability('company_settings'); }
 function userCanManageCustomersContracts(){ return userHasCapability('customers_contracts'); }
 function userCanManagePriceBooks(){ return userHasCapability('price_books'); }
@@ -4978,13 +4979,13 @@ return userHasCapability('actual_pricing');
 }
 function userCanSeeFieldMoney(){ return userHasCapability('field_pricing'); }
 function userCanUseBillingExports(){
-return ['owner','admin'].includes(currentUserRole()) ||
+return ['owner','manager','admin'].includes(currentUserRole()) ||
 (currentUserRole() === 'superintendent' &&
 userHasCapability('reporting') &&
 userHasCapability('actual_pricing'));
 }
 function userCanViewCompletedJobs(){
-return ['owner','admin','superintendent','gf'].includes(currentUserRole());
+return ['owner','manager','admin','superintendent','gf'].includes(currentUserRole());
 }
 function userHasAnyCompanyControls(){
 return userIsCompanyAdmin() || (currentUserRole() === 'superintendent' && [
@@ -5091,6 +5092,7 @@ window.history.pushState(nextState, '', window.location.href);
 }
 }
 function userCanOpenAppPage(page){
+if(userIsSafety()) return ['dashboardPage','safetyPage'].includes(page);
 if(['dashboardPage','jobsPage','productionPage','timekeepingPage'].includes(page)) return true;
 if(page === 'completedJobsPage') return userCanViewCompletedJobs();
 if(page === 'teamPage') return currentUserRole() !== 'foreman';
@@ -5120,10 +5122,10 @@ await loadTeamMembers();
 if(page === 'jobsPage'){
 const canManageJobs = userCanManageJobs();
 const role = currentUserRole();
-$('jobsPageTitle').textContent = ['owner','admin'].includes(role)
+$('jobsPageTitle').textContent = ['owner','manager','admin'].includes(role)
 ? 'Job Setup & Management'
 : (role === 'foreman' ? 'Assigned Jobs' : 'Jobs & Crew Progress');
-$('jobsPageDescription').textContent = ['owner','admin'].includes(role)
+$('jobsPageDescription').textContent = ['owner','manager','admin'].includes(role)
 ? 'Create and import jobs, organize them by contract, assign Foremen and manage job jackets'
 : (role === 'foreman'
 ? 'Review your assigned jobs, work points and complete job units'
@@ -5270,7 +5272,7 @@ show('authPage');
 return;
 }
 }
-if(requestedBillingReturn && ['owner','admin'].includes(String(mfaBootstrap?.role || mfaBootstrap?.user_role || '').toLowerCase())){
+if(requestedBillingReturn && ['owner','manager','admin'].includes(String(mfaBootstrap?.role || mfaBootstrap?.user_role || '').toLowerCase())){
 window.location.replace('/billing.html');
 return;
 }
@@ -5282,7 +5284,7 @@ if(accessStatusError){
 if(offlineJsaNetworkFailure(accessStatusError) && enterOfflineJsaMode()) return;
 if(companyAccessInactive(accessStatusError)){
 const blockedRole = String(mfaBootstrap?.role || mfaBootstrap?.user_role || '').toLowerCase();
-if(['owner','admin'].includes(blockedRole)){
+if(['owner','manager','admin'].includes(blockedRole)){
 window.location.replace('/billing.html?billing=access-blocked');
 return;
 }
@@ -5365,7 +5367,7 @@ if(['suspended','cancelled'].includes(subscriptionStatus) || trialExpired){
 // Owner/Admin keep their session and land on the exempt Company Billing
 // recovery page, mirroring the company_subscriptions gate above.
 const legacyBlockedRole = String(profile.role || '').toLowerCase();
-if(['owner','admin'].includes(legacyBlockedRole)){
+if(['owner','manager','admin'].includes(legacyBlockedRole)){
 clearOfflineJsaAccess();
 currentProfile = null;
 currentCompany = null;
@@ -6161,7 +6163,7 @@ alert(
 );
 };
 function formatTeamRole(role){
-const roleLabels = { owner:'Owner', admin:'Admin', superintendent:'Superintendent', gf:'General Foreman', foreman:'Foreman' };
+const roleLabels = { owner:'Owner', manager:'Manager', admin:'Admin', superintendent:'Superintendent', gf:'General Foreman', foreman:'Foreman', safety:'Safety' };
 return roleLabels[String(role || '').toLowerCase()] || 'Foreman';
 }
 function roleOptionsForMember(member){
@@ -6171,11 +6173,15 @@ if(member.id === currentProfile.id) return [];
 if(member.active === false) return [];
 if(actor === 'owner'){
 if(target === 'owner') return [];
-return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];
+return [['safety','Safety'],['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin'],['manager','Manager']];
+}
+if(actor === 'manager'){
+if(target === 'owner') return [];
+return [['safety','Safety'],['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin'],['manager','Manager']];
 }
 if(actor === 'admin'){
-if(['owner','admin'].includes(target)) return [];
-return [['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];
+if(['owner','manager','admin'].includes(target)) return [];
+return [['safety','Safety'],['foreman','Foreman'],['gf','General Foreman'],['superintendent','Superintendent'],['admin','Admin']];
 }
 if(actor === 'superintendent' && userCanManageRoles()){
 if(!['foreman','gf'].includes(target)) return [];
@@ -6254,7 +6260,8 @@ if(member.id === currentProfile.id || !userCanManageTeam()) return false;
 const actor = currentUserRole();
 const target = String(member.role || 'foreman').toLowerCase();
 if(actor === 'owner') return true;
-if(actor === 'admin') return !['owner','admin'].includes(target);
+if(actor === 'manager') return target !== 'owner';
+if(actor === 'admin') return !['owner','manager','admin'].includes(target);
 if(actor === 'superintendent') return ['foreman','gf'].includes(target);
 return false;
 }
@@ -6300,7 +6307,7 @@ card.appendChild(details);
 }
 function renderMoneyVisibilityPermissions(member,card){
 const role = String(member.role || 'foreman').toLowerCase();
-if(!['foreman','gf','superintendent'].includes(role) || !userIsCompanyAdmin()) return;
+if(!['foreman','gf','superintendent','safety'].includes(role) || !userIsCompanyAdmin()) return;
 const details = document.createElement('details');
 details.className = 'job-card';
 const summary = document.createElement('summary');
@@ -19412,10 +19419,15 @@ return Number.isInteger(quantity)
 function applyFlexibleJsaUi(){
 const method = String(currentCompany?.jsa_method || 'both').toLowerCase();
 const canManage = userIsCompanyAdmin();
+const readOnly = userIsSafety();
 $('jsaMethodSettingsCard').classList.toggle('hidden', !canManage);
 $('companyJsaMethod').value = ['digital','upload','both'].includes(method) ? method : 'both';
-$('createJsaBtn').classList.toggle('hidden', method === 'upload');
-$('uploadCompanyJsaBtn').classList.toggle('hidden', method === 'digital');
+$('createJsaBtn').classList.toggle('hidden', readOnly || method === 'upload');
+$('uploadCompanyJsaBtn').classList.toggle('hidden', readOnly || method === 'digital');
+if(readOnly){
+$('safetyJsaForm').classList.add('hidden');
+$('companyJsaUploadForm').classList.add('hidden');
+}
 }
 $('saveCompanyJsaMethod').onclick = async () => {
 if(!userIsCompanyAdmin()) return;
@@ -19732,7 +19744,7 @@ escapeHtml([jsa.job_number, jsa.job_name].filter(Boolean).join(' — ') || 'Job'
 (jsa.upload_notes ? '<br>Notes: ' + escapeHtml(jsa.upload_notes) : '') + '</div>';
 const actions = document.createElement('div'); actions.className='button-row';
 const open = document.createElement('button'); open.className='secondary small'; open.textContent='Open JSA File(s)'; open.onclick=()=>openUploadedJsaFiles(jsa); actions.appendChild(open);
-const canDelete = jsa.created_by === currentProfile.id || ['owner','admin','gf'].includes(currentUserRole()) || (currentUserRole()==='superintendent' && userHasCapability('safety_records'));
+const canDelete = jsa.created_by === currentProfile.id || ['owner','manager','admin','gf'].includes(currentUserRole()) || (currentUserRole()==='superintendent' && userHasCapability('safety_records'));
 if(canDelete){ const del=document.createElement('button'); del.className='danger small'; del.textContent='Delete Uploaded JSA'; del.onclick=()=>deleteUploadedCompanyJsa(jsa); actions.appendChild(del); }
 card.appendChild(actions); list.appendChild(card);
 });

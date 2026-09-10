@@ -28,7 +28,9 @@ jobs:
           node-version: '22'
 
       - name: Validate application
-        run: node scripts/validate-app.mjs
+        run: |
+          node scripts/validate-app.mjs
+          node scripts/validate-manager-safety-roles.mjs
 
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs

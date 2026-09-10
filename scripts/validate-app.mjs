@@ -382,8 +382,9 @@ if (teamFunctionSources.some(source => !source)) {
     teamFunctionSources.forEach(source => vm.runInContext(source, teamContext));
     const roleValues = member =>
       Array.from(teamContext.roleOptionsForMember(member), option => option[0]);
-    const allManagedRoles = ['foreman','gf','superintendent','admin'];
-    const lowerRoles = ['foreman','gf','superintendent'];
+    const ownerManagedRoles = ['safety','foreman','gf','superintendent','admin','manager'];
+    const adminManagedRoles = ['safety','foreman','gf','superintendent','admin'];
+    const lowerRoles = ['foreman','gf','superintendent','safety'];
     const expectRoles = (actual, expected, message) =>
       assert(JSON.stringify(actual) === JSON.stringify(expected), message);
 
@@ -391,7 +392,7 @@ if (teamFunctionSources.some(source => !source)) {
     lowerRoles.forEach(role => {
       expectRoles(
         roleValues({ id:`active-${role}`, role, active:true }),
-        allManagedRoles,
+        adminManagedRoles,
         `Admin must be able to assign every managed role to an active ${role}.`
       );
     });
@@ -425,9 +426,21 @@ if (teamFunctionSources.some(source => !source)) {
     teamContext.currentProfile = { id:'actor-owner', role:'owner' };
     expectRoles(
       roleValues({ id:'peer-admin', role:'admin', active:true }),
-      allManagedRoles,
+      ownerManagedRoles,
       'Owner must be able to manage an active Admin without assigning Owner generically.'
     );
+    teamContext.currentProfile = { id:'actor-manager', role:'manager' };
+    expectRoles(
+      roleValues({ id:'company-owner', role:'owner', active:true }),
+      [],
+      'Manager must never receive controls that can affect the Owner.'
+    );
+    expectRoles(
+      roleValues({ id:'peer-admin', role:'admin', active:true }),
+      ownerManagedRoles,
+      'Manager must be able to manage Admin and lower roles.'
+    );
+    teamContext.currentProfile = { id:'actor-owner', role:'owner' };
     expectRoles(
       roleValues({ id:'suspended-admin', role:'admin', active:false }),
       [],

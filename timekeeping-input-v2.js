@@ -8,7 +8,7 @@
   const profile=()=>typeof currentProfile!=='undefined'?currentProfile:window.currentProfile;
   const companyId=()=>profile()?.company_id||null;
   const role=()=>String(profile()?.role||'').toLowerCase();
-  const canManageEquipment=()=>['owner','admin'].includes(role());
+  const canManageEquipment=()=>['owner','manager','admin'].includes(role());
   let employeeEquipment=new Map(),equipment=[],foremenById=new Map(),profilesById=new Map(),wrappedSave=null,loadedReport='';
   let assignmentSearch='',assignmentFilter='all',loadedCompanyId='',refreshingData=false;
 
