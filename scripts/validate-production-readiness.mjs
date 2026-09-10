@@ -813,7 +813,7 @@ for (const marker of [
   '#teamList > :not(.lc-team-member-row){grid-column:1 / -1}'
 ]) assert(appPolish.includes(marker), `Responsive two-column Team roster marker missing: ${marker}`);
 assert(
-  expandedJsa.includes("app-polish.js?v=20260907a"),
+  expandedJsa.includes("app-polish.js?v=20260910a"),
   'Two-column Team roster must load through the refreshed app-polish asset.'
 );
 assert(/\.daily-review-counts\s+\.authorized,\s*\.daily-review-counts\s+\.pending,\s*\.daily-review-counts\s+\.redline\s*\{[^}]*color\s*:\s*inherit\s*;/m.test(index), 'Authorization, Pending Packet and Redline summary counts must remain neutral.');
