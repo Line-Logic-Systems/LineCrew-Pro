@@ -77,7 +77,7 @@ assert(
   'Disclosure headers must toggle across their full non-interactive summary area.'
 );
 assert(
-  gfCrewScope.includes("'Assign to me'") &&
+  gfCrewScope.includes('Assign to me') &&
     gfCrewScope.includes("p_gf_id:userId()") &&
     gfCrewScope.includes("role() !== 'gf' || !row.gf_id || row.gf_id === userId()") &&
     gfSelfAssignmentMigration.includes("p_gf_id is distinct from auth.uid()") &&
