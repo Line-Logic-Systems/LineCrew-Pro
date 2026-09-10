@@ -123,7 +123,7 @@
     tools.id='lcTeamTools';
     tools.className='lc-team-tools';
     tools.innerHTML='<input id="lcTeamSearch" type="search" placeholder="Search team by name or role" aria-label="Search team">'+
-      '<select id="lcTeamRoleFilter" aria-label="Filter team by role"><option value="all">All roles</option><option value="foreman">Foremen</option><option value="gf">General Foremen</option><option value="superintendent">Superintendents</option><option value="admin">Admins</option><option value="owner">Owners</option></select>'+
+      '<select id="lcTeamRoleFilter" aria-label="Filter team by role"><option value="all">All roles</option><option value="safety">Safety</option><option value="foreman">Foremen</option><option value="gf">General Foremen</option><option value="superintendent">Superintendents</option><option value="admin">Admins</option><option value="manager">Managers</option><option value="owner">Owners</option></select>'+
       '<span id="lcTeamCount" class="lc-team-count"></span>';
     list.parentNode.insertBefore(tools,list);
     const empty=document.createElement('div');

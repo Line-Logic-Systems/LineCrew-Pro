@@ -92,7 +92,7 @@
   }
   function assignmentGroupName(e){
     const linkedRole=String(profilesById.get(e.linked_profile_id)?.role||'').toLowerCase();
-    if(['owner','admin','superintendent','gf'].includes(linkedRole))return 'Leadership';
+    if(['owner','manager','admin','superintendent','gf'].includes(linkedRole))return 'Leadership';
     if(e.assigned_foreman_id){
       const f=foremenById.get(e.assigned_foreman_id);
       return f?.full_name?`${f.full_name} Crew`:'Assigned Crew';

@@ -66,7 +66,7 @@
   }
 
   function roleLabel(value) {
-    return ({ owner: 'Owner', admin: 'Admin', superintendent: 'Superintendent', gf: 'General Foreman', foreman: 'Foreman' })[value] || value || 'Team Member';
+    return ({ owner: 'Owner', manager: 'Manager', admin: 'Admin', superintendent: 'Superintendent', gf: 'General Foreman', foreman: 'Foreman', safety: 'Safety' })[value] || value || 'Team Member';
   }
 
   function signedInProfile() {

@@ -747,7 +747,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260907b') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260907b') &&
-    serviceWorker.includes("linecrew-pro-shell-v97") &&
+    serviceWorker.includes("linecrew-pro-shell-v98") &&
     expandedJsa.includes("role-workspace-polish.js?v=20260910a") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260910a"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'
@@ -813,7 +813,7 @@ for (const marker of [
   '#teamList > :not(.lc-team-member-row){grid-column:1 / -1}'
 ]) assert(appPolish.includes(marker), `Responsive two-column Team roster marker missing: ${marker}`);
 assert(
-  expandedJsa.includes("app-polish.js?v=20260910a"),
+  expandedJsa.includes("app-polish.js?v=20260910b"),
   'Two-column Team roster must load through the refreshed app-polish asset.'
 );
 assert(/\.daily-review-counts\s+\.authorized,\s*\.daily-review-counts\s+\.pending,\s*\.daily-review-counts\s+\.redline\s*\{[^}]*color\s*:\s*inherit\s*;/m.test(index), 'Authorization, Pending Packet and Redline summary counts must remain neutral.');
@@ -1155,7 +1155,7 @@ assert(
 );
 for (const marker of [
   "return 'Leadership'",
-  "['owner','admin','superintendent','gf'].includes(linkedRole)",
+  "['owner','manager','admin','superintendent','gf'].includes(linkedRole)",
   "c.from('profiles').select('id,full_name,role,active')",
   'Assign Default Trucks & Equipment'
 ]) assert(timekeepingInput.includes(marker), `Leadership equipment-assignment marker missing: ${marker}`);

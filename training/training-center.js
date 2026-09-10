@@ -1,5 +1,5 @@
 (function () {
-  const ROLE_RANK = { foreman: 1, gf: 2, superintendent: 3, admin: 4, owner: 5 };
+  const ROLE_RANK = { safety: 1, foreman: 1, gf: 2, superintendent: 3, admin: 4, manager: 5, owner: 6 };
   const CATEGORIES = [
     ['welcome', 'Welcome & Overview'],
     ['foreman', 'Foreman Training'],
