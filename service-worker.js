@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v96';
+const CACHE_NAME = 'linecrew-pro-shell-v97';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/',
@@ -18,21 +18,21 @@ const APP_SHELL = [
   '/number-input-polish.js?v=20260823a',
   '/expanded-jsa.js?v=20260907b',
   '/utility-portal-management.js?v=20260908a',
-  '/role-workspace-polish.js?v=20260908a',
+  '/role-workspace-polish.js?v=20260910a',
   '/expanded-jsa-core.js?v=20260820',
   '/jsa-signatures.js?v=20260828a',
   '/jsa-signature-layout-fix.js?v=20260820a',
   '/offline-jsa.js?v=20260827b',
   '/jsa-review.js?v=20260826a',
   '/foreman-field-tools.js?v=20260901a',
-  '/timekeeping.js?v=20260908a',
-  '/timekeeping-input-v2.js?v=20260907b',
-  '/timekeeping-roster.js?v=20260907a',
-  '/timekeeping-report-v2.js?v=20260908a',
-  '/timekeeping-pay-period-history.js?v=20260826b',
+  '/timekeeping.js?v=20260910a',
+  '/timekeeping-input-v2.js?v=20260910a',
+  '/timekeeping-roster.js?v=20260910a',
+  '/timekeeping-report-v2.js?v=20260910a',
+  '/timekeeping-pay-period-history.js?v=20260910a',
   '/timekeeping-polish.js?v=20260826b',
-  '/timekeeping-payroll.js?v=20260828c',
-  '/leadership-my-time.js?v=20260907a',
+  '/timekeeping-payroll.js?v=20260910a',
+  '/leadership-my-time.js?v=20260910a',
   SUPABASE_RUNTIME
 ];
 

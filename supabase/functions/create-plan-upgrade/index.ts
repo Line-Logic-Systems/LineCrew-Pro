@@ -215,7 +215,7 @@ Deno.serve(async (request) => {
     if (profileError || !profile || profile.active === false) {
       throw new RequestError("Active company profile required.", 403);
     }
-    if (!["owner", "admin"].includes(String(profile.role).toLowerCase())) {
+    if (!["owner", "manager", "admin"].includes(String(profile.role).toLowerCase())) {
       throw new RequestError("Company Owner or Admin access required.", 403);
     }
 

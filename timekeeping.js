@@ -9,7 +9,7 @@
   const companyId = () => typeof currentProfile !== 'undefined' ? currentProfile?.company_id || null : null;
   const isLeader = () => ['gf','admin','owner'].includes(role());
   const canManageRoster = () => isLeader();
-  const canViewCompleteRoster = () => ['admin','owner'].includes(role());
+  const canViewCompleteRoster = () => ['admin','manager','owner'].includes(role());
   const getSb = () => typeof sb !== 'undefined' ? sb : window.sb;
   const todayIso = () => new Date().toISOString().slice(0,10);
   const mondayIso = () => {

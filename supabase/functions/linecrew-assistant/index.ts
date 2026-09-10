@@ -634,7 +634,7 @@ Deno.serve(async (request) => {
     if (profileError || !profile) throw new Error("Profile not found.");
 
     const role = String(profile.role || "").toLowerCase();
-    if (!["admin", "owner"].includes(role) || profile.active !== true) {
+    if (!["admin", "manager", "owner"].includes(role) || profile.active !== true) {
       return jsonResponse(request, { error: "The LineCrew Assistant is not enabled for your role." }, 403);
     }
 

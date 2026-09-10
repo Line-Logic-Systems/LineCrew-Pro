@@ -242,7 +242,7 @@ if (!checkout.includes('readLinecrewPriceId')) throw new Error('Checkout must bi
 if (!checkout.includes('normalizeCrewQuantity(payload.crew_quantity)')) throw new Error('Checkout must validate the selected licensed crew quantity server-side.');
 if (!checkout.includes('Math.max(requestedCrewQuantity, Number(activeCrewCount || 0))')) throw new Error('Checkout must not license fewer slots than the company already has active crews.');
 if (!checkout.includes('line_items[0][quantity]", String(crewQuantity)')) throw new Error('Checkout must bill Stripe using the selected licensed crew quantity.');
-if (!checkout.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner or Admin role.');
+if (!checkout.includes('["owner", "manager", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Checkout must require company Owner, Manager or Admin role.');
 
 // Regression guards for the September 2026 Checkout outage: this parameter is
 // valid on the Subscriptions API and rejected by Checkout Sessions, so it must
@@ -315,7 +315,7 @@ if (!app.includes('companyAccessInactive(accessStatusError)') ||
     !app.includes("window.location.replace('/billing.html?billing=access-blocked')")) {
   throw new Error('Blocked Owner/Admin access must route to the exempt Company Billing recovery page.');
 }
-if (!portal.includes('["owner", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Billing portal must require company Owner or Admin role.');
+if (!portal.includes('["owner", "manager", "admin"].includes(String(profile.role).toLowerCase())')) throw new Error('Billing portal must require company Owner, Manager or Admin role.');
 if (!portal.includes('/billing.html?billing=portal-return')) throw new Error('Billing portal must return to the contractor billing page.');
 for (const marker of ['STRIPE_MANAGE_PORTAL_CONFIGURATION_ID','linecrew_manage_only_v1','subscription_update','update?.enabled !== true','params.set("configuration", portalConfiguration)']) {
   if (!portal.includes(marker)) throw new Error(`Manage Billing portal is missing required safety marker: ${marker}`);
@@ -327,7 +327,7 @@ for (const marker of [
   'update?.proration_behavior === "always_invoice"',
   'linecrew-crew-quantity-portal-${upgradePortalPurpose}',
   'BILLING_PLAN_PRICE_MAP',
-  '["owner", "admin"].includes(String(profile.role).toLowerCase())',
+  '["owner", "manager", "admin"].includes(String(profile.role).toLowerCase())',
   'subscription.customer !== stored.stripe_customer_id',
   'items.length !== 1',
   'targetCrewLimit < currentCrewLimit',
@@ -358,7 +358,7 @@ if (!webhookTests.includes('older events are stale')) throw new Error('Out-of-or
 if (!webhookTests.includes('customer-metadata mismatch rejects')) throw new Error('Stripe customer/company ownership regression coverage is missing.');
 if (!webhookTests.includes('mismatched livemode rejects')) throw new Error('Stripe live/test separation regression coverage is missing.');
 if (!upgrade.includes('if (configuredId)') || !upgrade.includes('configuration ID is invalid')) throw new Error('Upgrade portal must reject a malformed explicit configuration ID.');
-const authCheckPosition = upgrade.indexOf('["owner", "admin"].includes(String(profile.role).toLowerCase())');
+const authCheckPosition = upgrade.indexOf('["owner", "manager", "admin"].includes(String(profile.role).toLowerCase())');
 const portalResolutionPosition = upgrade.indexOf('const portalConfiguration = await resolveUpgradePortalConfiguration');
 if (authCheckPosition < 0 || portalResolutionPosition < authCheckPosition) throw new Error('Upgrade portal contacts Stripe before verifying the company Admin.');
 

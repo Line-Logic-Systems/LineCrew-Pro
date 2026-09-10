@@ -208,8 +208,8 @@
     byId('myTimePersonList')?.classList.toggle('hidden', canAddOtherPeople());
     byId('myTimeAdminRosterRows')?.classList.toggle('hidden', !canAddOtherPeople());
     byId('myTimeBatchActions')?.classList.toggle('hidden', !canAddOtherPeople());
-    const peopleTitle = role() === 'admin' ? 'My Admin Time Roster' : 'People on this entry';
-    const peopleHelp = role() === 'admin'
+    const peopleTitle = ['admin','manager'].includes(role()) ? 'My Leadership Time Roster' : 'People on this entry';
+    const peopleHelp = ['admin','manager'].includes(role())
       ? 'Assigned Personnel appear automatically as individual time rows, just like a Foreman crew on a Daily Report.'
       : 'Choose a name to enter individual hours, or add a temporary person for today.';
     const titleElement = byId('myTimePeopleTitle');
@@ -254,7 +254,7 @@
   function assignedRosterIds() {
     const ids = [];
     if (employee?.id) ids.push(employee.id);
-    if (role() === 'admin' && profile()?.id) {
+    if (['admin','manager'].includes(role()) && profile()?.id) {
       employees
         .filter((item) => item.active !== false && item.assigned_admin_id === profile().id)
         .forEach((item) => ids.push(item.id));
@@ -409,7 +409,7 @@
     const box = byId('myTimeAdminRosterRows');
     if (!box || !canAddOtherPeople()) return;
     if (!selectedEmployeeIds.length) {
-      box.innerHTML = role() === 'admin'
+      box.innerHTML = ['admin','manager'].includes(role())
         ? '<p class="muted">No Personnel are assigned to this Admin. Assign them in Manage Personnel Assignments, or add a temporary person above.</p>'
         : '<p class="muted">Add each person working with you to enter the group\'s time.</p>';
       return;
@@ -479,7 +479,7 @@
     box.innerHTML = selectedEmployeeIds.map((id) => {
       const item = employees.find((candidate) => candidate.id === id) || (id === employee?.id ? employee : null) || {};
       const self = id === employee?.id;
-      const assigned = role() === 'admin' && item.assigned_admin_id === profile()?.id;
+      const assigned = ['admin','manager'].includes(role()) && item.assigned_admin_id === profile()?.id;
       const persistent = self || assigned;
       return `<span class="my-time-person${id === activeEmployeeId ? ' active' : ''}"><button type="button" class="my-time-person-select" data-my-time-person="${esc(id)}">${esc(item.full_name || 'Employee')}${item.classification ? ` — ${esc(item.classification)}` : ''}${self ? ' (You)' : ''}</button>${assigned ? '<span class="my-time-person-badge">Assigned</span>' : ''}${persistent || editId ? '' : `<button type="button" class="my-time-remove-person" title="Remove ${esc(item.full_name || 'employee')}" data-my-time-remove-person="${esc(id)}">×</button>`}</span>`;
     }).join('');
@@ -668,7 +668,7 @@
   function editEntry(id) {
     const entry = entries.find((item) => item.id === id);
     if (!entry) return;
-    if (role() === 'admin') {
+    if (['admin','manager'].includes(role())) {
       captureAdminRows();
       editId = entry.id;
       if (!selectedEmployeeIds.includes(entry.employee_id)) selectedEmployeeIds.push(entry.employee_id);
@@ -781,7 +781,7 @@
 
   async function saveAdminRow(row) {
     const targetEmployeeId = row?.dataset.myTimeRow || '';
-    if (role() !== 'admin' || !targetEmployeeId || !selectedEmployeeIds.includes(targetEmployeeId)) return;
+    if (!['admin','manager'].includes(role()) || !targetEmployeeId || !selectedEmployeeIds.includes(targetEmployeeId)) return;
     const startInput = row.querySelector('.my-time-admin-start');
     const stopInput = row.querySelector('.my-time-admin-stop');
     const startTime = normalizeMilitaryInput(startInput);

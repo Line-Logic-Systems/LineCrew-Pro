@@ -112,7 +112,7 @@
     if(status==='approved'&&periodState.approved_at)text.push('Approved '+new Date(periodState.approved_at).toLocaleString());
     if(status==='locked'&&periodState.locked_at)text.push('Locked '+new Date(periodState.locked_at).toLocaleString());
     byId('tkPeriodStatus').textContent=text.join(' • ')||'This pay period is open for edits.';
-    const r=role();const approver=['gf','admin','owner'].includes(r),locker=['admin','owner'].includes(r);
+    const r=role();const approver=['gf','admin','manager','owner'].includes(r),locker=['admin','manager','owner'].includes(r);
     byId('tkApprovePeriodBtn').classList.toggle('hidden',!approver||status!=='open');
     byId('tkReopenPeriodBtn').classList.toggle('hidden',!approver||status!=='approved');
     byId('tkLockPeriodBtn').classList.toggle('hidden',!locker||status!=='approved');
