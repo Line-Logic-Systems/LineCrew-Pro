@@ -258,6 +258,11 @@ body:not(.lc-shell-active) .lc-shell-account {
     left: calc(var(--lc-shell-sidebar-width) + 20px);
   }
 
+  body.lc-shell-active .pilot-feedback-launcher.pilot-feedback-right {
+    left: auto;
+    right: 20px;
+  }
+
   body.lc-shell-active > main > section:not(.hidden) {
     width: 100%;
     max-width: 1480px;
