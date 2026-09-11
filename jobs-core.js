@@ -168,6 +168,21 @@
     };
   }
 
+  function jobAssignmentPanelViewModel(assignments = [], assignableLeaders = []){
+    const assigned = Array.isArray(assignments) ? assignments : [];
+    const leaders = Array.isArray(assignableLeaders) ? assignableLeaders : [];
+    const assignedIds = new Set(assigned.map(item => item?.member_id).filter(Boolean));
+    const available = leaders.filter(leader => !assignedIds.has(leader?.member_id));
+    return {
+      assignments: assigned,
+      available,
+      isEmpty: assigned.length === 0,
+      assignButtonLabel: assigned.length > 0
+        ? 'Assign Another Foreman / Leader'
+        : 'Assign Foreman / Leader'
+    };
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -178,7 +193,8 @@
     jobProgressViewModel,
     simpleJobBrowserViewModel,
     jobProgressRowViewModel,
-    jobCardDisplayModel
+    jobCardDisplayModel,
+    jobAssignmentPanelViewModel
   });
   window.LineCrewJobsCore = api;
 
@@ -193,4 +209,5 @@
   window.simpleJobBrowserViewModel = simpleJobBrowserViewModel;
   window.jobProgressRowViewModel = jobProgressRowViewModel;
   window.jobCardDisplayModel = jobCardDisplayModel;
+  window.jobAssignmentPanelViewModel = jobAssignmentPanelViewModel;
 })();
