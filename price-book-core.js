@@ -75,7 +75,11 @@
     return name;
   }
 
-  const api = Object.freeze({ normalizeImportHeader, importEditDistance, importHeaderMatchConfidence, normalizedPriceWorkType, importCell, importPrice, numericImportPrice, spreadsheetColumnName });
+  function priceBookComparisonValueChanged(left,right){
+    return String(left ?? '').trim() !== String(right ?? '').trim();
+  }
+
+  const api = Object.freeze({ normalizeImportHeader, importEditDistance, importHeaderMatchConfidence, normalizedPriceWorkType, importCell, importPrice, numericImportPrice, spreadsheetColumnName, priceBookComparisonValueChanged });
   window.LineCrewPriceBookCore = api;
 
   // Compatibility bridges while the legacy inline copies still exist.
@@ -87,4 +91,5 @@
   window.importPrice = importPrice;
   window.numericImportPrice = numericImportPrice;
   window.spreadsheetColumnName = spreadsheetColumnName;
+  window.priceBookComparisonValueChanged = priceBookComparisonValueChanged;
 })();
