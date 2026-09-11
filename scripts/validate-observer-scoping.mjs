@@ -8,6 +8,7 @@ function read(path){
 const tkPolish = read('timekeeping-polish.js');
 const maps = read('job-map-documents.js');
 const draftRestore = read('dark-contrast-draft-edit-fix.js');
+const jsaSignatures = read('jsa-signatures.js');
 
 if(tkPolish.includes("obs.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','disabled']})")){
   throw new Error('Timekeeping polish must not observe all body mutations.');
@@ -39,6 +40,19 @@ if(!draftRestore.includes("if(attachScopedObservers())attachObserver.disconnect(
 }
 if(!draftRestore.includes("throw new Error('Saved crew time is still loading. Your existing hours were preserved.")){
   throw new Error('Draft crew-time preservation save guard is missing.');
+}
+
+if(jsaSignatures.includes("const obs=new MutationObserver(upgrade);obs.observe(document.body,{subtree:true,childList:true})")){
+  throw new Error('JSA signatures must not continuously observe the entire app.');
+}
+if(!jsaSignatures.includes("safetyObserver.observe(page,{subtree:true,childList:true})")){
+  throw new Error('JSA signatures must scope their long-lived observer to #safetyPage.');
+}
+if(!jsaSignatures.includes("if(attachSafetyObserver())attachObserver.disconnect()")){
+  throw new Error('Temporary JSA signature attach observer must disconnect after Safety is available.');
+}
+for(const token of ["window.addEventListener('pointermove'","window.addEventListener('touchmove'","window.addEventListener('pointerup'","window.addEventListener('pointercancel'","Signature captured","Clear Signature"]){
+  if(!jsaSignatures.includes(token)) throw new Error(`JSA signature interaction wiring is missing: ${token}`);
 }
 
 console.log('Observer scoping validation passed.');
