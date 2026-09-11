@@ -18,9 +18,15 @@
     return [...unique.values()];
   }
 
-  const api = Object.freeze({ uniqueOfflineJsaJobs });
+  function offlineJsaNetworkFailure(error){
+    const message = String(error?.message || error || '').toLowerCase();
+    return !navigator.onLine || /failed to fetch|network|load failed|timeout|timed out|connection/.test(message);
+  }
+
+  const api = Object.freeze({ uniqueOfflineJsaJobs, offlineJsaNetworkFailure });
   window.LineCrewAppCore = api;
 
-  // Compatibility bridge while the legacy inline copy remains available.
+  // Compatibility bridges while the legacy inline copies remain available.
   window.uniqueOfflineJsaJobs = uniqueOfflineJsaJobs;
+  window.offlineJsaNetworkFailure = offlineJsaNetworkFailure;
 })();
