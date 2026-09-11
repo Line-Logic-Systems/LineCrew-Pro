@@ -83,6 +83,9 @@ jobs:
           node scripts/validate-assistant-live-context.mjs
           node scripts/validate-assistant-memory.mjs
 
+      - name: Validate marketing site, pricing, and Beta funnel
+        run: node scripts/validate-marketing-site.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
