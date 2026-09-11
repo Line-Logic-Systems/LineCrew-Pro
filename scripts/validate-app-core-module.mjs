@@ -30,7 +30,7 @@ const sandbox = {
 };
 vm.runInNewContext(moduleSource, sandbox, { filename:'app-core.js' });
 const core = sandbox.window.LineCrewAppCore;
-const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage','formatTeamRole','formatAuditTimestamp'];
+const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage','formatTeamRole','formatAuditTimestamp','formatCurrency'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`App core module must expose ${name}().`);
 }
@@ -43,62 +43,35 @@ const jobCases = [
 ];
 for (const [input, expected] of jobCases) {
   const actual = core.uniqueOfflineJsaJobs(input);
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`uniqueOfflineJsaJobs parity failed: ${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`);
-  }
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`uniqueOfflineJsaJobs parity failed: ${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`);
 }
 
-const onlineCases = [
-  [{message:'Failed to fetch'}, true],
-  [{message:'Network request failed'}, true],
-  [{message:'Request timed out'}, true],
-  [{message:'Connection reset'}, true],
-  [{message:'Permission denied'}, false],
-  [null, false]
-];
-for (const [error, expected] of onlineCases) {
+for (const [error, expected] of [[{message:'Failed to fetch'},true],[{message:'Network request failed'},true],[{message:'Request timed out'},true],[{message:'Connection reset'},true],[{message:'Permission denied'},false],[null,false]]) {
   sandbox.navigator.onLine = true;
   const actual = core.offlineJsaNetworkFailure(error);
   if (actual !== expected) throw new Error(`offlineJsaNetworkFailure(${JSON.stringify(error)}) returned ${actual}; expected ${expected}.`);
 }
 sandbox.navigator.onLine = false;
-if (core.offlineJsaNetworkFailure({message:'Permission denied'}) !== true) {
-  throw new Error('offlineJsaNetworkFailure() must return true whenever navigator reports offline.');
-}
+if (core.offlineJsaNetworkFailure({message:'Permission denied'}) !== true) throw new Error('offlineJsaNetworkFailure() must return true whenever navigator reports offline.');
 sandbox.navigator.onLine = true;
 
-const accessCases = [
-  [{message:'Company access is inactive'}, true],
-  [{message:'Permission denied',hint:'Company access is inactive until billing is restored'}, true],
-  [{message:'company ACCESS is INACTIVE'}, true],
-  [{message:'Permission denied'}, false],
-  [null, false]
-];
-for (const [error, expected] of accessCases) {
+for (const [error, expected] of [[{message:'Company access is inactive'},true],[{message:'Permission denied',hint:'Company access is inactive until billing is restored'},true],[{message:'company ACCESS is INACTIVE'},true],[{message:'Permission denied'},false],[null,false]]) {
   const actual = core.companyAccessInactive(error);
   if (actual !== expected) throw new Error(`companyAccessInactive(${JSON.stringify(error)}) returned ${actual}; expected ${expected}.`);
 }
 
-const stackCases = [
-  [{stack:'Error: Boom\n    at doThing (app.js:12:34)\n    at run (app.js:20:4)'}, 'at doThing (app.js:12:34)'],
-  [{stack:'Error: Boom\nno-location-here'}, ''],
-  [{stack:'Error: Boom\n  https://example.test/app.js:44:9 '}, 'https://example.test/app.js:44:9'],
-  [null, '']
-];
-for (const [error, expected] of stackCases) {
+for (const [error, expected] of [[{stack:'Error: Boom\n    at doThing (app.js:12:34)\n    at run (app.js:20:4)'},'at doThing (app.js:12:34)'],[{stack:'Error: Boom\nno-location-here'},''],[{stack:'Error: Boom\n  https://example.test/app.js:44:9 '},'https://example.test/app.js:44:9'],[null,'']]) {
   const actual = core.firstStackFrame(error);
   if (actual !== expected) throw new Error(`firstStackFrame() returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
 }
 
-storedDesktopView = '1';
-throwStorage = false;
+storedDesktopView = '1'; throwStorage = false;
 if (core.desktopViewEnabled() !== true) throw new Error('desktopViewEnabled() must return true for stored desktop view.');
 storedDesktopView = '0';
 if (core.desktopViewEnabled() !== false) throw new Error('desktopViewEnabled() must return false when stored desktop view is off.');
 storedDesktopView = null;
 if (core.desktopViewEnabled() !== false) throw new Error('desktopViewEnabled() must return false when no preference is stored.');
-throwStorage = true;
-fallbackDesktopClass = true;
+throwStorage = true; fallbackDesktopClass = true;
 if (core.desktopViewEnabled() !== true) throw new Error('desktopViewEnabled() must preserve the desktop-view class fallback when storage is unavailable.');
 fallbackDesktopClass = false;
 if (core.desktopViewEnabled() !== false) throw new Error('desktopViewEnabled() fallback must return false when the desktop-view class is absent.');
@@ -107,28 +80,13 @@ throwStorage = false;
 const section = (id, hidden) => ({ id, classList:{ contains:name => name === 'hidden' ? hidden : false } });
 pageSections = [section('dashboardPage',true), section('productionPage',false), section('jobsPage',true)];
 if (core.currentErrorPage() !== 'productionPage') throw new Error('currentErrorPage() must return the visible app section id.');
-pageSections = [section('dashboardPage',true), section('productionPage',true)];
-sandbox.window.location.pathname = '/billing.html';
+pageSections = [section('dashboardPage',true), section('productionPage',true)]; sandbox.window.location.pathname = '/billing.html';
 if (core.currentErrorPage() !== '/billing.html') throw new Error('currentErrorPage() must fall back to window.location.pathname.');
-pageSections = [];
-sandbox.window.location.pathname = '';
+pageSections = []; sandbox.window.location.pathname = '';
 if (core.currentErrorPage() !== 'app') throw new Error('currentErrorPage() must preserve the final app fallback.');
 sandbox.window.location.pathname = '/index.html';
 
-const roleCases = [
-  ['owner','Owner'],
-  ['manager','Manager'],
-  ['admin','Admin'],
-  ['superintendent','Superintendent'],
-  ['gf','General Foreman'],
-  ['foreman','Foreman'],
-  ['safety','Safety'],
-  ['GF','General Foreman'],
-  ['', 'Foreman'],
-  [null, 'Foreman'],
-  ['unknown-role','Foreman']
-];
-for (const [role, expected] of roleCases) {
+for (const [role, expected] of [['owner','Owner'],['manager','Manager'],['admin','Admin'],['superintendent','Superintendent'],['gf','General Foreman'],['foreman','Foreman'],['safety','Safety'],['GF','General Foreman'],['','Foreman'],[null,'Foreman'],['unknown-role','Foreman']]) {
   const actual = core.formatTeamRole(role);
   if (actual !== expected) throw new Error(`formatTeamRole(${JSON.stringify(role)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
 }
@@ -139,39 +97,22 @@ const auditDate = '2026-09-11T15:45:00Z';
 const expectedAuditDate = vm.runInNewContext(`new Date(${JSON.stringify(auditDate)}).toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})`);
 if (core.formatAuditTimestamp(auditDate) !== expectedAuditDate) throw new Error('formatAuditTimestamp() must match legacy date formatting.');
 
+for (const [value, expected] of [[0,'$0.00'],[1250,'$1,250.00'],[1250.5,'$1,250.50'],[-42.25,'-$42.25'],['99.95','$99.95'],[null,'$0.00'],['','$0.00']]) {
+  const actual = core.formatCurrency(value);
+  if (actual !== expected) throw new Error(`formatCurrency(${JSON.stringify(value)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
+}
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`App core compatibility bridge ${name} is not active.`);
 }
-if (!bootstrap.includes("script.src = '/app-core.js?v=20260910a'")) {
-  throw new Error('App core module is not bootstrapped by the existing front-end loader path.');
-}
-if (!bootstrap.includes('App core module unavailable; using inline compatibility fallback.')) {
-  throw new Error('App core loader must retain an explicit inline fallback path.');
-}
-if (!serviceWorker.includes("'/app-core.js?v=20260910a'")) {
-  throw new Error('App core module must remain in the offline app shell.');
-}
-for (const signature of [
-  'function uniqueOfflineJsaJobs(jobs){',
-  'function offlineJsaNetworkFailure(error){',
-  'function companyAccessInactive(error){',
-  'function firstStackFrame(error){',
-  'function desktopViewEnabled(){',
-  'function currentErrorPage(){',
-  'function formatTeamRole(role){',
-  'function formatAuditTimestamp(value){'
-]) {
+if (!bootstrap.includes("script.src = '/app-core.js?v=20260910a'")) throw new Error('App core module is not bootstrapped by the existing front-end loader path.');
+if (!bootstrap.includes('App core module unavailable; using inline compatibility fallback.')) throw new Error('App core loader must retain an explicit inline fallback path.');
+if (!serviceWorker.includes("'/app-core.js?v=20260910a'")) throw new Error('App core module must remain in the offline app shell.');
+for (const signature of ['function uniqueOfflineJsaJobs(jobs){','function offlineJsaNetworkFailure(error){','function companyAccessInactive(error){','function firstStackFrame(error){','function desktopViewEnabled(){','function currentErrorPage(){','function formatTeamRole(role){','function formatAuditTimestamp(value){','function formatCurrency(value){']) {
   if (!index.includes(signature)) throw new Error(`Legacy inline app-core fallback missing: ${signature}`);
 }
 
 console.log('App core modularization guard passed.');
-console.log('- offline JSA job deduping/default labels match legacy behavior');
-console.log('- offline/network failure classification matches legacy behavior');
-console.log('- inactive-company error detection matches legacy behavior');
-console.log('- support stack-frame extraction matches legacy behavior');
-console.log('- desktop-view preference and fallback behavior match legacy behavior');
-console.log('- visible-page error telemetry labeling matches legacy behavior');
-console.log('- team role labels match legacy behavior');
-console.log('- audit timestamp formatting matches legacy behavior');
+console.log('- low-risk shared helpers match legacy behavior, including currency formatting');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline and inline fallbacks remain available');
