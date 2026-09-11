@@ -62,6 +62,9 @@ jobs:
       - name: Validate platform billing and entitlement
         run: node scripts/validate-platform-billing.mjs
 
+      - name: Validate Utility Portal RPC output contract
+        run: node tests/utility-portal/check-migration-rpc-signatures.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
