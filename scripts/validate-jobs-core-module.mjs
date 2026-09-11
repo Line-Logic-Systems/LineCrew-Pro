@@ -9,7 +9,8 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-for (const name of ['fileNameWithoutExtension','jobPacketFileValidationMessage']) {
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate'];
+for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
 
@@ -46,7 +47,17 @@ for (const [file, expected] of fileCases) {
   if (actual !== expected) throw new Error(`jobPacketFileValidationMessage(${JSON.stringify(file)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
 }
 
-for (const name of ['fileNameWithoutExtension','jobPacketFileValidationMessage']) {
+const dateValue = '2026-09-10T15:30:00Z';
+if (core.formatCompletedJobDate(null) !== 'Not recorded') {
+  throw new Error('formatCompletedJobDate(null) must preserve the Not recorded fallback.');
+}
+const expectedDate = vm.runInNewContext(`new Date(${JSON.stringify(dateValue)}).toLocaleString()`);
+const actualDate = core.formatCompletedJobDate(dateValue);
+if (actualDate !== expectedDate) {
+  throw new Error(`formatCompletedJobDate() returned ${JSON.stringify(actualDate)}; expected ${JSON.stringify(expectedDate)}.`);
+}
+
+for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
 if (!bootstrap.includes("script.src = '/jobs-core.js?v=20260910a'")) {
@@ -58,13 +69,18 @@ if (!bootstrap.includes('Jobs core module unavailable; using inline compatibilit
 if (!serviceWorker.includes("'/jobs-core.js?v=20260910a'")) {
   throw new Error('Jobs core module must remain in the offline app shell.');
 }
-for (const signature of ['function fileNameWithoutExtension(value){','function jobPacketFileValidationMessage(file){']) {
+for (const signature of [
+  'function fileNameWithoutExtension(value){',
+  'function jobPacketFileValidationMessage(file){',
+  'function formatCompletedJobDate(value){'
+]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline Jobs fallback missing: ${signature}`);
 }
 
 console.log('Jobs core modularization guard passed.');
 console.log('- packet filename display helper matches legacy behavior');
 console.log('- packet file type/size validation matches legacy behavior');
+console.log('- completed-job date formatting matches legacy behavior');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline');
 console.log('- inline fallbacks remain available if the module cannot load');

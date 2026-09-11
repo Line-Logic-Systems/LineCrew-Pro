@@ -20,10 +20,19 @@
     return '';
   }
 
-  const api = Object.freeze({ fileNameWithoutExtension, jobPacketFileValidationMessage });
+  function formatCompletedJobDate(value){
+    return value ? new Date(value).toLocaleString() : 'Not recorded';
+  }
+
+  const api = Object.freeze({
+    fileNameWithoutExtension,
+    jobPacketFileValidationMessage,
+    formatCompletedJobDate
+  });
   window.LineCrewJobsCore = api;
 
   // Compatibility bridges while the legacy inline copies remain available.
   window.fileNameWithoutExtension = fileNameWithoutExtension;
   window.jobPacketFileValidationMessage = jobPacketFileValidationMessage;
+  window.formatCompletedJobDate = formatCompletedJobDate;
 })();
