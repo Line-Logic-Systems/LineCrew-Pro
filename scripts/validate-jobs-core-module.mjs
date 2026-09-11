@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows'];
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
@@ -48,63 +48,50 @@ for (const [file, expected] of fileCases) {
 }
 
 const dateValue = '2026-09-10T15:30:00Z';
-if (core.formatCompletedJobDate(null) !== 'Not recorded') {
-  throw new Error('formatCompletedJobDate(null) must preserve the Not recorded fallback.');
-}
+if (core.formatCompletedJobDate(null) !== 'Not recorded') throw new Error('formatCompletedJobDate(null) must preserve the Not recorded fallback.');
 const expectedDate = vm.runInNewContext(`new Date(${JSON.stringify(dateValue)}).toLocaleString()`);
-const actualDate = core.formatCompletedJobDate(dateValue);
-if (actualDate !== expectedDate) {
-  throw new Error(`formatCompletedJobDate() returned ${JSON.stringify(actualDate)}; expected ${JSON.stringify(expectedDate)}.`);
-}
+if (core.formatCompletedJobDate(dateValue) !== expectedDate) throw new Error('formatCompletedJobDate() must match legacy locale formatting.');
 
 const unitRecord = {units:[{
-  work_date:'2026-09-10',foreman_name:'Alex Foreman',crew_name:'Crew 1',
-  pole_location:'WP-12',work_point:'WP-FALLBACK',item_code:'U100',unit_code:'ALT',
-  item_name:'Primary description',unit_name:'Secondary',description:'Fallback',
-  install_quantity:'2.5',transfer_quantity:'1',retirement_quantity:'0',remove_quantity:'4',
-  authorization_status:'approved_redline',visible_line_value:'125.50',adjusted_line_value:'99',actual_line_value:'80'
-},{
-  work_point:'WP-2',unit_code:'U200',description:'Fallback description',remove_quantity:'3',actual_line_value:'45'
-}]};
-const expectedUnitRows = [{
-  'Work Date':'2026-09-10','Foreman':'Alex Foreman','Crew':'Crew 1','Pole / Work Point':'WP-12',
-  'Unit Code':'U100','Description':'Primary description','Installed':2.5,'Transferred':1,'Removed':0,
-  'Authorization':'approved redline','Visible Value':125.5
-},{
-  'Work Date':'','Foreman':'','Crew':'','Pole / Work Point':'WP-2','Unit Code':'U200',
-  'Description':'Fallback description','Installed':0,'Transferred':0,'Removed':3,'Authorization':'','Visible Value':45
-}];
-const actualUnitRows = core.completedJobUnitRows(unitRecord);
-if (JSON.stringify(actualUnitRows) !== JSON.stringify(expectedUnitRows)) {
-  throw new Error(`completedJobUnitRows() parity failed: ${JSON.stringify(actualUnitRows)}`);
+  work_date:'2026-09-10',foreman_name:'Alex Foreman',crew_name:'Crew 1',pole_location:'WP-12',work_point:'WP-FALLBACK',
+  item_code:'U100',unit_code:'ALT',item_name:'Primary description',unit_name:'Secondary',description:'Fallback',
+  install_quantity:'2.5',transfer_quantity:'1',retirement_quantity:'0',remove_quantity:'4',authorization_status:'approved_redline',
+  visible_line_value:'125.50',adjusted_line_value:'99',actual_line_value:'80'
+},{work_point:'WP-2',unit_code:'U200',description:'Fallback description',remove_quantity:'3',actual_line_value:'45'}]};
+const expectedUnitRows = [
+  {'Work Date':'2026-09-10','Foreman':'Alex Foreman','Crew':'Crew 1','Pole / Work Point':'WP-12','Unit Code':'U100','Description':'Primary description','Installed':2.5,'Transferred':1,'Removed':0,'Authorization':'approved redline','Visible Value':125.5},
+  {'Work Date':'','Foreman':'','Crew':'','Pole / Work Point':'WP-2','Unit Code':'U200','Description':'Fallback description','Installed':0,'Transferred':0,'Removed':3,'Authorization':'','Visible Value':45}
+];
+if (JSON.stringify(core.completedJobUnitRows(unitRecord)) !== JSON.stringify(expectedUnitRows)) throw new Error('completedJobUnitRows() parity failed.');
+
+const revisionCases = [
+  [null,'Original Packet'],
+  [{revision_number:0},'Original Packet'],
+  [{revision_number:1},'Original Packet'],
+  [{revision_number:2},'Revision 1'],
+  [{revision_number:'5'},'Revision 4']
+];
+for (const [packet, expected] of revisionCases) {
+  const actual = core.jobPackageRevisionLabel(packet);
+  if (actual !== expected) throw new Error(`jobPackageRevisionLabel(${JSON.stringify(packet)}) returned ${actual}; expected ${expected}.`);
 }
 
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
-if (!bootstrap.includes("script.src = '/jobs-core.js?v=20260910a'")) {
-  throw new Error('Jobs core module is not bootstrapped by the existing front-end loader path.');
-}
-if (!bootstrap.includes('Jobs core module unavailable; using inline compatibility fallback.')) {
-  throw new Error('Jobs core loader must retain an explicit inline fallback path.');
-}
-if (!serviceWorker.includes("'/jobs-core.js?v=20260910a'")) {
-  throw new Error('Jobs core module must remain in the offline app shell.');
-}
+if (!bootstrap.includes("script.src = '/jobs-core.js?v=20260910a'")) throw new Error('Jobs core module is not bootstrapped by the existing front-end loader path.');
+if (!bootstrap.includes('Jobs core module unavailable; using inline compatibility fallback.')) throw new Error('Jobs core loader must retain an explicit inline fallback path.');
+if (!serviceWorker.includes("'/jobs-core.js?v=20260910a'")) throw new Error('Jobs core module must remain in the offline app shell.');
 for (const signature of [
   'function fileNameWithoutExtension(value){',
   'function jobPacketFileValidationMessage(file){',
   'function formatCompletedJobDate(value){',
-  'function completedJobUnitRows(record){'
+  'function completedJobUnitRows(record){',
+  'function jobPackageRevisionLabel(jobPackage){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline Jobs fallback missing: ${signature}`);
 }
 
 console.log('Jobs core modularization guard passed.');
-console.log('- packet filename display helper matches legacy behavior');
-console.log('- packet file type/size validation matches legacy behavior');
-console.log('- completed-job date formatting matches legacy behavior');
-console.log('- completed-job unit export/display row formatting matches legacy behavior');
-console.log('- compatibility bridges are active');
-console.log('- module is available offline');
-console.log('- inline fallbacks remain available if the module cannot load');
+console.log('- filename, packet validation, completed-date, completed-unit-row and revision-label helpers match legacy behavior');
+console.log('- compatibility bridges are active; module is offline-capable; inline fallbacks remain available');
