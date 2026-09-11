@@ -41,6 +41,9 @@ jobs:
       - name: Validate observer scoping
         run: node scripts/validate-observer-scoping.mjs
 
+      - name: Validate whole-app observer inventory
+        run: node scripts/validate-body-observer-inventory.mjs
+
       - name: Validate GF scope regressions
         run: node scripts/validate-gf-scope-regressions.mjs
 
