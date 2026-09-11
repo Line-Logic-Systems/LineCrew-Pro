@@ -53,3 +53,16 @@
   script.onerror = () => console.warn('Daily Report core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
 })();
+
+/* Staged Production modularization bootstrap.
+ * The legacy inline helper remains the fallback if this module cannot load.
+ */
+(() => {
+  if (window.LineCrewProductionCore || document.querySelector('script[data-linecrew-production-core]')) return;
+  const script = document.createElement('script');
+  script.src = '/production-core.js?v=20260910a';
+  script.defer = false;
+  script.dataset.linecrewProductionCore = '1';
+  script.onerror = () => console.warn('Production core module unavailable; using inline compatibility fallback.');
+  document.head.appendChild(script);
+})();
