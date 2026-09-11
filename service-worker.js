@@ -20,6 +20,7 @@ const APP_SHELL = [
   '/jobs-core.js?v=20260910a',
   '/assistant-core.js?v=20260910a',
   '/billing-core.js?v=20260910a',
+  '/notifications-core.js?v=20260910a',
   '/daily-report-core.js?v=20260910a',
   '/production-core.js?v=20260910a',
   '/price-book-core.js?v=20260910a',
