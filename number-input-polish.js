@@ -54,6 +54,19 @@
   document.head.appendChild(script);
 })();
 
+/* Staged Jobs Core modularization bootstrap.
+ * The legacy inline helper remains the fallback if this module cannot load.
+ */
+(() => {
+  if (window.LineCrewJobsCore || document.querySelector('script[data-linecrew-jobs-core]')) return;
+  const script = document.createElement('script');
+  script.src = '/jobs-core.js?v=20260910a';
+  script.defer = false;
+  script.dataset.linecrewJobsCore = '1';
+  script.onerror = () => console.warn('Jobs core module unavailable; using inline compatibility fallback.');
+  document.head.appendChild(script);
+})();
+
 /* Staged Daily Report modularization bootstrap.
  * The legacy inline helper remains the fallback if this module cannot load.
  */
