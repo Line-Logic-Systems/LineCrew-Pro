@@ -188,6 +188,10 @@
     return list.filter(jobPackage => String(jobPackage?.job_id) === String(jobId));
   }
 
+  function jobPackageOpenButtonLabel(packageCount){
+    return Number(packageCount) === 1 ? 'Open Package' : 'View Packages';
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -200,7 +204,8 @@
     jobProgressRowViewModel,
     jobCardDisplayModel,
     jobAssignmentPanelViewModel,
-    jobPackagesForJob
+    jobPackagesForJob,
+    jobPackageOpenButtonLabel
   });
   window.LineCrewJobsCore = api;
 
@@ -217,4 +222,5 @@
   window.jobCardDisplayModel = jobCardDisplayModel;
   window.jobAssignmentPanelViewModel = jobAssignmentPanelViewModel;
   window.jobPackagesForJob = jobPackagesForJob;
+  window.jobPackageOpenButtonLabel = jobPackageOpenButtonLabel;
 })();
