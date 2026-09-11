@@ -86,6 +86,9 @@ jobs:
       - name: Validate marketing site, pricing, and Beta funnel
         run: node scripts/validate-marketing-site.mjs
 
+      - name: Validate workspace and navigation placement
+        run: node scripts/validate-workspace-navigation.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
