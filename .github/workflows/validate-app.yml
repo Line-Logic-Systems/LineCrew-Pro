@@ -71,6 +71,9 @@ jobs:
       - name: Validate onboarding and invitation account setup
         run: node scripts/validate-beta-onboarding.mjs
 
+      - name: Validate leadership time and role boundaries
+        run: node scripts/validate-leadership-self-time.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 

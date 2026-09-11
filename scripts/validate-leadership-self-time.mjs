@@ -98,8 +98,8 @@ requireText(batchMigration, 'employee.company_id = v_company_id', 'The batch mus
 requireText(batchMigration, 'from public.upsert_my_leadership_time(', 'The batch must reuse the guarded self-time calculation.');
 requireText(batchMigration, 'from public.upsert_leadership_employee_time(', 'The batch must reuse the guarded employee-time calculation.');
 requireText(batchMigration, 'revoke all on function public.upsert_leadership_time_batch(jsonb) from public, anon', 'The batch RPC must not be executable by Public or anon.');
-requireText(loader, 'leadership-my-time.js?v=20260907a', 'The My Time module is not loaded.');
-requireText(shell, '/leadership-my-time.js?v=20260907a', 'The My Time module is not in the offline app shell.');
+if (!/leadership-my-time\.js\?v=\d+[a-z]?/.test(loader)) throw new Error('The My Time module is not loaded.');
+if (!/\/leadership-my-time\.js\?v=\d+[a-z]?/.test(shell)) throw new Error('The My Time module is not in the offline app shell.');
 requireText(report, "rpc('timekeeping_report_rows_v3'", 'The Time Report must include leadership self-time.');
 requireText(customExport, "rpc('timekeeping_report_rows_v3'", 'Custom exports must include leadership self-time.');
 requireText(report, 'r.labor_code', 'The Time Report must show overhead labor codes.');
