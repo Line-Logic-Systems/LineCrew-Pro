@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob'];
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
@@ -94,6 +94,11 @@ const numericJobPackages = core.jobPackagesForJob(packages,'1');
 if (numericJobPackages.length !== 1 || numericJobPackages[0]?.id !== 'p3') throw new Error('Job package id string coercion changed.');
 if (core.jobPackagesForJob(null,'j1').length !== 0) throw new Error('Null job-package catalog must return an empty list.');
 
+for (const [count, expected] of [[1,'Open Package'],[2,'View Packages'],[0,'View Packages'],['1','Open Package'],[null,'View Packages']]) {
+  const actual = core.jobPackageOpenButtonLabel(count);
+  if (actual !== expected) throw new Error(`jobPackageOpenButtonLabel(${JSON.stringify(count)}) returned ${actual}; expected ${expected}.`);
+}
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
@@ -113,12 +118,13 @@ for (const marker of [
   'if(!grouped.has(utility)) grouped.set(utility,new Map());',
   'if(!contracts.has(contract)) contracts.set(contract,[]);',
   'const jobPackages = currentJobPackageCatalog.filter(',
-  'jobPackage => String(jobPackage.job_id) === String(job.id)'
+  'jobPackage => String(jobPackage.job_id) === String(job.id)',
+  "openPackageButton.textContent = jobPackages.length === 1 ? 'Open Package' : 'View Packages';"
 ]) {
   if (!index.includes(marker)) throw new Error(`Legacy Jobs progress behavior marker missing: ${marker}`);
 }
 
 console.log('Jobs core modularization guard passed.');
 console.log('- existing Jobs helpers and job-packet normalization match legacy behavior');
-console.log('- Jobs progress filtering, search, sorting, paging, grouping, and package matching are parity-tested');
+console.log('- Jobs progress filtering, search, sorting, paging, grouping, package matching, and package labels are parity-tested');
 console.log('- compatibility bridges are active; module is offline-capable; inline renderer remains available');
