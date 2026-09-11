@@ -6,10 +6,27 @@ const bootstrap = fs.readFileSync('number-input-polish.js','utf8');
 const index = fs.readFileSync('index.html','utf8');
 const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 
-const sandbox = { window:{}, navigator:{onLine:true} };
+let storedDesktopView = null;
+let fallbackDesktopClass = false;
+let throwStorage = false;
+const sandbox = {
+  window:{},
+  navigator:{onLine:true},
+  localStorage:{
+    getItem(key){
+      if(throwStorage) throw new Error('storage unavailable');
+      return key === 'linecrew-pro-desktop-view' ? storedDesktopView : null;
+    }
+  },
+  document:{
+    documentElement:{
+      classList:{ contains:name => name === 'desktop-view' && fallbackDesktopClass }
+    }
+  }
+};
 vm.runInNewContext(moduleSource, sandbox, { filename:'app-core.js' });
 const core = sandbox.window.LineCrewAppCore;
-const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame'];
+const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`App core module must expose ${name}().`);
 }
@@ -69,6 +86,20 @@ for (const [error, expected] of stackCases) {
   if (actual !== expected) throw new Error(`firstStackFrame() returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
 }
 
+storedDesktopView = '1';
+throwStorage = false;
+if (core.desktopViewEnabled() !== true) throw new Error('desktopViewEnabled() must return true for stored desktop view.');
+storedDesktopView = '0';
+if (core.desktopViewEnabled() !== false) throw new Error('desktopViewEnabled() must return false when stored desktop view is off.');
+storedDesktopView = null;
+if (core.desktopViewEnabled() !== false) throw new Error('desktopViewEnabled() must return false when no preference is stored.');
+throwStorage = true;
+fallbackDesktopClass = true;
+if (core.desktopViewEnabled() !== true) throw new Error('desktopViewEnabled() must preserve the desktop-view class fallback when storage is unavailable.');
+fallbackDesktopClass = false;
+if (core.desktopViewEnabled() !== false) throw new Error('desktopViewEnabled() fallback must return false when the desktop-view class is absent.');
+throwStorage = false;
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`App core compatibility bridge ${name} is not active.`);
 }
@@ -85,7 +116,8 @@ for (const signature of [
   'function uniqueOfflineJsaJobs(jobs){',
   'function offlineJsaNetworkFailure(error){',
   'function companyAccessInactive(error){',
-  'function firstStackFrame(error){'
+  'function firstStackFrame(error){',
+  'function desktopViewEnabled(){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline app-core fallback missing: ${signature}`);
 }
@@ -95,5 +127,6 @@ console.log('- offline JSA job deduping/default labels match legacy behavior');
 console.log('- offline/network failure classification matches legacy behavior');
 console.log('- inactive-company error detection matches legacy behavior');
 console.log('- support stack-frame extraction matches legacy behavior');
+console.log('- desktop-view preference and fallback behavior match legacy behavior');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline and inline fallbacks remain available');
