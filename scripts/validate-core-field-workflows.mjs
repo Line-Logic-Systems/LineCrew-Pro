@@ -19,6 +19,7 @@ const jsaCore = read('expanded-jsa-core.js');
 const jsaSignatures = read('jsa-signatures.js');
 const offlineJsa = read('offline-jsa.js');
 const gfScope = read('gf-crew-scope.js');
+const gfScopeSql = read('supabase/migrations/archive/20260826090000_gf_foreman_scope_and_scoped_jsas.sql');
 const maps = read('job-map-documents.js');
 const serviceWorker = read('service-worker.js');
 const dailyUi = index + '\n' + expandedJsa;
@@ -49,7 +50,8 @@ for(const [source,token,message] of [
   [expandedJsa,'offline-jsa.js','Expanded JSA loader must keep offline support.'],
   [jsaSignatures,'lc-signature-wrap','JSA signature pad wiring is missing.'],
   [offlineJsa,'window.LineCrewOfflineColdStart','Offline JSA cold-start support is missing.'],
-  [gfScope,'get_company_jsas_scoped','GF scoped JSA visibility is missing.']
+  [gfScope,'get_gf_crew_assignment_roster','GF crew-scope UI integration is missing.'],
+  [gfScopeSql,'get_company_jsas_scoped','Scoped JSA database function is missing.']
 ]) need(source, token, message);
 needAny(jsaCore,
   ['submit','save','create_jsa'],
