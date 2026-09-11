@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel','jobPackageDetailSubtitle'];
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel','jobPackageDetailSubtitle','completedJobSummaryViewModel'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
@@ -109,6 +109,21 @@ for (const [packet, expected] of [
   if (actual !== expected) throw new Error(`jobPackageDetailSubtitle(${JSON.stringify(packet)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
 }
 
+const completedSummary = core.completedJobSummaryViewModel({
+  progress:{reported_percent:'82.35',approved_percent:79},
+  reports:[{},{}],
+  units:[{},{},{}],
+  packages:[{}],
+  jsas:[{},{},{},{}],
+  attachments:[{},{}]
+});
+const expectedSummary = {reportedPercent:'82.3',approvedPercent:'79.0',dailyReports:2,unitLines:3,packetRevisions:1,jsas:4,attachments:2};
+if (JSON.stringify(completedSummary) !== JSON.stringify(expectedSummary)) throw new Error(`Completed job summary display changed: ${JSON.stringify(completedSummary)}.`);
+const emptyCompletedSummary = core.completedJobSummaryViewModel(null);
+if (JSON.stringify(emptyCompletedSummary) !== JSON.stringify({reportedPercent:'0.0',approvedPercent:'0.0',dailyReports:0,unitLines:0,packetRevisions:0,jsas:0,attachments:0})) {
+  throw new Error('Null completed-job summary input must remain safe and empty.');
+}
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
@@ -132,12 +147,19 @@ for (const marker of [
   "openPackageButton.textContent = jobPackages.length === 1 ? 'Open Package' : 'View Packages';",
   "const source = currentOpenJobPackage.source_filename",
   "'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +",
-  "' · Status: ' + status.toUpperCase() + source;"
+  "' · Status: ' + status.toUpperCase() + source;",
+  'Number(p.reported_percent||0).toFixed(1)',
+  'Number(p.approved_percent||0).toFixed(1)',
+  'Number(r.reports.length)',
+  'Number(r.units.length)',
+  'Number(r.packages.length)',
+  'Number(r.jsas.length)',
+  'Number(r.attachments.length)'
 ]) {
   if (!index.includes(marker)) throw new Error(`Legacy Jobs progress behavior marker missing: ${marker}`);
 }
 
 console.log('Jobs core modularization guard passed.');
 console.log('- existing Jobs helpers and job-packet normalization match legacy behavior');
-console.log('- Jobs progress filtering, search, sorting, paging, grouping, package matching, labels, and detail subtitle are parity-tested');
-console.log('- compatibility bridges are active; module is offline-capable; inline renderer remains available');
+console.log('- Jobs progress, package detail, and completed-job summary display values are parity-tested');
+console.log('- compatibility bridges are active; module is offline-capable; inline renderers remain available');
