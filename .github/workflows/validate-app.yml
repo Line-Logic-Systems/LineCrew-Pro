@@ -32,6 +32,9 @@ jobs:
           node scripts/validate-app.mjs
           node scripts/validate-manager-safety-roles.mjs
 
+      - name: Validate front-end stability boundaries
+        run: node scripts/validate-front-end-stability.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
