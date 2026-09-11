@@ -101,6 +101,9 @@ jobs:
       - name: Validate Jobs progress row view-model
         run: node scripts/validate-jobs-progress-row-view-model.mjs
 
+      - name: Validate Jobs card display model
+        run: node scripts/validate-jobs-card-display-model.mjs
+
       - name: Validate staged Assistant modularization
         run: node scripts/validate-assistant-core-module.mjs
 
