@@ -22,11 +22,19 @@
     return base + extension;
   }
 
-  const api = Object.freeze({ workTypeLabel, safeStorageFilename });
+  function dailyQuantityText(value){
+    const quantity = Number(value || 0);
+    if(!Number.isFinite(quantity)) return '0';
+    return Number.isInteger(quantity)
+      ? String(quantity)
+      : quantity.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
+  const api = Object.freeze({ workTypeLabel, safeStorageFilename, dailyQuantityText });
   window.LineCrewDailyReportCore = api;
 
   // Compatibility bridges while the legacy inline copies still exist.
-  // Existing callers keep using the same public function names.
   window.dailyUnitWorkTypeLabel = workTypeLabel;
   window.safeStorageFilename = safeStorageFilename;
+  window.dailyQuantityText = dailyQuantityText;
 })();
