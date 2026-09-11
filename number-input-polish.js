@@ -40,3 +40,16 @@
     input.dispatchEvent(new Event('change', { bubbles:true }));
   });
 })();
+
+/* Staged Daily Report modularization bootstrap.
+ * The legacy inline helper remains the fallback if this module cannot load.
+ */
+(() => {
+  if (window.LineCrewDailyReportCore || document.querySelector('script[data-linecrew-daily-report-core]')) return;
+  const script = document.createElement('script');
+  script.src = '/daily-report-core.js?v=20260910a';
+  script.defer = false;
+  script.dataset.linecrewDailyReportCore = '1';
+  script.onerror = () => console.warn('Daily Report core module unavailable; using inline compatibility fallback.');
+  document.head.appendChild(script);
+})();
