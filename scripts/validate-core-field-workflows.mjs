@@ -93,8 +93,14 @@ for(const [token,message] of [
   ["p_job_id:report.job_id",'Job map lookup must stay scoped to the current Daily Report job.'],
   ["p_work_point_code:location||null",'Job map lookup must keep selected work-point context.'],
   ['createSignedUrl(documentRow.storage_path,900)','Retained job packets must use short-lived signed URLs.'],
-  ['View Job Map','Daily Report map action is missing.']
+  ['View Job Map','Daily Report map action is missing.'],
+  ["observeTarget(byId('jobPackageDetailCard'))",'Job-map observer must stay scoped to package details.'],
+  ["observeTarget(byId('dailyUnitEditor'))",'Job-map observer must stay scoped to Daily Report unit entry.'],
+  ['function scheduleSync()','Job-map DOM refreshes must remain coalesced.']
 ]) need(maps, token, message);
+if(maps.includes("observer.observe(document.body,{subtree:true,childList:true,attributes:true")){
+  throw new Error('Job-map feature must not observe every class mutation in the entire application.');
+}
 
 // Flexible-JSA validation separately verifies that production submission never becomes JSA-gated.
 need(read('scripts/validate-flexible-jsa.mjs'),
