@@ -9,8 +9,9 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 let storedDesktopView = null;
 let fallbackDesktopClass = false;
 let throwStorage = false;
+let pageSections = [];
 const sandbox = {
-  window:{},
+  window:{ location:{ pathname:'/index.html' } },
   navigator:{onLine:true},
   localStorage:{
     getItem(key){
@@ -21,12 +22,15 @@ const sandbox = {
   document:{
     documentElement:{
       classList:{ contains:name => name === 'desktop-view' && fallbackDesktopClass }
+    },
+    querySelectorAll(selector){
+      return selector === 'main > section' ? pageSections : [];
     }
   }
 };
 vm.runInNewContext(moduleSource, sandbox, { filename:'app-core.js' });
 const core = sandbox.window.LineCrewAppCore;
-const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled'];
+const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`App core module must expose ${name}().`);
 }
@@ -100,6 +104,17 @@ fallbackDesktopClass = false;
 if (core.desktopViewEnabled() !== false) throw new Error('desktopViewEnabled() fallback must return false when the desktop-view class is absent.');
 throwStorage = false;
 
+const section = (id, hidden) => ({ id, classList:{ contains:name => name === 'hidden' ? hidden : false } });
+pageSections = [section('dashboardPage',true), section('productionPage',false), section('jobsPage',true)];
+if (core.currentErrorPage() !== 'productionPage') throw new Error('currentErrorPage() must return the visible app section id.');
+pageSections = [section('dashboardPage',true), section('productionPage',true)];
+sandbox.window.location.pathname = '/billing.html';
+if (core.currentErrorPage() !== '/billing.html') throw new Error('currentErrorPage() must fall back to window.location.pathname.');
+pageSections = [];
+sandbox.window.location.pathname = '';
+if (core.currentErrorPage() !== 'app') throw new Error('currentErrorPage() must preserve the final app fallback.');
+sandbox.window.location.pathname = '/index.html';
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`App core compatibility bridge ${name} is not active.`);
 }
@@ -117,7 +132,8 @@ for (const signature of [
   'function offlineJsaNetworkFailure(error){',
   'function companyAccessInactive(error){',
   'function firstStackFrame(error){',
-  'function desktopViewEnabled(){'
+  'function desktopViewEnabled(){',
+  'function currentErrorPage(){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline app-core fallback missing: ${signature}`);
 }
@@ -128,5 +144,6 @@ console.log('- offline/network failure classification matches legacy behavior');
 console.log('- inactive-company error detection matches legacy behavior');
 console.log('- support stack-frame extraction matches legacy behavior');
 console.log('- desktop-view preference and fallback behavior match legacy behavior');
+console.log('- visible-page error telemetry labeling matches legacy behavior');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline and inline fallbacks remain available');
