@@ -9,6 +9,9 @@ const core = sandbox.window.LineCrewJobsCore;
 if (!core || typeof core.jobAssignmentPanelViewModel !== 'function') {
   throw new Error('Jobs core must expose jobAssignmentPanelViewModel().');
 }
+if (typeof core.jobAssignmentRowViewModel !== 'function') {
+  throw new Error('Jobs core must expose jobAssignmentRowViewModel().');
+}
 
 const assignments = [
   { member_id:'m1', full_name:'Foreman One', member_role:'foreman' },
@@ -34,6 +37,26 @@ const nullSafe = core.jobAssignmentPanelViewModel(null, null);
 if (nullSafe.assignments.length !== 0 || nullSafe.available.length !== 0 || !nullSafe.isEmpty) throw new Error('Null assignment-panel input must remain safe and empty.');
 if (sandbox.window.jobAssignmentPanelViewModel !== core.jobAssignmentPanelViewModel) throw new Error('Jobs assignment-panel compatibility bridge is not active.');
 
+const datedRow = core.jobAssignmentRowViewModel({
+  full_name:'Foreman One',
+  member_role:'foreman',
+  assigned_by_name:'Admin User',
+  assigned_at:'2026-09-11T18:30:00Z'
+});
+if (datedRow.fullName !== 'Foreman One' || datedRow.memberRole !== 'foreman') throw new Error('Assignment row name/role mapping changed.');
+if (!datedRow.hasAssignedAt || datedRow.assignedByName !== 'Admin User' || datedRow.assignedAt !== '2026-09-11T18:30:00Z') throw new Error('Assignment row audit-detail mapping changed.');
+
+const unknownAssigner = core.jobAssignmentRowViewModel({
+  full_name:'GF Two',
+  member_role:'gf',
+  assigned_at:'2026-09-11T19:00:00Z'
+});
+if (unknownAssigner.assignedByName !== 'Unknown Team Member') throw new Error('Assignment row missing-assigner fallback changed.');
+
+const undatedRow = core.jobAssignmentRowViewModel({ full_name:'GF Two', member_role:'gf' });
+if (undatedRow.hasAssignedAt || undatedRow.assignedByName !== '' || undatedRow.assignedAt !== '') throw new Error('Undated assignment rows must not invent audit detail.');
+if (sandbox.window.jobAssignmentRowViewModel !== core.jobAssignmentRowViewModel) throw new Error('Jobs assignment-row compatibility bridge is not active.');
+
 for (const marker of [
   'function renderJobLeaderAssignments(job, container){',
   'const assignments = currentJobLeaderAssignments.get(job.id) || [];',
@@ -42,6 +65,9 @@ for (const marker of [
   'leader => !assignedIds.has(leader.member_id)',
   "? 'Assign Another Foreman / Leader'",
   ": 'Assign Foreman / Leader';",
+  "const assignmentDetail = assignment.assigned_at",
+  "escapeHtml(assignment.assigned_by_name || 'Unknown Team Member')",
+  "escapeHtml(formatAuditTimestamp(assignment.assigned_at))",
   'remove.onclick = () => changeJobLeaderAssignment(',
   'assign.onclick = () => changeJobLeaderAssignment('
 ]) {
@@ -50,5 +76,6 @@ for (const marker of [
 
 console.log('Jobs assignment-panel view-model guard passed.');
 console.log('- assigned leaders remain excluded from available choices');
+console.log('- assignment row audit display data matches the existing renderer');
 console.log('- empty/populated labels match the existing renderer');
 console.log('- live assign/unassign handlers remain inline and untouched');

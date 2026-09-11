@@ -183,6 +183,19 @@
     };
   }
 
+  function jobAssignmentRowViewModel(assignment = {}){
+    const hasAssignedAt = Boolean(assignment?.assigned_at);
+    return {
+      fullName: assignment?.full_name || '',
+      memberRole: assignment?.member_role || '',
+      hasAssignedAt,
+      assignedByName: hasAssignedAt
+        ? (assignment?.assigned_by_name || 'Unknown Team Member')
+        : '',
+      assignedAt: hasAssignedAt ? assignment.assigned_at : ''
+    };
+  }
+
   function jobPackagesForJob(packages = [], jobId = ''){
     const list = Array.isArray(packages) ? packages : [];
     return list.filter(jobPackage => String(jobPackage?.job_id) === String(jobId));
@@ -204,6 +217,7 @@
     jobProgressRowViewModel,
     jobCardDisplayModel,
     jobAssignmentPanelViewModel,
+    jobAssignmentRowViewModel,
     jobPackagesForJob,
     jobPackageOpenButtonLabel
   });
@@ -221,6 +235,7 @@
   window.jobProgressRowViewModel = jobProgressRowViewModel;
   window.jobCardDisplayModel = jobCardDisplayModel;
   window.jobAssignmentPanelViewModel = jobAssignmentPanelViewModel;
+  window.jobAssignmentRowViewModel = jobAssignmentRowViewModel;
   window.jobPackagesForJob = jobPackagesForJob;
   window.jobPackageOpenButtonLabel = jobPackageOpenButtonLabel;
 })();
