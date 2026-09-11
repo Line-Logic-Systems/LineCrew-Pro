@@ -228,6 +228,15 @@
     };
   }
 
+  function completedJobPackageRowViewModel(jobPackage = {}){
+    return {
+      revisionLabel: jobPackageRevisionLabel(jobPackage),
+      packageName: jobPackage?.package_name || jobPackage?.package_number || 'Utility Job Packet',
+      statusText: String(jobPackage?.status || '').toUpperCase(),
+      sourceFilename: jobPackage?.source_filename || 'No source filename'
+    };
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -244,7 +253,8 @@
     jobPackagesForJob,
     jobPackageOpenButtonLabel,
     jobPackageDetailSubtitle,
-    completedJobSummaryViewModel
+    completedJobSummaryViewModel,
+    completedJobPackageRowViewModel
   });
   window.LineCrewJobsCore = api;
 
@@ -265,4 +275,5 @@
   window.jobPackageOpenButtonLabel = jobPackageOpenButtonLabel;
   window.jobPackageDetailSubtitle = jobPackageDetailSubtitle;
   window.completedJobSummaryViewModel = completedJobSummaryViewModel;
+  window.completedJobPackageRowViewModel = completedJobPackageRowViewModel;
 })();
