@@ -49,13 +49,19 @@
       window.location.pathname || 'app';
   }
 
+  function formatTeamRole(role){
+    const roleLabels = { owner:'Owner', manager:'Manager', admin:'Admin', superintendent:'Superintendent', gf:'General Foreman', foreman:'Foreman', safety:'Safety' };
+    return roleLabels[String(role || '').toLowerCase()] || 'Foreman';
+  }
+
   const api = Object.freeze({
     uniqueOfflineJsaJobs,
     offlineJsaNetworkFailure,
     companyAccessInactive,
     firstStackFrame,
     desktopViewEnabled,
-    currentErrorPage
+    currentErrorPage,
+    formatTeamRole
   });
   window.LineCrewAppCore = api;
 
@@ -66,4 +72,5 @@
   window.firstStackFrame = firstStackFrame;
   window.desktopViewEnabled = desktopViewEnabled;
   window.currentErrorPage = currentErrorPage;
+  window.formatTeamRole = formatTeamRole;
 })();
