@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel','jobPackageDetailSubtitle','completedJobSummaryViewModel','completedJobPackageRowViewModel'];
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel','jobPackageDetailSubtitle','completedJobSummaryViewModel','completedJobPackageRowViewModel','completedJobDailyReportRowViewModel'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
@@ -137,6 +137,15 @@ if (JSON.stringify(emptyPacket) !== JSON.stringify({revisionLabel:'Original Pack
   throw new Error('Null completed-job packet row input must remain safe.');
 }
 
+const completedReport = core.completedJobDailyReportRowViewModel({work_date:'2026-09-11',foreman_name:'Alex Foreman',crew_name:'Crew 2',regular_hours:'8',overtime_hours:'2.5',status:'approved',notes:'Completed span work'});
+if (JSON.stringify(completedReport) !== JSON.stringify({workDate:'2026-09-11',foremanName:'Alex Foreman',crewName:'Crew 2',regularHours:8,overtimeHours:2.5,statusText:'APPROVED',notes:'Completed span work'})) {
+  throw new Error(`Completed Daily Report row display changed: ${JSON.stringify(completedReport)}.`);
+}
+const emptyReport = core.completedJobDailyReportRowViewModel(null);
+if (JSON.stringify(emptyReport) !== JSON.stringify({workDate:'',foremanName:'Foreman not recorded',crewName:'Crew not recorded',regularHours:0,overtimeHours:0,statusText:'',notes:''})) {
+  throw new Error('Null completed Daily Report row input must preserve current fallbacks.');
+}
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
@@ -169,12 +178,15 @@ for (const marker of [
   'Number(r.jsas.length)',
   'Number(r.attachments.length)',
   "jobPackageRevisionLabel(item))+' — '+escapeHtml(item.package_name||item.package_number||'Utility Job Packet')",
-  "escapeHtml(String(item.status||'').toUpperCase())+' · '+escapeHtml(item.source_filename||'No source filename')"
+  "escapeHtml(String(item.status||'').toUpperCase())+' · '+escapeHtml(item.source_filename||'No source filename')",
+  "escapeHtml(report.work_date)+' — '+escapeHtml(report.foreman_name||'Foreman not recorded')",
+  "escapeHtml(report.crew_name||'Crew not recorded')+' · '+Number(report.regular_hours||0)+' regular / '+Number(report.overtime_hours||0)+' OT",
+  "escapeHtml(String(report.status||'').toUpperCase())"
 ]) {
   if (!index.includes(marker)) throw new Error(`Legacy Jobs progress behavior marker missing: ${marker}`);
 }
 
 console.log('Jobs core modularization guard passed.');
 console.log('- existing Jobs helpers and job-packet normalization match legacy behavior');
-console.log('- Jobs progress, package detail, completed-job summary, and completed packet rows are parity-tested');
+console.log('- Jobs progress and completed-job presentation rows are parity-tested');
 console.log('- compatibility bridges are active; module is offline-capable; inline renderers remain available');
