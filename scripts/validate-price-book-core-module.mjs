@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'price-book-core.js' });
 const core = sandbox.window.LineCrewPriceBookCore;
-for (const name of ['normalizeImportHeader','importEditDistance','importHeaderMatchConfidence','normalizedPriceWorkType']) {
+for (const name of ['normalizeImportHeader','importEditDistance','importHeaderMatchConfidence','normalizedPriceWorkType','importCell','importPrice']) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Price Book core module must expose ${name}().`);
 }
 
@@ -65,7 +65,25 @@ for (const [[value, itemCode], expected] of workTypeCases) {
   if (actual !== expected) throw new Error(`normalizedPriceWorkType(${JSON.stringify(value)}, ${JSON.stringify(itemCode)}) returned ${actual}; expected ${expected}.`);
 }
 
-for (const name of ['normalizeImportHeader','importEditDistance','importHeaderMatchConfidence','normalizedPriceWorkType']) {
+const row = { 'Unit Code':'OH4112R', 'Install Price ($)':'$1,250.50', Description:'Test row' };
+if (core.importCell(row,['unitcode','itemcode']) !== 'OH4112R') throw new Error('importCell() failed normalized alias lookup.');
+if (core.importCell(row,['transferprice']) !== '') throw new Error('importCell() must return an empty string when no alias matches.');
+
+const priceCases = [
+  ['',0],
+  [null,0],
+  [undefined,0],
+  ['$1,250.50',1250.5],
+  [' ( 450.25 ) ',-450.25],
+  ['25',25]
+];
+for (const [input, expected] of priceCases) {
+  const actual = core.importPrice(input);
+  if (!Object.is(actual, expected)) throw new Error(`importPrice(${JSON.stringify(input)}) returned ${actual}; expected ${expected}.`);
+}
+if (!Number.isNaN(core.importPrice('not-a-price'))) throw new Error('importPrice() must preserve invalid numeric input as NaN for existing validation to catch.');
+
+for (const name of ['normalizeImportHeader','importEditDistance','importHeaderMatchConfidence','normalizedPriceWorkType','importCell','importPrice']) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Price Book compatibility bridge ${name} is not active.`);
 }
 if (!bootstrap.includes("script.src = '/price-book-core.js?v=20260910a'")) {
@@ -81,7 +99,9 @@ for (const signature of [
   'function normalizeImportHeader(value){',
   'function importEditDistance(left,right){',
   'function importHeaderMatchConfidence(value,aliases){',
-  "function normalizedPriceWorkType(value,itemCode=''){"
+  "function normalizedPriceWorkType(value,itemCode=''){",
+  'function importCell(row, aliases){',
+  'function importPrice(value){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline Price Book fallback missing: ${signature}`);
 }
@@ -92,5 +112,6 @@ if (!index.includes("const suffixMatch=String(itemCode || '').trim().toUpperCase
 console.log('Price Book core modularization guard passed.');
 console.log('- header normalization and fuzzy header matching match legacy behavior');
 console.log('- install/transfer/retirement detection parity is verified');
+console.log('- cell alias lookup and price parsing parity are verified');
 console.log('- word-style unit codes still avoid false suffix classification');
 console.log('- compatibility bridges, offline cache, and inline fallbacks remain active');

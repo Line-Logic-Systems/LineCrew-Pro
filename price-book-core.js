@@ -58,11 +58,27 @@
     return workType ? 'unknown' : '';
   }
 
+  function importCell(row, aliases) {
+    const keys = Object.keys(row || {});
+    const foundKey = keys.find(key => aliases.includes(normalizeImportHeader(key)));
+    return foundKey ? row[foundKey] : '';
+  }
+
+  function importPrice(value) {
+    if (value === '' || value === null || typeof value === 'undefined') return 0;
+    const cleaned = String(value)
+      .replace(/[$,\s]/g, '')
+      .replace(/^\((.*)\)$/, '-$1');
+    return Number(cleaned);
+  }
+
   const api = Object.freeze({
     normalizeImportHeader,
     importEditDistance,
     importHeaderMatchConfidence,
-    normalizedPriceWorkType
+    normalizedPriceWorkType,
+    importCell,
+    importPrice
   });
   window.LineCrewPriceBookCore = api;
 
@@ -71,4 +87,6 @@
   window.importEditDistance = importEditDistance;
   window.importHeaderMatchConfidence = importHeaderMatchConfidence;
   window.normalizedPriceWorkType = normalizedPriceWorkType;
+  window.importCell = importCell;
+  window.importPrice = importPrice;
 })();
