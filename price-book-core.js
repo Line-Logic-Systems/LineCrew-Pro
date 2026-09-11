@@ -64,7 +64,18 @@
     return Number.isFinite(price) && price >= 0 ? price : null;
   }
 
-  const api = Object.freeze({ normalizeImportHeader, importEditDistance, importHeaderMatchConfidence, normalizedPriceWorkType, importCell, importPrice, numericImportPrice });
+  function spreadsheetColumnName(columnIndex){
+    let index = columnIndex + 1;
+    let name = '';
+    while(index > 0){
+      const remainder = (index - 1) % 26;
+      name = String.fromCharCode(65 + remainder) + name;
+      index = Math.floor((index - 1) / 26);
+    }
+    return name;
+  }
+
+  const api = Object.freeze({ normalizeImportHeader, importEditDistance, importHeaderMatchConfidence, normalizedPriceWorkType, importCell, importPrice, numericImportPrice, spreadsheetColumnName });
   window.LineCrewPriceBookCore = api;
 
   // Compatibility bridges while the legacy inline copies still exist.
@@ -75,4 +86,5 @@
   window.importCell = importCell;
   window.importPrice = importPrice;
   window.numericImportPrice = numericImportPrice;
+  window.spreadsheetColumnName = spreadsheetColumnName;
 })();
