@@ -89,6 +89,9 @@ jobs:
       - name: Validate workspace and navigation placement
         run: node scripts/validate-workspace-navigation.mjs
 
+      - name: Validate staged App Core modularization
+        run: node scripts/validate-app-core-module.mjs
+
       - name: Validate staged Daily Report modularization
         run: node scripts/validate-daily-report-core-module.mjs
 
