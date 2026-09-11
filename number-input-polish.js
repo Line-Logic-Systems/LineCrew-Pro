@@ -41,6 +41,19 @@
   });
 })();
 
+/* Staged App Core modularization bootstrap.
+ * Legacy inline helpers remain the fallback if this module cannot load.
+ */
+(() => {
+  if (window.LineCrewAppCore || document.querySelector('script[data-linecrew-app-core]')) return;
+  const script = document.createElement('script');
+  script.src = '/app-core.js?v=20260910a';
+  script.defer = false;
+  script.dataset.linecrewAppCore = '1';
+  script.onerror = () => console.warn('App core module unavailable; using inline compatibility fallback.');
+  document.head.appendChild(script);
+})();
+
 /* Staged Daily Report modularization bootstrap.
  * The legacy inline helper remains the fallback if this module cannot load.
  */
