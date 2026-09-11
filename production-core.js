@@ -64,11 +64,45 @@
     return [...utilities.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  const api = Object.freeze({ reportUtilityKey, groupReportsByContractJob, groupReportsByUtility });
+  function reportingTotals(reports, valueSummaries = new Map(), authorizationSummaries = new Map()) {
+    const list = Array.isArray(reports) ? reports : [];
+    const totals = {
+      reports: list.length,
+      approved: 0,
+      actualValue: 0,
+      fieldValue: 0,
+      regularHours: 0,
+      overtimeHours: 0,
+      redlines: 0,
+      pending: 0
+    };
+
+    list.forEach(report => {
+      const value = valueSummaries?.get?.(report?.id) || {};
+      const authorization = authorizationSummaries?.get?.(report?.id) || {};
+      totals.actualValue += Number(value.actual_total || 0);
+      totals.fieldValue += Number(value.adjusted_total || 0);
+      totals.regularHours += Number(report?.regular_hours || 0);
+      totals.overtimeHours += Number(report?.overtime_hours || 0);
+      totals.redlines += Number(authorization.redline_count || 0);
+      totals.pending += Number(authorization.pending_packet_count || 0);
+      if (String(report?.status || '').toLowerCase() === 'approved') totals.approved += 1;
+    });
+
+    return totals;
+  }
+
+  const api = Object.freeze({
+    reportUtilityKey,
+    groupReportsByContractJob,
+    groupReportsByUtility,
+    reportingTotals
+  });
   window.LineCrewProductionCore = api;
 
   // Compatibility bridges while the legacy inline behavior remains available.
   window.productionReportUtilityKey = reportUtilityKey;
   window.productionGroupReportsByContractJob = groupReportsByContractJob;
   window.productionGroupReportsByUtility = groupReportsByUtility;
+  window.productionReportingTotalsCore = reportingTotals;
 })();
