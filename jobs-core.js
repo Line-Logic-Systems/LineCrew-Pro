@@ -56,13 +56,68 @@
       : key;
   }
 
+  function jobProgressViewModel(jobs, options = {}){
+    const list = Array.isArray(jobs) ? jobs : [];
+    const search = String(options.search || '').trim().toLowerCase();
+    const attention = String(options.attention ?? '');
+    const sort = String(options.sort || '');
+    const visibleCount = Math.max(0, Number(options.visibleCount ?? list.length) || 0);
+    const utilityLabel = job => job?.contracts?.customers?.name || job?.utility_name || job?.customer_name || 'No Utility Assigned';
+    const contractLabel = job => {
+      const contract = job?.contracts;
+      if(!contract) return 'No Contract Assigned';
+      return contract.contract_name + (contract.contract_number ? ' (' + contract.contract_number + ')' : '');
+    };
+
+    const matchingJobs = list.filter(job => {
+      if(attention === '' && job?.active !== true) return false;
+      if(attention === 'closed' && job?.active === true) return false;
+      const searchable = [job?.job_number,job?.job_name,utilityLabel(job),contractLabel(job)]
+        .map(value => String(value || '').toLowerCase()).join(' ');
+      return !search || searchable.includes(search);
+    });
+
+    const sortedJobs = [...matchingJobs].sort((first, second) => {
+      if(sort === 'job_number'){
+        return String(first?.job_number || '').localeCompare(String(second?.job_number || ''),undefined,{numeric:true,sensitivity:'base'});
+      }
+      return utilityLabel(first).localeCompare(utilityLabel(second),undefined,{numeric:true,sensitivity:'base'}) ||
+        contractLabel(first).localeCompare(contractLabel(second),undefined,{numeric:true,sensitivity:'base'}) ||
+        String(first?.job_number || '').localeCompare(String(second?.job_number || ''),undefined,{numeric:true,sensitivity:'base'});
+    });
+
+    const visibleJobs = sortedJobs.slice(0, visibleCount);
+    const grouped = new Map();
+    visibleJobs.forEach(job => {
+      const utility = utilityLabel(job);
+      const contract = contractLabel(job);
+      if(!grouped.has(utility)) grouped.set(utility,new Map());
+      const contracts = grouped.get(utility);
+      if(!contracts.has(contract)) contracts.set(contract,[]);
+      contracts.get(contract).push(job);
+    });
+
+    return {
+      matchingCount: matchingJobs.length,
+      visibleJobs,
+      groups: [...grouped.entries()].map(([utility, contracts]) => ({
+        utility,
+        contracts: [...contracts.entries()].map(([contract, contractJobs]) => ({
+          contract,
+          jobs: contractJobs
+        }))
+      }))
+    };
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
     formatCompletedJobDate,
     completedJobUnitRows,
     jobPackageRevisionLabel,
-    normalizeJobPacketPoint
+    normalizeJobPacketPoint,
+    jobProgressViewModel
   });
   window.LineCrewJobsCore = api;
 
@@ -73,4 +128,5 @@
   window.completedJobUnitRows = completedJobUnitRows;
   window.jobPackageRevisionLabel = jobPackageRevisionLabel;
   window.normalizeJobPacketPoint = normalizeJobPacketPoint;
+  window.jobProgressViewModel = jobProgressViewModel;
 })();

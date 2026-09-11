@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint'];
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
@@ -57,6 +57,31 @@ for (const [input, expected] of [
   if (actual !== expected) throw new Error(`normalizeJobPacketPoint(${JSON.stringify(input)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
 }
 
+const jobs = [
+  {id:'j10',job_number:'10',job_name:'Beta Rebuild',active:true,contracts:{contract_name:'South',contract_number:'2',customers:{name:'Utility B'}}},
+  {id:'j2',job_number:'2',job_name:'Alpha Work',active:true,contracts:{contract_name:'North',contract_number:'1',customers:{name:'Utility A'}}},
+  {id:'j5',job_number:'5',job_name:'Closed Alpha',active:false,contracts:{contract_name:'North',contract_number:'1',customers:{name:'Utility A'}}},
+  {id:'j20',job_number:'20',job_name:'No Contract Job',active:true,utility_name:'Utility A'}
+];
+
+const activeView = core.jobProgressViewModel(jobs,{attention:'',sort:'',visibleCount:10});
+if (activeView.matchingCount !== 3) throw new Error(`Default Jobs progress filter must show active jobs only; got ${activeView.matchingCount}.`);
+if (activeView.visibleJobs.map(job=>job.id).join(',') !== 'j20,j2,j10') throw new Error(`Utility/contract/job default sort changed: ${activeView.visibleJobs.map(job=>job.id).join(',')}.`);
+if (activeView.groups.length !== 2 || activeView.groups[0].utility !== 'Utility A' || activeView.groups[1].utility !== 'Utility B') throw new Error('Jobs utility grouping changed.');
+if (activeView.groups[0].contracts.length !== 2) throw new Error('Jobs contract grouping changed.');
+
+const closedView = core.jobProgressViewModel(jobs,{attention:'closed',visibleCount:10});
+if (closedView.matchingCount !== 1 || closedView.visibleJobs[0]?.id !== 'j5') throw new Error('Closed Jobs progress filter changed.');
+
+const searchView = core.jobProgressViewModel(jobs,{attention:'all',search:'beta',visibleCount:10});
+if (searchView.matchingCount !== 1 || searchView.visibleJobs[0]?.id !== 'j10') throw new Error('Jobs progress search behavior changed.');
+
+const numberView = core.jobProgressViewModel(jobs,{attention:'all',sort:'job_number',visibleCount:3});
+if (numberView.matchingCount !== 4 || numberView.visibleJobs.map(job=>job.job_number).join(',') !== '2,5,10') throw new Error('Numeric job-number sorting or paging changed.');
+
+const noJobs = core.jobProgressViewModel(null,{visibleCount:25});
+if (noJobs.matchingCount !== 0 || noJobs.visibleJobs.length !== 0 || noJobs.groups.length !== 0) throw new Error('Null Jobs progress input must produce an empty view model.');
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
@@ -66,7 +91,20 @@ if (!serviceWorker.includes("'/jobs-core.js?v=20260910a'")) throw new Error('Job
 for (const signature of ['function fileNameWithoutExtension(value){','function jobPacketFileValidationMessage(file){','function formatCompletedJobDate(value){','function completedJobUnitRows(record){','function jobPackageRevisionLabel(jobPackage){','function normalizeJobPacketPoint(value){']) {
   if (!index.includes(signature)) throw new Error(`Legacy inline Jobs fallback missing: ${signature}`);
 }
+for (const marker of [
+  'function renderJobProgressDashboard(jobs, canView = true){',
+  "if(attention === '' && job.active !== true) return false;",
+  "if(attention === 'closed' && job.active === true) return false;",
+  'const searchable = [job.job_number,job.job_name,utilityLabel(job),contractLabel(job)]',
+  "if(sort === 'job_number'){",
+  'const visibleJobs = sortedJobs.slice(0, currentJobProgressVisibleCount);',
+  'if(!grouped.has(utility)) grouped.set(utility,new Map());',
+  'if(!contracts.has(contract)) contracts.set(contract,[]);'
+]) {
+  if (!index.includes(marker)) throw new Error(`Legacy Jobs progress behavior marker missing: ${marker}`);
+}
 
 console.log('Jobs core modularization guard passed.');
-console.log('- existing Jobs helpers plus job-packet work-point normalization match legacy behavior');
-console.log('- compatibility bridges are active; module is offline-capable; inline fallbacks remain available');
+console.log('- existing Jobs helpers and job-packet normalization match legacy behavior');
+console.log('- Jobs progress filtering, search, sorting, paging, and grouping are parity-tested');
+console.log('- compatibility bridges are active; module is offline-capable; inline renderer remains available');
