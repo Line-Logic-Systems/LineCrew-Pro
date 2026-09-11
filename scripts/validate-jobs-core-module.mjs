@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel','jobPackageDetailSubtitle','completedJobSummaryViewModel'];
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel','jobPackageDetailSubtitle','completedJobSummaryViewModel','completedJobPackageRowViewModel'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
@@ -124,6 +124,19 @@ if (JSON.stringify(emptyCompletedSummary) !== JSON.stringify({reportedPercent:'0
   throw new Error('Null completed-job summary input must remain safe and empty.');
 }
 
+const completedPacket = core.completedJobPackageRowViewModel({revision_number:3,package_name:'North Feeder',package_number:'WO-9',status:'approved',source_filename:'north.pdf'});
+if (JSON.stringify(completedPacket) !== JSON.stringify({revisionLabel:'Revision 2',packageName:'North Feeder',statusText:'APPROVED',sourceFilename:'north.pdf'})) {
+  throw new Error(`Completed job packet row display changed: ${JSON.stringify(completedPacket)}.`);
+}
+const fallbackPacket = core.completedJobPackageRowViewModel({package_number:'WO-10'});
+if (JSON.stringify(fallbackPacket) !== JSON.stringify({revisionLabel:'Original Packet',packageName:'WO-10',statusText:'',sourceFilename:'No source filename'})) {
+  throw new Error('Completed job packet row fallbacks changed.');
+}
+const emptyPacket = core.completedJobPackageRowViewModel(null);
+if (JSON.stringify(emptyPacket) !== JSON.stringify({revisionLabel:'Original Packet',packageName:'Utility Job Packet',statusText:'',sourceFilename:'No source filename'})) {
+  throw new Error('Null completed-job packet row input must remain safe.');
+}
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
@@ -154,12 +167,14 @@ for (const marker of [
   'Number(r.units.length)',
   'Number(r.packages.length)',
   'Number(r.jsas.length)',
-  'Number(r.attachments.length)'
+  'Number(r.attachments.length)',
+  "jobPackageRevisionLabel(item))+' — '+escapeHtml(item.package_name||item.package_number||'Utility Job Packet')",
+  "escapeHtml(String(item.status||'').toUpperCase())+' · '+escapeHtml(item.source_filename||'No source filename')"
 ]) {
   if (!index.includes(marker)) throw new Error(`Legacy Jobs progress behavior marker missing: ${marker}`);
 }
 
 console.log('Jobs core modularization guard passed.');
 console.log('- existing Jobs helpers and job-packet normalization match legacy behavior');
-console.log('- Jobs progress, package detail, and completed-job summary display values are parity-tested');
+console.log('- Jobs progress, package detail, completed-job summary, and completed packet rows are parity-tested');
 console.log('- compatibility bridges are active; module is offline-capable; inline renderers remain available');
