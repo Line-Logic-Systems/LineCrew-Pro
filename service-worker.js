@@ -18,6 +18,7 @@ const APP_SHELL = [
   '/number-input-polish.js?v=20260823a',
   '/app-core.js?v=20260910a',
   '/jobs-core.js?v=20260910a',
+  '/assistant-core.js?v=20260910a',
   '/daily-report-core.js?v=20260910a',
   '/production-core.js?v=20260910a',
   '/price-book-core.js?v=20260910a',
