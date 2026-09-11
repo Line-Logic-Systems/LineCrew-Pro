@@ -110,6 +110,9 @@ jobs:
       - name: Validate staged Production modularization
         run: node scripts/validate-production-core-module.mjs
 
+      - name: Validate Production primary markup runtime handoff
+        run: node scripts/validate-production-primary-markup-runtime.mjs
+
       - name: Validate Production presentation boundaries
         run: node scripts/validate-production-presentation-regressions.mjs
 

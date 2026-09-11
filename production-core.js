@@ -8,6 +8,10 @@
     typeof window.productionReportingTotals === 'function'
       ? window.productionReportingTotals
       : null;
+  const legacyProductionUtilityPrimaryMetricsMarkup =
+    typeof window.productionUtilityPrimaryMetricsMarkup === 'function'
+      ? window.productionUtilityPrimaryMetricsMarkup
+      : null;
 
   function reportUtilityKey(report) {
     return String(report?.jobs?.contracts?.customers?.id || 'unassigned');
@@ -209,6 +213,37 @@
     return reportingTotals(reports);
   }
 
+  function runtimeUtilityPrimaryMetricsMarkup(reports) {
+    try {
+      if (
+        typeof currentDailyReportValueSummaries !== 'undefined' &&
+        typeof currentDailyAuthorizationSummaries !== 'undefined' &&
+        typeof userCanSeeActualContractPrices === 'function' &&
+        typeof userCanSeeFieldMoney === 'function' &&
+        typeof formatCurrency === 'function' &&
+        typeof escapeHtml === 'function'
+      ) {
+        return utilityPrimaryMetricsMarkup(
+          reports,
+          currentDailyReportValueSummaries,
+          currentDailyAuthorizationSummaries,
+          {
+            showActual: userCanSeeActualContractPrices(),
+            showField: userCanSeeFieldMoney()
+          },
+          { formatCurrency, escapeHtml }
+        );
+      }
+    } catch (error) {
+      // Fall through to the captured inline implementation.
+    }
+
+    if (legacyProductionUtilityPrimaryMetricsMarkup) {
+      return legacyProductionUtilityPrimaryMetricsMarkup(reports);
+    }
+    return utilityPrimaryMetricsMarkup(reports);
+  }
+
   const api = Object.freeze({
     reportUtilityKey,
     groupReportsByContractJob,
@@ -216,7 +251,8 @@
     reportingTotals,
     utilityPrimaryMetrics,
     utilityPrimaryMetricsMarkup,
-    runtimeReportingTotals
+    runtimeReportingTotals,
+    runtimeUtilityPrimaryMetricsMarkup
   });
   window.LineCrewProductionCore = api;
 
@@ -228,4 +264,5 @@
   window.productionUtilityPrimaryMetricsCore = utilityPrimaryMetrics;
   window.productionUtilityPrimaryMetricsMarkupCore = utilityPrimaryMetricsMarkup;
   window.productionReportingTotals = runtimeReportingTotals;
+  window.productionUtilityPrimaryMetricsMarkup = runtimeUtilityPrimaryMetricsMarkup;
 })();
