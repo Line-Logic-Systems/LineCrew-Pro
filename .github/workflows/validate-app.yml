@@ -41,6 +41,9 @@ jobs:
       - name: Validate observer scoping
         run: node scripts/validate-observer-scoping.mjs
 
+      - name: Validate GF scope regressions
+        run: node scripts/validate-gf-scope-regressions.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
