@@ -29,12 +29,13 @@ const reportC = { id:'r3', job_id:'job-a', jobs:{ job_number:'100', job_name:'Al
 const reportD = { id:'r4', jobs:{} };
 const grouped = core.groupReportsByContractJob([reportA, reportB, reportC, reportD]);
 if (grouped.length !== 3) throw new Error(`Expected 3 contract groups; got ${grouped.length}.`);
-if (grouped[0].label !== 'No Contract Assigned') throw new Error('Unassigned contract label/sort behavior changed.');
-if (grouped[1].label !== '10 — North' || grouped[2].label !== '20 — South') throw new Error('Contract labels/sort behavior changed.');
-const north = grouped[1];
+if (grouped[0].label !== '10 — North' || grouped[1].label !== '20 — South' || grouped[2].label !== 'No Contract Assigned') {
+  throw new Error('Contract labels/sort behavior changed.');
+}
+const north = grouped[0];
 if (north.reports.length !== 2 || north.jobs.length !== 1) throw new Error('Contract report/job grouping changed.');
 if (north.jobs[0].label !== '100 — Alpha' || north.jobs[0].reports.length !== 2) throw new Error('Job label/grouping behavior changed.');
-if (grouped[0].jobs[0].label !== 'No Job Assigned') throw new Error('Unassigned job fallback label changed.');
+if (grouped[2].jobs[0].label !== 'No Job Assigned') throw new Error('Unassigned job fallback label changed.');
 if (core.groupReportsByContractJob(null).length !== 0) throw new Error('Null report input must produce an empty grouping.');
 
 if (sandbox.window.productionReportUtilityKey !== core.reportUtilityKey) {
