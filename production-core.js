@@ -44,10 +44,31 @@
       }));
   }
 
-  const api = Object.freeze({ reportUtilityKey, groupReportsByContractJob });
+  function groupReportsByUtility(reports) {
+    const utilities = new Map();
+    (reports || [])
+      .filter(report => report?.archived !== true)
+      .forEach(report => {
+        const utility = report?.jobs?.contracts?.customers || {};
+        const key = reportUtilityKey(report);
+        if (!utilities.has(key)) {
+          utilities.set(key, {
+            id: key,
+            name: String(utility.name || 'No Utility / Cooperative Assigned'),
+            reports: []
+          });
+        }
+        utilities.get(key).reports.push(report);
+      });
+
+    return [...utilities.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  const api = Object.freeze({ reportUtilityKey, groupReportsByContractJob, groupReportsByUtility });
   window.LineCrewProductionCore = api;
 
-  // Compatibility bridge while the legacy inline copy still exists.
+  // Compatibility bridges while the legacy inline behavior remains available.
   window.productionReportUtilityKey = reportUtilityKey;
   window.productionGroupReportsByContractJob = groupReportsByContractJob;
+  window.productionGroupReportsByUtility = groupReportsByUtility;
 })();
