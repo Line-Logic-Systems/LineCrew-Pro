@@ -65,6 +65,9 @@ jobs:
       - name: Validate Utility Portal RPC output contract
         run: node tests/utility-portal/check-migration-rpc-signatures.mjs
 
+      - name: Validate onboarding and invitation account setup
+        run: node scripts/validate-beta-onboarding.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
