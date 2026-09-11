@@ -25,7 +25,10 @@ const legacyLongLivedAllowlist = new Set([
   'leadership-my-time.js',
   'responsive-role-shell.js',
   'role-workspace-polish.js',
+  'timekeeping-input-v2.js',
+  'timekeeping-pay-period-history.js',
   'timekeeping-payroll.js',
+  'timekeeping-report-v2.js',
   'timekeeping.js'
 ]);
 
