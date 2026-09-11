@@ -93,6 +93,19 @@
   document.head.appendChild(script);
 })();
 
+/* Staged Notifications Core modularization bootstrap.
+ * The legacy inline helper remains the fallback if this module cannot load.
+ */
+(() => {
+  if (window.LineCrewNotificationsCore || document.querySelector('script[data-linecrew-notifications-core]')) return;
+  const script = document.createElement('script');
+  script.src = '/notifications-core.js?v=20260910a';
+  script.defer = false;
+  script.dataset.linecrewNotificationsCore = '1';
+  script.onerror = () => console.warn('Notifications core module unavailable; using inline compatibility fallback.');
+  document.head.appendChild(script);
+})();
+
 /* Staged Daily Report modularization bootstrap.
  * The legacy inline helper remains the fallback if this module cannot load.
  */
