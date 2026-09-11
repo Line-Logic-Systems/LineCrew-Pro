@@ -150,6 +150,24 @@
     };
   }
 
+  function jobCardDisplayModel(job = {}){
+    const active = job?.active === true;
+    const customer = job?.customer_name || 'No customer listed';
+    const utility = job?.utility_name || 'No utility listed';
+    const contract = job?.contracts;
+    const contractLabel = contract
+      ? contract.contract_name + (contract.contract_number ? ' (' + contract.contract_number + ')' : '')
+      : 'Legacy job — contract not assigned';
+    const contractCustomer = contract?.customers?.name || customer;
+    return {
+      statusText: active ? 'ACTIVE' : 'CLOSED',
+      statusClass: active ? 'active' : 'closed',
+      customer: contractCustomer,
+      utility,
+      contractLabel
+    };
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -159,7 +177,8 @@
     normalizeJobPacketPoint,
     jobProgressViewModel,
     simpleJobBrowserViewModel,
-    jobProgressRowViewModel
+    jobProgressRowViewModel,
+    jobCardDisplayModel
   });
   window.LineCrewJobsCore = api;
 
@@ -173,4 +192,5 @@
   window.jobProgressViewModel = jobProgressViewModel;
   window.simpleJobBrowserViewModel = simpleJobBrowserViewModel;
   window.jobProgressRowViewModel = jobProgressRowViewModel;
+  window.jobCardDisplayModel = jobCardDisplayModel;
 })();
