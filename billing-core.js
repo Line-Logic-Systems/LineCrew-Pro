@@ -14,10 +14,15 @@
     return 'Partial Bill ' + Number(batch?.billing_sequence || 1);
   }
 
-  const api = Object.freeze({ billingStatusLabel, billingStageLabel });
+  function completeBillingSafeName(value,fallback='record'){
+    return String(value || fallback).replace(/[^a-z0-9._-]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,110) || fallback;
+  }
+
+  const api = Object.freeze({ billingStatusLabel, billingStageLabel, completeBillingSafeName });
   window.LineCrewBillingCore = api;
 
   // Compatibility bridges while the legacy inline copies remain available.
   window.billingStatusLabel = billingStatusLabel;
   window.billingStageLabel = billingStageLabel;
+  window.completeBillingSafeName = completeBillingSafeName;
 })();
