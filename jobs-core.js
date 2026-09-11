@@ -110,6 +110,27 @@
     };
   }
 
+  function simpleJobBrowserViewModel(jobs, options = {}){
+    const list = Array.isArray(jobs) ? jobs : [];
+    const search = String(options.search || '').trim().toLowerCase();
+    const status = String(options.status || 'active');
+    const visibleCount = Math.max(0, Number(options.visibleCount ?? list.length) || 0);
+    const matchingJobs = list.filter(job => {
+      if(status === 'active' && job?.active !== true) return false;
+      if(status === 'closed' && job?.active === true) return false;
+      return !search ||
+        String(job?.job_number || '').toLowerCase().includes(search) ||
+        String(job?.job_name || '').toLowerCase().includes(search);
+    });
+    const visibleJobs = matchingJobs.slice(0, visibleCount);
+    return {
+      matchingCount: matchingJobs.length,
+      visibleCount: visibleJobs.length,
+      visibleJobs,
+      hasMore: matchingJobs.length > visibleCount
+    };
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -117,7 +138,8 @@
     completedJobUnitRows,
     jobPackageRevisionLabel,
     normalizeJobPacketPoint,
-    jobProgressViewModel
+    jobProgressViewModel,
+    simpleJobBrowserViewModel
   });
   window.LineCrewJobsCore = api;
 
@@ -129,4 +151,5 @@
   window.jobPackageRevisionLabel = jobPackageRevisionLabel;
   window.normalizeJobPacketPoint = normalizeJobPacketPoint;
   window.jobProgressViewModel = jobProgressViewModel;
+  window.simpleJobBrowserViewModel = simpleJobBrowserViewModel;
 })();
