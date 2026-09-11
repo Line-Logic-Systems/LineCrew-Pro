@@ -55,47 +55,26 @@
   }
 
   function formatAuditTimestamp(value){
-    if(!value){
-      return 'Not recorded';
-    }
+    if(!value) return 'Not recorded';
     const date = new Date(value);
-    if(Number.isNaN(date.getTime())){
-      return String(value);
-    }
-    return date.toLocaleString(
-      undefined,
-      {
-        year:'numeric',
-        month:'short',
-        day:'numeric',
-        hour:'numeric',
-        minute:'2-digit'
-      }
-    );
+    if(Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
   }
 
   function formatCurrency(value){
     const amount = Number(value || 0);
-    return amount.toLocaleString(
-      'en-US',
-      {
-        style:'currency',
-        currency:'USD'
-      }
-    );
+    return amount.toLocaleString('en-US',{style:'currency',currency:'USD'});
   }
 
-  const api = Object.freeze({
-    uniqueOfflineJsaJobs,
-    offlineJsaNetworkFailure,
-    companyAccessInactive,
-    firstStackFrame,
-    desktopViewEnabled,
-    currentErrorPage,
-    formatTeamRole,
-    formatAuditTimestamp,
-    formatCurrency
-  });
+  function csvCell(value){
+    let text = String(value ?? '');
+    if(typeof value === 'string' && (/^[\t\r\n]/.test(text) || /^\s*[=+\-@]/.test(text))){
+      text = "'" + text;
+    }
+    return /[",\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }
+
+  const api = Object.freeze({uniqueOfflineJsaJobs,offlineJsaNetworkFailure,companyAccessInactive,firstStackFrame,desktopViewEnabled,currentErrorPage,formatTeamRole,formatAuditTimestamp,formatCurrency,csvCell});
   window.LineCrewAppCore = api;
 
   // Compatibility bridges while the legacy inline copies remain available.
@@ -108,4 +87,5 @@
   window.formatTeamRole = formatTeamRole;
   window.formatAuditTimestamp = formatAuditTimestamp;
   window.formatCurrency = formatCurrency;
+  window.csvCell = csvCell;
 })();
