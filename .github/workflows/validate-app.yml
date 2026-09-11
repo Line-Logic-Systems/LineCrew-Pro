@@ -56,6 +56,9 @@ jobs:
       - name: Validate Storm Mode
         run: node scripts/validate-storm-mode-regressions.mjs
 
+      - name: Validate job packet map retention
+        run: node scripts/validate-job-packet-map-retention.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
