@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'billing-core.js' });
 const core = sandbox.window.LineCrewBillingCore;
-const helperNames = ['billingStatusLabel','billingStageLabel','completeBillingSafeName'];
+const helperNames = ['billingStatusLabel','billingStageLabel','completeBillingSafeName','billingSafeStorageFilename'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Billing core module must expose ${name}().`);
 }
@@ -44,8 +44,24 @@ for (const [value, fallback, expected] of [
   const actual = core.completeBillingSafeName(value, fallback);
   if (actual !== expected) throw new Error(`completeBillingSafeName(${JSON.stringify(value)}, ${JSON.stringify(fallback)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
 }
-const longName = 'A'.repeat(140);
-if (core.completeBillingSafeName(longName).length !== 110) throw new Error('completeBillingSafeName() must preserve the 110-character filename cap.');
+if (core.completeBillingSafeName('A'.repeat(140)).length !== 110) throw new Error('completeBillingSafeName() must preserve the 110-character filename cap.');
+
+for (const [input, expected] of [
+  [null,'billing-attachment'],
+  ['', 'billing-attachment'],
+  ['invoice.pdf','invoice.pdf'],
+  ['Invoice Copy.PDF','Invoice-Copy.pdf'],
+  ['WO 123 / approval.final.PDF','WO-123-approval-final.pdf'],
+  ['no-extension','no-extension'],
+  ['###.PDF','billing-attachment.pdf'],
+  ['photo.JPEG','photo.jpeg'],
+  ['file.longextension123456789','file.longextensio']
+]) {
+  const actual = core.billingSafeStorageFilename(input);
+  if (actual !== expected) throw new Error(`billingSafeStorageFilename(${JSON.stringify(input)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
+}
+const longStorageBase = core.billingSafeStorageFilename('A'.repeat(100)+'.pdf').replace(/\.pdf$/,'');
+if (longStorageBase.length !== 80) throw new Error('billingSafeStorageFilename() must preserve the 80-character base-name cap.');
 
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Billing core compatibility bridge ${name} is not active.`);
@@ -53,10 +69,10 @@ for (const name of helperNames) {
 if (!bootstrap.includes("script.src = '/billing-core.js?v=20260910a'")) throw new Error('Billing core module is not bootstrapped by the existing front-end loader path.');
 if (!bootstrap.includes('Billing core module unavailable; using inline compatibility fallback.')) throw new Error('Billing core loader must retain an explicit inline fallback path.');
 if (!serviceWorker.includes("'/billing-core.js?v=20260910a'")) throw new Error('Billing core module must remain in the offline app shell.');
-for (const signature of ['function billingStatusLabel(status){','function billingStageLabel(batch){',"function completeBillingSafeName(value,fallback='record'){"]) {
+for (const signature of ['function billingStatusLabel(status){','function billingStageLabel(batch){',"function completeBillingSafeName(value,fallback='record'){",'function billingSafeStorageFilename(filename){']) {
   if (!index.includes(signature)) throw new Error(`Legacy inline Billing fallback missing: ${signature}`);
 }
 
 console.log('Billing core modularization guard passed.');
-console.log('- billing status/stage labels and safe export filenames match legacy behavior');
+console.log('- billing status/stage labels and filename sanitizers match legacy behavior');
 console.log('- compatibility bridges are active; module is offline-capable; inline fallbacks remain available');
