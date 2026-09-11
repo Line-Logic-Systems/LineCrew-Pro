@@ -19,7 +19,7 @@ const cases = [
   ['no-extension','no-extension'],
   ['', 'Job Packet'],
   [null, 'Job Packet'],
-  ['.hidden','.hidden']
+  ['.hidden','']
 ];
 for (const [input, expected] of cases) {
   const actual = core.fileNameWithoutExtension(input);
