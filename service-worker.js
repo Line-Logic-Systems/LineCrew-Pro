@@ -17,6 +17,7 @@ const APP_SHELL = [
   '/gf-review-theme-enhancements.js?v=20260908b',
   '/number-input-polish.js?v=20260823a',
   '/daily-report-core.js?v=20260910a',
+  '/production-core.js?v=20260910a',
   '/expanded-jsa.js?v=20260907b',
   '/utility-portal-management.js?v=20260908a',
   '/role-workspace-polish.js?v=20260910a',
