@@ -4,6 +4,11 @@
 (() => {
   'use strict';
 
+  const legacyProductionReportingTotals =
+    typeof window.productionReportingTotals === 'function'
+      ? window.productionReportingTotals
+      : null;
+
   function reportUtilityKey(report) {
     return String(report?.jobs?.contracts?.customers?.id || 'unassigned');
   }
@@ -92,11 +97,34 @@
     return totals;
   }
 
+  function runtimeReportingTotals(reports) {
+    try {
+      if (
+        typeof currentDailyReportValueSummaries !== 'undefined' &&
+        typeof currentDailyAuthorizationSummaries !== 'undefined'
+      ) {
+        return reportingTotals(
+          reports,
+          currentDailyReportValueSummaries,
+          currentDailyAuthorizationSummaries
+        );
+      }
+    } catch (error) {
+      // Fall through to the captured inline implementation.
+    }
+
+    if (legacyProductionReportingTotals) {
+      return legacyProductionReportingTotals(reports);
+    }
+    return reportingTotals(reports);
+  }
+
   const api = Object.freeze({
     reportUtilityKey,
     groupReportsByContractJob,
     groupReportsByUtility,
-    reportingTotals
+    reportingTotals,
+    runtimeReportingTotals
   });
   window.LineCrewProductionCore = api;
 
@@ -105,4 +133,5 @@
   window.productionGroupReportsByContractJob = groupReportsByContractJob;
   window.productionGroupReportsByUtility = groupReportsByUtility;
   window.productionReportingTotalsCore = reportingTotals;
+  window.productionReportingTotals = runtimeReportingTotals;
 })();
