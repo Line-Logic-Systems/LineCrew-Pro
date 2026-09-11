@@ -13,15 +13,19 @@ const sandbox = {
     atob:value => Buffer.from(value, 'base64').toString('binary'),
     navigator,
     PushManager:function PushManager(){},
-    Notification
+    Notification,
+    setTimeout,
+    clearTimeout
   },
   navigator,
   Notification,
-  Uint8Array
+  Uint8Array,
+  Promise,
+  Error
 };
 vm.runInNewContext(moduleSource, sandbox, { filename:'notifications-core.js' });
 const core = sandbox.window.LineCrewNotificationsCore;
-for (const name of ['urlBase64ToUint8Array','pushUnsupportedReason']) {
+for (const name of ['urlBase64ToUint8Array','pushUnsupportedReason','pushPromiseWithTimeout']) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Notifications core module must expose ${name}().`);
 }
 
@@ -75,7 +79,17 @@ if (core.pushUnsupportedReason() !== 'Blocked in browser settings. Allow notific
   throw new Error('Denied notification permission warning must match legacy behavior.');
 }
 
-for (const name of ['urlBase64ToUint8Array','pushUnsupportedReason']) {
+const resolved = await core.pushPromiseWithTimeout(Promise.resolve('ready'), 50, 'timeout');
+if (resolved !== 'ready') throw new Error('pushPromiseWithTimeout() must preserve successful promise values.');
+let timeoutError = '';
+try{
+  await core.pushPromiseWithTimeout(new Promise(() => {}), 5, 'notification timeout');
+}catch(error){
+  timeoutError = error?.message || '';
+}
+if (timeoutError !== 'notification timeout') throw new Error('pushPromiseWithTimeout() must reject with the configured timeout message.');
+
+for (const name of ['urlBase64ToUint8Array','pushUnsupportedReason','pushPromiseWithTimeout']) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Notifications core compatibility bridge ${name} is not active.`);
 }
 if (!bootstrap.includes("script.src = '/notifications-core.js?v=20260910a'")) {
@@ -89,7 +103,8 @@ if (!serviceWorker.includes("'/notifications-core.js?v=20260910a'")) {
 }
 for (const signature of [
   'function urlBase64ToUint8Array(value){',
-  'function pushUnsupportedReason(){'
+  'function pushUnsupportedReason(){',
+  'function pushPromiseWithTimeout(promise, timeoutMs, message){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline Notifications fallback missing: ${signature}`);
 }
@@ -97,4 +112,5 @@ for (const signature of [
 console.log('Notifications core modularization guard passed.');
 console.log('- VAPID URL-safe base64 decoding matches legacy behavior');
 console.log('- browser/iPhone/permission support-state messages match legacy behavior');
+console.log('- notification promise timeout resolution/rejection behavior matches legacy behavior');
 console.log('- compatibility bridges are active; module is offline-capable; inline fallbacks remain available');
