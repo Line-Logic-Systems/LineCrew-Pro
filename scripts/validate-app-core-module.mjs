@@ -30,7 +30,7 @@ const sandbox = {
 };
 vm.runInNewContext(moduleSource, sandbox, { filename:'app-core.js' });
 const core = sandbox.window.LineCrewAppCore;
-const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage','formatTeamRole'];
+const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage','formatTeamRole','formatAuditTimestamp'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`App core module must expose ${name}().`);
 }
@@ -133,6 +133,12 @@ for (const [role, expected] of roleCases) {
   if (actual !== expected) throw new Error(`formatTeamRole(${JSON.stringify(role)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
 }
 
+if (core.formatAuditTimestamp(null) !== 'Not recorded') throw new Error('formatAuditTimestamp(null) must preserve Not recorded.');
+if (core.formatAuditTimestamp('not-a-date') !== 'not-a-date') throw new Error('formatAuditTimestamp() must preserve invalid source text.');
+const auditDate = '2026-09-11T15:45:00Z';
+const expectedAuditDate = vm.runInNewContext(`new Date(${JSON.stringify(auditDate)}).toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})`);
+if (core.formatAuditTimestamp(auditDate) !== expectedAuditDate) throw new Error('formatAuditTimestamp() must match legacy date formatting.');
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`App core compatibility bridge ${name} is not active.`);
 }
@@ -152,7 +158,8 @@ for (const signature of [
   'function firstStackFrame(error){',
   'function desktopViewEnabled(){',
   'function currentErrorPage(){',
-  'function formatTeamRole(role){'
+  'function formatTeamRole(role){',
+  'function formatAuditTimestamp(value){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline app-core fallback missing: ${signature}`);
 }
@@ -165,5 +172,6 @@ console.log('- support stack-frame extraction matches legacy behavior');
 console.log('- desktop-view preference and fallback behavior match legacy behavior');
 console.log('- visible-page error telemetry labeling matches legacy behavior');
 console.log('- team role labels match legacy behavior');
+console.log('- audit timestamp formatting matches legacy behavior');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline and inline fallbacks remain available');
