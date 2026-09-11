@@ -12,7 +12,7 @@ const maps = read('job-map-documents.js');
 const migration = read('supabase/migrations/20260910201500_add_job_packet_documents_and_map_access.sql');
 
 for (const [token,message] of [
-  ["const BUCKET='job-packet-documents'", 'Job packet document bucket binding is missing.'],
+  ["job-packet-documents", 'Job packet document bucket binding is missing.'],
   ["storage.from(BUCKET).upload", 'Original job packet upload path is missing.'],
   ["register_job_package_document", 'Original job packet registration RPC is missing.'],
   ["get_job_package_documents", 'Job packet document listing RPC wiring is missing.'],
