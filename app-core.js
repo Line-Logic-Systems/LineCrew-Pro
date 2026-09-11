@@ -54,6 +54,26 @@
     return roleLabels[String(role || '').toLowerCase()] || 'Foreman';
   }
 
+  function formatAuditTimestamp(value){
+    if(!value){
+      return 'Not recorded';
+    }
+    const date = new Date(value);
+    if(Number.isNaN(date.getTime())){
+      return String(value);
+    }
+    return date.toLocaleString(
+      undefined,
+      {
+        year:'numeric',
+        month:'short',
+        day:'numeric',
+        hour:'numeric',
+        minute:'2-digit'
+      }
+    );
+  }
+
   const api = Object.freeze({
     uniqueOfflineJsaJobs,
     offlineJsaNetworkFailure,
@@ -61,7 +81,8 @@
     firstStackFrame,
     desktopViewEnabled,
     currentErrorPage,
-    formatTeamRole
+    formatTeamRole,
+    formatAuditTimestamp
   });
   window.LineCrewAppCore = api;
 
@@ -73,4 +94,5 @@
   window.desktopViewEnabled = desktopViewEnabled;
   window.currentErrorPage = currentErrorPage;
   window.formatTeamRole = formatTeamRole;
+  window.formatAuditTimestamp = formatAuditTimestamp;
 })();
