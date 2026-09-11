@@ -99,6 +99,37 @@
   }
 
   function polish(){labelTables();improveEmptyStates();installFilterHelpers();updateReportStatus();markBusyButtons();}
-  function init(){addStyles();polish();let timer;const obs=new MutationObserver(()=>{clearTimeout(timer);timer=setTimeout(polish,35)});obs.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','disabled']});}
+
+  function init(){
+    addStyles();
+    let pageObserver=null;
+    let attachObserver=null;
+    let timer=null;
+
+    const schedule=()=>{
+      clearTimeout(timer);
+      timer=setTimeout(polish,35);
+    };
+
+    const attach=()=>{
+      const page=byId('timekeepingPage');
+      if(!page || pageObserver) return false;
+      polish();
+      pageObserver=new MutationObserver(schedule);
+      pageObserver.observe(page,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','disabled']});
+      if(attachObserver){attachObserver.disconnect();attachObserver=null;}
+      return true;
+    };
+
+    if(byId('timekeepingPage')){
+      attach();
+      return;
+    }
+
+    attachObserver=new MutationObserver(()=>attach());
+    attachObserver.observe(document.body,{subtree:true,childList:true});
+    attach();
+  }
+
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
