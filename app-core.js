@@ -74,6 +74,17 @@
     );
   }
 
+  function formatCurrency(value){
+    const amount = Number(value || 0);
+    return amount.toLocaleString(
+      'en-US',
+      {
+        style:'currency',
+        currency:'USD'
+      }
+    );
+  }
+
   const api = Object.freeze({
     uniqueOfflineJsaJobs,
     offlineJsaNetworkFailure,
@@ -82,7 +93,8 @@
     desktopViewEnabled,
     currentErrorPage,
     formatTeamRole,
-    formatAuditTimestamp
+    formatAuditTimestamp,
+    formatCurrency
   });
   window.LineCrewAppCore = api;
 
@@ -95,4 +107,5 @@
   window.currentErrorPage = currentErrorPage;
   window.formatTeamRole = formatTeamRole;
   window.formatAuditTimestamp = formatAuditTimestamp;
+  window.formatCurrency = formatCurrency;
 })();
