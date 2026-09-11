@@ -24,14 +24,13 @@
   function csvCell(value){ let text=String(value ?? ''); if(typeof value==='string' && (/^[\t\r\n]/.test(text) || /^\s*[=+\-@]/.test(text))) text="'"+text; return /[",\n]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text; }
   function companyLogoExtension(file){ if(file?.type==='image/png')return 'png'; if(file?.type==='image/jpeg')return 'jpg'; if(file?.type==='image/webp')return 'webp'; return ''; }
   function companyJsaFileKey(file){ return [file.name,file.size,file.lastModified].join(':'); }
-  function safeJsaFilename(name){
-    return String(name || 'jsa-file')
-      .replace(/[^a-zA-Z0-9._-]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(-140) || 'jsa-file';
+  function safeJsaFilename(name){ return String(name || 'jsa-file').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/^-+|-+$/g,'').slice(-140) || 'jsa-file'; }
+  function allowedJsaFile(file){
+    return ['application/pdf','image/jpeg','image/png','image/heic','image/heif'].includes(String(file?.type || '').toLowerCase()) &&
+      Number(file?.size || 0) > 0 && Number(file?.size || 0) <= 15728640;
   }
 
-  const api = Object.freeze({uniqueOfflineJsaJobs,offlineJsaNetworkFailure,companyAccessInactive,firstStackFrame,desktopViewEnabled,currentErrorPage,formatTeamRole,formatAuditTimestamp,formatCurrency,csvCell,companyLogoExtension,companyJsaFileKey,safeJsaFilename});
+  const api = Object.freeze({uniqueOfflineJsaJobs,offlineJsaNetworkFailure,companyAccessInactive,firstStackFrame,desktopViewEnabled,currentErrorPage,formatTeamRole,formatAuditTimestamp,formatCurrency,csvCell,companyLogoExtension,companyJsaFileKey,safeJsaFilename,allowedJsaFile});
   window.LineCrewAppCore = api;
   window.uniqueOfflineJsaJobs=uniqueOfflineJsaJobs;
   window.offlineJsaNetworkFailure=offlineJsaNetworkFailure;
@@ -46,4 +45,5 @@
   window.companyLogoExtension=companyLogoExtension;
   window.companyJsaFileKey=companyJsaFileKey;
   window.safeJsaFilename=safeJsaFilename;
+  window.allowedJsaFile=allowedJsaFile;
 })();
