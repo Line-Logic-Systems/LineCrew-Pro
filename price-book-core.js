@@ -79,7 +79,15 @@
     return String(left ?? '').trim() !== String(right ?? '').trim();
   }
 
-  const api = Object.freeze({ normalizeImportHeader, importEditDistance, importHeaderMatchConfidence, normalizedPriceWorkType, importCell, importPrice, numericImportPrice, spreadsheetColumnName, priceBookComparisonValueChanged });
+  function newPriceBookFileSignature(file){
+    return [
+      String(file?.name || ''),
+      Number(file?.size || 0),
+      Number(file?.lastModified || 0)
+    ].join(':');
+  }
+
+  const api = Object.freeze({ normalizeImportHeader, importEditDistance, importHeaderMatchConfidence, normalizedPriceWorkType, importCell, importPrice, numericImportPrice, spreadsheetColumnName, priceBookComparisonValueChanged, newPriceBookFileSignature });
   window.LineCrewPriceBookCore = api;
 
   // Compatibility bridges while the legacy inline copies still exist.
@@ -92,4 +100,5 @@
   window.numericImportPrice = numericImportPrice;
   window.spreadsheetColumnName = spreadsheetColumnName;
   window.priceBookComparisonValueChanged = priceBookComparisonValueChanged;
+  window.newPriceBookFileSignature = newPriceBookFileSignature;
 })();
