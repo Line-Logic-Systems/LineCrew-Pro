@@ -147,6 +147,46 @@
     };
   }
 
+  function utilityPrimaryMetricsMarkup(
+    reports,
+    valueSummaries = new Map(),
+    authorizationSummaries = new Map(),
+    options = {},
+    helpers = {}
+  ) {
+    const metrics = utilityPrimaryMetrics(
+      reports,
+      valueSummaries,
+      authorizationSummaries,
+      options
+    );
+    const formatMoney = typeof helpers.formatCurrency === 'function'
+      ? helpers.formatCurrency
+      : value => String(value);
+    const escape = typeof helpers.escapeHtml === 'function'
+      ? helpers.escapeHtml
+      : value => String(value);
+
+    return '<div class="production-utility-primary-metrics">' +
+      '<span><strong>' + metrics.awaitingReview + '</strong>Awaiting Review</span>' +
+      '<span><strong>' + (
+        metrics.showMoney
+          ? escape(formatMoney(metrics.approvedValue))
+          : metrics.approvedReports
+      ) + '</strong>' + (
+        metrics.showMoney ? 'Approved Production' : 'Approved Reports'
+      ) + '</span>' +
+      '<span><strong>' + metrics.activeJobCount + '</strong>Active Jobs</span>' +
+      '<span><strong>' + (
+        metrics.showMoney
+          ? escape(formatMoney(metrics.runRate))
+          : '—'
+      ) + '</strong>' + (
+        metrics.showActual ? 'Actual' : 'Field'
+      ) + ' MH Rate</span>' +
+      '</div>';
+  }
+
   function runtimeReportingTotals(reports) {
     try {
       if (
@@ -175,6 +215,7 @@
     groupReportsByUtility,
     reportingTotals,
     utilityPrimaryMetrics,
+    utilityPrimaryMetricsMarkup,
     runtimeReportingTotals
   });
   window.LineCrewProductionCore = api;
@@ -185,5 +226,6 @@
   window.productionGroupReportsByUtility = groupReportsByUtility;
   window.productionReportingTotalsCore = reportingTotals;
   window.productionUtilityPrimaryMetricsCore = utilityPrimaryMetrics;
+  window.productionUtilityPrimaryMetricsMarkupCore = utilityPrimaryMetricsMarkup;
   window.productionReportingTotals = runtimeReportingTotals;
 })();
