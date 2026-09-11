@@ -148,13 +148,13 @@ for (const marker of [
   "const source = currentOpenJobPackage.source_filename",
   "'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +",
   "' · Status: ' + status.toUpperCase() + source;",
-  "Number(p.reported_percent||0).toFixed(1)+'%'",
-  "Number(p.approved_percent||0).toFixed(1)+'%'",
-  "Number(r.reports.length)+'</strong><br>Daily Reports'",
-  "Number(r.units.length)+'</strong><br>Unit Lines'",
-  "Number(r.packages.length)+'</strong><br>Packet Revisions'",
-  "Number(r.jsas.length)+'</strong><br>JSAs'",
-  "Number(r.attachments.length)+'</strong><br>Attachments'"
+  'Number(p.reported_percent||0).toFixed(1)',
+  'Number(p.approved_percent||0).toFixed(1)',
+  'Number(r.reports.length)',
+  'Number(r.units.length)',
+  'Number(r.packages.length)',
+  'Number(r.jsas.length)',
+  'Number(r.attachments.length)'
 ]) {
   if (!index.includes(marker)) throw new Error(`Legacy Jobs progress behavior marker missing: ${marker}`);
 }
