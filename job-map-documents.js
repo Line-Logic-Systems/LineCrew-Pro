@@ -7,6 +7,8 @@
   let pendingPacketPdf = null;
   let uploadInFlight = false;
   let lastUiKey = '';
+  let syncScheduled = false;
+  const observedTargets = new WeakSet();
   const completedUploads = new Set();
 
   function byId(id){ return document.getElementById(id); }
@@ -155,7 +157,32 @@
     if(pendingPacketPdf)void preservePendingPacket();
   }
 
-  const observer=new MutationObserver(()=>requestAnimationFrame(syncUi));
-  function init(){observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});[0,250,900,2200].forEach(delay=>setTimeout(syncUi,delay));window.addEventListener('focus',syncUi);}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+  function scheduleSync(){
+    if(syncScheduled)return;
+    syncScheduled=true;
+    requestAnimationFrame(()=>{syncScheduled=false;syncUi();installScopedObservers();});
+  }
+
+  function observeTarget(target){
+    if(!target||observedTargets.has(target))return;
+    observedTargets.add(target);
+    const observer=new MutationObserver(scheduleSync);
+    observer.observe(target,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+  }
+
+  function installScopedObservers(){
+    observeTarget(byId('jobPackageDetailCard'));
+    observeTarget(byId('dailyUnitEditor'));
+    observeTarget(byId('jobsPage'));
+  }
+
+  function init(){
+    installScopedObservers();
+    scheduleSync();
+    [250,900,2200].forEach(delay=>setTimeout(scheduleSync,delay));
+    window.addEventListener('focus',scheduleSync);
+    window.addEventListener('pageshow',scheduleSync);
+    document.addEventListener('linecrew:pagechange',scheduleSync);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
