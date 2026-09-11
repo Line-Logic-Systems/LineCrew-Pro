@@ -15,6 +15,8 @@
   let uploadRows = [];
   let lastAutoLoadKey = null;
   let refreshTimer = null;
+  let timekeepingObserver = null;
+  let dailyObserver = null;
 
   const normalized = (value) => String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
@@ -182,11 +184,32 @@
     },80);
   }
 
+  function attachScopedObservers(){
+    const timekeepingPage=byId('timekeepingPage');
+    if(timekeepingPage&&!timekeepingObserver){
+      timekeepingObserver=new MutationObserver(scheduleRefresh);
+      timekeepingObserver.observe(timekeepingPage,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+    }
+    const dailyForm=byId('dailyReportForm');
+    if(dailyForm&&!dailyObserver){
+      dailyObserver=new MutationObserver(scheduleRefresh);
+      dailyObserver.observe(dailyForm,{subtree:true,childList:true,attributes:true,attributeFilter:['class','data-report-id']});
+    }
+    return !!timekeepingPage&&!!dailyForm;
+  }
+
   function init(){
     addStyles();
     scheduleRefresh();
-    const observer=new MutationObserver(scheduleRefresh);
-    observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
+    if(!attachScopedObservers()){
+      const attachObserver=new MutationObserver(()=>{
+        scheduleRefresh();
+        if(attachScopedObservers())attachObserver.disconnect();
+      });
+      attachObserver.observe(document.body,{subtree:true,childList:true});
+    }
+    [250,800,1800].forEach(delay=>setTimeout(()=>{attachScopedObservers();scheduleRefresh();},delay));
+    window.addEventListener('pageshow',()=>{attachScopedObservers();scheduleRefresh();});
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
