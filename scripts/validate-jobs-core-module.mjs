@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate'];
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
@@ -57,6 +57,28 @@ if (actualDate !== expectedDate) {
   throw new Error(`formatCompletedJobDate() returned ${JSON.stringify(actualDate)}; expected ${JSON.stringify(expectedDate)}.`);
 }
 
+const unitRecord = {units:[{
+  work_date:'2026-09-10',foreman_name:'Alex Foreman',crew_name:'Crew 1',
+  pole_location:'WP-12',work_point:'WP-FALLBACK',item_code:'U100',unit_code:'ALT',
+  item_name:'Primary description',unit_name:'Secondary',description:'Fallback',
+  install_quantity:'2.5',transfer_quantity:'1',retirement_quantity:'0',remove_quantity:'4',
+  authorization_status:'approved_redline',visible_line_value:'125.50',adjusted_line_value:'99',actual_line_value:'80'
+},{
+  work_point:'WP-2',unit_code:'U200',description:'Fallback description',remove_quantity:'3',actual_line_value:'45'
+}]};
+const expectedUnitRows = [{
+  'Work Date':'2026-09-10','Foreman':'Alex Foreman','Crew':'Crew 1','Pole / Work Point':'WP-12',
+  'Unit Code':'U100','Description':'Primary description','Installed':2.5,'Transferred':1,'Removed':0,
+  'Authorization':'approved redline','Visible Value':125.5
+},{
+  'Work Date':'','Foreman':'','Crew':'','Pole / Work Point':'WP-2','Unit Code':'U200',
+  'Description':'Fallback description','Installed':0,'Transferred':0,'Removed':3,'Authorization':'','Visible Value':45
+}];
+const actualUnitRows = core.completedJobUnitRows(unitRecord);
+if (JSON.stringify(actualUnitRows) !== JSON.stringify(expectedUnitRows)) {
+  throw new Error(`completedJobUnitRows() parity failed: ${JSON.stringify(actualUnitRows)}`);
+}
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
@@ -72,7 +94,8 @@ if (!serviceWorker.includes("'/jobs-core.js?v=20260910a'")) {
 for (const signature of [
   'function fileNameWithoutExtension(value){',
   'function jobPacketFileValidationMessage(file){',
-  'function formatCompletedJobDate(value){'
+  'function formatCompletedJobDate(value){',
+  'function completedJobUnitRows(record){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline Jobs fallback missing: ${signature}`);
 }
@@ -81,6 +104,7 @@ console.log('Jobs core modularization guard passed.');
 console.log('- packet filename display helper matches legacy behavior');
 console.log('- packet file type/size validation matches legacy behavior');
 console.log('- completed-job date formatting matches legacy behavior');
+console.log('- completed-job unit export/display row formatting matches legacy behavior');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline');
 console.log('- inline fallbacks remain available if the module cannot load');
