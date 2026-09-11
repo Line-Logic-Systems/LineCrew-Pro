@@ -97,6 +97,56 @@
     return totals;
   }
 
+  function utilityPrimaryMetrics(
+    reports,
+    valueSummaries = new Map(),
+    authorizationSummaries = new Map(),
+    options = {}
+  ) {
+    const list = Array.isArray(reports) ? reports : [];
+    const totals = reportingTotals(list, valueSummaries, authorizationSummaries);
+    const approvedReports = list.filter(
+      report => String(report?.status || '').toLowerCase() === 'approved'
+    );
+    const approvedTotals = reportingTotals(
+      approvedReports,
+      valueSummaries,
+      authorizationSummaries
+    );
+    const awaitingReview = list.filter(
+      report => report?.archived !== true &&
+        String(report?.status || '').toLowerCase() === 'submitted'
+    ).length;
+    const showActual = options?.showActual === true;
+    const showField = options?.showField === true;
+    const showMoney = showActual || showField;
+    const approvedValue = showActual
+      ? approvedTotals.actualValue
+      : approvedTotals.fieldValue;
+    const totalValue = showActual ? totals.actualValue : totals.fieldValue;
+    const hours = totals.regularHours + totals.overtimeHours;
+    const runRate = hours ? totalValue / hours : 0;
+    const activeJobCount = new Set(
+      list
+        .filter(report => report?.jobs?.active === true)
+        .map(report => String(report?.job_id || ''))
+        .filter(Boolean)
+    ).size;
+
+    return {
+      awaitingReview,
+      approvedValue,
+      totalValue,
+      hours,
+      runRate,
+      activeJobCount,
+      approvedReports: approvedTotals.approved,
+      showActual,
+      showField,
+      showMoney
+    };
+  }
+
   function runtimeReportingTotals(reports) {
     try {
       if (
@@ -124,6 +174,7 @@
     groupReportsByContractJob,
     groupReportsByUtility,
     reportingTotals,
+    utilityPrimaryMetrics,
     runtimeReportingTotals
   });
   window.LineCrewProductionCore = api;
@@ -133,5 +184,6 @@
   window.productionGroupReportsByContractJob = groupReportsByContractJob;
   window.productionGroupReportsByUtility = groupReportsByUtility;
   window.productionReportingTotalsCore = reportingTotals;
+  window.productionUtilityPrimaryMetricsCore = utilityPrimaryMetrics;
   window.productionReportingTotals = runtimeReportingTotals;
 })();
