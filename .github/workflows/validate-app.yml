@@ -110,6 +110,9 @@ jobs:
       - name: Validate staged Production modularization
         run: node scripts/validate-production-core-module.mjs
 
+      - name: Validate Production presentation boundaries
+        run: node scripts/validate-production-presentation-regressions.mjs
+
       - name: Validate staged Price Book modularization
         run: node scripts/validate-price-book-core-module.mjs
 
