@@ -24,10 +24,19 @@
     return '';
   }
 
-  const api = Object.freeze({ urlBase64ToUint8Array, pushUnsupportedReason });
+  function pushPromiseWithTimeout(promise, timeoutMs, message){
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+  }
+
+  const api = Object.freeze({ urlBase64ToUint8Array, pushUnsupportedReason, pushPromiseWithTimeout });
   window.LineCrewNotificationsCore = api;
 
   // Compatibility bridges while the legacy inline copies remain available.
   window.urlBase64ToUint8Array = urlBase64ToUint8Array;
   window.pushUnsupportedReason = pushUnsupportedReason;
+  window.pushPromiseWithTimeout = pushPromiseWithTimeout;
 })();
