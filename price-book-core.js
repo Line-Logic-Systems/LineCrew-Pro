@@ -5,10 +5,7 @@
   'use strict';
 
   function normalizeImportHeader(value) {
-    return String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '');
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
   }
 
   function importEditDistance(left, right) {
@@ -20,11 +17,7 @@
       row[0] = i;
       for (let j = 1; j <= b.length; j++) {
         const held = row[j];
-        row[j] = Math.min(
-          row[j] + 1,
-          row[j - 1] + 1,
-          previous + (a[i - 1] === b[j - 1] ? 0 : 1)
-        );
+        row[j] = Math.min(row[j] + 1,row[j - 1] + 1,previous + (a[i - 1] === b[j - 1] ? 0 : 1));
         previous = held;
       }
     }
@@ -35,13 +28,8 @@
     const normalized = normalizeImportHeader(value);
     if (!normalized) return 0;
     if (aliases.includes(normalized)) return 1;
-    if (aliases.some(alias =>
-      alias.length >= 5 &&
-      (normalized.includes(alias) || (normalized.length >= 6 && alias.includes(normalized)))
-    )) return .92;
-    if (normalized.length >= 5 && aliases.some(alias =>
-      alias.length >= 5 && importEditDistance(normalized, alias) === 1
-    )) return .82;
+    if (aliases.some(alias => alias.length >= 5 && (normalized.includes(alias) || (normalized.length >= 6 && alias.includes(normalized))))) return .92;
+    if (normalized.length >= 5 && aliases.some(alias => alias.length >= 5 && importEditDistance(normalized, alias) === 1)) return .82;
     return 0;
   }
 
@@ -66,20 +54,17 @@
 
   function importPrice(value) {
     if (value === '' || value === null || typeof value === 'undefined') return 0;
-    const cleaned = String(value)
-      .replace(/[$,\s]/g, '')
-      .replace(/^\((.*)\)$/, '-$1');
+    const cleaned = String(value).replace(/[$,\s]/g, '').replace(/^\((.*)\)$/, '-$1');
     return Number(cleaned);
   }
 
-  const api = Object.freeze({
-    normalizeImportHeader,
-    importEditDistance,
-    importHeaderMatchConfidence,
-    normalizedPriceWorkType,
-    importCell,
-    importPrice
-  });
+  function numericImportPrice(value){
+    if(String(value ?? '').trim() === '') return null;
+    const price = importPrice(value);
+    return Number.isFinite(price) && price >= 0 ? price : null;
+  }
+
+  const api = Object.freeze({ normalizeImportHeader, importEditDistance, importHeaderMatchConfidence, normalizedPriceWorkType, importCell, importPrice, numericImportPrice });
   window.LineCrewPriceBookCore = api;
 
   // Compatibility bridges while the legacy inline copies still exist.
@@ -89,4 +74,5 @@
   window.normalizedPriceWorkType = normalizedPriceWorkType;
   window.importCell = importCell;
   window.importPrice = importPrice;
+  window.numericImportPrice = numericImportPrice;
 })();
