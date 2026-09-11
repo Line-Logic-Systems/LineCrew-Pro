@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'jobs-core.js' });
 const core = sandbox.window.LineCrewJobsCore;
-const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel'];
+const helperNames = ['fileNameWithoutExtension','jobPacketFileValidationMessage','formatCompletedJobDate','completedJobUnitRows','jobPackageRevisionLabel','normalizeJobPacketPoint','jobProgressViewModel','jobPackagesForJob','jobPackageOpenButtonLabel','jobPackageDetailSubtitle'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Jobs core module must expose ${name}().`);
 }
@@ -99,6 +99,16 @@ for (const [count, expected] of [[1,'Open Package'],[2,'View Packages'],[0,'View
   if (actual !== expected) throw new Error(`jobPackageOpenButtonLabel(${JSON.stringify(count)}) returned ${actual}; expected ${expected}.`);
 }
 
+for (const [packet, expected] of [
+  [{package_number:'WO-100',status:'approved',source_filename:'packet.pdf'},'Reference: WO-100 · Status: APPROVED · Source: packet.pdf'],
+  [{package_number:'WO-200',status:'draft'},'Reference: WO-200 · Status: DRAFT'],
+  [{status:'review'},'Reference: Not provided · Status: REVIEW'],
+  [{},'Reference: Not provided · Status: DRAFT']
+]) {
+  const actual = core.jobPackageDetailSubtitle(packet);
+  if (actual !== expected) throw new Error(`jobPackageDetailSubtitle(${JSON.stringify(packet)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
+}
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Jobs core compatibility bridge ${name} is not active.`);
 }
@@ -119,12 +129,15 @@ for (const marker of [
   'if(!contracts.has(contract)) contracts.set(contract,[]);',
   'const jobPackages = currentJobPackageCatalog.filter(',
   'jobPackage => String(jobPackage.job_id) === String(job.id)',
-  "openPackageButton.textContent = jobPackages.length === 1 ? 'Open Package' : 'View Packages';"
+  "openPackageButton.textContent = jobPackages.length === 1 ? 'Open Package' : 'View Packages';",
+  "const source = currentOpenJobPackage.source_filename",
+  "'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +",
+  "' · Status: ' + status.toUpperCase() + source;"
 ]) {
   if (!index.includes(marker)) throw new Error(`Legacy Jobs progress behavior marker missing: ${marker}`);
 }
 
 console.log('Jobs core modularization guard passed.');
 console.log('- existing Jobs helpers and job-packet normalization match legacy behavior');
-console.log('- Jobs progress filtering, search, sorting, paging, grouping, package matching, and package labels are parity-tested');
+console.log('- Jobs progress filtering, search, sorting, paging, grouping, package matching, labels, and detail subtitle are parity-tested');
 console.log('- compatibility bridges are active; module is offline-capable; inline renderer remains available');

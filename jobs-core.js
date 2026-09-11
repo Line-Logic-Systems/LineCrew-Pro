@@ -205,6 +205,15 @@
     return Number(packageCount) === 1 ? 'Open Package' : 'View Packages';
   }
 
+  function jobPackageDetailSubtitle(jobPackage = {}){
+    const status = String(jobPackage?.status || 'draft').toUpperCase();
+    const source = jobPackage?.source_filename
+      ? ' · Source: ' + jobPackage.source_filename
+      : '';
+    return 'Reference: ' + (jobPackage?.package_number || 'Not provided') +
+      ' · Status: ' + status + source;
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -219,7 +228,8 @@
     jobAssignmentPanelViewModel,
     jobAssignmentRowViewModel,
     jobPackagesForJob,
-    jobPackageOpenButtonLabel
+    jobPackageOpenButtonLabel,
+    jobPackageDetailSubtitle
   });
   window.LineCrewJobsCore = api;
 
@@ -238,4 +248,5 @@
   window.jobAssignmentRowViewModel = jobAssignmentRowViewModel;
   window.jobPackagesForJob = jobPackagesForJob;
   window.jobPackageOpenButtonLabel = jobPackageOpenButtonLabel;
+  window.jobPackageDetailSubtitle = jobPackageDetailSubtitle;
 })();
