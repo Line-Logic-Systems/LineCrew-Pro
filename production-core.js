@@ -8,6 +8,10 @@
     typeof window.productionReportingTotals === 'function'
       ? window.productionReportingTotals
       : null;
+  const legacyProductionReportingMetricsMarkup =
+    typeof window.productionReportingMetricsMarkup === 'function'
+      ? window.productionReportingMetricsMarkup
+      : null;
   const legacyProductionUtilityPrimaryMetricsMarkup =
     typeof window.productionUtilityPrimaryMetricsMarkup === 'function'
       ? window.productionUtilityPrimaryMetricsMarkup
@@ -248,6 +252,38 @@
     return reportingTotals(reports);
   }
 
+  function runtimeReportingMetricsMarkup(reports, wrapperTag = 'div') {
+    try {
+      if (
+        typeof currentDailyReportValueSummaries !== 'undefined' &&
+        typeof currentDailyAuthorizationSummaries !== 'undefined' &&
+        typeof userCanSeeActualContractPrices === 'function' &&
+        typeof userCanSeeFieldMoney === 'function' &&
+        typeof formatCurrency === 'function' &&
+        typeof escapeHtml === 'function'
+      ) {
+        return reportingMetricsMarkup(
+          reports,
+          wrapperTag,
+          currentDailyReportValueSummaries,
+          currentDailyAuthorizationSummaries,
+          {
+            showActual: userCanSeeActualContractPrices(),
+            showField: userCanSeeFieldMoney()
+          },
+          { formatCurrency, escapeHtml }
+        );
+      }
+    } catch (error) {
+      // Fall through to the captured inline implementation.
+    }
+
+    if (legacyProductionReportingMetricsMarkup) {
+      return legacyProductionReportingMetricsMarkup(reports, wrapperTag);
+    }
+    return reportingMetricsMarkup(reports, wrapperTag);
+  }
+
   function runtimeUtilityPrimaryMetricsMarkup(reports) {
     try {
       if (
@@ -288,6 +324,7 @@
     utilityPrimaryMetrics,
     utilityPrimaryMetricsMarkup,
     runtimeReportingTotals,
+    runtimeReportingMetricsMarkup,
     runtimeUtilityPrimaryMetricsMarkup
   });
   window.LineCrewProductionCore = api;
@@ -301,5 +338,6 @@
   window.productionUtilityPrimaryMetricsCore = utilityPrimaryMetrics;
   window.productionUtilityPrimaryMetricsMarkupCore = utilityPrimaryMetricsMarkup;
   window.productionReportingTotals = runtimeReportingTotals;
+  window.productionReportingMetricsMarkup = runtimeReportingMetricsMarkup;
   window.productionUtilityPrimaryMetricsMarkup = runtimeUtilityPrimaryMetricsMarkup;
 })();
