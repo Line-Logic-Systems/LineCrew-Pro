@@ -23,10 +23,20 @@
     return !navigator.onLine || /failed to fetch|network|load failed|timeout|timed out|connection/.test(message);
   }
 
-  const api = Object.freeze({ uniqueOfflineJsaJobs, offlineJsaNetworkFailure });
+  function companyAccessInactive(error){
+    const text = String(error?.message || '') + ' ' + String(error?.hint || '');
+    return /company access is inactive/i.test(text);
+  }
+
+  const api = Object.freeze({
+    uniqueOfflineJsaJobs,
+    offlineJsaNetworkFailure,
+    companyAccessInactive
+  });
   window.LineCrewAppCore = api;
 
   // Compatibility bridges while the legacy inline copies remain available.
   window.uniqueOfflineJsaJobs = uniqueOfflineJsaJobs;
   window.offlineJsaNetworkFailure = offlineJsaNetworkFailure;
+  window.companyAccessInactive = companyAccessInactive;
 })();
