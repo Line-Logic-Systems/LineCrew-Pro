@@ -45,12 +45,24 @@
     return revision > 1 ? 'Revision ' + (revision - 1) : 'Original Packet';
   }
 
+  function normalizeJobPacketPoint(value){
+    const key = String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/^(pole|wp|work[\s_-]*point)[\s#:_-]*/i, '')
+      .replace(/[^a-z0-9]+/g, '');
+    return /^\d+$/.test(key)
+      ? (key.replace(/^0+(?=\d)/, '') || '0')
+      : key;
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
     formatCompletedJobDate,
     completedJobUnitRows,
-    jobPackageRevisionLabel
+    jobPackageRevisionLabel,
+    normalizeJobPacketPoint
   });
   window.LineCrewJobsCore = api;
 
@@ -60,4 +72,5 @@
   window.formatCompletedJobDate = formatCompletedJobDate;
   window.completedJobUnitRows = completedJobUnitRows;
   window.jobPackageRevisionLabel = jobPackageRevisionLabel;
+  window.normalizeJobPacketPoint = normalizeJobPacketPoint;
 })();
