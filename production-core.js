@@ -101,6 +101,41 @@
     return totals;
   }
 
+  function reportingMetricsMarkup(
+    reports,
+    wrapperTag = 'div',
+    valueSummaries = new Map(),
+    authorizationSummaries = new Map(),
+    options = {},
+    helpers = {}
+  ) {
+    const totals = reportingTotals(reports, valueSummaries, authorizationSummaries);
+    const tag = wrapperTag === 'span' ? 'span' : 'div';
+    const formatMoney = typeof helpers.formatCurrency === 'function'
+      ? helpers.formatCurrency
+      : value => String(value);
+    const escape = typeof helpers.escapeHtml === 'function'
+      ? helpers.escapeHtml
+      : value => String(value);
+    const showActual = options?.showActual === true;
+    const showField = options?.showField === true;
+
+    return '<' + tag + ' class="daily-value-summary production-reporting-group-metrics">' +
+      '<span><strong>' + totals.reports + '</strong><br>Reports</span>' +
+      '<span><strong>' + totals.approved + '</strong><br>Completed</span>' +
+      (showActual
+        ? '<span><strong>' + escape(formatMoney(totals.actualValue)) + '</strong><br>Actual Unit Value</span>'
+        : '') +
+      (showField
+        ? '<span><strong>' + escape(formatMoney(totals.fieldValue)) + '</strong><br>Field Unit Value</span>'
+        : '') +
+      '<span><strong>' + totals.regularHours + '</strong><br>Regular Hours</span>' +
+      '<span><strong>' + totals.overtimeHours + '</strong><br>OT Hours</span>' +
+      '<span><strong>' + totals.redlines + '</strong><br>Redlines</span>' +
+      '<span><strong>' + totals.pending + '</strong><br>Pending Job Units</span>' +
+      '</' + tag + '>';
+  }
+
   function utilityPrimaryMetrics(
     reports,
     valueSummaries = new Map(),
@@ -249,6 +284,7 @@
     groupReportsByContractJob,
     groupReportsByUtility,
     reportingTotals,
+    reportingMetricsMarkup,
     utilityPrimaryMetrics,
     utilityPrimaryMetricsMarkup,
     runtimeReportingTotals,
@@ -261,6 +297,7 @@
   window.productionGroupReportsByContractJob = groupReportsByContractJob;
   window.productionGroupReportsByUtility = groupReportsByUtility;
   window.productionReportingTotalsCore = reportingTotals;
+  window.productionReportingMetricsMarkupCore = reportingMetricsMarkup;
   window.productionUtilityPrimaryMetricsCore = utilityPrimaryMetrics;
   window.productionUtilityPrimaryMetricsMarkupCore = utilityPrimaryMetricsMarkup;
   window.productionReportingTotals = runtimeReportingTotals;
