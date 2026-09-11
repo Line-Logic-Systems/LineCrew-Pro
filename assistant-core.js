@@ -18,9 +18,16 @@
     return ASSISTANT_MEMORY_TRIGGER_LABELS[String(trigger || '')] || 'Saved reminder';
   }
 
-  const api = Object.freeze({ assistantMemoryTriggerLabel });
+  function assistantMemoryJobLabel(memory){
+    const job = Array.isArray(memory?.jobs) ? memory.jobs[0] : memory?.jobs;
+    if(!job) return 'Selected job';
+    return [job.job_number,job.job_name].filter(Boolean).join(' — ') || 'Selected job';
+  }
+
+  const api = Object.freeze({ assistantMemoryTriggerLabel, assistantMemoryJobLabel });
   window.LineCrewAssistantCore = api;
 
-  // Compatibility bridge while the legacy inline copy remains available.
+  // Compatibility bridges while the legacy inline copies remain available.
   window.assistantMemoryTriggerLabel = assistantMemoryTriggerLabel;
+  window.assistantMemoryJobLabel = assistantMemoryJobLabel;
 })();
