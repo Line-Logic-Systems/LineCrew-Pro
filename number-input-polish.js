@@ -66,3 +66,16 @@
   script.onerror = () => console.warn('Production core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
 })();
+
+/* Staged Price Book modularization bootstrap.
+ * The legacy inline helpers remain the fallback if this module cannot load.
+ */
+(() => {
+  if (window.LineCrewPriceBookCore || document.querySelector('script[data-linecrew-price-book-core]')) return;
+  const script = document.createElement('script');
+  script.src = '/price-book-core.js?v=20260910a';
+  script.defer = false;
+  script.dataset.linecrewPriceBookCore = '1';
+  script.onerror = () => console.warn('Price Book core module unavailable; using inline compatibility fallback.');
+  document.head.appendChild(script);
+})();
