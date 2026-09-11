@@ -24,10 +24,27 @@
     return value ? new Date(value).toLocaleString() : 'Not recorded';
   }
 
+  function completedJobUnitRows(record){
+    return record.units.map(unit=>({
+      'Work Date':unit.work_date||'',
+      'Foreman':unit.foreman_name||'',
+      'Crew':unit.crew_name||'',
+      'Pole / Work Point':unit.pole_location||unit.work_point||'',
+      'Unit Code':unit.item_code||unit.unit_code||'',
+      'Description':unit.item_name||unit.unit_name||unit.description||'',
+      'Installed':Number(unit.install_quantity||0),
+      'Transferred':Number(unit.transfer_quantity||0),
+      'Removed':Number(unit.retirement_quantity||unit.remove_quantity||0),
+      'Authorization':String(unit.authorization_status||'').replaceAll('_',' '),
+      'Visible Value':Number(unit.visible_line_value||unit.adjusted_line_value||unit.actual_line_value||0)
+    }));
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
-    formatCompletedJobDate
+    formatCompletedJobDate,
+    completedJobUnitRows
   });
   window.LineCrewJobsCore = api;
 
@@ -35,4 +52,5 @@
   window.fileNameWithoutExtension = fileNameWithoutExtension;
   window.jobPacketFileValidationMessage = jobPacketFileValidationMessage;
   window.formatCompletedJobDate = formatCompletedJobDate;
+  window.completedJobUnitRows = completedJobUnitRows;
 })();
