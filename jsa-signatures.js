@@ -152,6 +152,28 @@
     if(picName&&!picSig)toast('Please sign the JSA Leader / Person in Charge signature box.','warning');
   }
 
-  function init(){addStyles();upgrade();document.addEventListener('click',validate,true);const obs=new MutationObserver(upgrade);obs.observe(document.body,{subtree:true,childList:true})}
+  let safetyObserver=null;
+  function attachSafetyObserver(){
+    const page=byId('safetyPage');
+    if(!page||safetyObserver)return !!page;
+    safetyObserver=new MutationObserver(upgrade);
+    safetyObserver.observe(page,{subtree:true,childList:true});
+    return true;
+  }
+
+  function init(){
+    addStyles();
+    upgrade();
+    document.addEventListener('click',validate,true);
+    if(!attachSafetyObserver()){
+      const attachObserver=new MutationObserver(()=>{
+        upgrade();
+        if(attachSafetyObserver())attachObserver.disconnect();
+      });
+      attachObserver.observe(document.body,{childList:true,subtree:true});
+    }
+    [250,800,1800].forEach(delay=>setTimeout(()=>{attachSafetyObserver();upgrade();},delay));
+    window.addEventListener('pageshow',()=>{attachSafetyObserver();upgrade();});
+  }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
