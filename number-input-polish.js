@@ -80,6 +80,19 @@
   document.head.appendChild(script);
 })();
 
+/* Staged Billing Core modularization bootstrap.
+ * The legacy inline helper remains the fallback if this module cannot load.
+ */
+(() => {
+  if (window.LineCrewBillingCore || document.querySelector('script[data-linecrew-billing-core]')) return;
+  const script = document.createElement('script');
+  script.src = '/billing-core.js?v=20260910a';
+  script.defer = false;
+  script.dataset.linecrewBillingCore = '1';
+  script.onerror = () => console.warn('Billing core module unavailable; using inline compatibility fallback.');
+  document.head.appendChild(script);
+})();
+
 /* Staged Daily Report modularization bootstrap.
  * The legacy inline helper remains the fallback if this module cannot load.
  */
