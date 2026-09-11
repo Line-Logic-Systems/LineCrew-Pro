@@ -183,6 +183,11 @@
     };
   }
 
+  function jobPackagesForJob(packages = [], jobId = ''){
+    const list = Array.isArray(packages) ? packages : [];
+    return list.filter(jobPackage => String(jobPackage?.job_id) === String(jobId));
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -194,7 +199,8 @@
     simpleJobBrowserViewModel,
     jobProgressRowViewModel,
     jobCardDisplayModel,
-    jobAssignmentPanelViewModel
+    jobAssignmentPanelViewModel,
+    jobPackagesForJob
   });
   window.LineCrewJobsCore = api;
 
@@ -210,4 +216,5 @@
   window.jobProgressRowViewModel = jobProgressRowViewModel;
   window.jobCardDisplayModel = jobCardDisplayModel;
   window.jobAssignmentPanelViewModel = jobAssignmentPanelViewModel;
+  window.jobPackagesForJob = jobPackagesForJob;
 })();
