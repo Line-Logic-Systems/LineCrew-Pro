@@ -77,6 +77,12 @@ jobs:
       - name: Validate company logo upload and branding
         run: node scripts/validate-company-logo-upload.mjs
 
+      - name: Validate Admin AI assistant safety boundaries
+        run: |
+          node scripts/validate-assistant-knowledge.mjs
+          node scripts/validate-assistant-live-context.mjs
+          node scripts/validate-assistant-memory.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
