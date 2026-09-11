@@ -9,7 +9,8 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'billing-core.js' });
 const core = sandbox.window.LineCrewBillingCore;
-for (const name of ['billingStatusLabel','billingStageLabel']) {
+const helperNames = ['billingStatusLabel','billingStageLabel','completeBillingSafeName'];
+for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Billing core module must expose ${name}().`);
 }
 
@@ -32,16 +33,30 @@ for (const [batch, expected] of [
   if (actual !== expected) throw new Error(`billingStageLabel(${JSON.stringify(batch)}) returned ${actual}; expected ${expected}.`);
 }
 
-for (const name of ['billingStatusLabel','billingStageLabel']) {
+for (const [value, fallback, expected] of [
+  [null,'record','record'],
+  ['','job','job'],
+  ['Job 123','record','Job-123'],
+  ['  A/B:C*D?  ','record','A-B-C-D'],
+  ['job_packet.v2','record','job_packet.v2'],
+  ['---','fallback','fallback']
+]) {
+  const actual = core.completeBillingSafeName(value, fallback);
+  if (actual !== expected) throw new Error(`completeBillingSafeName(${JSON.stringify(value)}, ${JSON.stringify(fallback)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
+}
+const longName = 'A'.repeat(140);
+if (core.completeBillingSafeName(longName).length !== 110) throw new Error('completeBillingSafeName() must preserve the 110-character filename cap.');
+
+for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`Billing core compatibility bridge ${name} is not active.`);
 }
 if (!bootstrap.includes("script.src = '/billing-core.js?v=20260910a'")) throw new Error('Billing core module is not bootstrapped by the existing front-end loader path.');
 if (!bootstrap.includes('Billing core module unavailable; using inline compatibility fallback.')) throw new Error('Billing core loader must retain an explicit inline fallback path.');
 if (!serviceWorker.includes("'/billing-core.js?v=20260910a'")) throw new Error('Billing core module must remain in the offline app shell.');
-for (const signature of ['function billingStatusLabel(status){','function billingStageLabel(batch){']) {
+for (const signature of ['function billingStatusLabel(status){','function billingStageLabel(batch){',"function completeBillingSafeName(value,fallback='record'){"]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline Billing fallback missing: ${signature}`);
 }
 
 console.log('Billing core modularization guard passed.');
-console.log('- billing status and stage labels match legacy behavior');
+console.log('- billing status/stage labels and safe export filenames match legacy behavior');
 console.log('- compatibility bridges are active; module is offline-capable; inline fallbacks remain available');
