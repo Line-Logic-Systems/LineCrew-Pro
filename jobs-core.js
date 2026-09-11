@@ -214,6 +214,20 @@
       ' · Status: ' + status + source;
   }
 
+  function completedJobSummaryViewModel(record = {}){
+    const progress = record?.progress || {};
+    const count = value => Array.isArray(value) ? value.length : 0;
+    return {
+      reportedPercent: Number(progress?.reported_percent || 0).toFixed(1),
+      approvedPercent: Number(progress?.approved_percent || 0).toFixed(1),
+      dailyReports: count(record?.reports),
+      unitLines: count(record?.units),
+      packetRevisions: count(record?.packages),
+      jsas: count(record?.jsas),
+      attachments: count(record?.attachments)
+    };
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -229,7 +243,8 @@
     jobAssignmentRowViewModel,
     jobPackagesForJob,
     jobPackageOpenButtonLabel,
-    jobPackageDetailSubtitle
+    jobPackageDetailSubtitle,
+    completedJobSummaryViewModel
   });
   window.LineCrewJobsCore = api;
 
@@ -249,4 +264,5 @@
   window.jobPackagesForJob = jobPackagesForJob;
   window.jobPackageOpenButtonLabel = jobPackageOpenButtonLabel;
   window.jobPackageDetailSubtitle = jobPackageDetailSubtitle;
+  window.completedJobSummaryViewModel = completedJobSummaryViewModel;
 })();
