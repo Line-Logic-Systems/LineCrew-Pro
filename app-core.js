@@ -35,11 +35,20 @@
       .find(line => /:\d+:\d+/.test(line)) || '';
   }
 
+  function desktopViewEnabled(){
+    try{
+      return localStorage.getItem('linecrew-pro-desktop-view') === '1';
+    }catch(error){
+      return document.documentElement.classList.contains('desktop-view');
+    }
+  }
+
   const api = Object.freeze({
     uniqueOfflineJsaJobs,
     offlineJsaNetworkFailure,
     companyAccessInactive,
-    firstStackFrame
+    firstStackFrame,
+    desktopViewEnabled
   });
   window.LineCrewAppCore = api;
 
@@ -48,4 +57,5 @@
   window.offlineJsaNetworkFailure = offlineJsaNetworkFailure;
   window.companyAccessInactive = companyAccessInactive;
   window.firstStackFrame = firstStackFrame;
+  window.desktopViewEnabled = desktopViewEnabled;
 })();
