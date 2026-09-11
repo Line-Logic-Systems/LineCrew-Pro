@@ -131,6 +131,25 @@
     };
   }
 
+  function jobProgressRowViewModel(job, summary = {}, assignments = [], options = {}){
+    const assignedNames = (Array.isArray(assignments) ? assignments : [])
+      .map(assignment => assignment?.full_name)
+      .filter(Boolean);
+    const role = String(options.role || '');
+    const profileName = String(options.profileName || '');
+    const assignmentLabel = assignedNames.length
+      ? assignedNames.join(', ')
+      : (role === 'foreman' ? (profileName || 'Assigned to you') : 'Unassigned');
+    const active = job?.active === true;
+    return {
+      statusText: active ? 'ACTIVE' : 'CLOSED',
+      statusClass: active ? 'active' : 'closed',
+      assignmentLabel,
+      packageCount: Number(summary?.package_count || 0),
+      workPointCount: Number(summary?.work_point_count || 0)
+    };
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -139,7 +158,8 @@
     jobPackageRevisionLabel,
     normalizeJobPacketPoint,
     jobProgressViewModel,
-    simpleJobBrowserViewModel
+    simpleJobBrowserViewModel,
+    jobProgressRowViewModel
   });
   window.LineCrewJobsCore = api;
 
@@ -152,4 +172,5 @@
   window.normalizeJobPacketPoint = normalizeJobPacketPoint;
   window.jobProgressViewModel = jobProgressViewModel;
   window.simpleJobBrowserViewModel = simpleJobBrowserViewModel;
+  window.jobProgressRowViewModel = jobProgressRowViewModel;
 })();
