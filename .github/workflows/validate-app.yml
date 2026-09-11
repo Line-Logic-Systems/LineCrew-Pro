@@ -47,6 +47,9 @@ jobs:
       - name: Validate Foreman field tools
         run: node scripts/validate-foreman-field-tools.mjs
 
+      - name: Validate GF review and theme
+        run: node scripts/validate-gf-review-theme.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
