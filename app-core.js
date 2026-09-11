@@ -28,10 +28,18 @@
     return /company access is inactive/i.test(text);
   }
 
+  function firstStackFrame(error){
+    return String(error?.stack || '')
+      .split('\n')
+      .map(line => line.trim())
+      .find(line => /:\d+:\d+/.test(line)) || '';
+  }
+
   const api = Object.freeze({
     uniqueOfflineJsaJobs,
     offlineJsaNetworkFailure,
-    companyAccessInactive
+    companyAccessInactive,
+    firstStackFrame
   });
   window.LineCrewAppCore = api;
 
@@ -39,4 +47,5 @@
   window.uniqueOfflineJsaJobs = uniqueOfflineJsaJobs;
   window.offlineJsaNetworkFailure = offlineJsaNetworkFailure;
   window.companyAccessInactive = companyAccessInactive;
+  window.firstStackFrame = firstStackFrame;
 })();
