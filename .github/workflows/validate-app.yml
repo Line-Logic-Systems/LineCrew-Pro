@@ -113,6 +113,9 @@ jobs:
       - name: Validate Production primary markup runtime handoff
         run: node scripts/validate-production-primary-markup-runtime.mjs
 
+      - name: Validate Production reporting metrics markup
+        run: node scripts/validate-production-reporting-metrics-markup.mjs
+
       - name: Validate Production presentation boundaries
         run: node scripts/validate-production-presentation-regressions.mjs
 
