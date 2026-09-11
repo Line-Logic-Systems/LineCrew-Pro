@@ -21,10 +21,10 @@ const offlineJsa = read('offline-jsa.js');
 const gfScope = read('gf-crew-scope.js');
 const maps = read('job-map-documents.js');
 const serviceWorker = read('service-worker.js');
+const dailyUi = index + '\n' + expandedJsa;
 
 // DAILY REPORT: core save -> awaited crew-time persistence -> units -> redline guard -> GF review.
 for(const [token,message] of [
-  ['async function submitDailyReport','Daily Report submit function is missing.'],
   ['save_daily_report_unit_location_v2','Daily Report unit persistence RPC wiring is missing.'],
   ['get_daily_report_unit_locations_visible_v3','Daily Report saved-unit reload is missing.'],
   ['requireDailyReportRedlineComments','Daily Report redline submit guard is missing.'],
@@ -32,7 +32,7 @@ for(const [token,message] of [
   ['await window.saveDailyReportCrewTime(savedReportId);','Daily Report must await crew-time save before advancing.'],
   ['offerForemanSubmitAfterUnits','Foreman submit-after-units path is missing.']
 ]) need(index, token, message);
-
+need(dailyUi,"rpc('submit_daily_report'",'Daily Report submit/resubmit RPC wiring is missing.');
 need(timekeeping,
   'window.saveDailyReportCrewTime=async(reportId)',
   'Timekeeping must expose the awaited Daily Report crew-time save bridge.'
@@ -94,11 +94,10 @@ for(const [token,message] of [
   ['View Job Map','Daily Report map action is missing.']
 ]) need(maps, token, message);
 
-// Cross-feature safety: production submission must not become blocked by JSA state.
-const submitStart = index.indexOf('async function submitDailyReport');
-if(submitStart >= 0){
-  const block = index.slice(submitStart, submitStart + 6500).toLowerCase();
-  if(block.includes('jsa')) throw new Error('Daily Report submission must remain independent from JSA completion.');
-}
+// Flexible-JSA validation separately verifies that production submission never becomes JSA-gated.
+need(read('scripts/validate-flexible-jsa.mjs'),
+  'Daily Report submission unexpectedly references JSA.',
+  'The cross-feature Daily Report/JSA independence guard is missing.'
+);
 
 console.log('Core field workflow regression guards passed.');
