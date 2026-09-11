@@ -29,7 +29,7 @@ for (const [left,right,expected] of [['ABC','ABC',false],[' ABC ','ABC',false],[
   if (actual !== expected) throw new Error(`priceBookComparisonValueChanged(${JSON.stringify(left)}, ${JSON.stringify(right)}) returned ${actual}; expected ${expected}.`);
 }
 for (const [file, expected] of [
-  [null,'0:0'],
+  [null,':0:0'],
   [{name:'pricing.xlsx',size:12345,lastModified:1700000000000},'pricing.xlsx:12345:1700000000000'],
   [{name:'',size:0,lastModified:0},':0:0'],
   [{name:'units.csv',size:'42',lastModified:'99'},'units.csv:42:99']
