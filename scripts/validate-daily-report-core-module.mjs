@@ -4,6 +4,7 @@ import vm from 'node:vm';
 const moduleSource = fs.readFileSync('daily-report-core.js','utf8');
 const bootstrap = fs.readFileSync('number-input-polish.js','utf8');
 const index = fs.readFileSync('index.html','utf8');
+const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'daily-report-core.js' });
@@ -49,6 +50,9 @@ if (!bootstrap.includes("script.src = '/daily-report-core.js?v=20260910a'")) {
 if (!bootstrap.includes('using inline compatibility fallback')) {
   throw new Error('Daily Report module loader must retain an explicit fallback path.');
 }
+if (!serviceWorker.includes("'/daily-report-core.js?v=20260910a'")) {
+  throw new Error('Daily Report core module must remain in the offline app shell before inline fallbacks can be removed.');
+}
 if (!index.includes('function dailyUnitWorkTypeLabel(workType){')) {
   throw new Error('Legacy inline Daily Report work-type helper must remain during the staged extraction rollout.');
 }
@@ -68,4 +72,5 @@ console.log('Daily Report core modularization guard passed.');
 console.log('- extracted module behavior matches legacy work-type labels');
 console.log('- attachment filename sanitizer is extracted with parity fixtures');
 console.log('- compatibility bridges are active');
+console.log('- module is pinned in the service-worker offline app shell');
 console.log('- inline fallbacks remain available if the module cannot load');
