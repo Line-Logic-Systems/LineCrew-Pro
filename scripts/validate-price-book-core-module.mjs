@@ -38,7 +38,7 @@ for (const [[left,right], expected] of distanceCases) {
 const confidenceCases = [
   [['Unit Code',['unitcode','itemcode']], 1],
   [['Unit Code Number',['unitcode','itemcode']], .92],
-  [['Unit Cod',['unitcode','itemcode']], .82],
+  [['Unutcode',['unitcode','itemcode']], .82],
   [['Completely Different',['unitcode','itemcode']], 0],
   [['',['unitcode']], 0]
 ];
