@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'production-core.js' });
 const core = sandbox.window.LineCrewProductionCore;
-for (const name of ['reportUtilityKey','groupReportsByContractJob','groupReportsByUtility']) {
+for (const name of ['reportUtilityKey','groupReportsByContractJob','groupReportsByUtility','reportingTotals']) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Production core module must expose ${name}().`);
 }
 
@@ -23,9 +23,9 @@ for (const [input, expected] of [
   if (actual !== expected) throw new Error(`reportUtilityKey() returned ${actual}; expected ${expected}.`);
 }
 
-const reportA = { id:'r1', job_id:'job-b', jobs:{ job_number:'200', job_name:'Beta', contracts:{ id:'contract-b', contract_number:'20', contract_name:'South', customers:{ id:'utility-b', name:'Beta Utility' } } } };
-const reportB = { id:'r2', job_id:'job-a', jobs:{ job_number:'100', job_name:'Alpha', contracts:{ id:'contract-a', contract_number:'10', contract_name:'North', customers:{ id:'utility-a', name:'Alpha Cooperative' } } } };
-const reportC = { id:'r3', job_id:'job-a', jobs:{ job_number:'100', job_name:'Alpha', contracts:{ id:'contract-a', contract_number:'10', contract_name:'North', customers:{ id:'utility-a', name:'Alpha Cooperative' } } } };
+const reportA = { id:'r1', job_id:'job-b', status:'approved', regular_hours:8, overtime_hours:2, jobs:{ job_number:'200', job_name:'Beta', contracts:{ id:'contract-b', contract_number:'20', contract_name:'South', customers:{ id:'utility-b', name:'Beta Utility' } } } };
+const reportB = { id:'r2', job_id:'job-a', status:'submitted', regular_hours:'10', overtime_hours:'1', jobs:{ job_number:'100', job_name:'Alpha', contracts:{ id:'contract-a', contract_number:'10', contract_name:'North', customers:{ id:'utility-a', name:'Alpha Cooperative' } } } };
+const reportC = { id:'r3', job_id:'job-a', status:'APPROVED', regular_hours:null, overtime_hours:0, jobs:{ job_number:'100', job_name:'Alpha', contracts:{ id:'contract-a', contract_number:'10', contract_name:'North', customers:{ id:'utility-a', name:'Alpha Cooperative' } } } };
 const reportD = { id:'r4', jobs:{} };
 const grouped = core.groupReportsByContractJob([reportA, reportB, reportC, reportD]);
 if (grouped.length !== 3) throw new Error(`Expected 3 contract groups; got ${grouped.length}.`);
@@ -48,10 +48,40 @@ if (utilityGroups[0].reports.length !== 2 || utilityGroups[1].reports.length !==
 if (utilityGroups.some(group => group.id === 'utility-z')) throw new Error('Archived reports must remain excluded from the utility directory.');
 if (core.groupReportsByUtility(null).length !== 0) throw new Error('Null utility input must produce an empty grouping.');
 
+const valueSummaries = new Map([
+  ['r1',{ actual_total:1200.5, adjusted_total:1100 }],
+  ['r2',{ actual_total:'300', adjusted_total:'275.25' }],
+  ['r3',{ actual_total:null, adjusted_total:25 }]
+]);
+const authorizationSummaries = new Map([
+  ['r1',{ redline_count:1, pending_packet_count:2 }],
+  ['r2',{ redline_count:'2', pending_packet_count:'1' }],
+  ['r3',{ redline_count:0, pending_packet_count:3 }]
+]);
+const totals = core.reportingTotals([reportA, reportB, reportC, reportD], valueSummaries, authorizationSummaries);
+const expectedTotals = {
+  reports:4,
+  approved:2,
+  actualValue:1500.5,
+  fieldValue:1400.25,
+  regularHours:18,
+  overtimeHours:3,
+  redlines:3,
+  pending:6
+};
+if (JSON.stringify(totals) !== JSON.stringify(expectedTotals)) {
+  throw new Error(`Production totals parity failed: ${JSON.stringify(totals)} != ${JSON.stringify(expectedTotals)}.`);
+}
+const emptyTotals = core.reportingTotals(null);
+if (JSON.stringify(emptyTotals) !== JSON.stringify({reports:0,approved:0,actualValue:0,fieldValue:0,regularHours:0,overtimeHours:0,redlines:0,pending:0})) {
+  throw new Error('Null Production totals input must return zero totals.');
+}
+
 for (const [bridge, fn] of [
   ['productionReportUtilityKey', core.reportUtilityKey],
   ['productionGroupReportsByContractJob', core.groupReportsByContractJob],
-  ['productionGroupReportsByUtility', core.groupReportsByUtility]
+  ['productionGroupReportsByUtility', core.groupReportsByUtility],
+  ['productionReportingTotalsCore', core.reportingTotals]
 ]) {
   if (sandbox.window[bridge] !== fn) throw new Error(`Production compatibility bridge ${bridge} is not active.`);
 }
@@ -65,14 +95,20 @@ for (const marker of [
   "const jobKey = String(report.job_id || 'no-job');",
   "label:[report.jobs?.job_number, report.jobs?.job_name].filter(Boolean).join(' — ') || 'No Job Assigned'",
   ".filter(report => report.archived !== true)",
-  "name:String(utility.name || 'No Utility / Cooperative Assigned')"
+  "name:String(utility.name || 'No Utility / Cooperative Assigned')",
+  'function productionReportingTotals(reports){',
+  'totals.actualValue += Number(value.actual_total || 0);',
+  'totals.fieldValue += Number(value.adjusted_total || 0);',
+  'totals.redlines += Number(authorization.redline_count || 0);',
+  'totals.pending += Number(authorization.pending_packet_count || 0);'
 ]) {
-  if (!index.includes(marker)) throw new Error(`Legacy Production grouping behavior marker missing: ${marker}`);
+  if (!index.includes(marker)) throw new Error(`Legacy Production behavior marker missing: ${marker}`);
 }
 
 console.log('Production core modularization guard passed.');
 console.log('- utility-key behavior matches legacy behavior');
 console.log('- contract/job grouping labels, sort order, and report membership are parity-tested');
 console.log('- utility directory grouping and archived-report exclusion are parity-tested');
+console.log('- Production report totals are parity-tested without changing live rendering');
 console.log('- compatibility bridges are active; module remains offline-capable');
 console.log('- inline renderer behavior remains available while staged rollout continues');
