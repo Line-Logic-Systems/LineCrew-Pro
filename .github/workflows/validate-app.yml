@@ -98,6 +98,9 @@ jobs:
       - name: Validate simple Jobs browser view-model
         run: node scripts/validate-jobs-simple-browser-view-model.mjs
 
+      - name: Validate Jobs progress row view-model
+        run: node scripts/validate-jobs-progress-row-view-model.mjs
+
       - name: Validate staged Assistant modularization
         run: node scripts/validate-assistant-core-module.mjs
 
