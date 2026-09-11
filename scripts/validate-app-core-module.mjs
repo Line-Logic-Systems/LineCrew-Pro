@@ -9,7 +9,8 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{}, navigator:{onLine:true} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'app-core.js' });
 const core = sandbox.window.LineCrewAppCore;
-for (const name of ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive']) {
+const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame'];
+for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`App core module must expose ${name}().`);
 }
 
@@ -57,7 +58,18 @@ for (const [error, expected] of accessCases) {
   if (actual !== expected) throw new Error(`companyAccessInactive(${JSON.stringify(error)}) returned ${actual}; expected ${expected}.`);
 }
 
-for (const name of ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive']) {
+const stackCases = [
+  [{stack:'Error: Boom\n    at doThing (app.js:12:34)\n    at run (app.js:20:4)'}, 'at doThing (app.js:12:34)'],
+  [{stack:'Error: Boom\nno-location-here'}, ''],
+  [{stack:'Error: Boom\n  https://example.test/app.js:44:9 '}, 'https://example.test/app.js:44:9'],
+  [null, '']
+];
+for (const [error, expected] of stackCases) {
+  const actual = core.firstStackFrame(error);
+  if (actual !== expected) throw new Error(`firstStackFrame() returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
+}
+
+for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`App core compatibility bridge ${name} is not active.`);
 }
 if (!bootstrap.includes("script.src = '/app-core.js?v=20260910a'")) {
@@ -72,7 +84,8 @@ if (!serviceWorker.includes("'/app-core.js?v=20260910a'")) {
 for (const signature of [
   'function uniqueOfflineJsaJobs(jobs){',
   'function offlineJsaNetworkFailure(error){',
-  'function companyAccessInactive(error){'
+  'function companyAccessInactive(error){',
+  'function firstStackFrame(error){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline app-core fallback missing: ${signature}`);
 }
@@ -81,5 +94,6 @@ console.log('App core modularization guard passed.');
 console.log('- offline JSA job deduping/default labels match legacy behavior');
 console.log('- offline/network failure classification matches legacy behavior');
 console.log('- inactive-company error detection matches legacy behavior');
+console.log('- support stack-frame extraction matches legacy behavior');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline and inline fallbacks remain available');
