@@ -30,7 +30,7 @@ const sandbox = {
 };
 vm.runInNewContext(moduleSource, sandbox, { filename:'app-core.js' });
 const core = sandbox.window.LineCrewAppCore;
-const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage'];
+const helperNames = ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage','formatTeamRole'];
 for (const name of helperNames) {
   if (!core || typeof core[name] !== 'function') throw new Error(`App core module must expose ${name}().`);
 }
@@ -115,6 +115,24 @@ sandbox.window.location.pathname = '';
 if (core.currentErrorPage() !== 'app') throw new Error('currentErrorPage() must preserve the final app fallback.');
 sandbox.window.location.pathname = '/index.html';
 
+const roleCases = [
+  ['owner','Owner'],
+  ['manager','Manager'],
+  ['admin','Admin'],
+  ['superintendent','Superintendent'],
+  ['gf','General Foreman'],
+  ['foreman','Foreman'],
+  ['safety','Safety'],
+  ['GF','General Foreman'],
+  ['', 'Foreman'],
+  [null, 'Foreman'],
+  ['unknown-role','Foreman']
+];
+for (const [role, expected] of roleCases) {
+  const actual = core.formatTeamRole(role);
+  if (actual !== expected) throw new Error(`formatTeamRole(${JSON.stringify(role)}) returned ${JSON.stringify(actual)}; expected ${JSON.stringify(expected)}.`);
+}
+
 for (const name of helperNames) {
   if (sandbox.window[name] !== core[name]) throw new Error(`App core compatibility bridge ${name} is not active.`);
 }
@@ -133,7 +151,8 @@ for (const signature of [
   'function companyAccessInactive(error){',
   'function firstStackFrame(error){',
   'function desktopViewEnabled(){',
-  'function currentErrorPage(){'
+  'function currentErrorPage(){',
+  'function formatTeamRole(role){'
 ]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline app-core fallback missing: ${signature}`);
 }
@@ -145,5 +164,6 @@ console.log('- inactive-company error detection matches legacy behavior');
 console.log('- support stack-frame extraction matches legacy behavior');
 console.log('- desktop-view preference and fallback behavior match legacy behavior');
 console.log('- visible-page error telemetry labeling matches legacy behavior');
+console.log('- team role labels match legacy behavior');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline and inline fallbacks remain available');
