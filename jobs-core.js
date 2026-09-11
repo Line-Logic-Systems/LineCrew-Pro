@@ -40,11 +40,17 @@
     }));
   }
 
+  function jobPackageRevisionLabel(jobPackage){
+    const revision = Math.max(1, Number(jobPackage?.revision_number || 1));
+    return revision > 1 ? 'Revision ' + (revision - 1) : 'Original Packet';
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
     formatCompletedJobDate,
-    completedJobUnitRows
+    completedJobUnitRows,
+    jobPackageRevisionLabel
   });
   window.LineCrewJobsCore = api;
 
@@ -53,4 +59,5 @@
   window.jobPacketFileValidationMessage = jobPacketFileValidationMessage;
   window.formatCompletedJobDate = formatCompletedJobDate;
   window.completedJobUnitRows = completedJobUnitRows;
+  window.jobPackageRevisionLabel = jobPackageRevisionLabel;
 })();
