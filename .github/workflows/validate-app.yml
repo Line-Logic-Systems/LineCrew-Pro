@@ -95,6 +95,9 @@ jobs:
       - name: Validate staged Production modularization
         run: node scripts/validate-production-core-module.mjs
 
+      - name: Validate staged Price Book modularization
+        run: node scripts/validate-price-book-core-module.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
