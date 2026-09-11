@@ -95,6 +95,9 @@ jobs:
       - name: Validate staged Jobs modularization
         run: node scripts/validate-jobs-core-module.mjs
 
+      - name: Validate simple Jobs browser view-model
+        run: node scripts/validate-jobs-simple-browser-view-model.mjs
+
       - name: Validate staged Assistant modularization
         run: node scripts/validate-assistant-core-module.mjs
 
