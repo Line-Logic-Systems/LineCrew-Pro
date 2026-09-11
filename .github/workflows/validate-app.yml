@@ -38,6 +38,9 @@ jobs:
       - name: Validate core field workflows
         run: node scripts/validate-core-field-workflows.mjs
 
+      - name: Validate observer scoping
+        run: node scripts/validate-observer-scoping.mjs
+
       - name: Validate end-to-end regression guardrails
         run: node scripts/validate-end-to-end-regressions.mjs
 
