@@ -30,7 +30,19 @@
     return base+extension;
   }
 
-  const api = Object.freeze({ billingStatusLabel, billingStageLabel, completeBillingSafeName, billingSafeStorageFilename });
+  function completeBillingSheetName(label,used){
+    let base=String(label || 'Batch').replace(/[\\/?*\[\]:]/g,' ').trim().slice(0,31) || 'Batch';
+    let name=base;
+    let sequence=2;
+    while(used.has(name)){
+      const suffix=' '+sequence++;
+      name=base.slice(0,31-suffix.length)+suffix;
+    }
+    used.add(name);
+    return name;
+  }
+
+  const api = Object.freeze({ billingStatusLabel, billingStageLabel, completeBillingSafeName, billingSafeStorageFilename, completeBillingSheetName });
   window.LineCrewBillingCore = api;
 
   // Compatibility bridges while the legacy inline copies remain available.
@@ -38,4 +50,5 @@
   window.billingStageLabel = billingStageLabel;
   window.completeBillingSafeName = completeBillingSafeName;
   window.billingSafeStorageFilename = billingSafeStorageFilename;
+  window.completeBillingSheetName = completeBillingSheetName;
 })();
