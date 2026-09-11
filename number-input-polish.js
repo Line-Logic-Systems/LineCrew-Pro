@@ -67,6 +67,19 @@
   document.head.appendChild(script);
 })();
 
+/* Staged Completed Jobs modularization bootstrap.
+ * The live inline archive renderer remains the fallback if this module cannot load.
+ */
+(() => {
+  if (window.LineCrewCompletedJobsCore || document.querySelector('script[data-linecrew-completed-jobs-core]')) return;
+  const script = document.createElement('script');
+  script.src = '/completed-jobs-core.js?v=20260911a';
+  script.defer = false;
+  script.dataset.linecrewCompletedJobsCore = '1';
+  script.onerror = () => console.warn('Completed Jobs core module unavailable; using inline compatibility fallback.');
+  document.head.appendChild(script);
+})();
+
 /* Staged Assistant Core modularization bootstrap.
  * The legacy inline helper remains the fallback if this module cannot load.
  */
