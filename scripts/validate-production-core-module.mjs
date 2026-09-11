@@ -17,7 +17,7 @@ const sandbox = {
 };
 vm.runInNewContext(moduleSource, sandbox, { filename:'production-core.js' });
 const core = sandbox.window.LineCrewProductionCore;
-for (const name of ['reportUtilityKey','groupReportsByContractJob','groupReportsByUtility','reportingTotals','runtimeReportingTotals']) {
+for (const name of ['reportUtilityKey','groupReportsByContractJob','groupReportsByUtility','reportingTotals','utilityPrimaryMetrics','runtimeReportingTotals']) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Production core module must expose ${name}().`);
 }
 
@@ -31,10 +31,10 @@ for (const [input, expected] of [
   if (actual !== expected) throw new Error(`reportUtilityKey() returned ${actual}; expected ${expected}.`);
 }
 
-const reportA = { id:'r1', job_id:'job-b', status:'approved', regular_hours:8, overtime_hours:2, jobs:{ job_number:'200', job_name:'Beta', contracts:{ id:'contract-b', contract_number:'20', contract_name:'South', customers:{ id:'utility-b', name:'Beta Utility' } } } };
-const reportB = { id:'r2', job_id:'job-a', status:'submitted', regular_hours:'10', overtime_hours:'1', jobs:{ job_number:'100', job_name:'Alpha', contracts:{ id:'contract-a', contract_number:'10', contract_name:'North', customers:{ id:'utility-a', name:'Alpha Cooperative' } } } };
-const reportC = { id:'r3', job_id:'job-a', status:'APPROVED', regular_hours:null, overtime_hours:0, jobs:{ job_number:'100', job_name:'Alpha', contracts:{ id:'contract-a', contract_number:'10', contract_name:'North', customers:{ id:'utility-a', name:'Alpha Cooperative' } } } };
-const reportD = { id:'r4', jobs:{} };
+const reportA = { id:'r1', job_id:'job-b', status:'approved', regular_hours:8, overtime_hours:2, jobs:{ active:true, job_number:'200', job_name:'Beta', contracts:{ id:'contract-b', contract_number:'20', contract_name:'South', customers:{ id:'utility-b', name:'Beta Utility' } } } };
+const reportB = { id:'r2', job_id:'job-a', status:'submitted', regular_hours:'10', overtime_hours:'1', jobs:{ active:true, job_number:'100', job_name:'Alpha', contracts:{ id:'contract-a', contract_number:'10', contract_name:'North', customers:{ id:'utility-a', name:'Alpha Cooperative' } } } };
+const reportC = { id:'r3', job_id:'job-a', status:'APPROVED', regular_hours:null, overtime_hours:0, jobs:{ active:true, job_number:'100', job_name:'Alpha', contracts:{ id:'contract-a', contract_number:'10', contract_name:'North', customers:{ id:'utility-a', name:'Alpha Cooperative' } } } };
+const reportD = { id:'r4', archived:true, status:'submitted', job_id:'job-c', regular_hours:0, overtime_hours:0, jobs:{ active:false } };
 const grouped = core.groupReportsByContractJob([reportA, reportB, reportC, reportD]);
 if (grouped.length !== 3) throw new Error(`Expected 3 contract groups; got ${grouped.length}.`);
 if (grouped[0].label !== '10 — North' || grouped[1].label !== '20 — South' || grouped[2].label !== 'No Contract Assigned') throw new Error('Contract labels/sort behavior changed.');
@@ -68,11 +68,25 @@ if (JSON.stringify(totals) !== JSON.stringify(expectedTotals)) throw new Error(`
 const emptyTotals = core.reportingTotals(null);
 if (JSON.stringify(emptyTotals) !== JSON.stringify({reports:0,approved:0,actualValue:0,fieldValue:0,regularHours:0,overtimeHours:0,redlines:0,pending:0})) throw new Error('Null Production totals input must return zero totals.');
 
+const actualMetrics = core.utilityPrimaryMetrics([reportA, reportB, reportC, reportD], valueSummaries, authorizationSummaries, {showActual:true});
+if (actualMetrics.awaitingReview !== 1) throw new Error(`Awaiting Review metric changed: ${actualMetrics.awaitingReview}.`);
+if (actualMetrics.activeJobCount !== 2) throw new Error(`Active Jobs metric changed: ${actualMetrics.activeJobCount}.`);
+if (actualMetrics.approvedReports !== 2) throw new Error('Approved report metric changed.');
+if (actualMetrics.approvedValue !== 1200.5 || actualMetrics.totalValue !== 1500.5) throw new Error('Actual production value selection changed.');
+if (actualMetrics.hours !== 21 || Math.abs(actualMetrics.runRate - (1500.5 / 21)) > 1e-9) throw new Error('Actual MH run-rate calculation changed.');
+if (!actualMetrics.showMoney || !actualMetrics.showActual || actualMetrics.showField) throw new Error('Actual-money visibility state changed.');
+
+const fieldMetrics = core.utilityPrimaryMetrics([reportA, reportB, reportC, reportD], valueSummaries, authorizationSummaries, {showField:true});
+if (fieldMetrics.approvedValue !== 1125 || fieldMetrics.totalValue !== 1400.25) throw new Error('Field production value selection changed.');
+if (Math.abs(fieldMetrics.runRate - (1400.25 / 21)) > 1e-9) throw new Error('Field MH run-rate calculation changed.');
+if (!fieldMetrics.showMoney || fieldMetrics.showActual || !fieldMetrics.showField) throw new Error('Field-money visibility state changed.');
+
+const noMoneyMetrics = core.utilityPrimaryMetrics([reportA, reportB], valueSummaries, authorizationSummaries, {});
+if (noMoneyMetrics.showMoney !== false || noMoneyMetrics.activeJobCount !== 2 || noMoneyMetrics.awaitingReview !== 1) throw new Error('No-money Production primary metrics changed.');
+
 // Runtime handoff must fall back to the captured inline implementation when summary dependencies are unavailable.
 const fallbackResult = sandbox.window.productionReportingTotals([reportA, reportB]);
-if (!fallbackResult?.legacyFallback || fallbackResult.reports !== 2 || fallbackCalls !== 1) {
-  throw new Error('Production totals runtime handoff did not preserve the inline fallback path.');
-}
+if (!fallbackResult?.legacyFallback || fallbackResult.reports !== 2 || fallbackCalls !== 1) throw new Error('Production totals runtime handoff did not preserve the inline fallback path.');
 
 // With the live summary maps available, the runtime bridge must use the module calculation and not the legacy fallback.
 let unexpectedLegacyCalls = 0;
@@ -96,6 +110,7 @@ for (const [bridge, fn] of [
   ['productionGroupReportsByContractJob', core.groupReportsByContractJob],
   ['productionGroupReportsByUtility', core.groupReportsByUtility],
   ['productionReportingTotalsCore', core.reportingTotals],
+  ['productionUtilityPrimaryMetricsCore', core.utilityPrimaryMetrics],
   ['productionReportingTotals', core.runtimeReportingTotals]
 ]) {
   if (sandbox.window[bridge] !== fn) throw new Error(`Production compatibility bridge ${bridge} is not active.`);
@@ -112,16 +127,17 @@ for (const marker of [
   ".filter(report => report.archived !== true)",
   "name:String(utility.name || 'No Utility / Cooperative Assigned')",
   'function productionReportingTotals(reports){',
-  'totals.actualValue += Number(value.actual_total || 0);',
-  'totals.fieldValue += Number(value.adjusted_total || 0);',
-  'totals.redlines += Number(authorization.redline_count || 0);',
-  'totals.pending += Number(authorization.pending_packet_count || 0);'
+  'function productionUtilityPrimaryMetricsMarkup(reports){',
+  "report.archived !== true &&",
+  "String(report.status || '').toLowerCase() === 'submitted'",
+  "report.jobs?.active === true",
+  'const runRate = hours ? totalValue / hours : 0;'
 ]) {
   if (!index.includes(marker)) throw new Error(`Legacy Production behavior marker missing: ${marker}`);
 }
 
 console.log('Production core modularization guard passed.');
-console.log('- utility, contract/job grouping, and report totals match legacy behavior');
+console.log('- utility, contract/job grouping, totals, and utility primary metrics match legacy behavior');
 console.log('- live Production totals handoff uses module summaries when available');
 console.log('- captured inline Production totals remain an automatic runtime fallback');
 console.log('- module remains offline-capable and legacy inline code remains present');
