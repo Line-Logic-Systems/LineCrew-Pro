@@ -9,7 +9,7 @@ const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 const sandbox = { window:{}, navigator:{onLine:true} };
 vm.runInNewContext(moduleSource, sandbox, { filename:'app-core.js' });
 const core = sandbox.window.LineCrewAppCore;
-for (const name of ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure']) {
+for (const name of ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive']) {
   if (!core || typeof core[name] !== 'function') throw new Error(`App core module must expose ${name}().`);
 }
 
@@ -43,8 +43,21 @@ sandbox.navigator.onLine = false;
 if (core.offlineJsaNetworkFailure({message:'Permission denied'}) !== true) {
   throw new Error('offlineJsaNetworkFailure() must return true whenever navigator reports offline.');
 }
+sandbox.navigator.onLine = true;
 
-for (const name of ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure']) {
+const accessCases = [
+  [{message:'Company access is inactive'}, true],
+  [{message:'Permission denied',hint:'Company access is inactive until billing is restored'}, true],
+  [{message:'company ACCESS is INACTIVE'}, true],
+  [{message:'Permission denied'}, false],
+  [null, false]
+];
+for (const [error, expected] of accessCases) {
+  const actual = core.companyAccessInactive(error);
+  if (actual !== expected) throw new Error(`companyAccessInactive(${JSON.stringify(error)}) returned ${actual}; expected ${expected}.`);
+}
+
+for (const name of ['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive']) {
   if (sandbox.window[name] !== core[name]) throw new Error(`App core compatibility bridge ${name} is not active.`);
 }
 if (!bootstrap.includes("script.src = '/app-core.js?v=20260910a'")) {
@@ -56,12 +69,17 @@ if (!bootstrap.includes('App core module unavailable; using inline compatibility
 if (!serviceWorker.includes("'/app-core.js?v=20260910a'")) {
   throw new Error('App core module must remain in the offline app shell.');
 }
-for (const signature of ['function uniqueOfflineJsaJobs(jobs){','function offlineJsaNetworkFailure(error){']) {
+for (const signature of [
+  'function uniqueOfflineJsaJobs(jobs){',
+  'function offlineJsaNetworkFailure(error){',
+  'function companyAccessInactive(error){'
+]) {
   if (!index.includes(signature)) throw new Error(`Legacy inline app-core fallback missing: ${signature}`);
 }
 
 console.log('App core modularization guard passed.');
 console.log('- offline JSA job deduping/default labels match legacy behavior');
 console.log('- offline/network failure classification matches legacy behavior');
+console.log('- inactive-company error detection matches legacy behavior');
 console.log('- compatibility bridges are active');
 console.log('- module is available offline and inline fallbacks remain available');
