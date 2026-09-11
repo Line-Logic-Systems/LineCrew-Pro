@@ -17,7 +17,7 @@ const sandbox = {
 };
 vm.runInNewContext(moduleSource, sandbox, { filename:'production-core.js' });
 const core = sandbox.window.LineCrewProductionCore;
-for (const name of ['reportUtilityKey','groupReportsByContractJob','groupReportsByUtility','reportingTotals','utilityPrimaryMetrics','runtimeReportingTotals']) {
+for (const name of ['reportUtilityKey','groupReportsByContractJob','groupReportsByUtility','reportingTotals','utilityPrimaryMetrics','utilityPrimaryMetricsMarkup','runtimeReportingTotals']) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Production core module must expose ${name}().`);
 }
 
@@ -86,6 +86,22 @@ if (!fieldMetrics.showMoney || fieldMetrics.showActual || !fieldMetrics.showFiel
 const noMoneyMetrics = core.utilityPrimaryMetrics([reportA, reportB], valueSummaries, authorizationSummaries, {});
 if (noMoneyMetrics.showMoney !== false || noMoneyMetrics.activeJobCount !== 2 || noMoneyMetrics.awaitingReview !== 1) throw new Error('No-money Production primary metrics changed.');
 
+const helpers = {
+  formatCurrency:value => '$' + Number(value).toFixed(2),
+  escapeHtml:value => 'ESC(' + String(value) + ')'
+};
+const actualMarkup = core.utilityPrimaryMetricsMarkup(metricReports, valueSummaries, authorizationSummaries, {showActual:true}, helpers);
+const expectedActualMarkup = '<div class="production-utility-primary-metrics"><span><strong>1</strong>Awaiting Review</span><span><strong>ESC($1200.50)</strong>Approved Production</span><span><strong>2</strong>Active Jobs</span><span><strong>ESC($71.45)</strong>Actual MH Rate</span></div>';
+if (actualMarkup !== expectedActualMarkup) throw new Error(`Actual utility metrics markup changed: ${actualMarkup}`);
+
+const fieldMarkup = core.utilityPrimaryMetricsMarkup(metricReports, valueSummaries, authorizationSummaries, {showField:true}, helpers);
+const expectedFieldMarkup = '<div class="production-utility-primary-metrics"><span><strong>1</strong>Awaiting Review</span><span><strong>ESC($1125.00)</strong>Approved Production</span><span><strong>2</strong>Active Jobs</span><span><strong>ESC($66.68)</strong>Field MH Rate</span></div>';
+if (fieldMarkup !== expectedFieldMarkup) throw new Error(`Field utility metrics markup changed: ${fieldMarkup}`);
+
+const noMoneyMarkup = core.utilityPrimaryMetricsMarkup([reportA, reportB], valueSummaries, authorizationSummaries, {}, helpers);
+const expectedNoMoneyMarkup = '<div class="production-utility-primary-metrics"><span><strong>1</strong>Awaiting Review</span><span><strong>1</strong>Approved Reports</span><span><strong>2</strong>Active Jobs</span><span><strong>—</strong>Field MH Rate</span></div>';
+if (noMoneyMarkup !== expectedNoMoneyMarkup) throw new Error(`No-money utility metrics markup changed: ${noMoneyMarkup}`);
+
 const fallbackResult = sandbox.window.productionReportingTotals([reportA, reportB]);
 if (!fallbackResult?.legacyFallback || fallbackResult.reports !== 2 || fallbackCalls !== 1) throw new Error('Production totals runtime handoff did not preserve the inline fallback path.');
 
@@ -111,6 +127,7 @@ for (const [bridge, fn] of [
   ['productionGroupReportsByUtility', core.groupReportsByUtility],
   ['productionReportingTotalsCore', core.reportingTotals],
   ['productionUtilityPrimaryMetricsCore', core.utilityPrimaryMetrics],
+  ['productionUtilityPrimaryMetricsMarkupCore', core.utilityPrimaryMetricsMarkup],
   ['productionReportingTotals', core.runtimeReportingTotals]
 ]) {
   if (sandbox.window[bridge] !== fn) throw new Error(`Production compatibility bridge ${bridge} is not active.`);
@@ -131,13 +148,16 @@ for (const marker of [
   "report.archived !== true &&",
   "String(report.status || '').toLowerCase() === 'submitted'",
   "report.jobs?.active === true",
-  'const runRate = hours ? totalValue / hours : 0;'
+  'const runRate = hours ? totalValue / hours : 0;',
+  "'<span><strong>' + awaitingReview + '</strong>Awaiting Review</span>'",
+  "'Approved Production' : 'Approved Reports'",
+  "'Actual' : 'Field'"
 ]) {
   if (!index.includes(marker)) throw new Error(`Legacy Production behavior marker missing: ${marker}`);
 }
 
 console.log('Production core modularization guard passed.');
-console.log('- utility, contract/job grouping, totals, and utility primary metrics match legacy behavior');
+console.log('- utility, grouping, totals, utility primary metrics, and primary metrics markup match legacy behavior');
 console.log('- live Production totals handoff uses module summaries when available');
 console.log('- captured inline Production totals remain an automatic runtime fallback');
 console.log('- module remains offline-capable and legacy inline code remains present');
