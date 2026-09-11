@@ -237,6 +237,18 @@
     };
   }
 
+  function completedJobDailyReportRowViewModel(report = {}){
+    return {
+      workDate: report?.work_date || '',
+      foremanName: report?.foreman_name || 'Foreman not recorded',
+      crewName: report?.crew_name || 'Crew not recorded',
+      regularHours: Number(report?.regular_hours || 0),
+      overtimeHours: Number(report?.overtime_hours || 0),
+      statusText: String(report?.status || '').toUpperCase(),
+      notes: report?.notes || ''
+    };
+  }
+
   const api = Object.freeze({
     fileNameWithoutExtension,
     jobPacketFileValidationMessage,
@@ -254,7 +266,8 @@
     jobPackageOpenButtonLabel,
     jobPackageDetailSubtitle,
     completedJobSummaryViewModel,
-    completedJobPackageRowViewModel
+    completedJobPackageRowViewModel,
+    completedJobDailyReportRowViewModel
   });
   window.LineCrewJobsCore = api;
 
@@ -276,4 +289,5 @@
   window.jobPackageDetailSubtitle = jobPackageDetailSubtitle;
   window.completedJobSummaryViewModel = completedJobSummaryViewModel;
   window.completedJobPackageRowViewModel = completedJobPackageRowViewModel;
+  window.completedJobDailyReportRowViewModel = completedJobDailyReportRowViewModel;
 })();
