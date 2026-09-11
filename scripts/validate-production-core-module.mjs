@@ -6,10 +6,18 @@ const bootstrap = fs.readFileSync('number-input-polish.js','utf8');
 const index = fs.readFileSync('index.html','utf8');
 const serviceWorker = fs.readFileSync('service-worker.js','utf8');
 
-const sandbox = { window:{} };
+let fallbackCalls = 0;
+const sandbox = {
+  window:{
+    productionReportingTotals(reports){
+      fallbackCalls += 1;
+      return { legacyFallback:true, reports:Array.isArray(reports) ? reports.length : 0 };
+    }
+  }
+};
 vm.runInNewContext(moduleSource, sandbox, { filename:'production-core.js' });
 const core = sandbox.window.LineCrewProductionCore;
-for (const name of ['reportUtilityKey','groupReportsByContractJob','groupReportsByUtility','reportingTotals']) {
+for (const name of ['reportUtilityKey','groupReportsByContractJob','groupReportsByUtility','reportingTotals','runtimeReportingTotals']) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Production core module must expose ${name}().`);
 }
 
@@ -39,12 +47,8 @@ if (core.groupReportsByContractJob(null).length !== 0) throw new Error('Null rep
 const archivedUtilityReport = { id:'r5', archived:true, jobs:{ contracts:{ customers:{ id:'utility-z', name:'Archived Utility' } } } };
 const utilityGroups = core.groupReportsByUtility([reportA, reportB, reportC, reportD, archivedUtilityReport]);
 if (utilityGroups.length !== 3) throw new Error(`Expected 3 visible utility groups; got ${utilityGroups.length}.`);
-if (utilityGroups[0].name !== 'Alpha Cooperative' || utilityGroups[1].name !== 'Beta Utility' || utilityGroups[2].name !== 'No Utility / Cooperative Assigned') {
-  throw new Error('Utility label/sort behavior changed.');
-}
-if (utilityGroups[0].reports.length !== 2 || utilityGroups[1].reports.length !== 1 || utilityGroups[2].reports.length !== 1) {
-  throw new Error('Utility report membership changed.');
-}
+if (utilityGroups[0].name !== 'Alpha Cooperative' || utilityGroups[1].name !== 'Beta Utility' || utilityGroups[2].name !== 'No Utility / Cooperative Assigned') throw new Error('Utility label/sort behavior changed.');
+if (utilityGroups[0].reports.length !== 2 || utilityGroups[1].reports.length !== 1 || utilityGroups[2].reports.length !== 1) throw new Error('Utility report membership changed.');
 if (utilityGroups.some(group => group.id === 'utility-z')) throw new Error('Archived reports must remain excluded from the utility directory.');
 if (core.groupReportsByUtility(null).length !== 0) throw new Error('Null utility input must produce an empty grouping.');
 
@@ -58,30 +62,41 @@ const authorizationSummaries = new Map([
   ['r2',{ redline_count:'2', pending_packet_count:'1' }],
   ['r3',{ redline_count:0, pending_packet_count:3 }]
 ]);
+const expectedTotals = { reports:4, approved:2, actualValue:1500.5, fieldValue:1400.25, regularHours:18, overtimeHours:3, redlines:3, pending:6 };
 const totals = core.reportingTotals([reportA, reportB, reportC, reportD], valueSummaries, authorizationSummaries);
-const expectedTotals = {
-  reports:4,
-  approved:2,
-  actualValue:1500.5,
-  fieldValue:1400.25,
-  regularHours:18,
-  overtimeHours:3,
-  redlines:3,
-  pending:6
-};
-if (JSON.stringify(totals) !== JSON.stringify(expectedTotals)) {
-  throw new Error(`Production totals parity failed: ${JSON.stringify(totals)} != ${JSON.stringify(expectedTotals)}.`);
-}
+if (JSON.stringify(totals) !== JSON.stringify(expectedTotals)) throw new Error(`Production totals parity failed: ${JSON.stringify(totals)} != ${JSON.stringify(expectedTotals)}.`);
 const emptyTotals = core.reportingTotals(null);
-if (JSON.stringify(emptyTotals) !== JSON.stringify({reports:0,approved:0,actualValue:0,fieldValue:0,regularHours:0,overtimeHours:0,redlines:0,pending:0})) {
-  throw new Error('Null Production totals input must return zero totals.');
+if (JSON.stringify(emptyTotals) !== JSON.stringify({reports:0,approved:0,actualValue:0,fieldValue:0,regularHours:0,overtimeHours:0,redlines:0,pending:0})) throw new Error('Null Production totals input must return zero totals.');
+
+// Runtime handoff must fall back to the captured inline implementation when summary dependencies are unavailable.
+const fallbackResult = sandbox.window.productionReportingTotals([reportA, reportB]);
+if (!fallbackResult?.legacyFallback || fallbackResult.reports !== 2 || fallbackCalls !== 1) {
+  throw new Error('Production totals runtime handoff did not preserve the inline fallback path.');
 }
+
+// With the live summary maps available, the runtime bridge must use the module calculation and not the legacy fallback.
+let unexpectedLegacyCalls = 0;
+const runtimeSandbox = {
+  window:{
+    productionReportingTotals(){
+      unexpectedLegacyCalls += 1;
+      return { legacyFallback:true };
+    }
+  },
+  currentDailyReportValueSummaries:valueSummaries,
+  currentDailyAuthorizationSummaries:authorizationSummaries
+};
+vm.runInNewContext(moduleSource, runtimeSandbox, { filename:'production-core-runtime.js' });
+const runtimeTotals = runtimeSandbox.window.productionReportingTotals([reportA, reportB, reportC, reportD]);
+if (JSON.stringify(runtimeTotals) !== JSON.stringify(expectedTotals)) throw new Error('Production totals runtime bridge changed calculated totals.');
+if (unexpectedLegacyCalls !== 0) throw new Error('Production totals runtime bridge incorrectly used the legacy fallback with dependencies available.');
 
 for (const [bridge, fn] of [
   ['productionReportUtilityKey', core.reportUtilityKey],
   ['productionGroupReportsByContractJob', core.groupReportsByContractJob],
   ['productionGroupReportsByUtility', core.groupReportsByUtility],
-  ['productionReportingTotalsCore', core.reportingTotals]
+  ['productionReportingTotalsCore', core.reportingTotals],
+  ['productionReportingTotals', core.runtimeReportingTotals]
 ]) {
   if (sandbox.window[bridge] !== fn) throw new Error(`Production compatibility bridge ${bridge} is not active.`);
 }
@@ -106,9 +121,7 @@ for (const marker of [
 }
 
 console.log('Production core modularization guard passed.');
-console.log('- utility-key behavior matches legacy behavior');
-console.log('- contract/job grouping labels, sort order, and report membership are parity-tested');
-console.log('- utility directory grouping and archived-report exclusion are parity-tested');
-console.log('- Production report totals are parity-tested without changing live rendering');
-console.log('- compatibility bridges are active; module remains offline-capable');
-console.log('- inline renderer behavior remains available while staged rollout continues');
+console.log('- utility, contract/job grouping, and report totals match legacy behavior');
+console.log('- live Production totals handoff uses module summaries when available');
+console.log('- captured inline Production totals remain an automatic runtime fallback');
+console.log('- module remains offline-capable and legacy inline code remains present');
