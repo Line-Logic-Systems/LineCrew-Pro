@@ -104,6 +104,9 @@ jobs:
       - name: Validate Jobs card display model
         run: node scripts/validate-jobs-card-display-model.mjs
 
+      - name: Validate Jobs assignment panel view-model
+        run: node scripts/validate-jobs-assignment-panel-view-model.mjs
+
       - name: Validate staged Assistant modularization
         run: node scripts/validate-assistant-core-module.mjs
 
