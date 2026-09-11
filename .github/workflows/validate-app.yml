@@ -95,6 +95,9 @@ jobs:
       - name: Validate staged Jobs modularization
         run: node scripts/validate-jobs-core-module.mjs
 
+      - name: Validate staged Assistant modularization
+        run: node scripts/validate-assistant-core-module.mjs
+
       - name: Validate staged Daily Report modularization
         run: node scripts/validate-daily-report-core-module.mjs
 
