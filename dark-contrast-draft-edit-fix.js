@@ -143,10 +143,34 @@
   }
 
   function scan(){addStyles();bindDraftEditButtons();installSaveGuard();}
+
+  let productionObserver=null;
+  let formObserver=null;
+  function attachScopedObservers(){
+    const production=byId('productionPage');
+    if(production&&!productionObserver){
+      productionObserver=new MutationObserver(scan);
+      productionObserver.observe(production,{subtree:true,childList:true});
+    }
+    const form=byId('dailyReportForm');
+    if(form&&!formObserver){
+      formObserver=new MutationObserver(scan);
+      formObserver.observe(form,{subtree:true,childList:true,attributes:true,attributeFilter:['class','data-report-id']});
+    }
+    return !!production&&!!form;
+  }
+
   function init(){
     scan();
-    const observer=new MutationObserver(scan);observer.observe(document.body,{subtree:true,childList:true});
-    [250,800,1800].forEach(delay=>setTimeout(scan,delay));
+    if(!attachScopedObservers()){
+      const attachObserver=new MutationObserver(()=>{
+        scan();
+        if(attachScopedObservers())attachObserver.disconnect();
+      });
+      attachObserver.observe(document.body,{childList:true,subtree:true});
+    }
+    [250,800,1800].forEach(delay=>setTimeout(()=>{attachScopedObservers();scan();},delay));
+    window.addEventListener('pageshow',()=>{attachScopedObservers();scan();});
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
