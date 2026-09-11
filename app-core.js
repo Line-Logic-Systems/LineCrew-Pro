@@ -43,12 +43,19 @@
     }
   }
 
+  function currentErrorPage(){
+    return [...document.querySelectorAll('main > section')]
+      .find(section => !section.classList.contains('hidden'))?.id ||
+      window.location.pathname || 'app';
+  }
+
   const api = Object.freeze({
     uniqueOfflineJsaJobs,
     offlineJsaNetworkFailure,
     companyAccessInactive,
     firstStackFrame,
-    desktopViewEnabled
+    desktopViewEnabled,
+    currentErrorPage
   });
   window.LineCrewAppCore = api;
 
@@ -58,4 +65,5 @@
   window.companyAccessInactive = companyAccessInactive;
   window.firstStackFrame = firstStackFrame;
   window.desktopViewEnabled = desktopViewEnabled;
+  window.currentErrorPage = currentErrorPage;
 })();
