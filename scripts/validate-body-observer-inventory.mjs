@@ -48,15 +48,25 @@ if (unexpected.length) {
   throw new Error('New whole-app MutationObserver(s) detected without review: ' + unexpected.map(item => `${item.file} (${item.count})`).join(', '));
 }
 
+const duplicateAttachments = found.filter(item => item.count > 1);
+if (duplicateAttachments.length) {
+  throw new Error('Existing whole-app observer file gained duplicate document.body attachments: ' + duplicateAttachments.map(item => `${item.file} (${item.count})`).join(', '));
+}
+
 const missingLegacy = [...legacyLongLivedAllowlist].filter(file => !found.some(item => item.file === file));
 if (missingLegacy.length) {
   console.log('Legacy whole-app observer(s) removed since inventory baseline:', missingLegacy.join(', '));
 }
 
 const total = found.reduce((sum, item) => sum + item.count, 0);
+const expectedMaximum = allowed.size;
+if (total > expectedMaximum) {
+  throw new Error(`Whole-app observer count exceeded reviewed baseline: ${total} > ${expectedMaximum}.`);
+}
+
 console.log(`Whole-app observer inventory: ${total} direct document.body observer attachment(s) across ${found.length} file(s).`);
 for (const item of found) {
   const kind = temporaryAttachAllowlist.has(item.file) ? 'temporary attach' : 'legacy long-lived';
   console.log(`- ${item.file}: ${item.count} (${kind})`);
 }
-console.log('Observer inventory validation passed.');
+console.log(`Observer inventory validation passed; reviewed maximum remains ${expectedMaximum}.`);
