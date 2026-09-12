@@ -9216,14 +9216,16 @@ currentBillingReconciliation=null;
 if(!jobId){ panel.classList.add('hidden'); panel.innerHTML=''; return null; }
 panel.classList.remove('hidden');
 panel.innerHTML='<span class="muted">Loading job billing reconciliation...</span>';
-const { data,error }=await sb.rpc('get_job_billing_reconciliation',{ p_job_id:jobId });
+const { data,error }=await sb.rpc('get_job_billing_reconciliation_v2',{ p_job_id:jobId });
 if(error){ panel.innerHTML='<span class="danger-text">Unable to load reconciliation: '+escapeHtml(error.message)+'</span>'; return null; }
 currentBillingReconciliation=data?.[0] || null;
 const item=currentBillingReconciliation;
 if(!item){ panel.innerHTML='<span class="muted">No job billing information is available.</span>'; return null; }
 panel.innerHTML=
-'<span><strong>'+escapeHtml(formatCurrency(item.authorized_value))+'</strong><br>Authorized</span>'+
-'<span><strong>'+escapeHtml(formatCurrency(item.approved_value))+'</strong><br>Approved</span>'+
+'<span><strong>'+escapeHtml(formatCurrency(item.authorized_progress_value))+'</strong><br>Authorized Scope</span>'+
+'<span><strong>'+escapeHtml(formatCurrency(item.approved_authorized_progress_value))+'</strong><br>Approved Authorized Progress</span>'+
+'<span><strong>'+escapeHtml(formatCurrency(item.approved_redline_value))+'</strong><br>Approved Redlines</span>'+
+'<span><strong>'+escapeHtml(formatCurrency(item.approved_billable_value))+'</strong><br>Total Approved Billable</span>'+
 '<span><strong>'+escapeHtml(formatCurrency(item.billed_value))+'</strong><br>Previously Billed</span>'+
 '<span><strong>'+escapeHtml(formatCurrency(item.credit_value))+'</strong><br>Billing Adjustments</span>'+
 '<span><strong>'+escapeHtml(formatCurrency(item.approved_unbilled_value))+'</strong><br>Approved Unbilled</span>'+
@@ -9771,7 +9773,7 @@ if(!batches.length) throw new Error('No billing batches exist for this job yet.'
 const hasFinal=batches.some(batch=>String(batch.billing_type).toLowerCase()==='final' && String(batch.status).toLowerCase()!=='void');
 if(!hasFinal && !confirm('This job does not have a retained Final Bill yet. Download the current billing record anyway?')) return;
 const [reconciliationResult,packagesResult,detailsResult]=await Promise.all([
-sb.rpc('get_job_billing_reconciliation',{p_job_id:jobId}),sb.rpc('get_job_packages_v2',{p_job_id:jobId}),
+sb.rpc('get_job_billing_reconciliation_v2',{p_job_id:jobId}),sb.rpc('get_job_packages_v2',{p_job_id:jobId}),
 sb.rpc('get_complete_job_billing_export_details_v1',{p_job_id:jobId})
 ]);
 if(reconciliationResult.error) throw reconciliationResult.error;
@@ -9800,7 +9802,10 @@ const batchHistory=batches.map(batch=>({
 }));
 const summary=[['LineCrew Pro Complete Job Billing Record'],['Job Number',job?.job_number || batches[0]?.job_number || ''],
 ['Job Name',job?.job_name || batches[0]?.job_name || ''],['Generated',new Date().toLocaleString()],
-['Authorized',Number(reconciliation.authorized_value || 0)],['Approved',Number(reconciliation.approved_value || 0)],
+['Authorized Scope',Number(reconciliation.authorized_progress_value || 0)],
+['Approved Authorized Progress',Number(reconciliation.approved_authorized_progress_value || 0)],
+['Approved Redlines',Number(reconciliation.approved_redline_value || 0)],
+['Total Approved Billable',Number(reconciliation.approved_billable_value || 0)],
 ['Previously Billed',Number(reconciliation.billed_value || 0)],['Billing Adjustments',Number(reconciliation.credit_value || 0)],
 ['Adjusted Billed Total',Number(reconciliation.net_billed_value ?? (Number(reconciliation.billed_value || 0)-Number(reconciliation.credit_value || 0)))],
 ['Approved Unbilled',Number(reconciliation.approved_unbilled_value || 0)],
@@ -9845,7 +9850,8 @@ addPage();
 pdfLine('LineCrew Pro - Complete Job Billing Record',{bold:true,size:16,gap:24,limit:80});
 pdfLine('Job: '+(job?.job_number || batches[0]?.job_number || '')+' - '+(job?.job_name || batches[0]?.job_name || ''),{bold:true,size:11});
 pdfLine('Generated: '+new Date().toLocaleString());
-pdfLine('Authorized: '+formatCurrency(reconciliation.authorized_value)+'   Approved: '+formatCurrency(reconciliation.approved_value));
+pdfLine('Authorized scope: '+formatCurrency(reconciliation.authorized_progress_value)+'   Approved authorized progress: '+formatCurrency(reconciliation.approved_authorized_progress_value));
+pdfLine('Approved redlines: '+formatCurrency(reconciliation.approved_redline_value)+'   Total approved billable: '+formatCurrency(reconciliation.approved_billable_value));
 pdfLine('Previously billed: '+formatCurrency(reconciliation.billed_value)+'   Billing adjustments: '+formatCurrency(reconciliation.credit_value));
 pdfLine('Adjusted billed total: '+formatCurrency(reconciliation.net_billed_value ?? (Number(reconciliation.billed_value || 0)-Number(reconciliation.credit_value || 0))));
 pdfLine('Approved unbilled: '+formatCurrency(reconciliation.approved_unbilled_value)+'   Remaining authorized: '+formatCurrency(reconciliation.remaining_authorized_value),{gap:20});
