@@ -119,7 +119,7 @@ begin
   with package_count as (
     select count(*)::integer value from public.job_packages package
     where package.company_id=v_company_id and package.job_id=v_report_job_id and package.status='active'
-  ), authorization as (
+  ), authorization_scope as (
     select authorized.price_book_item_id,point.normalized_work_point_key location_key,
       count(authorized.id)::integer authorized_unit_count,
       sum(authorized.authorized_install_quantity)::numeric authorized_install,
@@ -181,7 +181,7 @@ begin
     and unit.company_id=location.company_id and unit.daily_report_id=location.daily_report_id
     and unit.price_book_item_id=location.price_book_item_id
   cross join package_count packages
-  left join authorization authz on authz.price_book_item_id=location.price_book_item_id
+  left join authorization_scope authz on authz.price_book_item_id=location.price_book_item_id
     and authz.location_key=location.normalized_pole_location_key
   left join allocated allocation on allocation.id=location.id
   where location.daily_report_id=p_report_id and location.company_id=v_company_id

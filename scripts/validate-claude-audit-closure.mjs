@@ -16,6 +16,7 @@ assert.ok(!app.includes("sb.rpc('get_job_progress_dashboard_v2')"),'An unscoped 
 for(const marker of [
   "v_role not in ('owner','manager','admin','superintendent')",
   'point.normalized_work_point_key location_key',
+  'authorization_scope as (',
   'location.normalized_pole_location_key',
   "lower(coalesce(report.status,''))='approved' or report.id=p_report_id",
   "linecrew_company_entitlement_required",
@@ -25,6 +26,7 @@ for(const marker of [
   "v_current='draft' and v_next in ('exported','submitted','paid')",
   'job_packet_documents_manager_delete'
 ]) assert.ok(migration.includes(marker),`Audit closure migration is missing: ${marker}`);
+assert.ok(!migration.includes('), authorization as ('),'Reserved SQL keywords must not be used as CTE names.');
 
 assert.ok(assistant.includes('if (error || !Array.isArray(data))'),
   'Assistant must distinguish unavailable context from an empty result.');
