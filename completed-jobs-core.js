@@ -52,10 +52,19 @@
     };
   }
 
+  function completedJobIdChunks(values = [], maxSize = 100){
+    const ids = (Array.isArray(values) ? values : []).map(value => String(value || '')).filter(Boolean);
+    const size = Math.max(1, Math.min(100, Math.trunc(Number(maxSize) || 100)));
+    const chunks = [];
+    for(let index = 0; index < ids.length; index += size) chunks.push(ids.slice(index, index + size));
+    return chunks;
+  }
+
   window.LineCrewCompletedJobsCore = Object.freeze({
     completedJobCardViewModel,
     completedJobAttachmentRowViewModel,
     completedJobCloseoutRowViewModel,
-    completedJobAuditRowViewModel
+    completedJobAuditRowViewModel,
+    completedJobIdChunks
   });
 })();

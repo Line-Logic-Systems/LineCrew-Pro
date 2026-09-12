@@ -13,7 +13,8 @@ const names = [
   'completedJobCardViewModel',
   'completedJobAttachmentRowViewModel',
   'completedJobCloseoutRowViewModel',
-  'completedJobAuditRowViewModel'
+  'completedJobAuditRowViewModel',
+  'completedJobIdChunks'
 ];
 for (const name of names) {
   if (!core || typeof core[name] !== 'function') throw new Error(`Completed Jobs core must expose ${name}().`);
@@ -75,6 +76,15 @@ if (emptyAudit.eventType !== 'updated' || emptyAudit.actorName !== 'System' || e
   throw new Error('Completed Jobs audit fallbacks changed.');
 }
 
+const reportIds = Array.from({length:301},(_,index)=>`report-${index + 1}`);
+const reportIdChunks = core.completedJobIdChunks(reportIds,100);
+if (JSON.stringify(reportIdChunks.map(chunk=>chunk.length)) !== JSON.stringify([100,100,100,1])) {
+  throw new Error(`Completed Jobs report IDs must be capped at 100 per query: ${reportIdChunks.map(chunk=>chunk.length).join(',')}.`);
+}
+if (core.completedJobIdChunks(null).length !== 0 || core.completedJobIdChunks(['a','',null,'b'],500)[0].length !== 2) {
+  throw new Error('Completed Jobs report-ID chunking must handle empty values and enforce the 100-ID maximum.');
+}
+
 if (!bootstrap.includes("script.src = '/completed-jobs-core.js?v=20260911a'")) throw new Error('Completed Jobs core is not bootstrapped.');
 if (!bootstrap.includes('Completed Jobs core module unavailable; using inline compatibility fallback.')) throw new Error('Completed Jobs loader must retain an explicit inline fallback path.');
 if (!serviceWorker.includes("'/completed-jobs-core.js?v=20260911a'")) throw new Error('Completed Jobs core must be cached for offline use.');
@@ -93,7 +103,18 @@ for (const marker of [
   if (!index.includes(marker)) throw new Error(`Completed Jobs inline fallback marker missing: ${marker}`);
 }
 
+for (const marker of [
+  'const reportIdChunks=completedJobIdChunks(reportIds,100)',
+  'for(const reportIdChunk of reportIdChunks)',
+  ".in('daily_report_id',reportIdChunk)",
+  "attachments.sort((left,right)=>String(left.created_at||'').localeCompare(String(right.created_at||'')))"
+]) {
+  if (!index.includes(marker)) throw new Error(`Completed Jobs bounded attachment query marker missing: ${marker}`);
+}
+if (index.includes(".in('daily_report_id',reportIds)")) throw new Error('Completed Jobs must not send its unbounded report-ID array to PostgREST.');
+
 console.log('Completed Jobs core guard passed.');
 console.log('- completed-job cards, attachments, closeout history, and audit history match current display behavior');
 console.log('- live inline archive renderer remains present as the compatibility fallback');
 console.log('- module is bootstrapped and available offline');
+console.log('- completed-job attachment queries are capped at 100 report IDs per PostgREST request');
