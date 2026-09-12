@@ -10,7 +10,7 @@ let storedDesktopView=null,fallbackDesktopClass=false,throwStorage=false,pageSec
 const sandbox={window:{location:{pathname:'/index.html'}},navigator:{onLine:true},localStorage:{getItem(key){if(throwStorage)throw new Error('storage unavailable');return key==='linecrew-pro-desktop-view'?storedDesktopView:null;}},document:{documentElement:{classList:{contains:name=>name==='desktop-view'&&fallbackDesktopClass}},querySelectorAll(selector){return selector==='main > section'?pageSections:[];}}};
 vm.runInNewContext(moduleSource,sandbox,{filename:'app-core.js'});
 const core=sandbox.window.LineCrewAppCore;
-const helperNames=['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage','formatTeamRole','formatAuditTimestamp','formatCurrency','csvCell','companyLogoExtension','companyJsaFileKey','safeJsaFilename','allowedJsaFile'];
+const helperNames=['uniqueOfflineJsaJobs','offlineJsaNetworkFailure','companyAccessInactive','firstStackFrame','desktopViewEnabled','currentErrorPage','formatTeamRole','formatAuditTimestamp','formatCurrency','csvCell','companyLogoExtension','companyJsaFileKey','safeJsaFilename','allowedJsaFile','userCanSeeSafetyRecords'];
 for(const name of helperNames) if(!core||typeof core[name]!=='function') throw new Error(`App core module must expose ${name}().`);
 
 if(JSON.stringify(core.uniqueOfflineJsaJobs([{id:'1',job_number:'A1',job_name:'Alpha'},{id:'1'}]))!==JSON.stringify([{id:'1',job_number:'A1',job_name:'Alpha'}])) throw new Error('uniqueOfflineJsaJobs parity failed.');
@@ -22,7 +22,7 @@ const section=(id,hidden)=>({id,classList:{contains:name=>name==='hidden'?hidden
 if(core.formatTeamRole('gf')!=='General Foreman'||core.formatTeamRole('unknown')!=='Foreman')throw new Error('formatTeamRole parity failed.');
 if(core.formatAuditTimestamp(null)!=='Not recorded'||core.formatAuditTimestamp('not-a-date')!=='not-a-date')throw new Error('formatAuditTimestamp parity failed.');
 if(core.formatCurrency(1250.5)!=='$1,250.50')throw new Error('formatCurrency parity failed.');
-if(core.csvCell('=SUM(A1:A2)')!=="'=SUM(A1:A2)"||core.csvCell('a,b')!=='"a,b"')throw new Error('csvCell parity failed.');
+if(core.csvCell('=SUM(A1:A2)')!=='"\'=SUM(A1:A2)"'||core.csvCell('a,b')!=='"a,b"'||core.csvCell('  Crew 7 ')!=='"  Crew 7 "')throw new Error('csvCell must match the always-quoted inline fallback.');
 if(core.companyLogoExtension({type:'image/jpeg'})!=='jpg'||core.companyLogoExtension({type:'image/gif'})!=='')throw new Error('companyLogoExtension parity failed.');
 if(core.companyJsaFileKey({name:'jsa.jpg',size:12,lastModified:34})!=='jsa.jpg:12:34')throw new Error('companyJsaFileKey parity failed.');
 if(core.safeJsaFilename('JSA Page 1.jpg')!=='JSA-Page-1.jpg')throw new Error('safeJsaFilename parity failed.');
@@ -43,6 +43,15 @@ for(const [file,expected] of [
   if(actual!==expected) throw new Error(`allowedJsaFile(${JSON.stringify(file)}) returned ${actual}; expected ${expected}.`);
 }
 
+sandbox.window.currentUserRole=()=> 'safety';
+sandbox.window.userHasCapability=()=> false;
+if(core.userCanSeeSafetyRecords()!==true) throw new Error('Safety role must be able to view JSA records.');
+sandbox.window.currentUserRole=()=> 'foreman';
+if(core.userCanSeeSafetyRecords()!==true) throw new Error('Foreman JSA visibility must remain intact.');
+sandbox.window.currentUserRole=()=> 'admin';
+sandbox.window.userHasCapability=capability=>capability==='safety_records';
+if(core.userCanSeeSafetyRecords()!==true) throw new Error('Capability-based JSA visibility must remain intact.');
+
 for(const name of helperNames) if(sandbox.window[name]!==core[name]) throw new Error(`App core compatibility bridge ${name} is not active.`);
 if(!bootstrap.includes("script.src = '/app-core.js?v=20260910a'"))throw new Error('App core module is not bootstrapped.');
 if(!bootstrap.includes('App core module unavailable; using inline compatibility fallback.'))throw new Error('App core loader must retain fallback.');
@@ -50,5 +59,6 @@ if(!serviceWorker.includes("'/app-core.js?v=20260910a'"))throw new Error('App co
 for(const signature of ['function uniqueOfflineJsaJobs(jobs){','function offlineJsaNetworkFailure(error){','function companyAccessInactive(error){','function firstStackFrame(error){','function desktopViewEnabled(){','function currentErrorPage(){','function formatTeamRole(role){','function formatAuditTimestamp(value){','function formatCurrency(value){','function csvCell(value){','function companyLogoExtension(file){','function companyJsaFileKey(file){','function safeJsaFilename(name){','function allowedJsaFile(file){']) if(!index.includes(signature)) throw new Error(`Legacy inline app-core fallback missing: ${signature}`);
 
 console.log('App core modularization guard passed.');
-console.log('- low-risk shared helpers match legacy behavior, including JSA file validation');
+console.log('- shared helpers preserve legacy behavior, including always-quoted CSV cells');
+console.log('- Safety receives JSA-record visibility only; existing capability paths remain intact');
 console.log('- compatibility bridges are active; module is offline-capable; inline fallbacks remain available');
