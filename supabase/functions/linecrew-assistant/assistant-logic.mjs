@@ -211,3 +211,17 @@ export function assistantMemoryManagementRequested(question) {
     /\b(where|find|view|show|list|open|manage|edit|change|delete|remove|complete)\b.{0,100}\b(reminder|reminders|memor(?:y|ies))\b/i.test(text) ||
     /\b(reminder|reminders|memor(?:y|ies))\b.{0,100}\b(where|find|view|show|list|open|manage|edit|change|delete|remove|complete)\b/i.test(text);
 }
+
+export function assistantCountSnapshot(results = {}) {
+  const counts = {};
+  const unavailable = [];
+  for (const [label, result] of Object.entries(results)) {
+    if (result?.error || !Number.isFinite(result?.count)) {
+      counts[label] = null;
+      unavailable.push(label);
+      continue;
+    }
+    counts[label] = result.count;
+  }
+  return { counts, unavailable };
+}

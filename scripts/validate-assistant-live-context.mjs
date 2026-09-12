@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   assistantMemoryManagementRequested,
+  assistantCountSnapshot,
   assistantModelConfig,
   classifyAssistantRequest,
   detectAssistantNavigation,
@@ -69,6 +70,20 @@ assert.equal(assistantMemoryManagementRequested('Edit the reminder I saved.'),tr
 assert.equal(assistantMemoryManagementRequested('How do I import a Price Book?'),false);
 
 assert.deepEqual(
+  assistantCountSnapshot({
+    jobs:{count:0,error:null},
+    reports:{count:7,error:null},
+    team:{count:null,error:{message:'permission denied'}},
+    contracts:{count:null,error:null}
+  }),
+  {
+    counts:{jobs:0,reports:7,team:null,contracts:null},
+    unavailable:['team','contracts']
+  },
+  'Assistant counts must preserve real zeroes and never convert failed or missing counts into zero.'
+);
+
+assert.deepEqual(
   detectAssistantNavigation('Take me to Production.'),
   {destination:'production',label:'Production',mode:'auto'}
 );
@@ -101,6 +116,8 @@ for(const marker of [
   '2026-09-01-admin-owner-recovery-v13',
   'loadLiveCompanyContext(',
   'Authenticated Owner/Admin read-only snapshot constrained by company RLS',
+  'unavailable_count_sections',
+  'it does not mean zero',
   '.eq("company_id", companyId)',
   'assistantModelConfig(requestPlan.route',
   'OPENAI_MODEL_REASONING',
@@ -146,3 +163,4 @@ console.log('- Job/report/team/pricing intents choose relevant read-only data');
 console.log('- Complex troubleshooting routes to balanced reasoning with safe fallback');
 console.log('- Allowlisted Assistant navigation cannot invoke data mutations');
 console.log('- Edge Function remains authenticated, tenant-scoped and non-mutating');
+console.log('- Failed count and memory reads remain unavailable instead of becoming false zeroes');
