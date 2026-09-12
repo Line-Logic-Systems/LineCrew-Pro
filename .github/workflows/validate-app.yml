@@ -41,6 +41,9 @@ jobs:
       - name: Validate crew-time destructive-save protection
         run: node scripts/validate-timekeeping-crew-save-safety.mjs
 
+      - name: Validate migration directory hygiene
+        run: node scripts/validate-migration-hygiene.mjs
+
       - name: Validate observer scoping
         run: node scripts/validate-observer-scoping.mjs
 
