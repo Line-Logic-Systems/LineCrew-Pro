@@ -18,7 +18,7 @@ for(const signature of [
 ]) {
   if(!sql.includes(signature)) throw new Error(`Manager parity migration does not explicitly patch ${signature}.`);
 }
-if(!sql.includes("v_role not in ('owner', 'manager')")) throw new Error('Manager closeout override parity is missing.');
+if(!sql.includes("v_override_required and v_role not in (''owner'', ''manager'')")) throw new Error('Manager closeout override parity is missing.');
 if(!sql.includes('Expected role allow-list was not found')) throw new Error('Manager migration must fail closed if an expected function body changes.');
 if(/regexp_replace/i.test(sql)) throw new Error('Manager parity must not use a broad regexp rewrite.');
 
