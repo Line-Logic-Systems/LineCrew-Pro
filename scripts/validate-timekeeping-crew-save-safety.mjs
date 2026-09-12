@@ -19,11 +19,16 @@ function crewRow({employee='e1', regular='8', overtime='0'} = {}){
   return { querySelector(selector){ return fields[selector] || null; } };
 }
 
-async function runCase(rows, expectedMessage = ''){
+async function runCase(rows, expectedMessage = '', {loading=false} = {}){
   let calls = 0;
   const sandbox = {
     window:{},
-    document:{querySelectorAll(){ return rows; }},
+    document:{
+      querySelectorAll(){ return rows; },
+      querySelector(selector){
+        return selector === '#dailyCrewTimeRows' ? {dataset:{loading:String(loading)}} : null;
+      }
+    },
     Error,
     Number,
     Object,
@@ -48,6 +53,8 @@ async function runCase(rows, expectedMessage = ''){
   }
 }
 
+await runCase([], 'did not load');
+await runCase([crewRow()], 'still loading', {loading:true});
 await runCase([crewRow({employee:''})], 'Select an employee');
 await runCase([crewRow({employee:'e1'}), crewRow({employee:'e1'})], 'only once');
 await runCase([crewRow({regular:'25'})], 'exceed 24');
@@ -56,5 +63,5 @@ await runCase([crewRow({regular:'abc'})], 'valid numbers');
 await runCase([crewRow({employee:'e1',regular:'8',overtime:'2'}),crewRow({employee:'e2',regular:'10',overtime:'0'})]);
 
 console.log('Crew-time destructive-save guard passed.');
-console.log('- invalid/duplicate visible rows abort before the existing save function runs');
+console.log('- loading, empty, invalid, and duplicate visible rows abort before the existing save function runs');
 console.log('- valid rows still delegate to the existing save exactly once');

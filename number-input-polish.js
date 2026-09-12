@@ -52,6 +52,13 @@
 
   const validationError = () => {
     const rows = Array.from(document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row'));
+    const crewBox = document.querySelector('#dailyCrewTimeRows');
+    if(crewBox?.dataset?.loading === 'true'){
+      return 'Crew Time is still loading. Wait for the crew rows to appear before saving.';
+    }
+    if(rows.length === 0){
+      return 'Crew Time did not load. Reload the crew rows before saving so existing time is not removed.';
+    }
     const seen = new Set();
     for(const row of rows){
       const employeeId = String(row.querySelector('.tk-employee')?.value || '').trim();
