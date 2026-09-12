@@ -100,6 +100,18 @@
     };
   }
 
+  function resetPad(input,label){
+    if(!input)return;
+    if(active?.input===input)active=null;
+    cache.delete(input);
+    input.value='';
+    const cell=input.closest('.lc-signature-cell');
+    cell?.querySelector(':scope > .lc-signature-wrap')?.remove();
+    delete input.dataset.signaturePadInstalled;
+    input.type='text';
+    installPad(input,label);
+  }
+
   window.addEventListener('pointermove',e=>{
     if(!active||e.pointerId!==active.pointerId)return;
     e.preventDefault();e.stopImmediatePropagation();
@@ -140,6 +152,11 @@
     installPad(byId('jsaPersonInChargeSignature'),'JSA Leader / Person in Charge signature');
     const pic=byId('jsaPersonInChargeName'),leader=byId('safetyJsaLeader'),foreman=byId('safetyJsaForeman');if(pic&&!pic.value)pic.value=leader?.value||foreman?.value||'';
   }
+
+  window.LineCrewJsaSignatures=Object.freeze({
+    reset(input,label){ resetPad(input,label); },
+    upgrade
+  });
 
   function validate(e){
     if(!e.target?.closest?.('#saveSafetyJsaBtn'))return;

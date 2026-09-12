@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 const html = fs.readFileSync('index.html','utf8');
 const expandedJsa = fs.readFileSync('expanded-jsa.js','utf8');
+const expandedJsaCore = fs.readFileSync('expanded-jsa-core.js','utf8');
 const offlineJsa = fs.readFileSync('offline-jsa.js','utf8');
 const timekeepingInput = fs.readFileSync('timekeeping-input-v2.js','utf8');
 const serviceWorker = fs.readFileSync('service-worker.js','utf8');
@@ -110,6 +111,18 @@ if(!signatures.includes('const cache=new WeakMap()')){
 }
 if(!signatures.includes('cache.get(input)||decodeExisting(input.value)||[]')){
   throw new Error('Signature pads must read only the current input cache or current input value.');
+}
+for(const token of [
+  'function resetPad(input,label)',
+  'cache.delete(input)',
+  "cell?.querySelector(':scope > .lc-signature-wrap')?.remove()",
+  'delete input.dataset.signaturePadInstalled',
+  'window.LineCrewJsaSignatures=Object.freeze'
+]){
+  if(!signatures.includes(token)) throw new Error('Static JSA signature reset guard is missing: ' + token);
+}
+if(!expandedJsaCore.includes("window.LineCrewJsaSignatures?.reset?.(\n      byId('jsaPersonInChargeSignature')")){
+  throw new Error('Starting a new JSA must reset the static Person-in-Charge signature pad.');
 }
 if(signatures.includes('__lineCrewSignatureStrokes') || signatures.includes("return `crew-${")){
   throw new Error('Positional/global JSA signature caches can leak prior signatures into a new JSA.');
