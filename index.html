@@ -6576,7 +6576,7 @@ $('completedJobDetail').classList.add('hidden');$('completedJobsList').classList
 $('completedJobsLoading').classList.remove('hidden');$('completedJobsEmpty').classList.add('hidden');
 const [jobsResult,progressResult,assignmentsResult]=await Promise.all([
 sb.from('jobs').select(`*,contracts(id,contract_name,contract_number,customers(name))`).eq('company_id',currentProfile.company_id).eq('active',false).order('closed_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}),
-sb.rpc('get_job_progress_dashboard'),sb.rpc('get_job_leader_assignments')
+sb.rpc('get_job_progress_dashboard_v2'),sb.rpc('get_job_leader_assignments')
 ]);
 $('completedJobsLoading').classList.add('hidden');
 if(jobsResult.error) return alert('Unable to load completed jobs: '+jobsResult.error.message);
@@ -6964,7 +6964,7 @@ return;
 }
 currentJobPackageCatalog = jobPackages || [];
 const { data:jobProgress, error:jobProgressError } =
-await sb.rpc('get_job_progress_dashboard');
+await sb.rpc('get_job_progress_dashboard_v2');
 if(jobProgressError){
 alert('Unable to load job progress: ' + jobProgressError.message);
 return;
