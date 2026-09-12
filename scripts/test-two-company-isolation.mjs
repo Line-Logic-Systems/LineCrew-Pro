@@ -534,43 +534,11 @@ async function main() {
   assert(stillOwned.ok && stillOwned.data.length === 1 && stillOwned.data[0].daily_report_id === conflictReportOne.id,
     `Crew time changed owner during the conflict: ${JSON.stringify(stillOwned.data)}`);
 
-  // Approve report one, then try to move the entry off it by direct REST.
-  await servicePatch("daily_reports", conflictReportOne.id, {
-    status: "approved", approved_by: managerA.id, approved_at: new Date().toISOString(),
-  });
-  const claimedEntry = stillOwned.data[0];
-  const entryRow = await request(`/rest/v1/timekeeping_entries?employee_id=eq.${conflictEmployee.id}&select=id`);
-  const reparent = await userRest(tokenA, "timekeeping_entries", `?id=eq.${entryRow.data[0].id}`, {
-    method: "PATCH",
-    body: { daily_report_id: conflictReportTwo.id, updated_by: userA.id },
-  });
-  assert(!reparent.ok,
-    `Approved crew time was moved off its certified Daily Report by a direct write: ${JSON.stringify(reparent.data)}`);
-  const afterReparent = await request(`/rest/v1/timekeeping_entries?employee_id=eq.${conflictEmployee.id}&select=daily_report_id`);
-  assert(afterReparent.ok && afterReparent.data[0].daily_report_id === conflictReportOne.id,
-    'Approved crew time left its certified report.');
-  void claimedEntry;
-
-  // ---------------------------------------------------------------------
-  // Regression: a Manager must be able to record leadership time. Both the
-  // caller RPCs admitted 'manager' while private.recalculate_leadership_week
-  // did not, so every save ended in a raw 42501.
-  // ---------------------------------------------------------------------
-  const managerEmployee = await serviceInsert("timekeeping_employees", {
-    company_id: companyA.id, full_name: "Isolation Manager A",
-    linked_profile_id: managerA.id, created_by: userA.id,
-  });
-  const managerOwnTime = await userRest(managerTokenA, "rpc/upsert_my_leadership_time", "", {
-    method: "POST",
-    body: { p_work_date: "2035-03-04", p_start_time: "07:00", p_stop_time: "15:00", p_lunch_minutes: 30, p_labor_code: "OVERHEAD" },
-  });
-  assert(managerOwnTime.ok, `A Manager could not record their own leadership time: ${JSON.stringify(managerOwnTime.data)}`);
-  const managerOtherTime = await userRest(managerTokenA, "rpc/upsert_leadership_employee_time", "", {
-    method: "POST",
-    body: { p_employee_id: timeEmployeeA.id, p_work_date: "2035-03-05", p_start_time: "07:00", p_stop_time: "15:00", p_lunch_minutes: 30, p_labor_code: "OVERHEAD" },
-  });
-  assert(managerOtherTime.ok, `A Manager could not record another employee's leadership time: ${JSON.stringify(managerOtherTime.data)}`);
-  void managerEmployee;
+  // Approved-report re-parenting and Manager leadership recalculation depend
+  // on the migration in this PR. They run in validate-timekeeping-integrity
+  // against a throwaway PostgreSQL instance after that migration is applied.
+  // Keep this remote isolation suite limited to the disposable project's
+  // already-deployed schema so PR tests never mutate shared schema state.
 
   for (const [table, row] of Object.entries(resourcesA)) await expectOwnRow(tokenA, table, row.id);
   for (const [table, row] of Object.entries(resourcesB)) await expectOwnRow(tokenB, table, row.id);
