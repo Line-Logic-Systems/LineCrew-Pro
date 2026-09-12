@@ -272,6 +272,7 @@ async function main() {
       report_date: workDate,
       work_date: workDate,
       foreman_name: "Isolation Admin A",
+      created_by: userA.id,
     }));
   }
   await serviceInsert("timekeeping_entries", {
@@ -312,6 +313,7 @@ async function main() {
     report_date: "2035-01-01",
     work_date: "2035-01-01",
     foreman_name: "Isolation Admin A",
+    created_by: userA.id,
   });
 
   const [tokenA, tokenB, managerTokenA] = await Promise.all([signInAtAal2(userA.email), signInAtAal2(userB.email), signInAtAal2(managerA.email)]);
