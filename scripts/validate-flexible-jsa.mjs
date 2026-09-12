@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 const html = fs.readFileSync('index.html','utf8');
+const expandedJsa = fs.readFileSync('expanded-jsa.js','utf8');
 const offlineJsa = fs.readFileSync('offline-jsa.js','utf8');
 const timekeepingInput = fs.readFileSync('timekeeping-input-v2.js','utf8');
 const serviceWorker = fs.readFileSync('service-worker.js','utf8');
@@ -69,9 +70,35 @@ for(const token of [
   'Offline JSA form and device storage are ready.',
   'window.LineCrewOfflineColdStart',
   "toast(message, 'warning')",
-  "console.info('[offline-jsa] Digital JSA save requested.'"
+  "console.info('[offline-jsa] Digital JSA save requested.'",
+  'let initialized = false;',
+  'if (!window.LineCrewOfflineColdStart || !initialized) return;',
+  "ready.id = 'offlineColdStartJsaReady';",
+  'markReady: markColdStartReady'
 ]){
   if(!offlineJsa.includes(token)) throw new Error('Missing Offline JSA readiness token: ' + token);
+}
+
+// The recovery/JSA loader intentionally owns login so SIGNED_IN loads the app once.
+// It must therefore preserve every reliability behavior from the inline login path.
+for(const token of [
+  'const tryOfflineJsa = () =>',
+  'Promise.race([',
+  "new Error('Connection timed out.')",
+  'looksLikeOfflineFailure(error) && tryOfflineJsa()',
+  'finally {\n        resetLoginFormState();',
+  'script.onerror = () =>',
+  'jsaLoadFailed',
+  'Offline JSA unavailable — reconnect and reload',
+  'window.LineCrewOfflineJsa?.markReady?.()'
+]){
+  if(!expandedJsa.includes(token)) throw new Error('Expanded JSA loader lost an Offline JSA reliability guard: ' + token);
+}
+const guardedLoginStart = expandedJsa.indexOf('loginButton.onclick = async () => {');
+const guardedLoginEnd = expandedJsa.indexOf('const productionTile', guardedLoginStart);
+const guardedLogin = expandedJsa.slice(guardedLoginStart, guardedLoginEnd);
+if(guardedLogin.includes('loadApp(')){
+  throw new Error('Guarded login must continue letting SIGNED_IN load the app exactly once.');
 }
 
 const signatures = fs.readFileSync('jsa-signatures.js','utf8');
