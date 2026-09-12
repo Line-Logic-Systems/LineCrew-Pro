@@ -41,6 +41,9 @@ jobs:
       - name: Validate crew-time destructive-save protection
         run: node scripts/validate-timekeeping-crew-save-safety.mjs
 
+      - name: Validate Daily Report closed-job integrity
+        run: node scripts/validate-daily-report-closed-job-integrity.mjs
+
       - name: Validate migration directory hygiene
         run: node scripts/validate-migration-hygiene.mjs
 
