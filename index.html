@@ -7498,9 +7498,6 @@ empty.textContent = 'No utility job packages added yet.';
 container.appendChild(empty);
 return;
 }
-Warning: truncated output (original token count: 30510)
-Total output lines: 2500
-
 packages.forEach(jobPackage => {
 const row = document.createElement('div');
 row.className = 'unit-compact-card';
@@ -8991,7 +8988,43 @@ await previewJobPackageImport();
 async function editJob(job){
 $('createJobCard').dataset.jobId = job.id;
 $('createJobCard').querySelector('h2').textContent = 'Edit Job';
-resetCreateJobPa…510 tokens truncated…ob '+job.job_number+'?\n\nThe Final Bill is paid and no approved production is waiting to be billed.')) return;
+resetCreateJobPacketSelection();
+$('createJobPacketField').classList.add('hidden');
+updateCreateJobActionLabel();
+$('jobNumber').value = job.job_number || '';
+$('jobName').value = job.job_name || '';
+await loadJobContractOptions(job.contract_id || '');
+$('createJobCard').classList.remove('hidden');
+$('createJobCard').scrollIntoView({ behavior:'smooth' });
+}
+/* CLOSE / REOPEN JOB */
+async function changeJobStatus(job){
+const reopening=!job.active;
+let reason=null;
+if(reopening){
+reason=prompt('Why is job '+job.job_number+' being reopened?');
+if(reason===null) return;
+if(!reason.trim()) return alert('A reopening reason is required.');
+}else{
+const { data,error }=await sb.rpc('get_job_billing_reconciliation',{p_job_id:job.id});
+if(error) return alert('Unable to check job closeout: '+error.message);
+const rec=data?.[0] || {};
+const batchesResult=await sb.rpc('get_billing_export_batches_v3');
+if(batchesResult.error) return alert('Unable to check Final Bill: '+batchesResult.error.message);
+const paidFinal=(batchesResult.data||[]).some(batch=>batch.job_id===job.id && batch.billing_type==='final' && batch.status==='paid');
+const blockers=[];
+if(!paidFinal) blockers.push('No paid Final Bill');
+if(Number(rec.approved_unbilled_value)>0.01) blockers.push(formatCurrency(rec.approved_unbilled_value)+' approved production still unbilled');
+if(Number(rec.awaiting_review_count)>0) blockers.push(rec.awaiting_review_count+' report(s) awaiting review');
+if(Number(rec.draft_report_count)>0) blockers.push(rec.draft_report_count+' draft/returned report(s)');
+if(blockers.length){
+if(currentUserRole()!=='owner'){
+return alert('This job still has unresolved billing or production:\n\n• '+blockers.join('\n• ')+'\n\nOnly the company Owner can authorize this override closeout.');
+}
+reason=prompt('OWNER OVERRIDE REQUIRED\n\n• '+blockers.join('\n• ')+'\n\nEnter the permanent audit reason to close anyway, or Cancel.');
+if(reason===null) return;
+if(!reason.trim()) return alert('An Owner override reason is required.');
+}else if(!confirm('Close job '+job.job_number+'?\n\nThe Final Bill is paid and no approved production is waiting to be billed.')) return;
 }
 const { error }=await sb.rpc('set_job_closeout',{
 p_job_id:job.id,p_close:!reopening,p_reason:reason
