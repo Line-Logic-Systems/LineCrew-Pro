@@ -6,18 +6,25 @@ const sql=fs.readFileSync(migrationPath,'utf8');
 
 function need(token,message){ if(!sql.includes(token)) throw new Error(message); }
 
-need("and job.active is true", 'Daily Report submit/approval must require an active job.');
-need("Closed jobs are read-only. Reopen the job before approving this report.", 'Closed-job approval rejection is missing.');
-need("approved_by=auth.uid()", 'Approval actor metadata is missing.');
-need("approved_at=now()", 'Approval timestamp metadata is missing.');
-need("reviewed_by=auth.uid()", 'Reviewer metadata is missing.');
-need("reviewed_at=now()", 'Review timestamp metadata is missing.');
-need("updated_at=now()", 'Approval update timestamp is missing.');
+need('and job.active is true', 'Daily Report submit/approval must require an active job.');
+need('Closed jobs are read-only. Reopen the job before approving this report.', 'Closed-job approval rejection is missing.');
+need('approved_by=auth.uid()', 'Approval actor metadata is missing.');
+need('approved_at=now()', 'Approval timestamp metadata is missing.');
+need('reviewed_by=auth.uid()', 'Reviewer metadata is missing.');
+need('reviewed_at=now()', 'Review timestamp metadata is missing.');
+need('updated_at=now()', 'Approval update timestamp is missing.');
 need("v_role not in ('admin','manager','gf','owner','superintendent')", 'Manager must remain in Daily Report approval leadership.');
 need("lower(coalesce(public.my_role(),'')) in ('owner','manager','admin','gf')", 'Leadership direct-update policy role boundary is missing.');
-need("drop policy if exists daily_reports_leadership_update", 'Closed-job direct-update policy replacement is missing.');
-need("for update of report", 'Submit/approve path must lock the report row before state transition.');
-need("Job closed or report changed before submission completed", 'Submit race-condition guard is missing.');
-need("Job closed or report changed before approval completed.", 'Approval race-condition guard is missing.');
+need('drop policy if exists daily_reports_leadership_update', 'Closed-job direct-update policy replacement is missing.');
+need('for update of report', 'Submit/approve path must lock the report row before state transition.');
+need('Job closed or report changed before submission completed', 'Submit race-condition guard is missing.');
+need('Job closed or report changed before approval completed.', 'Approval race-condition guard is missing.');
+need('revoke all on function public.submit_daily_report(uuid) from public, anon', 'Submit RPC must remain unavailable to anonymous callers.');
+need('revoke all on function public.approve_daily_report(uuid,text) from public, anon', 'Approve RPC must remain unavailable to anonymous callers.');
+
+const updatePolicy=(sql.match(/create policy daily_reports_leadership_update[\s\S]*$/i)||[''])[0];
+if((updatePolicy.match(/job\.active is true/g)||[]).length < 2){
+  throw new Error('Closed-job protection must exist in both USING and WITH CHECK for the leadership UPDATE policy.');
+}
 
 console.log('Daily Report closed-job and approval metadata guard passed.');
