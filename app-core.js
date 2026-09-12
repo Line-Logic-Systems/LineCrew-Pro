@@ -21,7 +21,7 @@
   function formatTeamRole(role){ const roleLabels={owner:'Owner',manager:'Manager',admin:'Admin',superintendent:'Superintendent',gf:'General Foreman',foreman:'Foreman',safety:'Safety'}; return roleLabels[String(role || '').toLowerCase()] || 'Foreman'; }
   function formatAuditTimestamp(value){ if(!value)return 'Not recorded'; const date=new Date(value); if(Number.isNaN(date.getTime()))return String(value); return date.toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
   function formatCurrency(value){ const amount=Number(value || 0); return amount.toLocaleString('en-US',{style:'currency',currency:'USD'}); }
-  function csvCell(value){ let text=String(value ?? ''); if(typeof value==='string' && (/^[\t\r\n]/.test(text) || /^\s*[=+\-@]/.test(text))) text="'"+text; return /[",\n]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text; }
+  function csvCell(value){ let text=String(value ?? ''); if(typeof value==='string' && (/^[\t\r\n]/.test(text) || /^\s*[=+\-@]/.test(text))) text="'"+text; return '"'+text.replace(/"/g,'""')+'"'; }
   function companyLogoExtension(file){ if(file?.type==='image/png')return 'png'; if(file?.type==='image/jpeg')return 'jpg'; if(file?.type==='image/webp')return 'webp'; return ''; }
   function companyJsaFileKey(file){ return [file.name,file.size,file.lastModified].join(':'); }
   function safeJsaFilename(name){ return String(name || 'jsa-file').replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/^-+|-+$/g,'').slice(-140) || 'jsa-file'; }
@@ -29,8 +29,14 @@
     return ['application/pdf','image/jpeg','image/png','image/heic','image/heif'].includes(String(file?.type || '').toLowerCase()) &&
       Number(file?.size || 0) > 0 && Number(file?.size || 0) <= 15728640;
   }
+  function userCanSeeSafetyRecords(){
+    const role = typeof window.currentUserRole === 'function' ? String(window.currentUserRole() || '').toLowerCase() : '';
+    if(role === 'safety') return true;
+    if(['gf','foreman'].includes(role)) return true;
+    return typeof window.userHasCapability === 'function' && window.userHasCapability('safety_records');
+  }
 
-  const api = Object.freeze({uniqueOfflineJsaJobs,offlineJsaNetworkFailure,companyAccessInactive,firstStackFrame,desktopViewEnabled,currentErrorPage,formatTeamRole,formatAuditTimestamp,formatCurrency,csvCell,companyLogoExtension,companyJsaFileKey,safeJsaFilename,allowedJsaFile});
+  const api = Object.freeze({uniqueOfflineJsaJobs,offlineJsaNetworkFailure,companyAccessInactive,firstStackFrame,desktopViewEnabled,currentErrorPage,formatTeamRole,formatAuditTimestamp,formatCurrency,csvCell,companyLogoExtension,companyJsaFileKey,safeJsaFilename,allowedJsaFile,userCanSeeSafetyRecords});
   window.LineCrewAppCore = api;
   window.uniqueOfflineJsaJobs=uniqueOfflineJsaJobs;
   window.offlineJsaNetworkFailure=offlineJsaNetworkFailure;
@@ -46,4 +52,5 @@
   window.companyJsaFileKey=companyJsaFileKey;
   window.safeJsaFilename=safeJsaFilename;
   window.allowedJsaFile=allowedJsaFile;
+  window.userCanSeeSafetyRecords=userCanSeeSafetyRecords;
 })();
