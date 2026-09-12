@@ -1,8 +1,10 @@
 import fs from 'node:fs';
 
-const path='supabase/migrations/20260912010457_repair_manager_operational_parity.sql';
-if(!fs.existsSync(path)) throw new Error('Missing Manager operational parity migration.');
-const sql=fs.readFileSync(path,'utf8');
+const originalPath='supabase/migrations/20260912010457_repair_manager_operational_parity.sql';
+const completionPath=fs.readdirSync('supabase/migrations').find(name=>name.endsWith('_complete_manager_operational_parity.sql'));
+if(!fs.existsSync(originalPath)||!completionPath) throw new Error('Missing Manager operational parity migrations.');
+const originalSql=fs.readFileSync(originalPath,'utf8');
+const sql=fs.readFileSync(`supabase/migrations/${completionPath}`,'utf8');
 
 for(const signature of [
   'public.create_billing_export_batch(uuid,date,date,boolean,text)',
@@ -16,10 +18,33 @@ for(const signature of [
   'public.linecrew_can_manage_job_packages()',
   'public.linecrew_can_manage_jobs()'
 ]) {
-  if(!sql.includes(signature)) throw new Error(`Manager parity migration does not explicitly patch ${signature}.`);
+  if(!originalSql.includes(signature)) throw new Error(`Initial Manager parity migration does not explicitly patch ${signature}.`);
 }
-if(!sql.includes("v_override_required and v_role not in (''owner'', ''manager'')")) throw new Error('Manager closeout override parity is missing.');
-if(!sql.includes('Expected role allow-list was not found')) throw new Error('Manager migration must fail closed if an expected function body changes.');
+for(const signature of [
+  'public.get_job_packages_v2(uuid)',
+  'public.get_company_jsas()',
+  'public.get_job_closeout_history(uuid)',
+  'public.get_billing_export_batches_v3()',
+  'public.update_company_settings(text,text,text,text,text,text)',
+  'public.set_company_storm_mode(boolean,text)',
+  'public.save_daily_report_unit_location_v2(uuid,uuid,text,numeric,numeric,numeric)',
+  'public.get_job_package_work_points(uuid)',
+  'public.get_daily_report_unit_locations_v2(uuid)'
+]){
+  if(!sql.includes(signature)) throw new Error(`Completed Manager parity migration does not explicitly patch ${signature}.`);
+}
+for(const forbidden of [
+  'public.linecrew_transfer_company_owner(uuid)',
+  'public.linecrew_admin_replace_company_owner(uuid,uuid,text)',
+  'public.linecrew_claim_initial_owner()',
+  'public.platform_owner_prepare_beta_company(uuid,text,timestamp with time zone,timestamp with time zone)'
+]){
+  if(sql.includes(`('${forbidden}')`)) throw new Error(`Manager parity must not patch protected function ${forbidden}.`);
+}
+if(!sql.includes("v_override_required and v_role <> ''owner''")) throw new Error('Unresolved closeout overrides must remain Owner-only.');
+if(!sql.includes('No operational Admin role list was patched')) throw new Error('Manager migration must fail closed if an expected function body changes.');
 if(/regexp_replace/i.test(sql)) throw new Error('Manager parity must not use a broad regexp rewrite.');
 
 console.log('Manager operational parity guard passed.');
+console.log('- operational RPCs include Manager while ownership and platform controls remain excluded');
+console.log('- unresolved closeout overrides remain Owner-only');

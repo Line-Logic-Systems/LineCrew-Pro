@@ -224,7 +224,7 @@ async function cleanup() {
 
 async function main() {
   console.log(`Starting guarded two-company isolation test (${runId}).`);
-  const [userA, userB] = await Promise.all([createUser("company-a"), createUser("company-b")]);
+  const [userA, userB, managerA] = await Promise.all([createUser("company-a"), createUser("company-b"), createUser("manager-a")]);
 
   const companyA = await serviceInsert("companies", { name: `${runId} Company A`, created_by: userA.id });
   created.companies.push(companyA.id);
@@ -232,6 +232,7 @@ async function main() {
   created.companies.push(companyB.id);
   await serviceInsert("profiles", { id: userA.id, company_id: companyA.id, full_name: "Isolation Admin A", role: "admin" });
   await serviceInsert("profiles", { id: userB.id, company_id: companyB.id, full_name: "Isolation Admin B", role: "admin" });
+  await serviceInsert("profiles", { id: managerA.id, company_id: companyA.id, full_name: "Isolation Manager A", role: "manager" });
 
   const customerA = await serviceInsert("customers", { company_id: companyA.id, name: `${runId} Customer A` });
   const customerB = await serviceInsert("customers", { company_id: companyB.id, name: `${runId} Customer B` });
@@ -297,10 +298,20 @@ async function main() {
   await servicePatch("daily_reports", weeklyReports[1].id, { status: "approved", approved_by: userA.id, approved_at: new Date().toISOString() });
   await servicePatch("daily_reports", weeklyReports[2].id, { status: "approved", approved_by: userA.id, approved_at: new Date().toISOString() });
 
-  const [tokenA, tokenB] = await Promise.all([signInAtAal2(userA.email), signInAtAal2(userB.email)]);
+  const [tokenA, tokenB, managerTokenA] = await Promise.all([signInAtAal2(userA.email), signInAtAal2(userB.email), signInAtAal2(managerA.email)]);
   const resourcesA = { companies: companyA, profiles: { id: userA.id }, customers: customerA, price_books: priceBookA, jobs: jobA, daily_reports: reportA };
   const resourcesB = { companies: companyB, profiles: { id: userB.id }, customers: customerB, price_books: priceBookB, jobs: jobB, daily_reports: reportB };
 
+  for (const [rpc, body] of [
+    ["get_job_packages_v2", { p_job_id: jobA.id }],
+    ["get_company_jsas", {}],
+    ["get_job_progress_dashboard", {}],
+    ["get_job_package_work_points", { p_package_id: currentPackageA.id }],
+    ["get_assignable_job_leaders", {}],
+  ]) {
+    const result = await userRest(managerTokenA, `rpc/${rpc}`, "", { method: "POST", body });
+    assert(result.ok, `Manager operational RPC ${rpc} failed: ${JSON.stringify(result.data)}`);
+  }
   const transactionalSave = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
     method: "POST",
     body: {
