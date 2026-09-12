@@ -317,6 +317,10 @@
     addTaskRow();
     addTaskRow();
     buildCrewRows();
+    window.LineCrewJsaSignatures?.reset?.(
+      byId('jsaPersonInChargeSignature'),
+      'JSA Leader / Person in Charge signature'
+    );
     setNowFields();
   }
 
