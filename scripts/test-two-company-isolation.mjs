@@ -392,25 +392,32 @@ async function main() {
       full_name: `OT Split ${seedRegular}`,
       created_by: userA.id,
     });
-    const seedReport = await serviceInsert("daily_reports", {
-      company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
-      report_date: "2035-01-09", work_date: "2035-01-09",
-      foreman_name: "Isolation Admin A", created_by: userA.id,
-    });
+    const seedReports = [];
+    for (const workDate of ["2035-01-09", "2035-01-10"]) {
+      seedReports.push(await serviceInsert("daily_reports", {
+        company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
+        report_date: workDate, work_date: workDate,
+        foreman_name: "Isolation Admin A", created_by: userA.id,
+      }));
+    }
     const targetReport = await serviceInsert("daily_reports", {
       company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
       report_date: "2035-01-08", work_date: "2035-01-08",
       foreman_name: "Isolation Admin A", created_by: userA.id,
     });
-    await serviceInsert("timekeeping_entries", {
-      company_id: companyA.id, employee_id: splitEmployee.id,
-      daily_report_id: seedReport.id, job_id: jobA.id, work_date: "2035-01-09",
-      regular_hours: seedRegular, overtime_hours: 0,
-      created_by: userA.id, updated_by: userA.id,
-    });
-    await servicePatch("daily_reports", seedReport.id, {
-      status: "approved", approved_by: userA.id, approved_at: new Date().toISOString(),
-    });
+    const seedParts = [seedRegular / 2, seedRegular - (seedRegular / 2)];
+    for (let index = 0; index < seedReports.length; index += 1) {
+      await serviceInsert("timekeeping_entries", {
+        company_id: companyA.id, employee_id: splitEmployee.id,
+        daily_report_id: seedReports[index].id, job_id: jobA.id,
+        work_date: index === 0 ? "2035-01-09" : "2035-01-10",
+        regular_hours: seedParts[index], overtime_hours: 0,
+        created_by: userA.id, updated_by: userA.id,
+      });
+      await servicePatch("daily_reports", seedReports[index].id, {
+        status: "approved", approved_by: userA.id, approved_at: new Date().toISOString(),
+      });
+    }
     const split = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
       method: "POST",
       body: {
@@ -441,18 +448,37 @@ async function main() {
       report_date: "2035-01-07", work_date: "2035-01-07",
       foreman_name: "Isolation Admin A", created_by: userA.id,
     });
+    const sundayJobTwo = await serviceInsert("jobs", {
+      company_id: companyA.id, job_number: `${runId}-week-${weekStartDay}`,
+      job_name: `Week Boundary ${weekStartDay}`, created_by: userA.id,
+      price_book_id: priceBookA.id,
+    });
+    const sundayReportTwo = await serviceInsert("daily_reports", {
+      company_id: companyA.id, job_id: sundayJobTwo.id, foreman_id: userA.id,
+      report_date: "2035-01-07", work_date: "2035-01-07",
+      foreman_name: "Isolation Admin A", created_by: userA.id,
+    });
     const mondayReport = await serviceInsert("daily_reports", {
       company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
       report_date: "2035-01-08", work_date: "2035-01-08",
       foreman_name: "Isolation Admin A", created_by: userA.id,
     });
-    // 2035-01-07 (Sunday) consumes the whole regular allowance.
+    // Two valid entries on 2035-01-07 (Sunday) consume the whole regular
+    // allowance without violating the table's 24-hour-per-entry constraint.
     await serviceInsert("timekeeping_entries", {
       company_id: companyA.id, employee_id: weekEmployee.id,
       daily_report_id: sundayReport.id, job_id: jobA.id, work_date: "2035-01-07",
-      regular_hours: 40, overtime_hours: 0, created_by: userA.id, updated_by: userA.id,
+      regular_hours: 24, overtime_hours: 0, created_by: userA.id, updated_by: userA.id,
+    });
+    await serviceInsert("timekeeping_entries", {
+      company_id: companyA.id, employee_id: weekEmployee.id,
+      daily_report_id: sundayReportTwo.id, job_id: sundayJobTwo.id, work_date: "2035-01-07",
+      regular_hours: 16, overtime_hours: 0, created_by: userA.id, updated_by: userA.id,
     });
     await servicePatch("daily_reports", sundayReport.id, {
+      status: "approved", approved_by: userA.id, approved_at: new Date().toISOString(),
+    });
+    await servicePatch("daily_reports", sundayReportTwo.id, {
       status: "approved", approved_by: userA.id, approved_at: new Date().toISOString(),
     });
     const weekSave = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
