@@ -6613,7 +6613,7 @@ attachments.sort((left,right)=>String(left.created_at||'').localeCompare(String(
 }
 let billing=[];let reconciliation=null;
 if(userCanUseBillingExports()){
-const [batchesResult,reconciliationResult]=await Promise.all([sb.rpc('get_billing_export_batches_v4',{p_archive_filter:'all'}),sb.rpc('get_job_billing_reconciliation',{p_job_id:job.id})]);
+const [batchesResult,reconciliationResult]=await Promise.all([sb.rpc('get_billing_export_batches_v4',{p_archive_filter:'all'}),sb.rpc('get_job_billing_reconciliation_v3',{p_job_id:job.id})]);
 if(batchesResult.error) throw batchesResult.error;
 if(reconciliationResult.error) throw reconciliationResult.error;
 billing=(batchesResult.data||[]).filter(item=>String(item.job_id)===String(job.id));
@@ -6639,6 +6639,7 @@ detail.innerHTML='<div class="card"><button id="closeCompletedJobDetail" class="
 '<div class="card"><h3>Report Attachments ('+r.attachments.length+')</h3><div id="completedJobAttachments">'+((r.attachments.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(item.original_filename||'Attachment')+'</strong>'+(item.caption?'<br>'+escapeHtml(item.caption):'')+'<br><span class="muted">'+escapeHtml(formatCompletedJobDate(item.created_at))+'</span><br><button class="secondary small completed-attachment-open" data-attachment-id="'+escapeHtml(item.id)+'">Open Read-Only</button></div>').join(''))||'<p class="muted">No report attachments.</p>')+'</div></div>'+
 '<div class="card"><h3>Closeout & Reopen History ('+r.closeoutHistory.length+')</h3>'+((r.closeoutHistory.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(String(item.action||'').replaceAll('_',' ').toUpperCase())+'</strong><br>'+escapeHtml(item.actor_name||'System')+' · '+escapeHtml(formatTeamRole(item.actor_role))+' · '+escapeHtml(formatCompletedJobDate(item.occurred_at))+(item.reason?'<br>'+escapeHtml(item.reason):'')+(item.action==='override_closed'?'<br><span class="muted">Owner-authorized unresolved-work override</span>':'')+'</div>').join(''))||'<p class="muted">No closeout history was recorded before audit tracking was enabled.</p>')+'</div>'+
 '<div class="card"><h3>Audit History ('+r.audit.length+')</h3>'+((r.audit.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(String(item.event_type||'updated').replaceAll('_',' '))+'</strong><br>'+escapeHtml(item.actor_name||'System')+' · '+escapeHtml(formatCompletedJobDate(item.event_at))+(item.event_notes?'<br>'+escapeHtml(item.event_notes):'')+'</div>').join(''))||'<p class="muted">No recorded audit events.</p>')+'</div>'+
+'<div class="card"><h3>Billing Reconciliation</h3>'+(userCanUseBillingExports()&&r.reconciliation?'<div class="daily-value-summary"><span><strong>'+escapeHtml(formatCurrency(r.reconciliation.approved_authorized_progress_value||0))+'</strong><br>Approved Authorized</span><span><strong>'+escapeHtml(formatCurrency(r.reconciliation.approved_redline_value||0))+'</strong><br>Approved Redlines</span><span><strong>'+escapeHtml(formatCurrency(r.reconciliation.approved_billable_value||0))+'</strong><br>Total Approved Billable</span><span><strong>'+escapeHtml(formatCurrency(r.reconciliation.remaining_authorized_value||0))+'</strong><br>Remaining Unapproved Scope</span></div>':'<p class="muted">Billing dollars remain limited to roles with billing and actual-pricing permission.</p>')+'</div>'+
 '<div class="card"><h3>Billing History</h3>'+(userCanUseBillingExports()?((r.billing.map(item=>'<div class="daily-history-event"><strong>'+escapeHtml(item.batch_number||'Billing Batch')+' — '+escapeHtml(billingStageLabel(item))+'</strong><br>'+escapeHtml(billingStatusLabel(item.status))+' · '+escapeHtml(formatCurrency(item.total_value||0))+'</div>').join(''))||'<p class="muted">No billing batches.</p>'):'<p class="muted">Billing dollars remain limited to roles with billing and actual-pricing permission.</p>')+'</div>';
 $('closeCompletedJobDetail').onclick=()=>{detail.classList.add('hidden');$('completedJobsList').classList.remove('hidden');if(window.history.state?.lineCrewPage==='completedJobsPage'&&window.history.state?.jobId) setAppHistory({lineCrewPage:'completedJobsPage'},true);};
 $('exportCompletedJobExcel').onclick=exportCompletedJobExcel;
@@ -6652,7 +6653,7 @@ function exportCompletedJobExcel(){
 if(!currentCompletedJobRecord||typeof XLSX==='undefined') return alert('The completed job export is not ready.');
 if(!userCanExport()) return alert('Your role does not have export permission.');
 const r=currentCompletedJobRecord;const wb=XLSX.utils.book_new();
-const summary=[{'Job Number':r.job.job_number,'Job Name':r.job.job_name,'Customer':r.job.contracts?.customers?.name||r.job.customer_name||'','Contract':r.job.contracts?.contract_name||'','Contract Number':r.job.contracts?.contract_number||'','Closed At':r.job.closed_at||'','Closeout Status':r.job.closeout_status||'closed','Closeout Note':r.job.closeout_notes||'','Reported Percent':Number(r.progress.reported_percent||0),'Approved Percent':Number(r.progress.approved_percent||0),'Daily Reports':r.reports.length,'Unit Lines':r.units.length,'Packet Revisions':r.packages.length,'JSAs':r.jsas.length}];
+const summary=[{'Job Number':r.job.job_number,'Job Name':r.job.job_name,'Customer':r.job.contracts?.customers?.name||r.job.customer_name||'','Contract':r.job.contracts?.contract_name||'','Contract Number':r.job.contracts?.contract_number||'','Closed At':r.job.closed_at||'','Closeout Status':r.job.closeout_status||'closed','Closeout Note':r.job.closeout_notes||'','Reported Percent':Number(r.progress.reported_percent||0),'Approved Percent':Number(r.progress.approved_percent||0),'Approved Authorized':Number(r.reconciliation?.approved_authorized_progress_value||0),'Approved Redlines':Number(r.reconciliation?.approved_redline_value||0),'Total Approved Billable':Number(r.reconciliation?.approved_billable_value||0),'Remaining Unapproved Authorized Scope':Number(r.reconciliation?.remaining_authorized_value||0),'Daily Reports':r.reports.length,'Unit Lines':r.units.length,'Packet Revisions':r.packages.length,'JSAs':r.jsas.length}];
 XLSX.utils.book_append_sheet(wb,completedJobSheet(summary,'No summary'),'Job Summary');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.assignments.map(item=>({'Name':item.full_name||'','Role':formatTeamRole(item.member_role),'Assigned At':item.assigned_at||'','Assigned By':item.assigned_by_name||''})),'No assignments'),'Supervision');
 XLSX.utils.book_append_sheet(wb,completedJobSheet(r.reports.map(item=>({'Work Date':item.work_date||'','Foreman':item.foreman_name||'','Crew':item.crew_name||'','Regular Hours':Number(item.regular_hours||0),'OT Hours':Number(item.overtime_hours||0),'Weather':item.weather_conditions||'','Delay Hours':Number(item.delay_hours||0),'Delay Reason':item.delay_reason||'','Status':String(item.status||'').toUpperCase(),'Storm Mode':item.storm_mode?'Yes':'No','Storm Event':item.storm_event_name||'','Report Notes':item.notes||'','Review Notes':item.review_notes||''})),'No Daily Reports'),'Daily Reports');
@@ -9017,7 +9018,7 @@ reason=prompt('Why is job '+job.job_number+' being reopened?');
 if(reason===null) return;
 if(!reason.trim()) return alert('A reopening reason is required.');
 }else{
-const { data,error }=await sb.rpc('get_job_billing_reconciliation',{p_job_id:job.id});
+const { data,error }=await sb.rpc('get_job_billing_reconciliation_v3',{p_job_id:job.id});
 if(error) return alert('Unable to check job closeout: '+error.message);
 const rec=data?.[0] || {};
 const batchesResult=await sb.rpc('get_billing_export_batches_v3');
@@ -9227,7 +9228,7 @@ currentBillingReconciliation=null;
 if(!jobId){ panel.classList.add('hidden'); panel.innerHTML=''; return null; }
 panel.classList.remove('hidden');
 panel.innerHTML='<span class="muted">Loading job billing reconciliation...</span>';
-const { data,error }=await sb.rpc('get_job_billing_reconciliation_v2',{ p_job_id:jobId });
+const { data,error }=await sb.rpc('get_job_billing_reconciliation_v3',{ p_job_id:jobId });
 if(error){ panel.innerHTML='<span class="danger-text">Unable to load reconciliation: '+escapeHtml(error.message)+'</span>'; return null; }
 currentBillingReconciliation=data?.[0] || null;
 const item=currentBillingReconciliation;
@@ -9240,7 +9241,7 @@ panel.innerHTML=
 '<span><strong>'+escapeHtml(formatCurrency(item.billed_value))+'</strong><br>Previously Billed</span>'+
 '<span><strong>'+escapeHtml(formatCurrency(item.credit_value))+'</strong><br>Billing Adjustments</span>'+
 '<span><strong>'+escapeHtml(formatCurrency(item.approved_unbilled_value))+'</strong><br>Approved Unbilled</span>'+
-'<span><strong>'+escapeHtml(formatCurrency(item.remaining_authorized_value))+'</strong><br>Remaining Authorized</span>'+
+'<span><strong>'+escapeHtml(formatCurrency(item.remaining_authorized_value))+'</strong><br>Remaining Unapproved Authorized Scope</span>'+
 '<span><strong>'+escapeHtml(item.awaiting_review_count)+'</strong><br>Awaiting Review</span>'+
 '<span><strong>'+escapeHtml(item.draft_report_count)+'</strong><br>Draft / Returned</span>';
 return item;
@@ -9784,7 +9785,7 @@ if(!batches.length) throw new Error('No billing batches exist for this job yet.'
 const hasFinal=batches.some(batch=>String(batch.billing_type).toLowerCase()==='final' && String(batch.status).toLowerCase()!=='void');
 if(!hasFinal && !confirm('This job does not have a retained Final Bill yet. Download the current billing record anyway?')) return;
 const [reconciliationResult,packagesResult,detailsResult]=await Promise.all([
-sb.rpc('get_job_billing_reconciliation_v2',{p_job_id:jobId}),sb.rpc('get_job_packages_v2',{p_job_id:jobId}),
+sb.rpc('get_job_billing_reconciliation_v3',{p_job_id:jobId}),sb.rpc('get_job_packages_v2',{p_job_id:jobId}),
 sb.rpc('get_complete_job_billing_export_details_v1',{p_job_id:jobId})
 ]);
 if(reconciliationResult.error) throw reconciliationResult.error;
@@ -9820,7 +9821,7 @@ const summary=[['LineCrew Pro Complete Job Billing Record'],['Job Number',job?.j
 ['Previously Billed',Number(reconciliation.billed_value || 0)],['Billing Adjustments',Number(reconciliation.credit_value || 0)],
 ['Adjusted Billed Total',Number(reconciliation.net_billed_value ?? (Number(reconciliation.billed_value || 0)-Number(reconciliation.credit_value || 0)))],
 ['Approved Unbilled',Number(reconciliation.approved_unbilled_value || 0)],
-['Remaining Authorized',Number(reconciliation.remaining_authorized_value || 0)],
+['Remaining Unapproved Authorized Scope',Number(reconciliation.remaining_authorized_value || 0)],
 ['Awaiting Review',Number(reconciliation.awaiting_review_count || 0)],['Draft / Returned',Number(reconciliation.draft_report_count || 0)],
 ['Billing Batches',batches.length],['Packet Revisions',packages.length]];
 const summarySheet=XLSX.utils.aoa_to_sheet(summary); summarySheet['!cols']=[{wch:28},{wch:42}];
@@ -9865,7 +9866,7 @@ pdfLine('Authorized scope: '+formatCurrency(reconciliation.authorized_progress_v
 pdfLine('Approved redlines: '+formatCurrency(reconciliation.approved_redline_value)+'   Total approved billable: '+formatCurrency(reconciliation.approved_billable_value));
 pdfLine('Previously billed: '+formatCurrency(reconciliation.billed_value)+'   Billing adjustments: '+formatCurrency(reconciliation.credit_value));
 pdfLine('Adjusted billed total: '+formatCurrency(reconciliation.net_billed_value ?? (Number(reconciliation.billed_value || 0)-Number(reconciliation.credit_value || 0))));
-pdfLine('Approved unbilled: '+formatCurrency(reconciliation.approved_unbilled_value)+'   Remaining authorized: '+formatCurrency(reconciliation.remaining_authorized_value),{gap:20});
+pdfLine('Approved unbilled: '+formatCurrency(reconciliation.approved_unbilled_value)+'   Remaining unapproved authorized scope: '+formatCurrency(reconciliation.remaining_authorized_value),{gap:20});
 pdfLine('Billing Batch History',{bold:true,size:12,gap:18});
 batchRecords.forEach(({batch,lines,attachments})=>{
 pdfLine(billingStageLabel(batch)+' | '+batch.batch_number+' | '+billingStatusLabel(batch.status)+' | '+formatCurrency(batch.total_value),{bold:true,limit:100});
