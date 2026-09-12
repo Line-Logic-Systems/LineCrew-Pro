@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const app=fs.readFileSync('index.html','utf8');
-const migration=fs.readFileSync('supabase/migrations/20260912150000_harden_assistant_and_stripe_idempotency.sql','utf8');
+const migration=fs.readFileSync('supabase/migrations/20260912145002_harden_assistant_and_stripe_idempotency.sql','utf8');
 const assistant=fs.readFileSync('supabase/functions/linecrew-assistant/index.ts','utf8');
 const stripe=fs.readFileSync('supabase/functions/stripe-webhook/index.ts','utf8');
 
