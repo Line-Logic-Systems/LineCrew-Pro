@@ -4096,6 +4096,56 @@ if (IS_LINECREW_SANDBOX) {
 }
 const $ = id =>
 document.getElementById(id);
+function requestReportApprovalDecision({ redlineCount=0, pendingCount=0, requiresAdminOverride=false, includeUnits=false }={}){
+return new Promise(resolve => {
+const existing = $('reportApprovalDialog');
+if(existing) existing.remove();
+const backdrop = document.createElement('section');
+backdrop.id = 'reportApprovalDialog';
+backdrop.className = 'pilot-feedback-backdrop';
+backdrop.setAttribute('role','dialog');
+backdrop.setAttribute('aria-modal','true');
+backdrop.setAttribute('aria-labelledby','reportApprovalDialogTitle');
+const card = document.createElement('form');
+card.className = 'card pilot-feedback-card';
+const exceptionText = redlineCount || pendingCount
+? '<div class="notice"><strong>Authorization review</strong><br>' +
+redlineCount + ' redline unit ' + (redlineCount===1?'entry':'entries') + '<br>' +
+pendingCount + ' unit ' + (pendingCount===1?'entry':'entries') + ' pending a utility packet</div>'
+: '';
+card.innerHTML =
+'<h3 id="reportApprovalDialogTitle">Approve Daily Report</h3>' +
+'<p>' + (includeUnits?'Approve this Daily Report and all listed unit production?':'Approve this Daily Report?') + '</p>' +
+exceptionText +
+'<label for="reportApprovalNotes">' +
+(requiresAdminOverride?'Leadership override reason':'Approval notes (optional)') +
+'<textarea id="reportApprovalNotes" rows="4" ' +
+(requiresAdminOverride?'required aria-required="true"':'') +
+' placeholder="' + (requiresAdminOverride?'Required for this redline approval':'Add notes for the approval record') + '"></textarea></label>' +
+'<p id="reportApprovalDialogError" class="error-text hidden" role="alert" aria-live="assertive"></p>' +
+'<div class="button-row"><button type="submit" class="success">Approve</button>' +
+'<button type="button" class="secondary" data-action="cancel">Cancel</button></div>';
+backdrop.appendChild(card);
+document.body.appendChild(backdrop);
+const notes = card.querySelector('#reportApprovalNotes');
+const error = card.querySelector('#reportApprovalDialogError');
+const finish = value => { backdrop.remove(); resolve(value); };
+card.addEventListener('submit', event => {
+event.preventDefault();
+const value = notes.value.trim();
+if(requiresAdminOverride && !value){
+error.textContent = 'An override reason is required for a redline report.';
+error.classList.remove('hidden');
+notes.focus();
+return;
+}
+finish(value);
+});
+card.querySelector('[data-action="cancel"]').onclick = () => finish(null);
+backdrop.addEventListener('keydown', event => { if(event.key==='Escape') finish(null); });
+notes.focus();
+});
+}
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
 let pendingUtilityInviteToken = new URLSearchParams(window.location.search).get('utilityInvite') || '';
@@ -17970,31 +18020,13 @@ const requiresAdminOverride =
 redlineCount > 0 &&
 currentCompany?.require_gf_redline_approval === true &&
 currentUserRole() !== 'gf';
-const notes = prompt(
-requiresAdminOverride
-? 'This company requires GF approval for redlines. Enter the leadership override reason:'
-: 'Optional approval notes:',
-''
-);
+const notes = await requestReportApprovalDecision({
+redlineCount,
+pendingCount,
+requiresAdminOverride,
+includeUnits:true
+});
 if(notes === null) return;
-if(requiresAdminOverride && !notes.trim()){
-alert('An override reason is required for a redline report.');
-return;
-}
-let message = 'Approve this daily report and all listed unit production?';
-if(redlineCount || pendingCount){
-message =
-'Authorization review required:\n\n' +
-redlineCount + ' redline unit entr' +
-(redlineCount === 1 ? 'y' : 'ies') + '\n' +
-pendingCount + ' unit entr' +
-(pendingCount === 1 ? 'y' : 'ies') +
-' pending a utility packet\n\n' +
-(requiresAdminOverride
-? 'Your override reason will be recorded. Continue?'
-: 'Approving confirms that you reviewed these exceptions. Continue?');
-}
-if(!confirm(message)) return;
 approveButton.disabled = true;
 approveButton.textContent = 'Approving...';
 const { error } = await sb.rpc('approve_daily_report', {
@@ -19082,36 +19114,13 @@ const requiresAdminOverride =
 redlineCount > 0 &&
 currentCompany?.require_gf_redline_approval === true &&
 currentUserRole() !== 'gf';
-const notes = prompt(
-requiresAdminOverride
-? 'This company requires GF approval for redlines. Enter the leadership override reason:'
-: 'Optional approval notes:',
-''
-);
-if(notes === null){
-return;
-}
-if(requiresAdminOverride && !notes.trim()){
-alert('An override reason is required for a redline report.');
-return;
-}
-let approvalMessage = 'Approve this daily report?';
-if(redlineCount || pendingCount){
-approvalMessage =
-'Authorization review required:\n\n' +
-redlineCount + ' redline unit entr' +
-(redlineCount === 1 ? 'y' : 'ies') + '\n' +
-pendingCount + ' unit entr' +
-(pendingCount === 1 ? 'y' : 'ies') +
-' pending a utility packet\n\n' +
-(requiresAdminOverride
-? 'Your override reason will be recorded. Continue?'
-: 'Approving confirms that you reviewed these exceptions. Continue?');
-}
-const confirmed = confirm(approvalMessage);
-if(!confirmed){
-return;
-}
+const notes = await requestReportApprovalDecision({
+redlineCount,
+pendingCount,
+requiresAdminOverride,
+includeUnits:false
+});
+if(notes === null) return;
 approveBtn.disabled = true;
 approveBtn.textContent = 'Approving...';
 const { error } = await sb.rpc(
