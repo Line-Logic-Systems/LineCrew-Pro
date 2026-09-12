@@ -72,8 +72,47 @@
     });
   }
 
+  const markOfflineJsaReady = () => {
+    try { window.LineCrewOfflineJsa?.markReady?.(); } catch (_) {}
+  };
+
+  // Keep every path into Offline JSA consistent, including SIGNED_OUT while
+  // already offline. The offline module makes markReady idempotent, so calling
+  // it here is safe whether the cold-start mode began before or after its init.
+  if (typeof window.enterOfflineJsaMode === 'function' && !window.enterOfflineJsaMode.__linecrewOfflineReadyWrapped) {
+    const originalEnterOfflineJsaMode = window.enterOfflineJsaMode;
+    const wrappedEnterOfflineJsaMode = (...args) => {
+      const entered = originalEnterOfflineJsaMode(...args);
+      if (entered) markOfflineJsaReady();
+      return entered;
+    };
+    wrappedEnterOfflineJsaMode.__linecrewOfflineReadyWrapped = true;
+    window.enterOfflineJsaMode = wrappedEnterOfflineJsaMode;
+  }
+
+  const tryOfflineJsa = () => {
+    try {
+      if (typeof window.enterOfflineJsaMode !== 'function') return false;
+      const entered = window.enterOfflineJsaMode();
+      if (entered) markOfflineJsaReady();
+      return entered === true;
+    } catch (_) {
+      return false;
+    }
+  };
+
+  const looksLikeOfflineFailure = (error) => {
+    try {
+      if (typeof window.offlineJsaNetworkFailure === 'function') {
+        return window.offlineJsaNetworkFailure(error);
+      }
+    } catch (_) {}
+    return /fetch|network|offline|timed out|connection/i.test(String(error?.message || error || ''));
+  };
+
   // Supabase emits SIGNED_IN after signInWithPassword. Let that event perform
-  // the single app load so privileged accounts cannot race two MFA enrollments.
+  // the single app load so privileged accounts cannot race two MFA enrollments,
+  // while preserving the inline login handler's offline fallback and timeout.
   const loginButton = document.getElementById('loginBtn');
   if (loginButton && typeof sb !== 'undefined') {
     loginButton.onclick = async () => {
@@ -86,10 +125,24 @@
       }
       loginButton.disabled = true;
       loginButton.textContent = 'Signing In...';
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) {
+      try {
+        if (!navigator.onLine && tryOfflineJsa()) return;
+        const timeout = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Connection timed out.')), 10000);
+        });
+        const { error } = await Promise.race([
+          sb.auth.signInWithPassword({ email, password }),
+          timeout
+        ]);
+        if (error) {
+          if (looksLikeOfflineFailure(error) && tryOfflineJsa()) return;
+          alert(error.message);
+        }
+      } catch (error) {
+        if (looksLikeOfflineFailure(error) && tryOfflineJsa()) return;
+        alert(error?.message || 'LineCrew Pro could not sign in.');
+      } finally {
         resetLoginFormState();
-        alert(error.message);
       }
     };
   }
@@ -100,7 +153,25 @@
     productionDescription.textContent = 'Daily production reporting and review';
   }
 
-  const load = (src, onload, marker) => {
+  const jsaLoadFailed = (src) => {
+    console.error(`Offline JSA dependency failed to load: ${src}`);
+    const banner = document.getElementById('offlineColdStartJsaBanner');
+    if (banner && !banner.querySelector('[data-linecrew-jsa-load-error]')) {
+      const error = document.createElement('div');
+      error.dataset.linecrewJsaLoadError = '1';
+      error.style.cssText = 'margin-top:8px;font-weight:800;color:#8a1c1c';
+      error.textContent = 'Offline JSA could not finish loading on this device. Keep the app open and try again when service is available.';
+      banner.appendChild(error);
+    }
+    ['createJsaBtn','uploadCompanyJsaBtn'].forEach((id) => {
+      const button = document.getElementById(id);
+      if (!button) return;
+      button.disabled = true;
+      button.textContent = 'Offline JSA unavailable — reconnect and reload';
+    });
+  };
+
+  const load = (src, onload, marker, onerror) => {
     if (marker && document.querySelector(`script[data-${marker}]`)) {
       if (onload) onload();
       return;
@@ -110,6 +181,10 @@
     script.defer = false;
     if (marker) script.setAttribute(`data-${marker}`, '1');
     if (onload) script.onload = onload;
+    script.onerror = () => {
+      console.error(`LineCrew Pro dependency failed to load: ${src}`);
+      if (onerror) onerror(src);
+    };
     document.head.appendChild(script);
   };
 
@@ -119,10 +194,12 @@
   load('gf-crew-scope.js?v=20260910b');
   load('expanded-jsa-core.js?v=20260820', () => {
     load('jsa-signatures.js?v=20260828a', () => {
-      load('jsa-signature-layout-fix.js?v=20260820a', () => load('offline-jsa.js?v=20260827b'));
-    });
+      load('jsa-signature-layout-fix.js?v=20260820a', () => {
+        load('offline-jsa.js?v=20260827b', markOfflineJsaReady, null, jsaLoadFailed);
+      }, null, jsaLoadFailed);
+    }, null, jsaLoadFailed);
     load('jsa-review.js?v=20260826a');
-  });
+  }, null, jsaLoadFailed);
   load('timekeeping.js?v=20260910a', () => {
     load('timekeeping-input-v2.js?v=20260910a', null, 'linecrew-timekeeping-input-v2');
     load('foreman-field-tools.js?v=20260901a');
