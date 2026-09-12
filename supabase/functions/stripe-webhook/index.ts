@@ -103,6 +103,7 @@ Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "POST required." }, 405);
   let service: any = null;
   let eventId: string | null = null;
+  let processingToken: string | null = null;
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey = getSecretKey();
@@ -132,22 +133,29 @@ Deno.serve(async (request) => {
     service = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false },
     });
+    processingToken = crypto.randomUUID();
+    const processingStartedAt = new Date().toISOString();
     const { error: eventInsertError } = await service.from("billing_events")
       .insert({
         provider: "stripe",
         provider_event_id: eventId,
         event_type: String(event.type || "unknown"),
         payload: event,
+        processing_started_at: processingStartedAt,
+        processing_token: processingToken,
       });
     if (eventInsertError) {
       if (eventInsertError.code !== "23505") throw eventInsertError;
-      const { data: priorEvent, error: priorEventError } = await service.from(
-        "billing_events",
-      ).select("processed_at").eq("provider_event_id", eventId).single();
-      if (priorEventError) throw priorEventError;
-      if (priorEvent?.processed_at) {
-        return json({ received: true, duplicate: true });
-      }
+      const staleBefore = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const { data: claimed, error: claimError } = await service.from("billing_events")
+        .update({ processing_started_at: processingStartedAt, processing_token: processingToken, error_text: null })
+        .eq("provider_event_id", eventId)
+        .is("processed_at", null)
+        .or(`processing_started_at.is.null,processing_started_at.lt.${staleBefore}`)
+        .select("id")
+        .maybeSingle();
+      if (claimError) throw claimError;
+      if (!claimed) return json({ received: true, duplicate: true, processing: true });
     }
 
     const object = event.data?.object || {};
@@ -474,18 +482,18 @@ Deno.serve(async (request) => {
         company_id: companyId,
         processed_at: new Date().toISOString(),
         error_text: null,
-      }).eq("provider_event_id", eventId);
+      }).eq("provider_event_id", eventId).eq("processing_token", processingToken);
     if (completeError) throw completeError;
     return json({ received: true });
   } catch (error) {
     console.error(error);
-    if (service && eventId) {
+    if (service && eventId && processingToken) {
       try {
         await service.from("billing_events").update({
           error_text: (error instanceof Error
             ? error.message
             : "Webhook processing failed.").slice(0, 2000),
-        }).eq("provider_event_id", eventId);
+        }).eq("provider_event_id", eventId).eq("processing_token", processingToken);
       } catch { /* preserve the original processing error */ }
     }
     return json({

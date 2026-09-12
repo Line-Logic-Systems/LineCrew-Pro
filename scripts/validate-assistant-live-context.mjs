@@ -126,8 +126,9 @@ for(const marker of [
   'store: false'
 ]) assert(assistant.includes(marker),`Assistant live-context marker missing: ${marker}`);
 assert(!assistant.includes('SUPABASE_SERVICE_ROLE_KEY'),'Assistant must not bypass RLS with a service-role key.');
+const assistantWithoutBudget=assistant.replace('.rpc(\n      "consume_assistant_monthly_request",\n    )','');
 for(const mutation of ['.insert(','.update(','.upsert(','.delete(','.rpc(']) {
-  assert(!assistant.includes(mutation),`Assistant live data must remain read-only: ${mutation}`);
+  assert(!assistantWithoutBudget.includes(mutation),`Assistant live data must remain read-only except for its isolated request budget: ${mutation}`);
 }
 for(const marker of [
   'collectAssistantScreenContext()',

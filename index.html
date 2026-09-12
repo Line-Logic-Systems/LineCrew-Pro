@@ -6576,14 +6576,17 @@ const open=document.createElement('button');open.className='secondary';open.text
 async function loadCompletedJobs(openJobId=null){
 $('completedJobDetail').classList.add('hidden');$('completedJobsList').classList.remove('hidden');
 $('completedJobsLoading').classList.remove('hidden');$('completedJobsEmpty').classList.add('hidden');
-const [jobsResult,assignmentsResult]=await Promise.all([
-sb.from('jobs').select(`*,contracts(id,contract_name,contract_number,customers(name))`).eq('company_id',currentProfile.company_id).eq('active',false).order('closed_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}),
-sb.rpc('get_job_leader_assignments')
-]);
+const completedJobsRows=[];
+for(let offset=0;;offset+=200){
+const page=await sb.from('jobs').select(`*,contracts(id,contract_name,contract_number,customers(name))`).eq('company_id',currentProfile.company_id).eq('active',false).order('closed_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}).range(offset,offset+199);
+if(page.error) return alert('Unable to load completed jobs: '+page.error.message);
+completedJobsRows.push(...(page.data||[]));
+if((page.data||[]).length<200) break;
+}
+const assignmentsResult=await sb.rpc('get_job_leader_assignments');
 $('completedJobsLoading').classList.add('hidden');
-if(jobsResult.error) return alert('Unable to load completed jobs: '+jobsResult.error.message);
 if(assignmentsResult.error) return alert('Unable to load completed job assignments: '+assignmentsResult.error.message);
-completedJobsCatalog=jobsResult.data||[];
+completedJobsCatalog=completedJobsRows;
 const progressRows=[];
 for(const idChunk of completedJobIdChunks(completedJobsCatalog.map(job=>job.id),6)){
 const results=await Promise.all(idChunk.map(jobId=>sb.rpc('get_job_progress_dashboard_v2',{p_job_id:jobId})));
@@ -6598,18 +6601,29 @@ renderCompletedJobs();
 if(openJobId && completedJobsCatalog.some(job=>String(job.id)===String(openJobId))) await openCompletedJob(openJobId,false);
 }
 async function collectCompletedJobRecord(job){
-const reportsResult=await sb.from('daily_reports').select('id,job_id,work_date,foreman_name,crew_name,regular_hours,overtime_hours,weather_conditions,delay_hours,delay_reason,notes,status,archived,review_notes,storm_mode,storm_event_name,created_at,updated_at').eq('company_id',currentProfile.company_id).eq('job_id',job.id).order('work_date',{ascending:true});
-if(reportsResult.error) throw reportsResult.error;
-const [packagesResult,jsasResult,closeoutResult,exportDetailsResult]=await Promise.all([sb.rpc('get_job_packages_v2',{p_job_id:job.id}),sb.rpc('get_company_jsas'),sb.rpc('get_job_closeout_history',{p_job_id:job.id}),sb.rpc('get_completed_job_export_details_v1',{p_job_id:job.id})]);
+const reportRows=[];
+for(let offset=0;;offset+=500){
+const page=await sb.from('daily_reports').select('id,job_id,work_date,foreman_name,crew_name,regular_hours,overtime_hours,weather_conditions,delay_hours,delay_reason,notes,status,archived,review_notes,storm_mode,storm_event_name,created_at,updated_at').eq('company_id',currentProfile.company_id).eq('job_id',job.id).order('work_date',{ascending:true}).range(offset,offset+499);
+if(page.error) throw page.error;
+reportRows.push(...(page.data||[]));
+if((page.data||[]).length<500) break;
+}
+const [packagesResult,closeoutResult,exportDetailsResult]=await Promise.all([sb.rpc('get_job_packages_v2',{p_job_id:job.id}),sb.rpc('get_job_closeout_history',{p_job_id:job.id}),sb.rpc('get_completed_job_export_details_v1',{p_job_id:job.id})]);
 if(packagesResult.error) throw packagesResult.error;
-if(jsasResult.error) throw jsasResult.error;
 if(closeoutResult.error) throw closeoutResult.error;
 if(exportDetailsResult.error) throw exportDetailsResult.error;
+const jsaRows=[];
+for(let offset=0;;offset+=500){
+const page=await sb.rpc('get_job_jsas',{p_job_id:job.id,p_limit:500,p_offset:offset});
+if(page.error) throw page.error;
+jsaRows.push(...(page.data||[]));
+if((page.data||[]).length<500) break;
+}
 const exportDetails=exportDetailsResult.data||{};
 const units=Array.isArray(exportDetails.units)?exportDetails.units:[];
 const audit=Array.isArray(exportDetails.audit)?exportDetails.audit:[];
 let attachments=[];
-const reportIds=(reportsResult.data||[]).map(report=>report.id);
+const reportIds=reportRows.map(report=>report.id);
 if(reportIds.length){
 const reportIdChunks=completedJobIdChunks(reportIds,100);
 for(const reportIdChunk of reportIdChunks){
@@ -6621,13 +6635,13 @@ attachments.sort((left,right)=>String(left.created_at||'').localeCompare(String(
 }
 let billing=[];let reconciliation=null;
 if(userCanUseBillingExports()){
-const [batchesResult,reconciliationResult]=await Promise.all([sb.rpc('get_billing_export_batches_v4',{p_archive_filter:'all'}),sb.rpc('get_job_billing_reconciliation_v3',{p_job_id:job.id})]);
+const [batchesResult,reconciliationResult]=await Promise.all([sb.rpc('get_job_billing_export_batches',{p_job_id:job.id}),sb.rpc('get_job_billing_reconciliation_v3',{p_job_id:job.id})]);
 if(batchesResult.error) throw batchesResult.error;
 if(reconciliationResult.error) throw reconciliationResult.error;
-billing=(batchesResult.data||[]).filter(item=>String(item.job_id)===String(job.id));
+billing=batchesResult.data||[];
 reconciliation=reconciliationResult.data?.[0]||null;
 }
-return {job,progress:completedJobsProgress.get(job.id)||{},assignments:completedJobsAssignments.get(job.id)||[],reports:reportsResult.data||[],units,audit,closeoutHistory:closeoutResult.data||[],attachments,packages:packagesResult.data||[],jsas:(jsasResult.data||[]).filter(item=>String(item.job_id||'')===String(job.id)),billing,reconciliation};
+return {job,progress:completedJobsProgress.get(job.id)||{},assignments:completedJobsAssignments.get(job.id)||[],reports:reportRows,units,audit,closeoutHistory:closeoutResult.data||[],attachments,packages:packagesResult.data||[],jsas:jsaRows,billing,reconciliation};
 }
 function completedJobUnitRows(record){
 return record.units.map(unit=>({'Work Date':unit.work_date||'','Foreman':unit.foreman_name||'','Crew':unit.crew_name||'','Pole / Work Point':unit.pole_location||unit.work_point||'','Unit Code':unit.item_code||unit.unit_code||'','Description':unit.item_name||unit.unit_name||unit.description||'','Installed':Number(unit.install_quantity||0),'Transferred':Number(unit.transfer_quantity||0),'Removed':Number(unit.retirement_quantity||unit.remove_quantity||0),'Authorization':String(unit.authorization_status||'').replaceAll('_',' '),'Visible Value':Number(unit.visible_line_value||unit.adjusted_line_value||unit.actual_line_value||0)}));

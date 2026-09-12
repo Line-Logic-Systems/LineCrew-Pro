@@ -642,6 +642,19 @@ Deno.serve(async (request) => {
       return jsonResponse(request, { error: "The LineCrew Assistant is not enabled for your role." }, 403);
     }
 
+    const { data: usageRows, error: usageError } = await client.rpc(
+      "consume_assistant_monthly_request",
+    );
+    if (usageError) throw new Error("Assistant usage protection is unavailable.");
+    const usage = Array.isArray(usageRows) ? usageRows[0] : usageRows;
+    if (!usage?.allowed) {
+      return jsonResponse(request, {
+        error: "This company has reached its monthly LineCrew Assistant request limit. Contact LineCrew Pro support if you need the limit reviewed.",
+        usage_month: usage?.usage_month || null,
+        request_limit: usage?.request_limit || null,
+      }, 429);
+    }
+
     const body = await request.json();
     const question = String(body?.question || "").trim().slice(0, 1200);
     const rawScreenContext = body?.screen_context && typeof body.screen_context === "object"

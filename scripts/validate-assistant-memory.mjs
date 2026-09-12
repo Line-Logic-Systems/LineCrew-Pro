@@ -40,8 +40,9 @@ for(const marker of [
   'must choose Save in the app',
   'advisory data'
 ]) assert(edge.includes(marker),`Assistant Edge memory boundary is missing: ${marker}`);
+const edgeWithoutBudget=edge.replace('.rpc(\n      "consume_assistant_monthly_request",\n    )','');
 for(const mutation of ['.insert(','.update(','.upsert(','.delete(','.rpc(']){
-  assert(!edge.includes(mutation),`Assistant Edge must remain non-mutating: ${mutation}`);
+  assert(!edgeWithoutBudget.includes(mutation),`Assistant Edge must remain operationally non-mutating except for its isolated request budget: ${mutation}`);
 }
 
 for(const marker of [
