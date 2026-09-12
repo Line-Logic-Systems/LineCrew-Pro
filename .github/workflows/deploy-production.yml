@@ -1,0 +1,73 @@
+name: Deploy Production (gated)
+
+# Production currently deploys straight from the Git integration, ~3 seconds
+# after a push and roughly 40 seconds BEFORE the last validation finishes, so a
+# red commit can reach app.linecrewpro.com before anything has checked it.
+#
+# This workflow is the replacement path: validate first, deploy only on green.
+#
+# IT IS NOT ARMED YET. Arming it is two steps, in this order:
+#   1. Add the repository secret VERCEL_TOKEN (plus VERCEL_ORG_ID and
+#      VERCEL_PROJECT_ID). Until then the deploy job below skips itself, so
+#      nothing changes and nothing breaks.
+#   2. THEN disable Vercel's own Git auto-deploy for main, either in the
+#      project settings or by adding to vercel.json:
+#        "git": { "deploymentEnabled": { "main": false } }
+#
+# Doing step 2 before step 1 would leave you unable to deploy at all.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Run every repository validator
+        run: |
+          failed=0
+          for script in scripts/validate-*.mjs; do
+            if ! node --experimental-vm-modules "$script" >/dev/null 2>&1; then
+              echo "::error::$script failed"
+              node --experimental-vm-modules "$script" 2>&1 | tail -5
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check whether the deploy credential is configured
+        id: gate
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "armed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VERCEL_TOKEN is not set, so this gated deploy is inactive. Vercel's Git integration is still deploying this commit. See the header of this workflow for how to arm it."
+          else
+            echo "armed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.gate.outputs.armed == 'true'
+
+      - name: Deploy to production
+        if: steps.gate.outputs.armed == 'true'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"

@@ -7,7 +7,7 @@
 (function(){
 try{
 if(localStorage.getItem('linecrew-pro-theme-preload')==='dark'){
-document.documentElement.classList.add('dark');
+document.documentElement.classList.add('lc-industrial-dark');
 }
 if(localStorage.getItem('linecrew-pro-desktop-view') === '1'){
 document.getElementById('appViewport')
@@ -28,7 +28,7 @@ document.documentElement.classList.add('desktop-view');
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/linecrew-pro-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/icons/linecrew-pro-180.png">
-<link rel="stylesheet" href="/responsive-role-shell.css?v=20260910a">
+<link rel="stylesheet" href="/responsive-role-shell.css?v=20260912a">
 <title>LineCrew Pro</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js" integrity="sha384-l8ah+VgaWtk1mvOe9VC+OirC6qHFF4yH7l7mKRidV9MSti3E9F463bMp6ZVN4kuC" crossorigin="anonymous"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
@@ -1935,13 +1935,14 @@ margin:4px 0;
 <main>
 <!-- AUTH -->
 <section id="authPage">
-<form id="loginCard" class="card" onsubmit="return false">
+<form id="loginCard" class="card">
 <h2>Sign In</h2>
 <label for="loginEmail">Email</label>
-<input id="loginEmail" type="email" autocomplete="email">
+<input id="loginEmail" type="email" autocomplete="username" aria-describedby="loginError">
 <label for="loginPassword">Password</label>
-<input id="loginPassword" type="password" autocomplete="current-password">
-<button id="loginBtn" type="button">Sign In</button>
+<input id="loginPassword" type="password" autocomplete="current-password" aria-describedby="loginError">
+<p id="loginError" class="muted" role="alert" aria-live="assertive" hidden></p>
+<button id="loginBtn" type="submit">Sign In</button>
 <button id="forgotPasswordBtn" type="button" class="secondary">Forgot Password</button>
 </form>
 <div id="pwaInstallCard" class="card hidden">
@@ -5491,15 +5492,21 @@ void loadPushNotificationStatus();
 void loadGfNotificationPreference();
 }
 /* LOGIN */
-$('loginBtn').onclick = async()=>{
+function setLoginError(message){
+const box = $('loginError');
+if(!box) return;
+if(!message){ box.hidden = true; box.textContent = ''; return; }
+box.textContent = message;
+box.hidden = false;
+}
+const submitLogin = async()=>{
 const email =
 $('loginEmail').value.trim();
 const password =
 $('loginPassword').value;
+setLoginError('');
 if(!email || !password){
-return alert(
-'Enter email and password.'
-);
+return setLoginError('Enter email and password.');
 }
 const button = $('loginBtn');
 button.disabled = true;
@@ -5515,24 +5522,25 @@ timeout
 ]);
 if(error){
 if(offlineJsaNetworkFailure(error) && enterOfflineJsaMode()) return;
-return alert(error.message);
+return setLoginError(error.message);
 }
 await loadApp();
 }catch(error){
 if(offlineJsaNetworkFailure(error) && enterOfflineJsaMode()) return;
-alert(error?.message || 'LineCrew Pro could not sign in.');
+setLoginError(error?.message || 'LineCrew Pro could not sign in.');
 }finally{
 button.disabled = false;
 button.textContent = 'Sign In';
 }
 };
-['loginEmail','loginPassword'].forEach(id => {
-$(id).addEventListener('keydown', event => {
-if(event.key !== 'Enter' || event.isComposing) return;
-event.preventDefault();
-if(!$('loginBtn').disabled) $('loginBtn').click();
-});
-});
+/* The card is a real <form> whose button is type="submit", so Enter and
+   assistive technology use the native path. This is assigned as a PROPERTY so
+   expanded-jsa.js can supersede it the way it always has; adding a listener
+   instead would run both handlers and sign in twice. */
+$('loginCard').onsubmit = event => {
+if(event) event.preventDefault();
+if(!$('loginBtn').disabled) submitLogin();
+};
 $('forgotPasswordBtn').onclick = async () => {
 const email =
 $('loginEmail').value.trim() ||

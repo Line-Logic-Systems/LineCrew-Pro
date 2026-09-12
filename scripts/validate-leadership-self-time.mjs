@@ -48,7 +48,13 @@ for (const field of ['myTimeAdminRosterRows','my-time-admin-start','my-time-admi
 
 requireText(module, "rpc('upsert_my_leadership_time'", 'My Time must save through the guarded RPC.');
 requireText(module, "rpc('upsert_leadership_employee_time'", 'Admin/GF added employees must save through the guarded employee RPC.');
-requireText(module, "['gf','admin','manager','owner']", 'Operational leadership must be able to add other employees.');
+// Must equal the server gate in upsert_leadership_employee_time and
+// private.recalculate_leadership_week. Owner is absent by design: offering the
+// People roster to an Owner produced a raw 42501 on save.
+requireText(module, "['gf','admin','manager']", 'The add-other-people list must match the server gate exactly.');
+if (module.includes("['gf','admin','manager','owner']")) {
+  throw new Error('Owner must not be offered the People roster: the server gate refuses it.');
+}
 requireText(module, 'assigned_admin_id === profile().id', 'Admin My Time must auto-load only the signed-in Admin roster.');
 requireText(module, "rpc('upsert_leadership_time_batch'", 'GF/Admin group time must save through one transactional batch RPC.');
 requireText(module, 'Save All Time', 'GF/Admin group time needs one clear batch-save action.');

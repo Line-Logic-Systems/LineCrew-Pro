@@ -30,8 +30,10 @@ assert.ok(!migration.includes('), authorization as ('),'Reserved SQL keywords mu
 
 assert.ok(assistant.includes('if (error || !Array.isArray(data))'),
   'Assistant must distinguish unavailable context from an empty result.');
-assert.ok(leadership.includes("['gf','admin','manager','owner']"),
+assert.ok(leadership.includes("['gf','admin','manager']"),
   'Manager leadership-time parity is missing.');
+assert.ok(!leadership.includes("['gf','admin','manager','owner']"),
+  'Owner must not be offered the People roster: the server gate refuses it.');
 assert.ok(app.includes("localStorage.getItem('linecrew-pro-theme-preload')==='dark'")&&
   theme.includes("localStorage.setItem('linecrew-pro-theme-preload', theme)"),
   'Dark mode must be available to the head bootstrap before deferred scripts load.');

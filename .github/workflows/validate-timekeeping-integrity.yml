@@ -1,0 +1,64 @@
+name: Validate Timekeeping Integrity
+
+# Executes the timekeeping integrity guarantees against a throwaway PostgreSQL
+# instance. No Supabase project and no secrets are involved, so this runs on
+# every pull request from any contributor -- including forks.
+#
+# These assertions are a ratchet, not a description: each one fails against the
+# pre-fix function bodies and passes against the current ones.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - '.github/workflows/validate-timekeeping-integrity.yml'
+  workflow_dispatch:
+
+jobs:
+  timekeeping-integrity:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: linecrew_integrity
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: linecrew_integrity
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install psql
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Build the fixture
+        run: psql -v ON_ERROR_STOP=1 -q -f supabase/tests/timekeeping_integrity_fixture.sql
+
+      - name: Apply the timekeeping integrity migration
+        run: psql -v ON_ERROR_STOP=1 -q -f supabase/migrations/20260912160000_close_timekeeping_integrity_gaps.sql
+
+      - name: Assert the integrity guarantees
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/timekeeping_integrity_test.sql

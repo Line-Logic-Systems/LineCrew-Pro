@@ -1,3 +1,28 @@
+/* Dark palette must exist BEFORE first paint. The pre-paint script in
+   index.html sets html.lc-industrial-dark from localStorage; the full set of
+   component overrides still arrives later with gf-review-theme-enhancements.js,
+   but these tokens and the body ground are what the eye actually sees, so
+   defining them in a <head> stylesheet is what removes the white flash. */
+html.lc-industrial-dark {
+  --navy: #071522;
+  --blue: #2492ff;
+  --bg: #07111d;
+  --card: #10283a;
+  --text: #f5f9fd;
+  --muted: #9eb2c5;
+  --border: #27506d;
+  --green: #20a568;
+  --red: #e15b5b;
+  --orange: #e89a3d;
+  color-scheme: dark;
+  background: #07111d;
+}
+
+html.lc-industrial-dark body {
+  background: #07111d;
+  color: #f5f9fd;
+}
+
 :root {
   --lc-shell-sidebar-width: 264px;
   --lc-shell-header-height: 76px;
@@ -541,7 +566,11 @@ body:not(.lc-shell-active) .lc-shell-account {
   margin: 0;
 }
 
-@media (max-width: 1099px) {
+/* Also covers wide touch devices (iPad Pro landscape, Surface in tablet mode).
+   Gating this block on width alone left width >= 1100px + pointer: coarse
+   matching neither this block nor the (min-width:1100px) and (pointer:fine)
+   desktop blocks, so those devices rendered with no shell styling at all. */
+@media (max-width: 1099px), (min-width: 1100px) and (pointer: coarse) {
   .lc-role-sidebar {
     display: none !important;
   }

@@ -10,7 +10,11 @@
   const profile = () => typeof currentProfile !== 'undefined' ? currentProfile : window.currentProfile;
   const role = () => String(profile()?.role || '').toLowerCase();
   const canEnterMyTime = () => ['gf','superintendent','admin','manager','owner'].includes(role());
-  const canAddOtherPeople = () => ['gf','admin','manager','owner'].includes(role());
+  // Must match upsert_leadership_employee_time / upsert_leadership_time_batch
+  // and private.recalculate_leadership_week exactly. Owner is deliberately
+  // absent: the server gate is ('gf','admin','manager'), and showing the People
+  // roster to an Owner produced a raw 42501 on save.
+  const canAddOtherPeople = () => ['gf','admin','manager'].includes(role());
   const getSb = () => {
     try { return typeof sb !== 'undefined' ? sb : (window.sb || window.supabaseClient || null); }
     catch (_) { return window.sb || window.supabaseClient || null; }

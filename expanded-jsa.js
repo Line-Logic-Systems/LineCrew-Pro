@@ -113,14 +113,29 @@
   // Supabase emits SIGNED_IN after signInWithPassword. Let that event perform
   // the single app load so privileged accounts cannot race two MFA enrollments,
   // while preserving the inline login handler's offline fallback and timeout.
+  // The sign-in card is a real <form> whose submit button is type="submit", so
+  // Enter and assistive technology use the native path. Supersede the inline
+  // handler by REPLACING the form's onsubmit property (not by adding a
+  // listener, which would run both handlers), and leave onclick alone so a
+  // button press produces exactly one submit.
   const loginButton = document.getElementById('loginBtn');
-  if (loginButton && typeof sb !== 'undefined') {
-    loginButton.onclick = async () => {
+  const loginForm = document.getElementById('loginCard');
+  const showLoginError = (message) => {
+    const box = document.getElementById('loginError');
+    if (!box) { alert(message); return; }
+    box.textContent = message;
+    box.hidden = false;
+  };
+  if (loginButton && loginForm && typeof sb !== 'undefined') {
+    loginForm.onsubmit = async (event) => {
+      if (event) event.preventDefault();
       if (loginButton.disabled) return;
       const email = document.getElementById('loginEmail')?.value.trim() || '';
       const password = document.getElementById('loginPassword')?.value || '';
+      const errorBox = document.getElementById('loginError');
+      if (errorBox) { errorBox.hidden = true; errorBox.textContent = ''; }
       if (!email || !password) {
-        alert('Enter email and password.');
+        showLoginError('Enter email and password.');
         return;
       }
       loginButton.disabled = true;
@@ -136,11 +151,11 @@
         ]);
         if (error) {
           if (looksLikeOfflineFailure(error) && tryOfflineJsa()) return;
-          alert(error.message);
+          showLoginError(error.message);
         }
       } catch (error) {
         if (looksLikeOfflineFailure(error) && tryOfflineJsa()) return;
-        alert(error?.message || 'LineCrew Pro could not sign in.');
+        showLoginError(error?.message || 'LineCrew Pro could not sign in.');
       } finally {
         resetLoginFormState();
       }
