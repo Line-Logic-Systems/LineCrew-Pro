@@ -6534,6 +6534,13 @@ let completedJobsCatalog = [];
 let completedJobsProgress = new Map();
 let completedJobsAssignments = new Map();
 let currentCompletedJobRecord = null;
+function completedJobIdChunks(values=[],maxSize=100){
+const ids=(Array.isArray(values)?values:[]).map(value=>String(value||'')).filter(Boolean);
+const size=Math.max(1,Math.min(100,Math.trunc(Number(maxSize)||100)));
+const chunks=[];
+for(let index=0;index<ids.length;index+=size) chunks.push(ids.slice(index,index+size));
+return chunks;
+}
 function completedJobSearchMatch(job){
 const search = String($('completedJobsSearch').value || '').trim().toLowerCase();
 if(!search) return true;
@@ -6596,9 +6603,13 @@ const audit=Array.isArray(exportDetails.audit)?exportDetails.audit:[];
 let attachments=[];
 const reportIds=(reportsResult.data||[]).map(report=>report.id);
 if(reportIds.length){
-const attachmentsResult=await sb.from('daily_report_attachments').select('id,daily_report_id,storage_path,original_filename,mime_type,file_size_bytes,caption,created_at').in('daily_report_id',reportIds).order('created_at',{ascending:true});
+const reportIdChunks=completedJobIdChunks(reportIds,100);
+for(const reportIdChunk of reportIdChunks){
+const attachmentsResult=await sb.from('daily_report_attachments').select('id,daily_report_id,storage_path,original_filename,mime_type,file_size_bytes,caption,created_at').in('daily_report_id',reportIdChunk).order('created_at',{ascending:true});
 if(attachmentsResult.error) throw attachmentsResult.error;
-attachments=attachmentsResult.data||[];
+attachments.push(...(attachmentsResult.data||[]));
+}
+attachments.sort((left,right)=>String(left.created_at||'').localeCompare(String(right.created_at||'')));
 }
 let billing=[];let reconciliation=null;
 if(userCanUseBillingExports()){
