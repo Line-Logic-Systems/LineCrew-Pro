@@ -4,7 +4,10 @@
   const byId=id=>document.getElementById(id);
   const toast=(m,t='info')=>window.LineCrewUI?.toast?.(m,t)||console.log(m);
   const NS='http://www.w3.org/2000/svg';
-  const cache=window.__lineCrewSignatureStrokes||(window.__lineCrewSignatureStrokes=new Map());
+  // Signature strokes belong to one concrete input element only. A new JSA
+  // rebuilds its signature inputs, so a WeakMap prevents prior-form strokes
+  // from ever being reused by positional keys such as crew-1/crew-2.
+  const cache=new WeakMap();
   let active=null;
   let suppressReleaseUntil=0;
 
@@ -21,11 +24,6 @@
       .lc-signature-status.signed{color:#198754;font-weight:800}
       @media(max-width:720px){.lc-crew-row>.lc-signature-cell{grid-column:1!important}}
     `;document.head.appendChild(s);
-  }
-
-  function keyFor(input){
-    if(input.id==='jsaPersonInChargeSignature')return 'leader';
-    return `crew-${input.dataset.index||1}`;
   }
 
   function svgData(strokes){
@@ -59,9 +57,8 @@
     const oldInner=priorCell?.querySelector(':scope > .lc-signature-wrap')||labelEl.querySelector(':scope > .lc-signature-wrap');
     if(oldInner)oldInner.remove();
 
-    const key=keyFor(input);
-    let strokes=cache.get(key)||decodeExisting(input.value)||[];
-    cache.set(key,strokes);
+    let strokes=cache.get(input)||decodeExisting(input.value)||[];
+    cache.set(input,strokes);
     input.dataset.signaturePadInstalled='explicit-cell';input.type='hidden';
 
     // Make the signature label + pad one explicit grid item. This avoids the pad
@@ -82,7 +79,7 @@
     actions.append(status,clear);wrap.append(svg,actions);cell.appendChild(wrap);
 
     const setStatus=()=>{const signed=strokes.some(s=>s.length>1);status.textContent=signed?'Signature captured':'Sign above with finger, mouse, or stylus';status.classList.toggle('signed',signed)};
-    const persist=()=>{cache.set(key,strokes);input.value=strokes.some(s=>s.length>1)?svgData(strokes):'';setStatus()};
+    const persist=()=>{cache.set(input,strokes);input.value=strokes.some(s=>s.length>1)?svgData(strokes):'';setStatus()};
     const point=e=>{const r=svg.getBoundingClientRect();return[Math.max(0,Math.min(1000,((e.clientX-r.left)/Math.max(1,r.width))*1000)),Math.max(0,Math.min(200,((e.clientY-r.top)/Math.max(1,r.height))*200))]};
     strokes.forEach(p=>addStroke(svg,p));persist();
 
@@ -90,7 +87,7 @@
       if(e.button!==undefined&&e.button!==0)return;
       e.preventDefault();e.stopPropagation();
       const current=[point(e)];
-      strokes=[...strokes,current];cache.set(key,strokes);
+      strokes=[...strokes,current];cache.set(input,strokes);
       const line=addStroke(svg,current);
       active={pointerId:e.pointerId,svg,input,current,line,point,persist};
       try{svg.setPointerCapture(e.pointerId)}catch(_){}
@@ -99,7 +96,7 @@
 
     clear.onclick=e=>{
       e.preventDefault();e.stopPropagation();
-      strokes=[];cache.set(key,strokes);input.value='';while(svg.firstChild)svg.removeChild(svg.firstChild);setStatus();
+      strokes=[];cache.set(input,strokes);input.value='';while(svg.firstChild)svg.removeChild(svg.firstChild);setStatus();
     };
   }
 
