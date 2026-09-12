@@ -116,7 +116,7 @@
   if (window.LineCrewAppCore || document.querySelector('script[data-linecrew-app-core]')) return;
   const script = document.createElement('script');
   script.src = '/app-core.js?v=20260910a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewAppCore = '1';
   script.onerror = () => console.warn('App core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
@@ -129,7 +129,7 @@
   if (window.LineCrewJobsCore || document.querySelector('script[data-linecrew-jobs-core]')) return;
   const script = document.createElement('script');
   script.src = '/jobs-core.js?v=20260910a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewJobsCore = '1';
   script.onerror = () => console.warn('Jobs core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
@@ -142,7 +142,7 @@
   if (window.LineCrewCompletedJobsCore || document.querySelector('script[data-linecrew-completed-jobs-core]')) return;
   const script = document.createElement('script');
   script.src = '/completed-jobs-core.js?v=20260911a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewCompletedJobsCore = '1';
   script.onerror = () => console.warn('Completed Jobs core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
@@ -155,7 +155,7 @@
   if (window.LineCrewAssistantCore || document.querySelector('script[data-linecrew-assistant-core]')) return;
   const script = document.createElement('script');
   script.src = '/assistant-core.js?v=20260910a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewAssistantCore = '1';
   script.onerror = () => console.warn('Assistant core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
@@ -168,7 +168,7 @@
   if (window.LineCrewBillingCore || document.querySelector('script[data-linecrew-billing-core]')) return;
   const script = document.createElement('script');
   script.src = '/billing-core.js?v=20260910a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewBillingCore = '1';
   script.onerror = () => console.warn('Billing core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
@@ -181,7 +181,7 @@
   if (window.LineCrewNotificationsCore || document.querySelector('script[data-linecrew-notifications-core]')) return;
   const script = document.createElement('script');
   script.src = '/notifications-core.js?v=20260910a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewNotificationsCore = '1';
   script.onerror = () => console.warn('Notifications core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
@@ -194,7 +194,7 @@
   if (window.LineCrewDailyReportCore || document.querySelector('script[data-linecrew-daily-report-core]')) return;
   const script = document.createElement('script');
   script.src = '/daily-report-core.js?v=20260910a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewDailyReportCore = '1';
   script.onerror = () => console.warn('Daily Report core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
@@ -207,7 +207,7 @@
   if (window.LineCrewProductionCore || document.querySelector('script[data-linecrew-production-core]')) return;
   const script = document.createElement('script');
   script.src = '/production-core.js?v=20260910a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewProductionCore = '1';
   script.onerror = () => console.warn('Production core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);
@@ -220,7 +220,7 @@
   if (window.LineCrewPriceBookCore || document.querySelector('script[data-linecrew-price-book-core]')) return;
   const script = document.createElement('script');
   script.src = '/price-book-core.js?v=20260910a';
-  script.defer = false;
+  script.async = false;
   script.dataset.linecrewPriceBookCore = '1';
   script.onerror = () => console.warn('Price Book core module unavailable; using inline compatibility fallback.');
   document.head.appendChild(script);

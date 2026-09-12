@@ -178,7 +178,7 @@
     }
     const script = document.createElement('script');
     script.src = src;
-    script.defer = false;
+    script.async = false;
     if (marker) script.setAttribute(`data-${marker}`, '1');
     if (onload) script.onload = onload;
     script.onerror = () => {

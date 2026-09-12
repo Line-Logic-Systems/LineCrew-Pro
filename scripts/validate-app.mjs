@@ -150,9 +150,10 @@ assert(
 );
 assert(
   responsiveShellStyles.includes('@media (min-width: 1100px) and (pointer: fine)') &&
-    responsiveShellStyles.includes('@media (max-width: 1099px), (pointer: coarse)') &&
+    responsiveShellStyles.includes('@media (max-width: 1099px)') &&
+    !responsiveShellStyles.includes('@media (max-width: 1099px), (pointer: coarse)') &&
     responsiveShellStyles.includes('.lc-role-sidebar {\n    display: none !important;'),
-  'The permanent role sidebar must remain desktop-only and hidden on coarse/mobile pointers.'
+  'The permanent role sidebar must use viewport width rather than hiding on every touch-primary device.'
 );
 assert(
   responsiveShellStyles.includes('body.lc-shell-active > header .company-brand-badge img') &&

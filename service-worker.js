@@ -1,13 +1,12 @@
-const CACHE_NAME = 'linecrew-pro-shell-v98';
+const CACHE_NAME = 'linecrew-pro-shell-v99';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
-  '/',
   '/index.html',
   '/manifest.webmanifest',
   '/icons/linecrew-pro-180.png',
   '/icons/linecrew-pro-192.png',
   '/icons/linecrew-pro-512.png',
-  '/responsive-role-shell.css?v=20260908d',
+  '/responsive-role-shell.css?v=20260910a',
   '/responsive-role-shell.js?v=20260910b',
   '/profile-photo.js?v=20260908a',
   '/app-polish.js?v=20260910b',
@@ -42,11 +41,13 @@ const APP_SHELL = [
   '/timekeeping-polish.js?v=20260826b',
   '/timekeeping-payroll.js?v=20260910a',
   '/leadership-my-time.js?v=20260910a',
-  SUPABASE_RUNTIME
+  '/job-map-documents.js?v=20260910a'
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_NAME)
+    .then((cache) => cache.addAll(APP_SHELL).then(() => cache.add(SUPABASE_RUNTIME).catch(() => undefined)))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {

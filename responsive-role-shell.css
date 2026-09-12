@@ -541,7 +541,7 @@ body:not(.lc-shell-active) .lc-shell-account {
   margin: 0;
 }
 
-@media (max-width: 1099px), (pointer: coarse) {
+@media (max-width: 1099px) {
   .lc-role-sidebar {
     display: none !important;
   }

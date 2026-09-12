@@ -55,8 +55,12 @@ type PushOutboxRow = {
   attempt_count: number;
 };
 
+type ServiceClient = {
+  from: (table: string) => any;
+};
+
 async function deliverPush(
-  service: ReturnType<typeof createClient>,
+  service: ServiceClient,
   subscriptions: PushSubscriptionRow[],
   payload: Record<string, unknown>,
   vapidSubject: string,
