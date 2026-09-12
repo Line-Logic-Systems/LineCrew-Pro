@@ -262,7 +262,8 @@ assert(index.includes("sb.rpc('create_assistant_memory'"), 'Assistant Memory mus
 assert(index.includes('confirmAssistantFinalBillingReminders(jobId)'), 'Final billing must display matching advisory Assistant Memory reminders.');
 assert(index.includes('id="assistantMemoryTile"'), 'Owner/Admin Dashboard must include visible Assistant Memory access.');
 assert(index.includes("$('assistantMemoryTile').classList.toggle('hidden', !userCanUseAssistant())"), 'Assistant Memory Dashboard tile must remain Owner/Admin-only.');
-assert(index.includes("['loginEmail','loginPassword'].forEach"), 'Sign-in fields must submit through the Sign In button when Enter is pressed.');
+assert(index.includes('<button id="loginBtn" type="submit">') && index.includes("$('loginCard').onsubmit ="),
+  'Sign-in must submit natively so Enter and assistive technology work without a keydown shim.');
 assert(index.includes("event.key === 'Enter' && !event.shiftKey && !event.isComposing"), 'Assistant must send on Enter while preserving Shift+Enter for a new line and IME composition.');
 assert(index.includes('Enter to send · Shift+Enter for a new line'), 'Assistant must explain its keyboard shortcut.');
 assert(index.includes('id="assistantResizeHandle"'), 'Assistant panel must provide an accessible drag-to-resize handle.');
@@ -747,7 +748,7 @@ assert(
 assert(
   index.includes('expanded-jsa.js?v=20260907b') &&
     serviceWorker.includes('/expanded-jsa.js?v=20260907b') &&
-    serviceWorker.includes("linecrew-pro-shell-v100") &&
+    /const CACHE_NAME = 'linecrew-pro-shell-v\d+';/.test(serviceWorker) &&
     expandedJsa.includes("role-workspace-polish.js?v=20260910a") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260910a"),
   'Returned-report metadata fix must be delivered through a fresh offline app-shell cache.'

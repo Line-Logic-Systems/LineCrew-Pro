@@ -196,6 +196,13 @@ async function cleanup() {
       prefer: "return=minimal",
     });
   }
+  // Entries created server-side by save_daily_report_crew_time and the
+  // leadership RPCs are not in `created.rows`, and the daily_reports FK is
+  // ON DELETE SET NULL rather than CASCADE, so sweep them by employee before
+  // the id-based pass or the timekeeping_employees delete hits an FK.
+  for (const employeeId of created.rows.filter((row) => row.table === "timekeeping_employees").map((row) => row.id)) {
+    await request(`/rest/v1/timekeeping_entries?employee_id=eq.${employeeId}`, { method: "DELETE", prefer: "return=minimal" });
+  }
   const tableOrder = [
     "timekeeping_entries",
     "timekeeping_employees",
@@ -368,6 +375,176 @@ async function main() {
   const oldReport = await request(`/rest/v1/daily_reports?id=eq.${preStormReport.id}&select=storm_mode,storm_event_name`);
   assert(oldReport.ok && oldReport.data?.[0]?.storm_mode === false && oldReport.data?.[0]?.storm_event_name === null,
     `Pre-Storm work date was misclassified: ${JSON.stringify(oldReport.data)}`);
+
+  // ---------------------------------------------------------------------
+  // Regression: the weekly overtime split at every allowance boundary.
+  // Previously only the saturated case (running = 40) was exercised, so the
+  // one branch that can actually SPLIT a day was never executed.
+  // ---------------------------------------------------------------------
+  for (const [seedRegular, dayHours, expectRegular, expectOvertime] of [
+    [36, 8, 4, 4],
+    [39.5, 8, 0.5, 7.5],
+    [40, 8, 0, 8],
+    [44, 8, 0, 8],
+  ]) {
+    const splitEmployee = await serviceInsert("timekeeping_employees", {
+      company_id: companyA.id,
+      full_name: `OT Split ${seedRegular}`,
+      created_by: userA.id,
+    });
+    const seedReport = await serviceInsert("daily_reports", {
+      company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
+      report_date: "2035-01-09", work_date: "2035-01-09",
+      foreman_name: "Isolation Admin A", created_by: userA.id,
+    });
+    const targetReport = await serviceInsert("daily_reports", {
+      company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
+      report_date: "2035-01-08", work_date: "2035-01-08",
+      foreman_name: "Isolation Admin A", created_by: userA.id,
+    });
+    await serviceInsert("timekeeping_entries", {
+      company_id: companyA.id, employee_id: splitEmployee.id,
+      daily_report_id: seedReport.id, job_id: jobA.id, work_date: "2035-01-09",
+      regular_hours: seedRegular, overtime_hours: 0,
+      created_by: userA.id, updated_by: userA.id,
+    });
+    await servicePatch("daily_reports", seedReport.id, {
+      status: "approved", approved_by: userA.id, approved_at: new Date().toISOString(),
+    });
+    const split = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
+      method: "POST",
+      body: {
+        p_report_id: targetReport.id,
+        p_rows: [{ employee_id: splitEmployee.id, crew_name: "Split Crew", regular_hours: dayHours, overtime_hours: 0 }],
+      },
+    });
+    assert(split.ok, `OT split save failed at running ${seedRegular}: ${JSON.stringify(split.data)}`);
+    assert(
+      Number(split.data?.[0]?.regular_hours) === expectRegular &&
+      Number(split.data?.[0]?.overtime_hours) === expectOvertime,
+      `OT split wrong at running ${seedRegular}: expected ${expectRegular}/${expectOvertime}, got ${JSON.stringify(split.data)}`,
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Regression: the payroll week must follow companies.week_start_day.
+  // 2035-01-06 is a Sunday and 2035-01-07 a Monday, so the two settings put
+  // them in DIFFERENT weeks -- a fixture that can actually tell them apart.
+  // ---------------------------------------------------------------------
+  for (const [weekStartDay, sundayIsOwnWeek] of [[0, true], [1, false]]) {
+    await servicePatch("companies", companyA.id, { week_start_day: weekStartDay });
+    const weekEmployee = await serviceInsert("timekeeping_employees", {
+      company_id: companyA.id, full_name: `Week Start ${weekStartDay}`, created_by: userA.id,
+    });
+    const sundayReport = await serviceInsert("daily_reports", {
+      company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
+      report_date: "2035-01-07", work_date: "2035-01-07",
+      foreman_name: "Isolation Admin A", created_by: userA.id,
+    });
+    const mondayReport = await serviceInsert("daily_reports", {
+      company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
+      report_date: "2035-01-08", work_date: "2035-01-08",
+      foreman_name: "Isolation Admin A", created_by: userA.id,
+    });
+    // 2035-01-07 (Sunday) consumes the whole regular allowance.
+    await serviceInsert("timekeeping_entries", {
+      company_id: companyA.id, employee_id: weekEmployee.id,
+      daily_report_id: sundayReport.id, job_id: jobA.id, work_date: "2035-01-07",
+      regular_hours: 40, overtime_hours: 0, created_by: userA.id, updated_by: userA.id,
+    });
+    await servicePatch("daily_reports", sundayReport.id, {
+      status: "approved", approved_by: userA.id, approved_at: new Date().toISOString(),
+    });
+    const weekSave = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
+      method: "POST",
+      body: {
+        p_report_id: mondayReport.id,
+        p_rows: [{ employee_id: weekEmployee.id, crew_name: "Week Crew", regular_hours: 8, overtime_hours: 0 }],
+      },
+    });
+    assert(weekSave.ok, `Week-start save failed for week_start_day=${weekStartDay}: ${JSON.stringify(weekSave.data)}`);
+    // week_start_day=1 (Monday): Sunday 01-07 is in the PREVIOUS week, so the
+    // Monday entry starts a fresh 40-hour allowance -> 8 regular.
+    // week_start_day=0 (Sunday): both days share a week -> allowance spent -> 8 OT.
+    const expectedRegular = sundayIsOwnWeek ? 0 : 8;
+    const expectedOvertime = sundayIsOwnWeek ? 8 : 0;
+    assert(
+      Number(weekSave.data?.[0]?.regular_hours) === expectedRegular &&
+      Number(weekSave.data?.[0]?.overtime_hours) === expectedOvertime,
+      `week_start_day=${weekStartDay} did not move the week boundary: expected ${expectedRegular}/${expectedOvertime}, got ${JSON.stringify(weekSave.data)}`,
+    );
+  }
+  await servicePatch("companies", companyA.id, { week_start_day: 1 });
+
+  // ---------------------------------------------------------------------
+  // Regression: two Daily Reports must not fight over one employee's entry,
+  // and an approved report's crew time must be immutable in BOTH directions.
+  // ---------------------------------------------------------------------
+  const conflictEmployee = await serviceInsert("timekeeping_employees", {
+    company_id: companyA.id, full_name: "Conflict Crew", created_by: userA.id,
+  });
+  const conflictReportOne = await serviceInsert("daily_reports", {
+    company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id,
+    report_date: "2035-02-05", work_date: "2035-02-05",
+    foreman_name: "Isolation Admin A", created_by: userA.id,
+  });
+  const conflictReportTwo = await serviceInsert("daily_reports", {
+    company_id: companyA.id, job_id: jobA.id, foreman_id: managerA.id,
+    report_date: "2035-02-05", work_date: "2035-02-05",
+    foreman_name: "Isolation Manager A", created_by: userA.id,
+  });
+  const firstClaim = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
+    method: "POST",
+    body: { p_report_id: conflictReportOne.id, p_rows: [{ employee_id: conflictEmployee.id, crew_name: "Crew One", regular_hours: 8, overtime_hours: 0 }] },
+  });
+  assert(firstClaim.ok, `First crew claim failed: ${JSON.stringify(firstClaim.data)}`);
+  const secondClaim = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
+    method: "POST",
+    body: { p_report_id: conflictReportTwo.id, p_rows: [{ employee_id: conflictEmployee.id, crew_name: "Crew Two", regular_hours: 8, overtime_hours: 0 }] },
+  });
+  assert(!secondClaim.ok && secondClaim.data?.code === "23505",
+    `A second report re-parented an employee's crew time: ${JSON.stringify(secondClaim.data)}`);
+  const stillOwned = await request(`/rest/v1/timekeeping_entries?employee_id=eq.${conflictEmployee.id}&select=daily_report_id`);
+  assert(stillOwned.ok && stillOwned.data.length === 1 && stillOwned.data[0].daily_report_id === conflictReportOne.id,
+    `Crew time changed owner during the conflict: ${JSON.stringify(stillOwned.data)}`);
+
+  // Approve report one, then try to move the entry off it by direct REST.
+  await servicePatch("daily_reports", conflictReportOne.id, {
+    status: "approved", approved_by: managerA.id, approved_at: new Date().toISOString(),
+  });
+  const claimedEntry = stillOwned.data[0];
+  const entryRow = await request(`/rest/v1/timekeeping_entries?employee_id=eq.${conflictEmployee.id}&select=id`);
+  const reparent = await userRest(tokenA, "timekeeping_entries", `?id=eq.${entryRow.data[0].id}`, {
+    method: "PATCH",
+    body: { daily_report_id: conflictReportTwo.id, updated_by: userA.id },
+  });
+  assert(!reparent.ok,
+    `Approved crew time was moved off its certified Daily Report by a direct write: ${JSON.stringify(reparent.data)}`);
+  const afterReparent = await request(`/rest/v1/timekeeping_entries?employee_id=eq.${conflictEmployee.id}&select=daily_report_id`);
+  assert(afterReparent.ok && afterReparent.data[0].daily_report_id === conflictReportOne.id,
+    'Approved crew time left its certified report.');
+  void claimedEntry;
+
+  // ---------------------------------------------------------------------
+  // Regression: a Manager must be able to record leadership time. Both the
+  // caller RPCs admitted 'manager' while private.recalculate_leadership_week
+  // did not, so every save ended in a raw 42501.
+  // ---------------------------------------------------------------------
+  const managerEmployee = await serviceInsert("timekeeping_employees", {
+    company_id: companyA.id, full_name: "Isolation Manager A",
+    linked_profile_id: managerA.id, created_by: userA.id,
+  });
+  const managerOwnTime = await userRest(managerTokenA, "rpc/upsert_my_leadership_time", "", {
+    method: "POST",
+    body: { p_work_date: "2035-03-04", p_start_time: "07:00", p_stop_time: "15:00", p_lunch_minutes: 30, p_labor_code: "OVERHEAD" },
+  });
+  assert(managerOwnTime.ok, `A Manager could not record their own leadership time: ${JSON.stringify(managerOwnTime.data)}`);
+  const managerOtherTime = await userRest(managerTokenA, "rpc/upsert_leadership_employee_time", "", {
+    method: "POST",
+    body: { p_employee_id: timeEmployeeA.id, p_work_date: "2035-03-05", p_start_time: "07:00", p_stop_time: "15:00", p_lunch_minutes: 30, p_labor_code: "OVERHEAD" },
+  });
+  assert(managerOtherTime.ok, `A Manager could not record another employee's leadership time: ${JSON.stringify(managerOtherTime.data)}`);
+  void managerEmployee;
 
   for (const [table, row] of Object.entries(resourcesA)) await expectOwnRow(tokenA, table, row.id);
   for (const [table, row] of Object.entries(resourcesB)) await expectOwnRow(tokenB, table, row.id);

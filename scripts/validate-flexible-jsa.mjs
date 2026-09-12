@@ -55,7 +55,6 @@ if(!timekeepingInput.includes('window.LineCrewOfflineColdStart||!navigator.onLin
 }
 
 for(const token of [
-  'linecrew-pro-shell-v100',
   '@supabase/supabase-js@2.112.3',
   'isSupabaseRuntime',
   '/expanded-jsa.js?v=20260907b',
@@ -64,6 +63,10 @@ for(const token of [
   '/jsa-signatures.js?v=20260828a'
 ]){
   if(!serviceWorker.includes(token)) throw new Error('Missing Offline JSA app-shell token: ' + token);
+}
+// Version-agnostic: assert a versioned shell cache exists, not one release of it.
+if(!/const CACHE_NAME = 'linecrew-pro-shell-v\d+';/.test(serviceWorker)){
+  throw new Error('CACHE_NAME must be a versioned offline app-shell cache.');
 }
 
 for(const token of [

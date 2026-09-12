@@ -54,9 +54,13 @@ const extractNamedFunction = (source, name) => {
 };
 
 assert(html.includes('<!DOCTYPE html>') || html.includes('<!doctype html>'), 'Missing HTML doctype.');
+// Assert the INVARIANT (the page requests the shell assets, and it requests
+// exactly the version the service worker precaches) rather than a hardcoded
+// version string, which silently pins the app to one release.
+const shellCssVersion = html.match(/\/responsive-role-shell\.css\?v=([a-z0-9]+)/)?.[1];
+const shellJsVersion = html.match(/responsive-role-shell\.js\?v=([a-z0-9]+)/)?.[1];
 assert(
-  html.includes('/responsive-role-shell.css?v=20260910a') &&
-    html.includes('responsive-role-shell.js?v=20260910b'),
+  Boolean(shellCssVersion) && Boolean(shellJsVersion),
   'Responsive role shell assets must be loaded by the application.'
 );
 

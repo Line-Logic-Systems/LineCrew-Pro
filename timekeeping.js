@@ -12,12 +12,28 @@
   const canViewCompleteRoster = () => ['admin','manager','owner'].includes(role());
   const getSb = () => typeof sb !== 'undefined' ? sb : window.sb;
   const todayIso = () => new Date().toISOString().slice(0,10);
-  const mondayIso = () => {
-    const d = new Date();
-    const day = (d.getDay() + 6) % 7;
-    d.setDate(d.getDate() - day);
-    return d.toISOString().slice(0,10);
+  // The payroll week must match the week the server's overtime engine uses.
+  // Both recalculate_timekeeping_employee_week and
+  // private.recalculate_leadership_week derive it as
+  //   work_date - ((dow(work_date) - week_start_day + 7) % 7)
+  // with week_start_day from companies (0 = Sunday, default 1 = Monday).
+  // Hard-coding Monday here silently offset a Sunday-start company's payroll
+  // period by a day, including the p_start/p_end sent to
+  // timekeeping_set_period_status.
+  const companyWeekStartDay = () => {
+    const raw = (typeof currentCompany !== 'undefined' ? currentCompany : window.currentCompany)?.week_start_day;
+    const day = Number(raw);
+    return Number.isInteger(day) && day >= 0 && day <= 6 ? day : 1;
   };
+  const weekStartIso = (date = new Date()) => {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    d.setDate(d.getDate() - (((d.getDay() - companyWeekStartDay() + 7) % 7)));
+    const month = String(d.getMonth() + 1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${d.getFullYear()}-${month}-${day}`;
+  };
+  // Retained for compatibility with any external caller; now week-start aware.
+  const mondayIso = () => weekStartIso();
 
   let employees = [];
   let equipment = [];
@@ -877,20 +893,30 @@
   refreshCrewEmployeeSelects();
   const box=byId('dailyCrewTimeRows');if(!box)return;
   box.dataset.loading='true';
+  delete box.dataset.loadFailed;
   box.innerHTML='';
+  // A failed read of saved crew time must NEVER fall through to the default
+  // roster at 0.00 hours: that snapshot is non-empty, so it clears both the
+  // client and server empty-grid guards and then zeroes (or deletes) every
+  // employee already recorded on the report. Fail the load loudly instead.
+  const failCrewLoad=(error)=>{
+    box.dataset.loadFailed='1';
+    crewRowsLoadedForReport=null;   // allow a genuine retry
+    box.innerHTML='<p class="muted">Saved crew time could not be loaded, so it cannot be edited safely right now. Reopen the report to try again.</p>';
+    console.warn('Crew time load failed; refusing to fall back to default rows.', error?.message||error);
+  };
   try{
   if(role()==='foreman'){
     const viewerId=typeof currentProfile!=='undefined' ? currentProfile?.id||null : null;
     const own=employees.find(e=>e.active&&e.linked_profile_id===viewerId)||null;
     if(reportId){
       const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used').eq('daily_report_id',reportId).order('created_at');
-      if(!error){
-        const saved=data||[];
-        const ownSaved=own?saved.find(x=>x.employee_id===own.id):null;
-        if(own)addCrewRow(ownSaved||{employee_id:own.id});
-        saved.filter(x=>!own||x.employee_id!==own.id).forEach(addCrewRow);
-        if(saved.length||own)return;
-      }
+      if(error){ failCrewLoad(error); return; }
+      const saved=data||[];
+      const ownSaved=own?saved.find(x=>x.employee_id===own.id):null;
+      if(own)addCrewRow(ownSaved||{employee_id:own.id});
+      saved.filter(x=>!own||x.employee_id!==own.id).forEach(addCrewRow);
+      if(saved.length||own)return;
     }
     if(own)addCrewRow({employee_id:own.id});
     employees.filter(e=>e.active&&e.assigned_foreman_id===viewerId&&(!own||e.id!==own.id)).forEach(e=>addCrewRow({employee_id:e.id}));
@@ -898,9 +924,12 @@
   }
   if(reportId){
     const {data,error}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours,start_time,stop_time,lunch_minutes,per_diem,equipment_used,equipment_not_used').eq('daily_report_id',reportId).order('created_at');
-    if(!error && data?.length){data.forEach(addCrewRow);return;}
+    if(error){ failCrewLoad(error); return; }
+    if(data?.length){data.forEach(addCrewRow);return;}
   }
   await loadDefaultCrewRows();
+  }catch(error){
+    failCrewLoad(error);
   }finally{
     box.dataset.loading='false';
   }
@@ -908,6 +937,7 @@
 
   async function persistCrewTime(snapshot, reportId){
     if(!reportId)throw new Error('The Daily Report must be saved before its crew time can be recorded.');
+    if(byId('dailyCrewTimeRows')?.dataset.loadFailed==='1')throw new Error('Crew Time did not load. Existing time was not changed. Reopen the report and try again.');
     if(!Array.isArray(snapshot)||snapshot.length===0)throw new Error('Crew Time did not load. Existing time was not changed. Reload the crew rows and try again.');
     const workDate=byId('dailyWorkDate')?.value;if(!workDate)return;
     const crewName=(byId('dailyCrewName')?.value||'').trim()||null;
