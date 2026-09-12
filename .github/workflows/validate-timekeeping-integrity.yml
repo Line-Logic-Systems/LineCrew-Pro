@@ -58,7 +58,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -q -f supabase/tests/timekeeping_integrity_fixture.sql
 
       - name: Apply the timekeeping integrity migration
-        run: psql -v ON_ERROR_STOP=1 -q -f supabase/migrations/20260912160000_close_timekeeping_integrity_gaps.sql
+        run: psql -v ON_ERROR_STOP=1 -q -f supabase/migrations/20260912203259_close_timekeeping_integrity_gaps.sql
 
       - name: Assert the integrity guarantees
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/timekeeping_integrity_test.sql
