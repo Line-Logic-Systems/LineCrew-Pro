@@ -38,7 +38,10 @@
   function saveTheme(theme){
     const key = themeStorageKey();
     if(!key) return;
-    try { localStorage.setItem(key, theme); } catch (_) {}
+    try {
+      localStorage.setItem(key, theme);
+      localStorage.setItem('linecrew-pro-theme-preload', theme);
+    } catch (_) {}
     applyTheme(theme);
   }
 

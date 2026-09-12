@@ -10,7 +10,7 @@
   const profile = () => typeof currentProfile !== 'undefined' ? currentProfile : window.currentProfile;
   const role = () => String(profile()?.role || '').toLowerCase();
   const canEnterMyTime = () => ['gf','superintendent','admin','manager','owner'].includes(role());
-  const canAddOtherPeople = () => ['gf','admin'].includes(role());
+  const canAddOtherPeople = () => ['gf','admin','manager','owner'].includes(role());
   const getSb = () => {
     try { return typeof sb !== 'undefined' ? sb : (window.sb || window.supabaseClient || null); }
     catch (_) { return window.sb || window.supabaseClient || null; }

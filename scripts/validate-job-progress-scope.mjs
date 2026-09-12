@@ -17,7 +17,10 @@ for(const marker of [
 
 assert.ok(!migration.includes('left join lateral'),'Scoped progress must not restore a per-work-point lateral scan.');
 assert.ok(!app.includes("sb.rpc('get_job_progress_dashboard')"),'The UI must not call the legacy full-company dashboard.');
-assert.ok(app.includes("sb.rpc('get_job_progress_dashboard_v2')"),'Job list pages must use the set-based v2 dashboard.');
+const calls=[...app.matchAll(/sb\.rpc\('get_job_progress_dashboard_v2'([^)]*)\)/g)];
+assert.ok(calls.length>=2,'Every job-progress consumer must use the set-based v2 dashboard.');
+assert.ok(calls.every(match=>match[1].includes('p_job_id:')),
+  'Every job-progress call must pass p_job_id so work remains job-scoped.');
 
 console.log('Scoped job progress validation passed.');
 console.log('- billing and closeout push one job ID into every aggregate');

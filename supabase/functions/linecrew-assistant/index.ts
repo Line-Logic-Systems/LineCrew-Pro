@@ -253,12 +253,12 @@ async function readRows(
   unavailable: string[],
 ) {
   const { data, error } = await query;
-  if (error) {
-    console.warn(`LineCrew Assistant live context unavailable: ${label}`, error.message || error);
+  if (error || !Array.isArray(data)) {
+    console.warn(`LineCrew Assistant live context unavailable: ${label}`, error?.message || error || "invalid response shape");
     unavailable.push(label);
     return [];
   }
-  return Array.isArray(data) ? data as Record<string, unknown>[] : [];
+  return data as Record<string, unknown>[];
 }
 
 function dateDaysAgo(days: number) {

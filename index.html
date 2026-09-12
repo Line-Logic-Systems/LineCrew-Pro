@@ -6,6 +6,9 @@
 <script>
 (function(){
 try{
+if(localStorage.getItem('linecrew-pro-theme-preload')==='dark'){
+document.documentElement.classList.add('dark');
+}
 if(localStorage.getItem('linecrew-pro-desktop-view') === '1'){
 document.getElementById('appViewport')
 .setAttribute('content', 'width=1180,viewport-fit=cover');
@@ -1955,19 +1958,19 @@ margin:4px 0;
 <input id="recoveryPasswordConfirm" type="password" minlength="8" autocomplete="new-password">
 <button id="saveRecoveryPassword">Save New Password</button>
 </div>
-<div id="signupCard" class="card">
+<form id="signupCard" class="card">
 <h2 id="signupHeading">Create Account</h2>
 <p id="signupInviteMessage" class="muted hidden">
 This private invitation will place you directly into the correct company.
 </p>
-<label>Email</label>
-<input id="signupEmail" type="email" autocomplete="email">
-<label>Password</label>
+<label for="signupEmail">Email</label>
+<input id="signupEmail" type="email" autocomplete="username">
+<label for="signupPassword">Password</label>
 <input id="signupPassword" type="password" minlength="8" autocomplete="new-password">
-<label>Confirm Password</label>
+<label for="signupPasswordConfirm">Confirm Password</label>
 <input id="signupPasswordConfirm" type="password" minlength="8" autocomplete="new-password">
-<button id="signupBtn">Create Account</button>
-</div>
+<button id="signupBtn" type="submit">Create Account</button>
+</form>
 </section>
 <!-- PRIVILEGED ACCOUNT MFA -->
 <section id="mfaPage" class="hidden">
@@ -5580,7 +5583,8 @@ button.textContent = 'Save New Password';
 }
 };
 /* SIGN UP */
-$('signupBtn').onclick = async()=>{
+$('signupBtn').onclick = async(event)=>{
+event?.preventDefault();
 const email =
 $('signupEmail').value.trim();
 const password =
@@ -6572,16 +6576,22 @@ const open=document.createElement('button');open.className='secondary';open.text
 async function loadCompletedJobs(openJobId=null){
 $('completedJobDetail').classList.add('hidden');$('completedJobsList').classList.remove('hidden');
 $('completedJobsLoading').classList.remove('hidden');$('completedJobsEmpty').classList.add('hidden');
-const [jobsResult,progressResult,assignmentsResult]=await Promise.all([
+const [jobsResult,assignmentsResult]=await Promise.all([
 sb.from('jobs').select(`*,contracts(id,contract_name,contract_number,customers(name))`).eq('company_id',currentProfile.company_id).eq('active',false).order('closed_at',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false}),
-sb.rpc('get_job_progress_dashboard_v2'),sb.rpc('get_job_leader_assignments')
+sb.rpc('get_job_leader_assignments')
 ]);
 $('completedJobsLoading').classList.add('hidden');
 if(jobsResult.error) return alert('Unable to load completed jobs: '+jobsResult.error.message);
-if(progressResult.error) return alert('Unable to load completed job progress: '+progressResult.error.message);
 if(assignmentsResult.error) return alert('Unable to load completed job assignments: '+assignmentsResult.error.message);
 completedJobsCatalog=jobsResult.data||[];
-completedJobsProgress=new Map((progressResult.data||[]).map(item=>[item.job_id,item]));
+const progressRows=[];
+for(const idChunk of completedJobIdChunks(completedJobsCatalog.map(job=>job.id),6)){
+const results=await Promise.all(idChunk.map(jobId=>sb.rpc('get_job_progress_dashboard_v2',{p_job_id:jobId})));
+const failed=results.find(result=>result.error);
+if(failed) return alert('Unable to load completed job progress: '+failed.error.message);
+results.forEach(result=>progressRows.push(...(result.data||[])));
+}
+completedJobsProgress=new Map(progressRows.map(item=>[item.job_id,item]));
 completedJobsAssignments=new Map();
 (assignmentsResult.data||[]).forEach(item=>{const rows=completedJobsAssignments.get(item.job_id)||[];rows.push(item);completedJobsAssignments.set(item.job_id,rows);});
 renderCompletedJobs();
@@ -6961,11 +6971,12 @@ alert('Unable to load utility job packages: ' + jobPackagesError.message);
 return;
 }
 currentJobPackageCatalog = jobPackages || [];
-const { data:jobProgress, error:jobProgressError } =
-await sb.rpc('get_job_progress_dashboard_v2');
-if(jobProgressError){
-alert('Unable to load job progress: ' + jobProgressError.message);
-return;
+const jobProgress=[];
+for(const jobChunk of completedJobIdChunks(jobs.map(job=>job.id),6)){
+const progressResults=await Promise.all(jobChunk.map(jobId=>sb.rpc('get_job_progress_dashboard_v2',{p_job_id:jobId})));
+const failedProgress=progressResults.find(result=>result.error);
+if(failedProgress){alert('Unable to load job progress: '+failedProgress.error.message);return;}
+progressResults.forEach(result=>jobProgress.push(...(result.data||[])));
 }
 currentJobProgressSummaries = new Map(
 (jobProgress || []).map(progress => [progress.job_id, progress])

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'linecrew-pro-shell-v99';
+const CACHE_NAME = 'linecrew-pro-shell-v100';
 const SUPABASE_RUNTIME = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.min.js';
 const APP_SHELL = [
   '/index.html',
@@ -77,7 +77,7 @@ self.addEventListener('fetch', (event) => {
     } catch (_) {
       const cached = await caches.match(request);
       if (cached) return cached;
-      if (request.mode === 'navigate') return caches.match('/');
+      if (request.mode === 'navigate') return caches.match('/index.html');
       return Response.error();
     }
   })());
