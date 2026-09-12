@@ -1932,15 +1932,15 @@ margin:4px 0;
 <main>
 <!-- AUTH -->
 <section id="authPage">
-<div id="loginCard" class="card">
+<form id="loginCard" class="card" onsubmit="return false">
 <h2>Sign In</h2>
-<label>Email</label>
-<input id="loginEmail" type="email">
-<label>Password</label>
-<input id="loginPassword" type="password">
-<button id="loginBtn">Sign In</button>
-<button id="forgotPasswordBtn" class="secondary">Forgot Password</button>
-</div>
+<label for="loginEmail">Email</label>
+<input id="loginEmail" type="email" autocomplete="email">
+<label for="loginPassword">Password</label>
+<input id="loginPassword" type="password" autocomplete="current-password">
+<button id="loginBtn" type="button">Sign In</button>
+<button id="forgotPasswordBtn" type="button" class="secondary">Forgot Password</button>
+</form>
 <div id="pwaInstallCard" class="card hidden">
 <h3>Install LineCrew Pro</h3>
 <p id="pwaInstallText" class="muted">Install LineCrew Pro on this device for quick access.</p>
@@ -4973,7 +4973,7 @@ function userCanManageJobPackages(){
 return userHasCapability('job_packages') || currentUserRole() === 'gf';
 }
 function userCanExport(){ return userHasCapability('exports') || currentUserRole() === 'gf'; }
-function userCanSeeSafetyRecords(){ return userHasCapability('safety_records') || ['gf','foreman'].includes(currentUserRole()); }
+function userCanSeeSafetyRecords(){ return userIsSafety() || userHasCapability('safety_records') || ['gf','foreman'].includes(currentUserRole()); }
 function userCanSeeActualContractPrices(){
 return userHasCapability('actual_pricing');
 }
@@ -5538,21 +5538,17 @@ if(!email) return;
 const button = $('forgotPasswordBtn');
 button.disabled = true;
 button.textContent = 'Sending Reset Link...';
-const redirectTo =
-window.location.origin + window.location.pathname;
-const { error } = await sb.auth.resetPasswordForEmail(
-email,
-{ redirectTo }
-);
+try{
+const redirectTo = window.location.origin + window.location.pathname;
+const { error } = await sb.auth.resetPasswordForEmail(email,{ redirectTo });
+if(error) throw error;
+alert('Password reset email sent. Open the link in that email on this device, then choose a new password.');
+}catch(error){
+alert('Unable to send password reset email: ' + (error?.message || error));
+}finally{
 button.disabled = false;
 button.textContent = 'Forgot Password';
-if(error){
-alert('Unable to send password reset email: ' + error.message);
-return;
 }
-alert(
-'Password reset email sent. Open the link in that email on this device, then choose a new password.'
-);
 };
 $('saveRecoveryPassword').onclick = async () => {
 const password = $('recoveryPassword').value;
@@ -5568,18 +5564,20 @@ return;
 const button = $('saveRecoveryPassword');
 button.disabled = true;
 button.textContent = 'Saving...';
+try{
 const { error } = await sb.auth.updateUser({ password });
-button.disabled = false;
-button.textContent = 'Save New Password';
-if(error){
-alert('Unable to update password: ' + error.message);
-return;
-}
+if(error) throw error;
 $('recoveryPassword').value = '';
 $('recoveryPasswordConfirm').value = '';
 $('passwordRecoveryCard').classList.add('hidden');
 alert('Password updated. You are signed in.');
 await loadApp();
+}catch(error){
+alert('Unable to update password: ' + (error?.message || error));
+}finally{
+button.disabled = false;
+button.textContent = 'Save New Password';
+}
 };
 /* SIGN UP */
 $('signupBtn').onclick = async()=>{

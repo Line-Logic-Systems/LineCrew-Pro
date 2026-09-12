@@ -63,3 +63,10 @@ jobs:
           deno check supabase/functions/linecrew-assistant/index.ts
           deno check supabase/functions/parse-utility-job-packet/index.ts
           deno check supabase/functions/send-team-invitation/index.ts
+          deno check supabase/functions/submit-beta-application/index.ts
+          deno check supabase/functions/review-beta-application/index.ts
+          deno check supabase/functions/complete-utility-invitation-signup/index.ts
+          deno check supabase/functions/send-push-notification/index.ts
+          deno check supabase/functions/send-utility-invitation/index.ts
+          deno check supabase/functions/notify-pilot-feedback/index.ts
+          deno check supabase/functions/retry-beta-sales-notification/index.ts
