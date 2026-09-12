@@ -344,7 +344,11 @@ for (const marker of ['59900', '8500', "when 'linecrew' then 5", 'p_included_cre
 }
 if (!webhook.includes('stripe-signature') || !webhook.includes('verifyStripeSignature')) throw new Error('Stripe webhook signature validation is missing.');
 if (!webhook.includes('eventInsertError.code !== "23505"')) throw new Error('Stripe webhook must recognize unique-event retries by PostgreSQL error code.');
-if (!webhook.includes('priorEvent?.processed_at')) throw new Error('Stripe webhook must distinguish completed duplicates from retryable failed events.');
+if (!webhook.includes('processingToken = crypto.randomUUID()') ||
+    !webhook.includes('.eq("processing_token", processingToken)') ||
+    !webhook.includes('processing_started_at.lt.')) {
+  throw new Error('Stripe webhook must use a token-bound expiring claim for duplicate deliveries.');
+}
 if (!webhook.includes('invoice.paid is intentionally audit-only')) throw new Error('Stripe invoice.paid must not blindly reactivate a subscription.');
 if (!webhook.includes('scheduledCancelUnix') || !webhook.includes('scheduledCancelUnix === currentPeriodEndUnix')) {
   throw new Error('Stripe webhook must recognize cancel_at resolved to the current period end.');

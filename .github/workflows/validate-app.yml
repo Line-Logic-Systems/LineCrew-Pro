@@ -48,6 +48,8 @@ jobs:
         run: node scripts/validate-migration-hygiene.mjs
       - name: Validate launch audit closure
         run: node scripts/validate-claude-audit-closure.mjs
+      - name: Validate final audit hardening
+        run: node scripts/validate-final-audit-hardening.mjs
 
       - name: Validate observer scoping
         run: node scripts/validate-observer-scoping.mjs
