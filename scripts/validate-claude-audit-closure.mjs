@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const app=fs.readFileSync('index.html','utf8');
-const migration=fs.readFileSync('supabase/migrations/20260912123000_close_launch_readiness_audit.sql','utf8');
+const migration=fs.readFileSync('supabase/migrations/20260912144518_close_launch_readiness_audit.sql','utf8');
 const assistant=fs.readFileSync('supabase/functions/linecrew-assistant/index.ts','utf8');
 const serviceWorker=fs.readFileSync('service-worker.js','utf8');
 const theme=fs.readFileSync('gf-review-theme-enhancements.js','utf8');
