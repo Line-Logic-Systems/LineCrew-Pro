@@ -199,6 +199,7 @@ async function cleanup() {
   const tableOrder = [
     "timekeeping_entries",
     "timekeeping_employees",
+    "storm_mode_assignments",
     "job_package_authorized_units",
     "job_package_work_points",
     "job_packages",
@@ -297,6 +298,21 @@ async function main() {
   });
   await servicePatch("daily_reports", weeklyReports[1].id, { status: "approved", approved_by: userA.id, approved_at: new Date().toISOString() });
   await servicePatch("daily_reports", weeklyReports[2].id, { status: "approved", approved_by: userA.id, approved_at: new Date().toISOString() });
+  await servicePatch("companies", companyA.id, {
+    storm_mode_enabled: true,
+    storm_event_name: "Isolation Storm",
+    storm_started_at: "2035-01-08T00:00:00Z",
+    storm_ended_at: null,
+  });
+  await serviceInsert("storm_mode_assignments", { company_id: companyA.id, user_id: userA.id, assigned_by: userA.id });
+  const preStormReport = await serviceInsert("daily_reports", {
+    company_id: companyA.id,
+    job_id: jobA.id,
+    foreman_id: userA.id,
+    report_date: "2035-01-01",
+    work_date: "2035-01-01",
+    foreman_name: "Isolation Admin A",
+  });
 
   const [tokenA, tokenB, managerTokenA] = await Promise.all([signInAtAal2(userA.email), signInAtAal2(userB.email), signInAtAal2(managerA.email)]);
   const resourcesA = { companies: companyA, profiles: { id: userA.id }, customers: customerA, price_books: priceBookA, jobs: jobA, daily_reports: reportA };
@@ -334,6 +350,22 @@ async function main() {
   assert(!rejectedEmptySave.ok && rejectedEmptySave.data?.code === "22023", "Empty Crew Time save was not rejected.");
   const preservedEntry = await request(`/rest/v1/timekeeping_entries?daily_report_id=eq.${weeklyReports[0].id}&select=id`);
   assert(preservedEntry.ok && preservedEntry.data.length === 1, "Empty Crew Time save removed the persisted entry.");
+
+  const stormContext = await userRest(tokenA, "rpc/set_daily_report_storm_context", "", {
+    method: "POST",
+    body: { p_report_id: weeklyReports[0].id },
+  });
+  assert(stormContext.ok, `Storm context latch failed: ${JSON.stringify(stormContext.data)}`);
+  const stormTime = await request(`/rest/v1/timekeeping_entries?daily_report_id=eq.${weeklyReports[0].id}&select=storm_work`);
+  assert(stormTime.ok && stormTime.data?.[0]?.storm_work === true, "Storm context did not restamp Crew Time.");
+  const oldContext = await userRest(tokenA, "rpc/set_daily_report_storm_context", "", {
+    method: "POST",
+    body: { p_report_id: preStormReport.id },
+  });
+  assert(oldContext.ok, `Pre-Storm context latch failed: ${JSON.stringify(oldContext.data)}`);
+  const oldReport = await request(`/rest/v1/daily_reports?id=eq.${preStormReport.id}&select=storm_mode,storm_event_name`);
+  assert(oldReport.ok && oldReport.data?.[0]?.storm_mode === false && oldReport.data?.[0]?.storm_event_name === null,
+    `Pre-Storm work date was misclassified: ${JSON.stringify(oldReport.data)}`);
 
   for (const [table, row] of Object.entries(resourcesA)) await expectOwnRow(tokenA, table, row.id);
   for (const [table, row] of Object.entries(resourcesB)) await expectOwnRow(tokenB, table, row.id);

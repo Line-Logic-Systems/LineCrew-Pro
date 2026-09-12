@@ -12,6 +12,9 @@ const app = read('index.html');
 const timekeeping = read('timekeeping.js');
 const expandedJsa = read('expanded-jsa-core.js');
 const stormLock = read('supabase/migrations/20260912004620_lock_daily_report_storm_context.sql');
+const stormRepairPath=fs.readdirSync('supabase/migrations').find(name=>name.endsWith('_repair_storm_classification_window.sql'));
+if(!stormRepairPath) throw new Error('Missing Storm classification window repair.');
+const stormRepair=read(`supabase/migrations/${stormRepairPath}`);
 
 need(app, 'saveStormModeSetting', 'Storm Mode save control is missing.');
 need(app, 'set_company_storm_mode', 'Storm Mode company RPC wiring is missing.');
@@ -38,9 +41,22 @@ for(const [token,message] of [
   ['before insert or update of daily_report_id, storm_work', 'Timekeeping storm context trigger is missing.']
 ]) need(stormLock, token, message);
 
+for(const [token,message] of [
+  ["v_work_date>=v_started_date",'Storm classification must start on the event date.'],
+  ["v_work_date<=v_ended_date",'Storm classification must stop after the event end date.'],
+  ['update public.timekeeping_entries entry set storm_work=v_storm','Initial classification must restamp any already-created time rows.'],
+  ['reclassify_daily_report_storm_context','Leadership needs an audited Storm reclassification path.'],
+  ["'daily_report_storm_reclassified'",'Storm reclassification must write an audit event.']
+]) need(stormRepair,token,message);
+
+const stormCall=app.indexOf("'set_daily_report_storm_context'");
+const crewSave=app.indexOf('window.saveDailyReportCrewTime',stormCall);
+if(stormCall<0||crewSave<0||stormCall>crewSave) throw new Error('Daily Report Storm context must be latched before Crew Time is saved.');
+
 const superintendentChecks = (stormLock.match(/v_role = 'superintendent' and not public\.linecrew_has_capability\('storm_mode'\)/g) || []).length;
 if(superintendentChecks !== 1) throw new Error(`Storm context should contain exactly one Superintendent capability check; found ${superintendentChecks}.`);
 
 console.log('Storm Mode regression guards passed.');
 console.log('- historical Daily Report storm context is locked after first classification');
 console.log('- crew time linked to a report inherits that report storm context');
+console.log('- report work date is bounded by the Storm event and audited reclassification is available');
