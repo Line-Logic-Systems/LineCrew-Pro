@@ -48,7 +48,7 @@ for (const field of ['myTimeAdminRosterRows','my-time-admin-start','my-time-admi
 
 requireText(module, "rpc('upsert_my_leadership_time'", 'My Time must save through the guarded RPC.');
 requireText(module, "rpc('upsert_leadership_employee_time'", 'Admin/GF added employees must save through the guarded employee RPC.');
-requireText(module, "['gf','admin']", 'Only Admin and General Foreman may add other employees.');
+requireText(module, "['gf','admin','manager','owner']", 'Operational leadership must be able to add other employees.');
 requireText(module, 'assigned_admin_id === profile().id', 'Admin My Time must auto-load only the signed-in Admin roster.');
 requireText(module, "rpc('upsert_leadership_time_batch'", 'GF/Admin group time must save through one transactional batch RPC.');
 requireText(module, 'Save All Time', 'GF/Admin group time needs one clear batch-save action.');

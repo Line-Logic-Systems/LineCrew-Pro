@@ -169,6 +169,7 @@
   if(document.querySelector('script[data-lc-gf-theme-enhancements]')) return;
   const script=document.createElement('script');
   script.src='/gf-review-theme-enhancements.js?v=20260908b';
+  script.async=false;
   script.defer=true;
   script.dataset.lcGfThemeEnhancements='1';
   document.head.appendChild(script);
@@ -178,6 +179,7 @@
   if(document.querySelector('script[data-lc-dark-draft-fix]')) return;
   const script=document.createElement('script');
   script.src='/dark-contrast-draft-edit-fix.js';
+  script.async=false;
   script.defer=true;
   script.dataset.lcDarkDraftFix='1';
   document.head.appendChild(script);
