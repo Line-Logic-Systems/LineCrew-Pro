@@ -304,7 +304,6 @@ async function main() {
 
   for (const [rpc, body] of [
     ["get_company_jsas", {}],
-    ["get_job_progress_dashboard", {}],
     ["get_job_package_work_points", { p_package_id: currentPackageA.id }],
     ["get_assignable_job_leaders", {}],
   ]) {
