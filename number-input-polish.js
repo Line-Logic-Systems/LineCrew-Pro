@@ -41,6 +41,67 @@
   });
 })();
 
+/* F1 payroll-data safety guard.
+ * timekeeping.js historically filtered invalid/duplicate crew rows out of the
+ * snapshot and then deleted saved rows that were absent from that snapshot.
+ * Validate the visible crew grid before the existing save function can run so
+ * a typo can never turn into a destructive delete.
+ */
+(() => {
+  'use strict';
+
+  const validationError = () => {
+    const rows = Array.from(document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row'));
+    const seen = new Set();
+    for(const row of rows){
+      const employeeId = String(row.querySelector('.tk-employee')?.value || '').trim();
+      if(!employeeId) return 'Select an employee for every Crew Time row, or remove the blank row before saving.';
+      if(seen.has(employeeId)) return 'Each employee can appear only once in Crew Time. Remove the duplicate row before saving.';
+      seen.add(employeeId);
+      const regular = Number(row.querySelector('.tk-regular')?.value || 0);
+      const overtime = Number(row.querySelector('.tk-ot')?.value || 0);
+      if(!Number.isFinite(regular) || !Number.isFinite(overtime)){
+        return 'Crew Time hours must be valid numbers before saving.';
+      }
+      if(regular < 0 || overtime < 0 || regular + overtime > 24){
+        return 'Crew Time cannot be negative or exceed 24 total hours for one employee in one day.';
+      }
+    }
+    return '';
+  };
+
+  const wrapSave = (save) => {
+    if(typeof save !== 'function' || save.__lineCrewCrewTimeValidated) return save;
+    const guarded = async (...args) => {
+      const error = validationError();
+      if(error) throw new Error(error);
+      return save(...args);
+    };
+    guarded.__lineCrewCrewTimeValidated = true;
+    return guarded;
+  };
+
+  const existing = window.saveDailyReportCrewTime;
+  if(typeof existing === 'function'){
+    window.saveDailyReportCrewTime = wrapSave(existing);
+    return;
+  }
+
+  let pending;
+  Object.defineProperty(window, 'saveDailyReportCrewTime', {
+    configurable:true,
+    get(){ return pending; },
+    set(value){
+      pending = wrapSave(value);
+      Object.defineProperty(window, 'saveDailyReportCrewTime', {
+        configurable:true,
+        writable:true,
+        value:pending
+      });
+    }
+  });
+})();
+
 /* Staged App Core modularization bootstrap.
  * Legacy inline helpers remain the fallback if this module cannot load.
  */
