@@ -12,6 +12,7 @@ on:
       # what this job proves, so it runs for those changes too.
       - 'index.html'
       - 'scripts/test-two-company-isolation.mjs'
+      - 'timekeeping.js'
       - '.github/workflows/test-two-company-isolation.yml'
   workflow_dispatch:
     inputs:

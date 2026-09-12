@@ -189,7 +189,16 @@ async function expectForeignHidden(token, table, id) {
 }
 
 async function cleanup() {
+  for (const id of created.rows.filter((row) => row.table === "daily_reports").map((row) => row.id)) {
+    await request(`/rest/v1/daily_reports?id=eq.${id}`, {
+      method: "PATCH",
+      body: { status: "rejected" },
+      prefer: "return=minimal",
+    });
+  }
   const tableOrder = [
+    "timekeeping_entries",
+    "timekeeping_employees",
     "job_package_authorized_units",
     "job_package_work_points",
     "job_packages",
@@ -247,9 +256,75 @@ async function main() {
   const reportA = await serviceInsert("daily_reports", { company_id: companyA.id, job_id: jobA.id, foreman_id: userA.id, report_date: new Date().toISOString().slice(0, 10), foreman_name: "Isolation Admin A" });
   const reportB = await serviceInsert("daily_reports", { company_id: companyB.id, job_id: jobB.id, foreman_id: userB.id, report_date: new Date().toISOString().slice(0, 10), foreman_name: "Isolation Admin B" });
 
+  const timeEmployeeA = await serviceInsert("timekeeping_employees", {
+    company_id: companyA.id,
+    full_name: "Transactional Time Test",
+    created_by: userA.id,
+  });
+  const weeklyReports = [];
+  for (const workDate of ["2035-01-08", "2035-01-09", "2035-01-10"]) {
+    weeklyReports.push(await serviceInsert("daily_reports", {
+      company_id: companyA.id,
+      job_id: jobA.id,
+      foreman_id: userA.id,
+      report_date: workDate,
+      work_date: workDate,
+      foreman_name: "Isolation Admin A",
+    }));
+  }
+  await serviceInsert("timekeeping_entries", {
+    company_id: companyA.id,
+    employee_id: timeEmployeeA.id,
+    daily_report_id: weeklyReports[1].id,
+    job_id: jobA.id,
+    work_date: "2035-01-09",
+    regular_hours: 24,
+    overtime_hours: 0,
+    created_by: userA.id,
+    updated_by: userA.id,
+  });
+  await serviceInsert("timekeeping_entries", {
+    company_id: companyA.id,
+    employee_id: timeEmployeeA.id,
+    daily_report_id: weeklyReports[2].id,
+    job_id: jobA.id,
+    work_date: "2035-01-10",
+    regular_hours: 16,
+    overtime_hours: 0,
+    created_by: userA.id,
+    updated_by: userA.id,
+  });
+  await servicePatch("daily_reports", weeklyReports[1].id, { status: "approved", approved_by: userA.id, approved_at: new Date().toISOString() });
+  await servicePatch("daily_reports", weeklyReports[2].id, { status: "approved", approved_by: userA.id, approved_at: new Date().toISOString() });
+
   const [tokenA, tokenB] = await Promise.all([signInAtAal2(userA.email), signInAtAal2(userB.email)]);
   const resourcesA = { companies: companyA, profiles: { id: userA.id }, customers: customerA, price_books: priceBookA, jobs: jobA, daily_reports: reportA };
   const resourcesB = { companies: companyB, profiles: { id: userB.id }, customers: customerB, price_books: priceBookB, jobs: jobB, daily_reports: reportB };
+
+  const transactionalSave = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
+    method: "POST",
+    body: {
+      p_report_id: weeklyReports[0].id,
+      p_rows: [{ employee_id: timeEmployeeA.id, crew_name: "Isolation Crew", regular_hours: 8, overtime_hours: 0 }],
+    },
+  });
+  assert(transactionalSave.ok, `Transactional Crew Time save failed: ${JSON.stringify(transactionalSave.data)}`);
+  assert(
+    Number(transactionalSave.data?.[0]?.regular_hours) === 0 && Number(transactionalSave.data?.[0]?.overtime_hours) === 8,
+    `Approved weekly hours were not reserved during backdated save: ${JSON.stringify(transactionalSave.data)}`,
+  );
+  const approvedEntries = await request(`/rest/v1/timekeeping_entries?daily_report_id=in.(${weeklyReports[1].id},${weeklyReports[2].id})&select=daily_report_id,regular_hours,overtime_hours&order=work_date.asc`);
+  assert(
+    approvedEntries.ok && Number(approvedEntries.data?.[0]?.regular_hours) === 24 && Number(approvedEntries.data?.[1]?.regular_hours) === 16,
+    `Approved Crew Time changed during backdated save: ${JSON.stringify(approvedEntries.data)}`,
+  );
+  const rejectedEmptySave = await userRest(tokenA, "rpc/save_daily_report_crew_time", "", {
+    method: "POST",
+    body: { p_report_id: weeklyReports[0].id, p_rows: [] },
+  });
+  assert(!rejectedEmptySave.ok && rejectedEmptySave.data?.code === "22023", "Empty Crew Time save was not rejected.");
+  const preservedEntry = await request(`/rest/v1/timekeeping_entries?daily_report_id=eq.${weeklyReports[0].id}&select=id`);
+  assert(preservedEntry.ok && preservedEntry.data.length === 1, "Empty Crew Time save removed the persisted entry.");
 
   for (const [table, row] of Object.entries(resourcesA)) await expectOwnRow(tokenA, table, row.id);
   for (const [table, row] of Object.entries(resourcesB)) await expectOwnRow(tokenB, table, row.id);

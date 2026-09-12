@@ -909,24 +909,12 @@
   async function persistCrewTime(snapshot, reportId){
     if(!reportId)throw new Error('The Daily Report must be saved before its crew time can be recorded.');
     if(!Array.isArray(snapshot)||snapshot.length===0)throw new Error('Crew Time did not load. Existing time was not changed. Reload the crew rows and try again.');
-    const jobId=byId('dailyJobId')?.value||null;const workDate=byId('dailyWorkDate')?.value;if(!workDate)return;
+    const workDate=byId('dailyWorkDate')?.value;if(!workDate)return;
     const crewName=(byId('dailyCrewName')?.value||'').trim()||null;
-    const stormWork=typeof currentStormModeAssigned!=='undefined' ? !!currentStormModeAssigned : false;
-    const {data:{user}}=await getSb().auth.getUser();if(!user)throw new Error('Your session expired. Sign in again before saving crew time.');
-    const rows=snapshot.map(r=>({company_id:companyId(),employee_id:r.employee_id,daily_report_id:reportId,job_id:jobId,work_date:workDate,crew_name:crewName,regular_hours:r.regular_hours,overtime_hours:r.overtime_hours,storm_work:stormWork,start_time:r.start_time||null,stop_time:r.stop_time||null,lunch_minutes:r.lunch_minutes||0,per_diem:r.per_diem===true,equipment_used:r.equipment_not_used?null:(r.equipment_used||null),equipment_not_used:r.equipment_not_used===true,created_by:user.id,updated_by:user.id,updated_at:new Date().toISOString()}));
-    const {error}=await getSb().from('timekeeping_entries').upsert(rows,{onConflict:'company_id,employee_id,work_date,job_id'});
+    const rows=snapshot.map(r=>({employee_id:r.employee_id,crew_name:crewName,regular_hours:r.regular_hours,overtime_hours:r.overtime_hours,start_time:r.start_time||null,stop_time:r.stop_time||null,lunch_minutes:r.lunch_minutes||0,per_diem:r.per_diem===true,equipment_used:r.equipment_not_used?null:(r.equipment_used||null),equipment_not_used:r.equipment_not_used===true}));
+    const {data:recalculated,error}=await getSb().rpc('save_daily_report_crew_time',{p_report_id:reportId,p_rows:rows});
     if(error)throw error;
-    let staleQuery=getSb().from('timekeeping_entries').delete().eq('daily_report_id',reportId);
-    staleQuery=staleQuery.not('employee_id','in','('+snapshot.map(row=>row.employee_id).join(',')+')');
-    const {error:deleteError}=await staleQuery;
-    if(deleteError)throw deleteError;
-    for(const row of snapshot){
-      const {error:otError}=await getSb().rpc('recalculate_timekeeping_employee_week',{p_report_id:reportId,p_employee_id:row.employee_id});
-      if(otError)throw otError;
-    }
     if(snapshot.length){
-      const {data:recalculated,error:reloadError}=await getSb().from('timekeeping_entries').select('employee_id,regular_hours,overtime_hours').eq('daily_report_id',reportId);
-      if(reloadError)throw reloadError;
       const byEmployee=new Map((recalculated||[]).map(entry=>[entry.employee_id,entry]));
       document.querySelectorAll('#dailyCrewTimeRows .tk-crew-row').forEach(row=>{
         const employeeId=row.querySelector('.tk-employee')?.value||'';
