@@ -303,7 +303,6 @@ async function main() {
   const resourcesB = { companies: companyB, profiles: { id: userB.id }, customers: customerB, price_books: priceBookB, jobs: jobB, daily_reports: reportB };
 
   for (const [rpc, body] of [
-    ["get_job_packages_v2", { p_job_id: jobA.id }],
     ["get_company_jsas", {}],
     ["get_job_progress_dashboard", {}],
     ["get_job_package_work_points", { p_package_id: currentPackageA.id }],
