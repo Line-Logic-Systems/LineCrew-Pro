@@ -2,7 +2,7 @@
 --
 -- These run against a throwaway PostgreSQL instance in CI (no Supabase
 -- project, no secrets), against the real deployed function bodies installed by
--- supabase/migrations/20260912160000_close_timekeeping_integrity_gaps.sql.
+-- supabase/migrations/20260912203259_close_timekeeping_integrity_gaps.sql.
 --
 -- Every test below FAILS against the pre-fix bodies and PASSES against the
 -- fixed ones, or is a guard proving existing correct behaviour was preserved.
