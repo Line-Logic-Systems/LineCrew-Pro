@@ -9,6 +9,7 @@
   const CONTEXT_KEY = 'linecrew-offline-jsa-context-v1';
   const MAX_FILE_BYTES = 15728640;
   const MAX_BACKOFF_MS = 5 * 60 * 1000;
+  const MAX_SYNC_ATTEMPTS = 5;
   const byId = (id) => document.getElementById(id);
   const value = (id) => (byId(id)?.value || '').trim();
   const checked = (name) => [...document.querySelectorAll(`[name="${name}"]:checked`)].map((el) => el.value);
@@ -115,22 +116,132 @@
     return Boolean(profile?.id && profile?.company_id && item.user_id === profile.id && item.company_id === profile.company_id);
   }
 
+  function downloadRecoveryBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  async function exportBlockedJsas() {
+    const rows = (await all()).filter((item) => item.status === 'blocked' && currentIdentityMatches(item));
+    if (!rows.length) {
+      toast('There are no blocked JSAs for this signed-in user.', 'info');
+      return;
+    }
+    for (const item of rows) {
+      const copy = { ...item };
+      copy.attachments = [];
+      for (const attachment of item.attachments || []) {
+        const { blob, ...metadata } = attachment;
+        copy.attachments.push(metadata);
+        if (blob instanceof Blob) {
+          downloadRecoveryBlob(blob, `linecrew-jsa-recovery-${item.id}-${safeFilename(attachment.name)}`);
+        }
+      }
+      downloadRecoveryBlob(
+        new Blob([JSON.stringify(copy, null, 2)], { type:'application/json' }),
+        `linecrew-jsa-recovery-${item.id}.json`
+      );
+    }
+    toast(`Exported recovery data for ${rows.length} blocked JSA${rows.length === 1 ? '' : 's'}.`, 'success');
+  }
+
+  async function retryBlockedJsas() {
+    const rows = (await all()).filter((item) => item.status === 'blocked' && currentIdentityMatches(item));
+    for (const item of rows) {
+      item.status = 'pending';
+      item.attempt_count = 0;
+      item.next_attempt_at = null;
+      item.last_error = null;
+      await put(item);
+    }
+    await renderQueueCount();
+    if (rows.length) void syncQueue(true);
+  }
+
+  function renderRecoveryPanel(blockedCount, otherUserCount) {
+    const page = byId('safetyPage');
+    if (!page) return;
+    let panel = byId('offlineJsaRecoveryPanel');
+    if (!blockedCount && !otherUserCount) {
+      panel?.remove();
+      return;
+    }
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'offlineJsaRecoveryPanel';
+      panel.className = 'card';
+      panel.style.cssText = 'border:2px solid #c43b3b;background:#fff5f5;color:#672020';
+      page.prepend(panel);
+    }
+    panel.replaceChildren();
+    const heading = document.createElement('strong');
+    heading.textContent = 'Offline JSA Sync Needs Attention';
+    panel.appendChild(heading);
+
+    if (blockedCount) {
+      const text = document.createElement('p');
+      text.textContent = `${blockedCount} JSA${blockedCount === 1 ? '' : 's'} could not sync after ${MAX_SYNC_ATTEMPTS} attempts. Later JSAs will continue syncing.`;
+      panel.appendChild(text);
+
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'secondary small';
+      retry.textContent = 'Retry Failed JSAs';
+      retry.addEventListener('click', () => void retryBlockedJsas());
+      panel.appendChild(retry);
+
+      const exportButton = document.createElement('button');
+      exportButton.type = 'button';
+      exportButton.className = 'secondary small';
+      exportButton.textContent = 'Export Recovery Copy';
+      exportButton.addEventListener('click', () => void exportBlockedJsas());
+      panel.appendChild(exportButton);
+    }
+
+    if (otherUserCount) {
+      const other = document.createElement('p');
+      other.textContent = `This device also has ${otherUserCount} unsynced JSA${otherUserCount === 1 ? '' : 's'} saved by another LineCrew Pro user. Sign back in as that user to sync or export those records.`;
+      panel.appendChild(other);
+    }
+  }
+
   async function renderQueueCount() {
     const profile = getProfile();
     const rows = await all().catch(() => []);
-    const count = rows.filter((item) => item.status !== 'synced' && (!profile?.id || item.user_id === profile.id)).length;
+    const unsynced = rows.filter((item) => item.status !== 'synced');
+    const ownRows = profile?.id && profile?.company_id
+      ? unsynced.filter((item) => item.user_id === profile.id && item.company_id === profile.company_id)
+      : unsynced;
+    const blockedCount = ownRows.filter((item) => item.status === 'blocked').length;
+    const otherUserCount = profile?.id && profile?.company_id
+      ? unsynced.filter((item) => item.user_id !== profile.id || item.company_id !== profile.company_id).length
+      : 0;
+    const count = ownRows.length;
     let pill = byId('offlineJsaQueuePill');
     const card = byId('safetyPage')?.querySelector('.section-header,.card');
     if (!pill && card) {
       pill = document.createElement('span');
       pill.id = 'offlineJsaQueuePill';
-      pill.style.cssText = 'display:none;margin-left:8px;padding:4px 8px;border-radius:999px;background:#fff4da;border:1px solid #e3b64c;color:#6a4300;font-size:12px;font-weight:800';
+      pill.style.cssText = 'display:none;margin-left:8px;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:800';
       card.appendChild(pill);
     }
     if (pill) {
       pill.style.display = count ? 'inline-block' : 'none';
-      pill.textContent = `${count} JSA${count === 1 ? '' : 's'} waiting to sync`;
+      pill.style.background = blockedCount ? '#fff0f0' : '#fff4da';
+      pill.style.border = `1px solid ${blockedCount ? '#d99595' : '#e3b64c'}`;
+      pill.style.color = blockedCount ? '#7c1f1f' : '#6a4300';
+      pill.textContent = blockedCount
+        ? `${count} JSA${count === 1 ? '' : 's'} waiting · ${blockedCount} need attention`
+        : `${count} JSA${count === 1 ? '' : 's'} waiting to sync`;
     }
+    renderRecoveryPanel(blockedCount, otherUserCount);
   }
 
   function collectTasks() {
@@ -372,6 +483,21 @@
     return Math.min(MAX_BACKOFF_MS, 5000 * (2 ** Math.min(Math.max(attemptCount - 1, 0), 6)));
   }
 
+  function nextSyncFailureState(item, error, nowMs = Date.now()) {
+    const next = { ...item };
+    next.attempt_count = Number(next.attempt_count || 0) + 1;
+    next.last_error = error?.message || String(error);
+    next.last_attempt_at = new Date(nowMs).toISOString();
+    if (next.attempt_count >= MAX_SYNC_ATTEMPTS) {
+      next.status = 'blocked';
+      next.next_attempt_at = null;
+    } else {
+      next.status = 'pending';
+      next.next_attempt_at = new Date(nowMs + backoff(next.attempt_count)).toISOString();
+    }
+    return next;
+  }
+
   async function refreshSafetyViews() {
     try { if (typeof window.loadSafetyJsas === 'function') await window.loadSafetyJsas(); } catch (_) {}
     try { if (typeof window.loadUploadedCompanyJsas === 'function') await window.loadUploadedCompanyJsas(); } catch (_) {}
@@ -385,6 +511,7 @@
     const rows = (await all()).sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
     for (const item of rows) {
       if (!currentIdentityMatches(item)) continue;
+      if (item.status === 'blocked') continue;
       if (!force && item.next_attempt_at && new Date(item.next_attempt_at).getTime() > Date.now()) continue;
       try {
         const serverId = item.type === 'upload'
@@ -401,14 +528,17 @@
         }
         if (serverId) await refreshSafetyViews();
       } catch (error) {
-        item.status = 'pending';
-        item.attempt_count = Number(item.attempt_count || 0) + 1;
-        item.last_error = error?.message || String(error);
-        item.last_attempt_at = new Date().toISOString();
-        item.next_attempt_at = new Date(Date.now() + backoff(item.attempt_count)).toISOString();
+        Object.assign(item, nextSyncFailureState(item, error));
         await put(item);
         await renderQueueCount();
-        break;
+        if (item.status === 'blocked') {
+          setStatus(
+            `A saved JSA could not sync after ${MAX_SYNC_ATTEMPTS} attempts. It remains secured on this device and is shown in Offline JSA Sync Needs Attention.`,
+            'error'
+          );
+          toast('One JSA needs attention, but later saved JSAs will keep syncing.', 'warning');
+        }
+        continue;
       }
     }
   }
