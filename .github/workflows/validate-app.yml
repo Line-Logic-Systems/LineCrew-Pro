@@ -89,6 +89,9 @@ jobs:
           node scripts/validate-assistant-live-context.mjs
           node scripts/validate-assistant-memory.mjs
 
+      - name: Validate redline billing reconciliation
+        run: node scripts/validate-redline-billing-reconciliation.mjs
+
       - name: Validate marketing site, pricing, and Beta funnel
         run: node scripts/validate-marketing-site.mjs
 
