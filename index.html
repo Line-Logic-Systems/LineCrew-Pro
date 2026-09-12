@@ -19348,6 +19348,19 @@ error.message
 return;
 }
 const savedReportId = reportId || data;
+if(Object.prototype.hasOwnProperty.call(currentCompany || {}, 'storm_mode_enabled')){
+const { error:stormError } = await sb.rpc(
+'set_daily_report_storm_context',
+{ p_report_id:savedReportId }
+);
+if(stormError){
+alert(
+'The report was saved, but its Storm Mode tag could not be applied: ' +
+stormError.message
+);
+return;
+}
+}
 if(typeof window.saveDailyReportCrewTime === 'function'){
 try{
 await window.saveDailyReportCrewTime(savedReportId);
@@ -19375,18 +19388,6 @@ contextError.message
 );
 await loadProductionReports();
 return;
-}
-if(Object.prototype.hasOwnProperty.call(currentCompany || {}, 'storm_mode_enabled')){
-const { error:stormError } = await sb.rpc(
-'set_daily_report_storm_context',
-{ p_report_id:savedReportId }
-);
-if(stormError){
-alert(
-'The report and JSA were saved, but the Storm Mode tag could not be applied: ' +
-stormError.message
-);
-}
 }
 const { data:savedReport, error:savedReportError } = await sb
 .from('daily_reports')
