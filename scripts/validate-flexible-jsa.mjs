@@ -78,6 +78,15 @@ const signatures = fs.readFileSync('jsa-signatures.js','utf8');
 if(!signatures.includes("!e.target?.closest?.('.lc-signature-wrap')")){
   throw new Error('Signature click suppression must be limited to the signature pad.');
 }
+if(!signatures.includes('const cache=new WeakMap()')){
+  throw new Error('JSA signature strokes must be scoped to concrete input elements with WeakMap.');
+}
+if(!signatures.includes('cache.get(input)||decodeExisting(input.value)||[]')){
+  throw new Error('Signature pads must read only the current input cache or current input value.');
+}
+if(signatures.includes('__lineCrewSignatureStrokes') || signatures.includes("return `crew-${")){
+  throw new Error('Positional/global JSA signature caches can leak prior signatures into a new JSA.');
+}
 
 const requiredSql = [
   "jsa_method text not null default 'both'",
