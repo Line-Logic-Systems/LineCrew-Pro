@@ -24,6 +24,7 @@
 
   let dbPromise = null;
   let syncPromise = null;
+  let initialized = false;
 
   function uuid() {
     if (crypto.randomUUID) return crypto.randomUUID();
@@ -495,7 +496,7 @@
   }
 
   function markColdStartReady() {
-    if (!window.LineCrewOfflineColdStart) return;
+    if (!window.LineCrewOfflineColdStart || !initialized) return;
     ['createJsaBtn', 'uploadCompanyJsaBtn'].forEach((id) => {
       const button = byId(id);
       if (!button) return;
@@ -503,8 +504,9 @@
       button.textContent = button.dataset.offlineReadyLabel || (id === 'createJsaBtn' ? '+ Complete Digital JSA' : '+ Upload Company JSA');
     });
     const banner = byId('offlineColdStartJsaBanner');
-    if (banner) {
+    if (banner && !byId('offlineColdStartJsaReady')) {
       const ready = document.createElement('div');
+      ready.id = 'offlineColdStartJsaReady';
       ready.style.cssText = 'margin-top:8px;font-weight:800;color:#155d2d';
       ready.textContent = 'Offline JSA form and device storage are ready.';
       banner.appendChild(ready);
@@ -520,6 +522,7 @@
     restoreJobs('safetyJsaJob');
     restoreJobs('companyJsaUploadJob');
     cacheJobContext();
+    initialized = true;
     markColdStartReady();
     window.addEventListener('online', () => setTimeout(() => void syncQueue(true), 250));
     document.addEventListener('visibilitychange', () => { if (!document.hidden) void syncQueue(); });
@@ -532,6 +535,7 @@
 
   window.LineCrewOfflineJsa = {
     sync: () => syncQueue(true),
-    queueCount: async () => (await all()).filter((item) => item.status !== 'synced').length
+    queueCount: async () => (await all()).filter((item) => item.status !== 'synced').length,
+    markReady: markColdStartReady
   };
 })();
