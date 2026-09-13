@@ -99,6 +99,9 @@ jobs:
       - name: Validate redline billing reconciliation
         run: node scripts/validate-redline-billing-reconciliation.mjs
 
+      - name: Validate field-complete billing handoff
+        run: node scripts/validate-billing-readiness-workflow.mjs
+
       - name: Validate marketing site, pricing, and Beta funnel
         run: node scripts/validate-marketing-site.mjs
 
