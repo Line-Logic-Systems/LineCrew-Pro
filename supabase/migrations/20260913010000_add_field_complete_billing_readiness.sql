@@ -29,13 +29,13 @@ begin
   v_oid:=to_regprocedure('public.set_job_package_status(uuid,text)');
   if v_oid is null then raise exception 'set_job_package_status(uuid,text) is missing'; end if;
   select pg_get_functiondef(v_oid) into v_definition;
-  v_updated:=replace(v_definition,'begin
-  if not public.linecrew_can_manage_job_packages() then','BEGIN
+  v_updated:=replace(v_definition,$needle$begin
+  if not public.linecrew_can_manage_job_packages() then$needle$,$replacement$BEGIN
   if exists(select 1 from public.profiles p where p.id=auth.uid()
-    and p.active is true and lower(coalesce(p.role,''))=''gf'') then
-    raise exception using errcode=''42501'',message=''Only Admin leadership can change a utility package status.'';
+    and p.active is true and lower(coalesce(p.role,''))='gf') then
+    raise exception using errcode='42501',message='Only Admin leadership can change a utility package status.';
   end if;
-  if not public.linecrew_can_manage_job_packages() then');
+  if not public.linecrew_can_manage_job_packages() then$replacement$);
   if v_updated=v_definition then
     raise exception 'Expected package-status authorization block was not found';
   end if;
