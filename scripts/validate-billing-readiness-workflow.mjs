@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 const app=fs.readFileSync('index.html','utf8');
-const sql=fs.readFileSync('supabase/migrations/20260913010000_add_field_complete_billing_readiness.sql','utf8');
+const sql=fs.readFileSync('supabase/migrations/20260913004015_add_field_complete_billing_readiness.sql','utf8');
 
 for(const marker of [
   'Mark Complete for Billing','Return to Field','requestBillingReadinessDecision',
