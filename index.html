@@ -4146,6 +4146,62 @@ backdrop.addEventListener('keydown', event => { if(event.key==='Escape') finish(
 notes.focus();
 });
 }
+function requestBillingReadinessDecision({jobNumber,approvedPercent,ready}){
+return new Promise(resolve => {
+const existing=$('billingReadinessDialog');
+if(existing) existing.remove();
+const belowComplete=ready && approvedPercent<100;
+const reasonRequired=belowComplete || !ready;
+const backdrop=document.createElement('section');
+backdrop.id='billingReadinessDialog';
+backdrop.className='pilot-feedback-backdrop';
+backdrop.setAttribute('role','dialog');
+backdrop.setAttribute('aria-modal','true');
+backdrop.setAttribute('aria-labelledby','billingReadinessDialogTitle');
+const card=document.createElement('form');
+card.className='card pilot-feedback-card';
+card.innerHTML=
+'<h3 id="billingReadinessDialogTitle">'+(ready?'Submit Job for Billing':'Return Job to Field')+'</h3>'+
+'<p><strong>'+escapeHtml(jobNumber)+'</strong> is '+Number(approvedPercent||0).toFixed(1)+'% complete.</p>'+
+(belowComplete?'<div class="notice"><strong>Below 100%</strong><br>You may submit it, but the reason becomes part of the permanent handoff record.</div>':'')+
+'<label for="billingReadinessReason">'+(reasonRequired?(ready?'Reason for submitting below 100%':'Reason for returning to the field'):'Handoff note (optional)')+
+'<textarea id="billingReadinessReason" rows="4" '+(reasonRequired?'required aria-required="true"':'')+'></textarea></label>'+
+'<p id="billingReadinessDialogError" class="error-text hidden" role="alert" aria-live="assertive"></p>'+
+'<div class="button-row"><button type="submit" class="'+(ready?'success':'warning')+'">'+(ready?'Submit for Billing':'Return to Field')+'</button>'+
+'<button type="button" class="secondary" data-action="cancel">Cancel</button></div>';
+backdrop.appendChild(card);document.body.appendChild(backdrop);
+const reason=card.querySelector('#billingReadinessReason');
+const error=card.querySelector('#billingReadinessDialogError');
+const finish=value=>{backdrop.remove();resolve(value);};
+card.addEventListener('submit',event=>{event.preventDefault();const value=reason.value.trim();
+if(reasonRequired&&!value){error.textContent='A reason is required.';error.classList.remove('hidden');reason.focus();return;}
+finish(value);});
+card.querySelector('[data-action="cancel"]').onclick=()=>finish(null);
+backdrop.addEventListener('keydown',event=>{if(event.key==='Escape')finish(null);});
+reason.focus();
+});
+}
+function requestPackageStatusDecision({packageName,action}){
+return new Promise(resolve=>{
+const existing=$('packageStatusDialog');if(existing)existing.remove();
+const backdrop=document.createElement('section');backdrop.id='packageStatusDialog';
+backdrop.className='pilot-feedback-backdrop';backdrop.setAttribute('role','dialog');
+backdrop.setAttribute('aria-modal','true');backdrop.setAttribute('aria-labelledby','packageStatusDialogTitle');
+const card=document.createElement('form');card.className='card pilot-feedback-card';
+const label=action.charAt(0).toUpperCase()+action.slice(1);
+card.innerHTML='<h3 id="packageStatusDialogTitle">'+label+' Utility Package</h3>'+
+'<p>'+label+' <strong>'+escapeHtml(packageName)+'</strong>?</p>'+
+'<p class="muted">This changes the package lifecycle only. It does not submit the job for billing or close the job.</p>'+
+'<div class="button-row"><button type="submit" class="success">'+label+' Package</button>'+
+'<button type="button" class="secondary" data-action="cancel">Cancel</button></div>';
+backdrop.appendChild(card);document.body.appendChild(backdrop);
+const finish=value=>{backdrop.remove();resolve(value);};
+card.addEventListener('submit',event=>{event.preventDefault();finish(true);});
+card.querySelector('[data-action="cancel"]').onclick=()=>finish(false);
+backdrop.addEventListener('keydown',event=>{if(event.key==='Escape')finish(false);});
+card.querySelector('button[type="submit"]').focus();
+});
+}
 let pendingInviteToken = new URLSearchParams(window.location.search).get('invite') || '';
 let pendingInviteEmail = new URLSearchParams(window.location.search).get('email') || '';
 let pendingUtilityInviteToken = new URLSearchParams(window.location.search).get('utilityInvite') || '';
@@ -4401,6 +4457,7 @@ let currentContractFieldSettings = new Map();
 let currentJobContractCatalog = [];
 let currentJobPackageCatalog = [];
 let currentJobProgressSummaries = new Map();
+let currentJobBillingReadiness = new Map();
 let currentJobAssignableLeaders = [];
 let currentJobLeaderAssignments = new Map();
 let currentJobsCatalog = [];
@@ -5025,6 +5082,9 @@ function userCanManageCustomersContracts(){ return userHasCapability('customers_
 function userCanManagePriceBooks(){ return userHasCapability('price_books'); }
 function userCanManageJobPackages(){
 return userHasCapability('job_packages') || currentUserRole() === 'gf';
+}
+function userCanAdministerJobPackageStatus(){
+return userHasCapability('job_packages') && currentUserRole() !== 'gf';
 }
 function userCanExport(){ return userHasCapability('exports') || currentUserRole() === 'gf'; }
 function userCanSeeSafetyRecords(){ return userIsSafety() || userHasCapability('safety_records') || ['gf','foreman'].includes(currentUserRole()); }
@@ -7057,6 +7117,13 @@ currentJobProgressSummaries = new Map(
 currentJobPackageCatalog = [];
 currentJobProgressSummaries = new Map();
 }
+if(['owner','manager','admin','superintendent','gf'].includes(currentUserRole())){
+const readinessResult=await sb.rpc('get_job_billing_readiness');
+if(readinessResult.error){alert('Unable to load billing readiness: '+readinessResult.error.message);return;}
+currentJobBillingReadiness=new Map((readinessResult.data||[]).map(item=>[item.job_id,item]));
+}else{
+currentJobBillingReadiness=new Map();
+}
 if(canManageJobAssignments){
 const { data:leaders, error:leadersError } =
 await sb.rpc('get_assignable_job_leaders');
@@ -7279,6 +7346,17 @@ $('showAddJobPackageBtn').classList.toggle(
 $('jobProgressDashboard').scrollIntoView({ behavior:'smooth', block:'start' });
 }
 /* RENDER JOB */
+async function changeJobBillingReadiness(job,ready){
+const progress=currentJobProgressSummaries.get(job.id)||{};
+const approvedPercent=Number(progress.approved_percent||0);
+const reason=await requestBillingReadinessDecision({jobNumber:job.job_number,approvedPercent,ready});
+if(reason===null)return;
+const {error}=await sb.rpc('set_job_billing_readiness',{
+p_job_id:job.id,p_ready:ready,p_reason:reason||null
+});
+if(error){alert('Unable to update billing readiness: '+error.message);return;}
+await loadJobs();
+}
 function renderJob(job){
 const card =
 document.createElement('div');
@@ -7313,6 +7391,8 @@ const contractLabel = contract
 : 'Legacy job — contract not assigned';
 const contractCustomer =
 contract?.customers?.name || customer;
+const billingReadiness=currentJobBillingReadiness.get(job.id)||{};
+const isReadyForBilling=billingReadiness.status==='ready';
 card.innerHTML = `
 <div class="job-number">
 ${escapeHtml(job.job_number)}
@@ -7339,6 +7419,7 @@ Contract:
 ${escapeHtml(contractLabel)}
 </strong>
 </div>
+<div class="job-info"><strong>Billing handoff:</strong> ${isReadyForBilling?'READY FOR BILLING':'NOT READY'}</div>
 <div class="job-leader-panel hidden" id="job-leaders-${job.id}"></div>
 <div
 class="actions"
@@ -7380,6 +7461,21 @@ else card.querySelector(`#job-packages-${job.id}`)?.scrollIntoView({ behavior:'s
 };
 actions.appendChild(openPackageButton);
 }
+const role=currentUserRole();
+if(job.active && !isReadyForBilling && ['gf','owner','manager','admin'].includes(role)){
+const readyButton=document.createElement('button');
+readyButton.className='small success';
+readyButton.textContent='Mark Complete for Billing';
+readyButton.onclick=()=>changeJobBillingReadiness(job,true);
+actions.appendChild(readyButton);
+}
+if(job.active && isReadyForBilling && ['owner','manager','admin'].includes(role)){
+const returnButton=document.createElement('button');
+returnButton.className='small warning';
+returnButton.textContent='Return to Field';
+returnButton.onclick=()=>changeJobBillingReadiness(job,false);
+actions.appendChild(returnButton);
+}
 if(canManage){
 const otherActions = document.createElement('details');
 otherActions.className = 'job-other-actions';
@@ -7397,11 +7493,13 @@ card.querySelector(`#job-leaders-${job.id}`),
 historyButton
 );
 otherMenu.appendChild(historyButton);
+if(['owner','manager','admin'].includes(currentUserRole())){
 const closeButton = document.createElement('button');
 closeButton.className = 'small warning';
 closeButton.textContent = 'Close Job';
 closeButton.onclick = ()=> changeJobStatus(job);
 otherMenu.appendChild(closeButton);
+}
 }else{
 const reopenButton = document.createElement('button');
 reopenButton.className = 'small success';
@@ -7927,7 +8025,7 @@ const source = currentOpenJobPackage.source_filename
 $('jobPackageDetailSubtitle').textContent =
 'Reference: ' + (currentOpenJobPackage.package_number || 'Not provided') +
 ' · Status: ' + status.toUpperCase() + source;
-const canManagePackage = userCanManageJobPackages();
+const canManagePackage = userCanAdministerJobPackageStatus();
 const isDraft = status === 'draft';
 $('jobPackageAdminTools').classList.toggle('hidden', !canManagePackage || !isDraft);
 $('jobPackageImportTools').classList.toggle('hidden', !canManagePackage || !isDraft);
@@ -7948,7 +8046,7 @@ statusButton.className = 'success small';
 }
 }
 async function changeJobPackageStatus(){
-if(!currentOpenJobPackage || !userCanManageJobPackages()){
+if(!currentOpenJobPackage || !userCanAdministerJobPackageStatus()){
 return;
 }
 const currentStatus = String(currentOpenJobPackage.status || 'draft').toLowerCase();
@@ -7958,10 +8056,10 @@ const action = currentStatus === 'draft'
 : currentStatus === 'active'
 ? 'close'
 : 'reopen';
-if(!confirm(
-`${action.charAt(0).toUpperCase() + action.slice(1)} utility package ` +
-`"${currentOpenJobPackage.package_name}"?`
-)){
+if(!await requestPackageStatusDecision({
+packageName:currentOpenJobPackage.package_name,
+action
+})){
 return;
 }
 const { data, error } = await sb.rpc('set_job_package_status', {
