@@ -5,7 +5,7 @@ const app=fs.readFileSync('index.html','utf8');
 const loader=fs.readFileSync('expanded-jsa.js','utf8');
 const signatures=fs.readFileSync('jsa-signatures.js','utf8');
 const worker=fs.readFileSync('service-worker.js','utf8');
-const sql=fs.readFileSync('supabase/migrations/20260913011500_fix_foreman_production_summaries.sql','utf8');
+const sql=fs.readFileSync('supabase/migrations/20260913015216_fix_foreman_production_summaries.sql','utf8');
 
 for(const marker of [
   'No JSAs Match These Filters','details?.crew_acknowledgments',
