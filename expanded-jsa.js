@@ -186,18 +186,28 @@
     });
   };
 
-  const load = (src, onload, marker, onerror) => {
-    if (marker && document.querySelector(`script[data-${marker}]`)) {
+  const load = (src, onload, marker, onerror, attempt = 0) => {
+    const prior = marker ? document.querySelector(`script[data-${marker}]`) : null;
+    if (prior?.dataset.linecrewLoaded === '1') {
       if (onload) onload();
       return;
     }
+    if(prior) prior.remove();
     const script = document.createElement('script');
-    script.src = src;
+    script.src = attempt ? src + (src.includes('?') ? '&' : '?') + 'retry=' + attempt : src;
     script.async = false;
     if (marker) script.setAttribute(`data-${marker}`, '1');
-    if (onload) script.onload = onload;
+    script.onload = () => {
+      script.dataset.linecrewLoaded = '1';
+      if (onload) onload();
+    };
     script.onerror = () => {
       console.error(`LineCrew Pro dependency failed to load: ${src}`);
+      script.remove();
+      if(attempt < 1){
+        window.setTimeout(()=>load(src,onload,marker,onerror,attempt+1),250);
+        return;
+      }
       if (onerror) onerror(src);
     };
     document.head.appendChild(script);
@@ -208,7 +218,7 @@
   load('role-workspace-polish.js?v=20260910a');
   load('gf-crew-scope.js?v=20260910b');
   load('expanded-jsa-core.js?v=20260820', () => {
-    load('jsa-signatures.js?v=20260828a', () => {
+    load('jsa-signatures.js?v=20260913a', () => {
       load('jsa-signature-layout-fix.js?v=20260820a', () => {
         load('offline-jsa.js?v=20260827b', markOfflineJsaReady, null, jsaLoadFailed);
       }, null, jsaLoadFailed);

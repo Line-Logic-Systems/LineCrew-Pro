@@ -1615,7 +1615,7 @@ padding:0 12px 10px;
 }
 .daily-batch-grid{
 display:grid;
-grid-template-columns:54px minmax(220px, 1.8fr) 145px 90px;
+grid-template-columns:54px minmax(220px, 1.8fr) 145px 90px auto;
 gap:7px;
 align-items:start;
 }
@@ -1634,6 +1634,10 @@ padding:9px 8px;
 padding-top:31px;
 font-weight:800;
 color:var(--navy);
+}
+.daily-batch-clear{
+margin-top:27px;
+white-space:nowrap;
 }
 .daily-batch-unit-field{
 position:relative;
@@ -1668,6 +1672,9 @@ grid-template-columns:1fr 1fr;
 .daily-batch-number,
 .daily-batch-unit-field{
 grid-column:1 / -1;
+}
+.daily-batch-clear{
+margin-top:0;
 }
 .daily-batch-number{
 padding-top:0;
@@ -4468,6 +4475,7 @@ let currentBillingReconciliation = null;
 let currentOpenJobId = null;
 let currentJobProgressVisibleCount = 25;
 let currentSimpleJobVisibleCount = 25;
+let currentJobLoadSequence = 0;
 let currentOpenJobPackage = null;
 let currentJobPackageImportWorkbook = null;
 let currentJobPackageImportRows = [];
@@ -6096,6 +6104,13 @@ $('safetyJsaHistoryTitle').textContent = foremanEntryWorkspace
 $('safetyJsaHistoryCard').classList.toggle('hidden', records.length === 0);
 $('safetyJsaHistoryCount').textContent = records.length + ' record' + (records.length === 1 ? '' : 's');
 $('safetyJsaEmpty').classList.toggle('hidden', records.length > 0);
+if(records.length === 0){
+const hasStoredRecords=currentSafetyJsas.length > 0;
+$('safetyJsaEmpty').innerHTML=hasStoredRecords
+? '<h3>No JSAs Match These Filters</h3><p class="muted">Change the visible date range or search, then try again.</p>'
+: '<h3>No JSAs Yet</h3><p class="muted">Morning safety briefings will appear here.</p>';
+if(hasStoredRecords) $('safetyJsaFiltersCard').open=true;
+}
 $('safetyJsaFilterCount').textContent = 'Showing ' + records.length + ' of ' + currentSafetyJsas.length;
 const summary = $('safetyJsaReportingSummary');
 const metrics = $('safetyJsaReportingMetrics');
@@ -6111,12 +6126,20 @@ records.map(jsa => String(jsa.foreman_name || '').trim()).filter(Boolean)
 const crews = new Set(
 records.map(jsa => String(jsa.crew_name || '').trim()).filter(Boolean)
 );
-const crewSignIns = records.reduce((total, jsa) =>
-total + String(jsa.crew_members || '')
-.split(/\r?\n|,/)
-.map(name => name.trim())
-.filter(Boolean).length
-, 0);
+const crewSignIns = records.reduce((total, jsa) => {
+let details=jsa?.details;
+if(typeof details==='string'){try{details=JSON.parse(details);}catch{details={};}}
+const acknowledgments=Array.isArray(details?.crew_acknowledgments)
+? details.crew_acknowledgments
+: [];
+if(acknowledgments.length){
+return total+acknowledgments.filter(row=>
+String(row?.printed_name||'').trim() || String(row?.signature||'').trim()
+).length;
+}
+return total+String(jsa.crew_members||'').split(/\r?\n|,/)
+.map(name=>name.trim()).filter(Boolean).length;
+},0);
 metrics.innerHTML =
 '<span><strong>' + records.length + '</strong><br>Completed JSAs</span>' +
 '<span><strong>' + jobs.size + '</strong><br>Jobs</span>' +
@@ -7031,6 +7054,12 @@ updateCreateJobActionLabel();
 };
 /* LOAD JOBS */
 async function loadJobs(){
+const loadSequence=++currentJobLoadSequence;
+$('jobsList').replaceChildren();
+currentJobPackageCatalog=[];
+currentJobProgressSummaries=new Map();
+currentJobLeaderAssignments=new Map();
+currentJobBillingReadiness=new Map();
 $('jobsLoading')
 .classList
 .remove('hidden');
@@ -7083,6 +7112,7 @@ error.message
 );
 return;
 }
+if(loadSequence!==currentJobLoadSequence)return;
 if(!jobs || jobs.length === 0){
 $('jobsEmpty')
 .classList
@@ -7267,7 +7297,9 @@ row.innerHTML =
 '<span class="status ' + (job.active === true ? 'active' : 'closed') + '">' + (job.active === true ? 'ACTIVE' : 'CLOSED') + '</span></div>' +
 '<div class="job-progress-assignees"><strong>Assigned Foremen / Job Leaders:</strong> ' +
 escapeHtml(assignmentLabel) + '</div>' +
-'<div class="job-setup-counts">' + Number(summary.package_count || 0) + ' job jacket' + (Number(summary.package_count || 0) === 1 ? '' : 's') + ' · ' + Number(summary.work_point_count || 0) + ' work point' + (Number(summary.work_point_count || 0) === 1 ? '' : 's') + '</div>' +
+'<div class="job-setup-counts">' + (currentUserRole()==='foreman'
+? 'Open Remaining Units to review assigned packet scope'
+: Number(summary.package_count || 0) + ' job jacket' + (Number(summary.package_count || 0) === 1 ? '' : 's') + ' · ' + Number(summary.work_point_count || 0) + ' work point' + (Number(summary.work_point_count || 0) === 1 ? '' : 's')) + '</div>' +
 '<div class="job-open-details">View Job Details &amp; Units →</div>';
 row.title = 'Open ' + job.job_number + ' job details';
 row.setAttribute('role', 'button');
@@ -17136,7 +17168,7 @@ summary
 currentDailyAuthorizationSummaries = new Map();
 const canReviewProduction = userCanReviewProduction();
 const canViewProductionReporting = userCanUseReporting();
-if(canReviewProduction || canViewProductionReporting){
+if(canReviewProduction || canViewProductionReporting || foremanEntryWorkspace){
 const { data:authorizationSummaries, error:authorizationSummaryError } =
 await sb.rpc('get_daily_report_authorization_summaries');
 if(authorizationSummaryError){
@@ -17933,10 +17965,10 @@ const totalHours =
 Number(report?.regular_hours || 0) +
 Number(report?.overtime_hours || 0);
 const actualRunRate = totalHours > 0
-? Number(summary.actual_total || 0) / totalHours
+? Math.round(Number(summary.actual_total || 0)*100) / 100 / totalHours
 : 0;
 const fieldRunRate = totalHours > 0
-? Number(summary.adjusted_total || 0) / totalHours
+? Math.round(Number(summary.adjusted_total || 0)*100) / 100 / totalHours
 : 0;
 const runRateMarkup =
 (canSeeActual
@@ -17996,7 +18028,7 @@ summary &&
 Number(summary.unit_line_count || 0) > 0 &&
 totalHours > 0;
 const fieldRunRate = hasRunRate
-? Number(summary.adjusted_total || 0) / totalHours
+? Math.round(Number(summary.adjusted_total || 0)*100) / 100 / totalHours
 : NaN;
 const status = hasRunRate ? manHourTargetStatus(fieldRunRate) : null;
 const className = status ? status.key : 'not-set';
@@ -18210,7 +18242,7 @@ summary.innerHTML =
 (poleItems.length === 1 ? '' : 's') + '</span></span>' +
 '<span class="daily-saved-pole-review">' +
 (poleRedlineCount > 0
-? poleRedlineCount + ' REDLINE — COMMENT REQUIRED'
+? poleRedlineCount + ' REDLINE' + (poleItems.some(item=>!String(item.redline_comment||'').trim())?' — COMMENT REQUIRED':' — COMMENT SAVED')
 : 'Review / Edit') + '</span>';
 poleCard.appendChild(summary);
 const poleBody = document.createElement('div');
@@ -18504,6 +18536,7 @@ placeholder="Explain why this work differs from the authorized job packet."></te
 <input class="daily-batch-quantity" type="number"
 min="0.01" step="0.01" placeholder="0">
 </div>
+<div><button type="button" class="secondary small daily-batch-clear">Clear Line</button></div>
 </div>
 `;
 const row = {
@@ -18514,6 +18547,16 @@ suggestions:element.querySelector('.daily-unit-suggestions'),
 selection:element.querySelector('.daily-batch-selection'),
 actionInput:element.querySelector('.daily-batch-action'),
 quantityInput:element.querySelector('.daily-batch-quantity')
+};
+row.selectionSequence=0;
+row.clearButton=element.querySelector('.daily-batch-clear');
+row.clearButton.onclick=()=>{
+row.selectionSequence+=1;
+row.selectedItem=null;row.searchInput.value='';row.quantityInput.value='';
+row.actionInput.value='install';row.selection.replaceChildren();row.suggestions.replaceChildren();
+row.suggestions.classList.add('hidden');row.redlineCommentInput.value='';
+row.redlinePanel.classList.add('hidden');row.isRedline=false;
+renderDailyUnitTotals();refreshDailyBatchAuthorizationPreviews();row.searchInput.focus();
 };
 row.searchInput.oninput = () => renderDailyBatchSuggestions(row);
 row.actionInput.onchange = () => {
@@ -18630,8 +18673,11 @@ return String(value || '')
 .replace(/[^a-z0-9]/g, '');
 }
 async function selectDailyBatchUnit(row, item){
+const selectionSequence=++row.selectionSequence;
 row.selectedItem = item;
 row.searchInput.value = item.item_code;
+row.suggestions.classList.add('hidden');
+row.selection.innerHTML='<span class="muted">Checking authorized work type...</span>';
 let inferredWorkType = inferDailyUnitWorkType(item);
 const location = $('dailyUnitPoleLocation').value.trim();
 if(location && currentDailyUnitReport?.id){
@@ -18644,12 +18690,12 @@ p_pole_location:location
 }
 );
 const authorizedAction = authorization?.[0]?.preferred_work_type;
+if(selectionSequence!==row.selectionSequence || row.selectedItem!==item)return;
 if(['install','transfer','retirement'].includes(authorizedAction)){
 inferredWorkType = authorizedAction;
 }
 }
 row.actionInput.value = inferredWorkType;
-row.suggestions.classList.add('hidden');
 row.selection.innerHTML =
 '<strong>Selected:</strong> ' + escapeHtml(shortDailyUnitLabel(item)) +
 ' <details><summary>View Description</summary><div class="muted">' +
@@ -19360,6 +19406,11 @@ $('productionList').appendChild(groupCard);
 }
 /* DAILY REPORT FORM */
 $('createDailyReportBtn').onclick = async () => {
+const createButton=$('createDailyReportBtn');
+if(createButton.disabled)return;
+createButton.disabled=true;
+const priorCreateText=createButton.textContent;
+createButton.textContent='Loading Report Form...';
 $('dailyReportForm').classList.remove('hidden');
 delete $('dailyReportForm').dataset.reportId;
 $('dailyForemanName').value =
@@ -19386,6 +19437,8 @@ error
 .eq('active', true)
 .order('job_number', { ascending:true });
 if(error){
+createButton.disabled=false;
+createButton.textContent=priorCreateText;
 alert(
 'Unable to load active jobs: ' +
 error.message
@@ -19400,6 +19453,9 @@ option.textContent =
 `${job.job_number} - ${job.job_name}`;
 $('dailyJobId').appendChild(option);
 });
+createButton.disabled=false;
+createButton.textContent=priorCreateText;
+$('dailyReportForm').scrollIntoView({behavior:'smooth',block:'start'});
 };
 $('cancelDailyReportBtn').onclick = () => {
 $('dailyReportForm').classList.add('hidden');
@@ -19534,6 +19590,8 @@ id,
 job_id,
 work_date,
 status,
+regular_hours,
+overtime_hours,
 created_by,
 foreman_id,
 archived,
@@ -19933,7 +19991,7 @@ alert('LineCrew Pro could not start: ' + (error?.message || 'Unknown error'));
 }
 startApp();
 </script>
-<script src="expanded-jsa.js?v=20260907b"></script>
+<script src="expanded-jsa.js?v=20260913a"></script>
 <script src="utility-portal-management.js?v=20260908a"></script>
 <script>
 (function () {

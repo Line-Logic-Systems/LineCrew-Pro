@@ -746,8 +746,8 @@ assert(
   'Job history, billing exports and PDF records must share one revision label.'
 );
 assert(
-  index.includes('expanded-jsa.js?v=20260907b') &&
-    serviceWorker.includes('/expanded-jsa.js?v=20260907b') &&
+  index.includes('expanded-jsa.js?v=20260913a') &&
+    serviceWorker.includes('/expanded-jsa.js?v=20260913a') &&
     /const CACHE_NAME = 'linecrew-pro-shell-v\d+';/.test(serviceWorker) &&
     expandedJsa.includes("role-workspace-polish.js?v=20260910a") &&
     serviceWorker.includes("/role-workspace-polish.js?v=20260910a"),

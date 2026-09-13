@@ -78,8 +78,12 @@
     const clear=document.createElement('button');clear.type='button';clear.className='secondary small';clear.textContent='Clear Signature';
     actions.append(status,clear);wrap.append(svg,actions);cell.appendChild(wrap);
 
-    const setStatus=()=>{const signed=strokes.some(s=>s.length>1);status.textContent=signed?'Signature captured':'Sign above with finger, mouse, or stylus';status.classList.toggle('signed',signed)};
-    const persist=()=>{cache.set(input,strokes);input.value=strokes.some(s=>s.length>1)?svgData(strokes):'';setStatus()};
+    const strokeLength=stroke=>stroke.slice(1).reduce((total,p,index)=>{
+      const prior=stroke[index];return total+Math.hypot(p[0]-prior[0],p[1]-prior[1]);
+    },0);
+    const isMeaningful=()=>strokes.some(stroke=>stroke.length>=3&&strokeLength(stroke)>=25);
+    const setStatus=()=>{const signed=isMeaningful();status.textContent=signed?'Signature captured':'Sign above with finger, mouse, or stylus';status.classList.toggle('signed',signed)};
+    const persist=()=>{cache.set(input,strokes);input.value=isMeaningful()?svgData(strokes):'';setStatus()};
     const point=e=>{const r=svg.getBoundingClientRect();return[Math.max(0,Math.min(1000,((e.clientX-r.left)/Math.max(1,r.width))*1000)),Math.max(0,Math.min(200,((e.clientY-r.top)/Math.max(1,r.height))*200))]};
     strokes.forEach(p=>addStroke(svg,p));persist();
 
@@ -128,9 +132,16 @@
   function finishActive(e){
     if(!active||e.pointerId!==active.pointerId)return;
     e.preventDefault();e.stopImmediatePropagation();
-    if(active.current.length===1){active.current.push([active.current[0][0]+1,active.current[0][1]+1]);active.line.setAttribute('points',active.current.map(p=>`${p[0]},${p[1]}`).join(' '))}
     const finished=active;
+    const length=finished.current.slice(1).reduce((total,p,index)=>{
+      const prior=finished.current[index];return total+Math.hypot(p[0]-prior[0],p[1]-prior[1]);
+    },0);
+    if(finished.current.length<3||length<25){
+      strokes=strokes.filter(stroke=>stroke!==finished.current);finished.line.remove();
+      finished.persist();status.textContent='Signature needs a longer stroke';
+    }else{
     finished.persist();
+    }
     try{finished.svg.releasePointerCapture(finished.pointerId)}catch(_){}
     suppressReleaseUntil=Date.now()+800;
     active=null;
